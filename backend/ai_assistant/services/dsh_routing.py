@@ -7,8 +7,10 @@ GROUPS = {
         'read_learning_project', 'plan_learning_project', 'record_learning_progress',
         'set_learning_followup', 'find_learning_resources', 'manage_learning_resources', 'manage_learning_strategies')),
     'knowledge': ('知识地图与证据路径', '组织带来源知识单元、有向前置关系与目标深度；登记检查任务并更新贝叶斯证据。', (
-        'read_learning_project', 'manage_learning_knowledge', 'plan_learning_project', 'record_learning_progress',
+        'read_learning_project', 'manage_learning_knowledge', 'manage_learning_tasks', 'plan_learning_project', 'record_learning_progress',
         'manage_learning_resources', 'find_learning_resources')),
+    'tasks': ('项目正式学习任务', '按当前项目知识节点安排正式单选任务，读取实际成绩与复习时间。', (
+        'read_learning_project', 'manage_learning_tasks', 'get_practice_questions', 'lookup_question', 'search_knowledge_tree')),
     'interactive': ('交互讲题', '取题并编写交互实验，在同一分组内完成题目讲解和可操作实验。', (
         'get_practice_questions', 'lookup_question', 'search_knowledge_tree', 'build_learning_experiment',
         'read_learning_experiment', 'register_session_tool', 'read_session_tool')),

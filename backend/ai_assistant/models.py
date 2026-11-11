@@ -557,3 +557,19 @@ class LearningKnowledgeVersion(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['knowledge_map', 'revision'], name='learning_knowledge_version')]
+
+
+class ProjectLearningTask(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE, related_name='learning_tasks')
+    knowledge_version = models.ForeignKey(LearningKnowledgeVersion, on_delete=models.CASCADE)
+    node_id = models.CharField(max_length=60)
+    stage_id = models.CharField(max_length=60)
+    title = models.CharField(max_length=200)
+    instructions = models.TextField()
+    question_ids = models.JSONField()
+    question_snapshot = models.JSONField()
+    mode = models.CharField(max_length=16, choices=[('apply', '应用'), ('transfer', '迁移')])
+    assistance = models.CharField(max_length=16, default='unknown')
+    exam = models.OneToOneField('quizzes.QuizExam', null=True, blank=True, on_delete=models.CASCADE, related_name='learning_task')
+    created_at = models.DateTimeField(auto_now_add=True)

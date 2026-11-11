@@ -3,13 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import api from '@/lib/api';
+import { MarkdownContent } from '@/components/MarkdownContent';
 import { useAuthStore } from '@/store/useAuthStore';
 import { learningUrl, type ProjectLearning } from '@/lib/projectLearning';
 
 interface Belief { mean: number; interval: [number, number]; effective_count: number; independent_count: number; stale_days: number | null; }
 interface KnowledgeNode {
   id: string; title: string; outcome: string; prerequisites: string[];
-  citation: { resource_id: number; revision: number; quote: string; url: string; title: string; read_at: string };
+  citation: { resource_id: number; revision: number; quote: string; url: string; title: string; read_at: string; source_kind?: string };
   beliefs?: Record<'apply' | 'transfer', Belief>;
 }
 interface KnowledgeVersion { version_id: number; revision: number; title: string; nodes: KnowledgeNode[]; }
@@ -18,8 +19,9 @@ export interface LearningKnowledge {
   path: { version_id: number; targets: string[]; depth: 'apply' | 'transfer' } | null;
   nodes: KnowledgeNode[];
   excluded_evidence_count?: number;
+  repeated_question_count?: number;
   recommendations: { node_id: string; title: string; mode: 'apply' | 'transfer'; reason: string; information_gain: number; target_coverage: number; gap: number; score: number }[];
-  evidence?: { event_id: number; conversation_id: string; source: string; question: string; rubric: string; quote: string; reason: string; outcome: 'success' | 'failure' | 'unclear'; assistance: string; node_id: string; mode: 'apply' | 'transfer'; at: string }[];
+  evidence?: { event_id: number; conversation_id: string | null; label_source?: string; exam_id?: number; source: string; question: string; rubric: string; quote: string; reason: string; outcome: 'success' | 'failure' | 'unclear'; assistance: string; node_id: string; mode: 'apply' | 'transfer'; at: string }[];
 }
 const modes = { apply: '理解与应用', transfer: '迁移应用' };
 const outcomes = { success: '支持观察', failure: '相反观察', unclear: '尚不明确' };
@@ -66,10 +68,11 @@ export function LearningKnowledgePanel({ project, onStudy }: { project: ProjectL
     {knowledge?.path && <><h4>{knowledge.title} · 版本 {knowledge.revision}</h4><p>目标：{knowledge.path.targets.map(id => knowledge.nodes.find(node => node.id === id)?.title || id).join('、')} · {modes[knowledge.path.depth]}</p>
       <ol className="um-knowledge-nodes">{knowledge.nodes.map(node => <li key={node.id}><h4>{node.title}</h4><p>{node.outcome}</p><p className="um-learning-muted">前置：{node.prerequisites.map(id => knowledge.nodes.find(item => item.id === id)?.title || id).join('、') || '无'}（教学建议）</p>
         {node.beliefs && <div className="um-knowledge-estimates"><Estimate title="常规任务" estimate={node.beliefs.apply} /><Estimate title="候选迁移任务" estimate={node.beliefs.transfer} /></div>}
-        <details><summary>知识依据与资料版本</summary><a href={node.citation.url} target="_blank" rel="noreferrer">{node.citation.title}</a><p className="um-learning-muted">资料版本 {node.citation.revision} · 读取于 {new Date(node.citation.read_at).toLocaleString('zh-CN')}</p><blockquote>{node.citation.quote}</blockquote><p className="um-learning-muted">引用支持知识内容，前置关系尚未独立验证。</p></details>
+        <details><summary>知识依据与资料版本</summary>{node.citation.source_kind === 'unimind_original' ? <span>UniMind 原创内容 · 版本快照</span> : <a href={node.citation.url} target="_blank" rel="noreferrer">{node.citation.title}</a>}<p className="um-learning-muted">资料版本 {node.citation.revision} · {node.citation.source_kind === 'unimind_original' ? '快照创建于 ' : '读取于 '}{new Date(node.citation.read_at).toLocaleString('zh-CN')}</p><blockquote>{node.citation.quote}</blockquote><p className="um-learning-muted">引用支持知识内容，前置关系尚未独立验证。</p></details>
       </li>)}</ol>
       <h4>建议下一次检查</h4>{knowledge.recommendations.map(item => <article className="um-knowledge-recommendation" key={item.node_id}><p>{item.title} · {modes[item.mode]}</p><p className="um-learning-muted">{item.reason}</p><button className="um-learning-text-button" onClick={() => onStudy(`请围绕当前知识地图节点 ${item.node_id}“${item.title}”安排一次${modes[item.mode]}检查。先登记具体任务和判断标准，呈现任务后等我作答。`)}>让小宇准备任务</button><details><summary>为什么建议这一项</summary><p>预期信息增益 {item.information_gain.toFixed(3)}，目标覆盖 {item.target_coverage.toFixed(2)}，估计缺口 {item.gap.toFixed(2)}，排序值 {item.score.toFixed(3)}。先检查前置节点，再结合这些分项排序；排序值表示原型策略的相对优先级。</p></details></article>)}
-      <details className="um-learning-evidence"><summary>查看实际检查依据</summary>{!knowledge.evidence?.length && <p>尚无后续作答证据。</p>}{knowledge.evidence?.map(item => <article key={item.event_id}><time>{new Date(item.at).toLocaleString('zh-CN')}</time><h4>{knowledge.nodes.find(node => node.id === item.node_id)?.title} · {modes[item.mode]} · {outcomes[item.outcome]}</h4><p>任务：{item.question}</p><p>标准：{item.rubric}</p><blockquote>{item.quote}</blockquote><p>{item.reason}</p><p className="um-learning-muted">{assistance[item.assistance]} · 判断由小宇依据任务标准提出，尚未独立复核。</p><Link to={learningUrl('/xiaoyu', project.project_id, item.conversation_id)}>回到原对话</Link></article>)}</details>
+      <details className="um-learning-evidence"><summary>查看实际检查依据</summary>{!knowledge.evidence?.length && <p>尚无后续作答证据。</p>}{knowledge.evidence?.map(item => <article key={item.event_id}><time>{new Date(item.at).toLocaleString('zh-CN')}</time><h4>{knowledge.nodes.find(node => node.id === item.node_id)?.title} · {modes[item.mode]} · {outcomes[item.outcome]}</h4><div>任务：<MarkdownContent content={item.question} /></div><p>标准：{item.rubric}</p><blockquote>{item.quote}</blockquote><p>{item.reason}</p><p className="um-learning-muted">{assistance[item.assistance]}（帮助情况按声明记录） · {item.label_source === 'objective_answer_key' ? '标准答案比对，知识归属仍是教学安排。' : '判断由小宇依据任务标准提出，尚未独立复核。'}</p>{item.exam_id ? <Link to={learningUrl(`/tests/results/${item.exam_id}`, project.project_id, project.conversation_id || undefined)}>查看实际作答与评分</Link> : <Link to={learningUrl('/xiaoyu', project.project_id, item.conversation_id || undefined)}>回到原对话</Link>}</article>)}</details>
+      {!!knowledge.repeated_question_count && <p className="um-learning-muted">有 {knowledge.repeated_question_count} 次重复题保留了成绩与复习记录，未重复增加独立证据。</p>}
       {!!knowledge.excluded_evidence_count && <p className="um-learning-muted">有 {knowledge.excluded_evidence_count} 条历史观察的原始依据已不可核验，已停止计入当前估计。</p>}
       <details><summary>关于贝叶斯证据路径引擎</summary><p>{knowledge.algorithm} 根据可回放的实际任务观测计算常规与迁移两组条件分布。提示降低证据权重，引导与未知帮助不更新；证据过时后逐步回到未知。参数和任务差异尚未用真实学习数据校准，范围只表达固定假设下的不确定性。</p></details>
     </>}

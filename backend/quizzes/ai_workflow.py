@@ -52,24 +52,29 @@ def _calc_elo_change(user_elo: int, score_ratio: float, difficulty: float) -> in
     return int(32 * (score_ratio - expected_score))
 
 
-def _grade_answer(question: Question, user_answer: Any) -> Dict[str, Any]:
+def _grade_answer(question: Question, user_answer: Any, *, objective_only=False) -> Dict[str, Any]:
     max_score = question.get_max_score()
     correct_answer = question.correct_answer
     if question.q_type == 'objective':
         options = AIService.normalize_options(question.options)
         user_answer = AIService.normalize_objective_answer(user_answer, options)
         correct_answer = AIService.normalize_objective_answer(correct_answer, options)
-    grade_data = AIService.grade_question(
-        question_text=question.text,
-        user_answer=user_answer,
-        correct_answer=correct_answer,
-        q_type=question.q_type,
-        max_score=max_score,
-        grading_points=question.grading_points,
-        options=question.options,
-        rubric=question.rubric,
-        subjective_type=_subjective_type_label(question),
-    )
+    if objective_only and question.q_type == 'objective':
+        correct = bool(user_answer and user_answer == correct_answer)
+        grade_data = {'score': max_score if correct else 0, 'feedback': '作答与标准答案一致。' if correct else '作答与标准答案不一致。',
+                      'analysis': question.ai_answer or '', 'memorix_rating': 4 if correct else 1}
+    else:
+        grade_data = AIService.grade_question(
+            question_text=question.text,
+            user_answer=user_answer,
+            correct_answer=correct_answer,
+            q_type=question.q_type,
+            max_score=max_score,
+            grading_points=question.grading_points,
+            options=question.options,
+            rubric=question.rubric,
+            subjective_type=_subjective_type_label(question),
+        )
 
     score_val = _clamp_score(float(grade_data.get('score', 0)), max_score)
 
@@ -327,6 +332,9 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
         exam.save(update_fields=['status', 'started_at'])
 
     items = list(ExamQuestionResult.objects.filter(exam_id=exam_id).order_by('position', 'id'))
+    from ai_assistant.models import ProjectLearningTask
+    from ai_assistant.services.learning_tasks import validate_task_question, sync_exam_task_result
+    learning_task = ProjectLearningTask.objects.filter(exam_id=exam_id).first()
     if not items:
         _finalize_exam(user_id, exam_id)
         return
@@ -342,7 +350,12 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
             ).first()
             if not question:
                 raise ValidationError('题目不存在或不在当前内容范围')
-            graded = _grade_answer(question, item.user_answer or '')
+            if learning_task:
+                validate_task_question(learning_task, question)
+            if learning_task and question.q_type == 'objective':
+                graded = _grade_answer(question, item.user_answer or '', objective_only=True)
+            else:
+                graded = _grade_answer(question, item.user_answer or '')
         except Exception as exc:
             logger.exception('Exam item grading failed: exam_id=%s item_id=%s', exam_id, item.pk)
             _mark_item_failed(item.pk, str(exc))
@@ -360,6 +373,8 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
                 ).first()
                 if not question or get_content_institution_id() != scope:
                     raise ValidationError('题目或内容范围已变更')
+                if learning_task:
+                    validate_task_question(learning_task, question)
                 _apply_memorix_status(
                     user, question, graded['normalized_score'], graded['memorix_rating'],
                 )
@@ -381,6 +396,8 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
                     'score', 'max_score', 'feedback', 'analysis', 'is_correct',
                     'error_type', 'error_metadata', 'status', 'attempts', 'graded_at',
                 ])
+                if learning_task:
+                    transaction.on_commit(lambda result_id=locked.pk: sync_exam_task_result(result_id), robust=True)
                 _refresh_exam_counts(exam_id)
                 transaction.on_commit(
                     lambda q=question, s=graded['score']: _queue_experience_verification(user_id, q, s)

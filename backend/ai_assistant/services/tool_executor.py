@@ -46,6 +46,7 @@ def generate_step_label(tool_name: str, args: dict) -> str:
     labels = {
         'manage_learning_resources': lambda a: '整理与复用我的学习资料',
         'manage_learning_strategies': lambda a: '查阅教学方法与后续表现',
+        'manage_learning_tasks': lambda a: '安排正式学习任务与查看结果',
         'manage_learning_knowledge': lambda a: '组织知识地图与证据检查',
         'read_learning_project': lambda a: '读取这个项目的学习安排',
         'plan_learning_project': lambda a: '整理阶段路径与下一步',
@@ -624,6 +625,9 @@ class PlannerToolExecutor(BaseToolExecutor):
 
     def _handle_manage_learning_resources(self, args):
         return self._project_learning('manage_learning_resources', args)
+
+    def _handle_manage_learning_tasks(self, args):
+        return self._project_learning('manage_learning_tasks', args)
 
     def _handle_manage_learning_knowledge(self, args):
         return self._project_learning('manage_learning_knowledge', args)

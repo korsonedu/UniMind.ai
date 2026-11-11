@@ -33,10 +33,14 @@ class Command(BaseCommand):
             records.append({key: check[key] for key in ('version_id', 'node_id', 'mode', 'outcome', 'assistance', 'answer_hash')} | {
                 'event_id': event.pk, 'message_id': event.message_id, 'probe_id': probe.pk,
                 'question_hash': probe.content['question_hash'], 'at': event.created_at.isoformat(), 'task_at': probe.created_at.isoformat()})
+        from ai_assistant.services.learning_task_evidence import formal_observations
+        formal, task_provenance = formal_observations(project, options['version_id'])
+        records.extend(formal)
         report = evaluate_records(records, cutoff, options['data_origin'])
+        report['formal_provenance'] = {key: value for key, value in task_provenance.items() if key != 'events'}
         report['scope'] = {'project_id': project.pk, 'version_id': options['version_id']}
         report['provenance'] = {key: value for key, value in verified.items() if key != 'events'}
-        report['notice'] = ('Offline fixed holdout against XiaoYu rubric judgements; task and grading reliability are unvalidated. '
+        report['notice'] = ('Offline fixed holdout with separately labelled XiaoYu rubric judgements and objective answer-key results; knowledge mapping and assistance declarations are unvalidated. '
                             'Data origin is operator-declared. Scores do not establish calibration or learning improvement. '
                             'Historical source availability is rechecked at report time. No state or parameter writes.')
         self.stdout.write(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False))

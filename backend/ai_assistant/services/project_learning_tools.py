@@ -84,6 +84,14 @@ PROJECT_LEARNING_TOOLS.append(tool('manage_learning_knowledge',
          'question': text('需在回复中原样呈现的任务，8 至 2000 字'), 'rubric': text('明确的检查标准，8 至 1500 字')}, ('action',))))
 
 
+PROJECT_LEARNING_TOOLS.append(tool('manage_learning_tasks',
+    '读取或创建当前项目的正式单选任务。先查当前题库的真实题号，将题目关联当前知识版本、节点及阶段；题目归属是教学建议。提交和评分由用户操作，模型不能传分数或代答。读回真实成绩后给一句反馈和下一步，帮助声明不等于自动验证独立性。',
+    obj({'action': {'type': 'string', 'enum': ['list', 'read', 'create']}, 'task_id': text('read时填写任务UUID，读取本人已评分原作答和解析'), 'version_id': {'type': 'integer'},
+         'node_id': text(), 'stage_id': text(), 'title': text(), 'instructions': text('讲解、示例与作答要求；不得直接泄露练习答案'),
+         'question_ids': {'type': 'array', 'items': {'type': 'integer'}, 'minItems': 1, 'maxItems': 10},
+         'mode': {'type': 'string', 'enum': ['apply', 'transfer']}}, ('action',))))
+
+
 PROJECT_LEARNING_NAMES = frozenset(tool['function']['name'] for tool in PROJECT_LEARNING_TOOLS)
 
 

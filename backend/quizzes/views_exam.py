@@ -32,6 +32,13 @@ class SubmitExamView(APIView):
         submission_id = request.data.get('submission_id')
         if submission_id:
             submission_id = serializers.UUIDField().run_validation(submission_id)
+        task_id = request.data.get('learning_task_id')
+        assistance = serializers.ChoiceField(choices=['independent', 'hint', 'guided', 'unknown']).run_validation(
+            request.data.get('assistance', 'unknown'))
+        if task_id:
+            task_id = serializers.UUIDField().run_validation(task_id)
+            if not submission_id:
+                raise serializers.ValidationError('学习任务必须提供原始提交编号。')
         answers_hash = hashlib.sha256(json.dumps({
             'kind': 'exam', 'answers': sorted([
                 {'question_id': int(item['question_id']), 'answer': item.get('answer') or ''}
@@ -40,13 +47,25 @@ class SubmitExamView(APIView):
         }, sort_keys=True).encode()).hexdigest()
 
         with transaction.atomic():
+            task = None
             if submission_id:
                 request.user.__class__.objects.select_for_update().get(pk=request.user.pk)
+                from ai_assistant.models import ProjectLearningTask
+                from ai_assistant.services.learning_tasks import validate_task_submission
+                if task_id:
+                    task, questions = validate_task_submission(request.user, task_id, submission_id,
+                                                               questions_data, assistance)
+                elif ProjectLearningTask.objects.filter(pk=submission_id).exists():
+                    raise serializers.ValidationError('请从原学习任务提交。')
                 prior = PracticeSubmission.objects.filter(session_id=submission_id).first()
                 if prior:
                     if prior.user_id != request.user.pk or prior.answers_hash != answers_hash:
                         return Response({'error': '这组练习已提交，不能更换答案。'}, status=409)
+                    if task and task.exam_id != prior.response.get('exam_id'):
+                        return Response({'error': '已有提交不能关联到另一个学习任务。'}, status=409)
                     return Response(prior.response, status=202)
+                if task and task.exam_id:
+                    return Response({'error': '学习任务已经提交。'}, status=409)
             exam = QuizExam.objects.create(
                 user=request.user,
                 status='pending',
@@ -70,6 +89,10 @@ class SubmitExamView(APIView):
             if submission_id:
                 PracticeSubmission.objects.create(user=request.user, session_id=submission_id,
                     answers_hash=answers_hash, response=response)
+            if task:
+                task.exam = exam
+                task.assistance = assistance
+                task.save(update_fields=['exam', 'assistance'])
             transaction.on_commit(
                 lambda: dispatch_exam_grading(request.user.id, exam.id, questions_data)
             )
@@ -99,7 +122,8 @@ class ExamSubmissionView(APIView):
         submission = get_object_or_404(PracticeSubmission, user=request.user, session_id=submission_id)
         saved = submission.response if isinstance(submission.response, dict) else {}
         exam = get_object_or_404(QuizExam, user=request.user, pk=saved.get('exam_id'))
-        return Response({'exam_id': exam.pk, 'answers': [
+        task = getattr(exam, 'learning_task', None)
+        return Response({'exam_id': exam.pk, 'assistance': task.assistance if task else None, 'answers': [
             {'position': item.position, 'answer': item.user_answer}
             for item in exam.results.order_by('position', 'id')
         ]})

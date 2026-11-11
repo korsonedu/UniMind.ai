@@ -11,6 +11,7 @@ import { MarkdownContent } from '@/components/MarkdownContent';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useExamActivityStore, isActiveExamStatus, type ExamActivityStatus } from '@/store/useExamActivityStore';
 import { useLearningSession } from '@/hooks/useLearningSession';
+import { learningUrl } from '@/lib/projectLearning';
 import { WorkspaceActiveContext } from '@/components/WorkspaceContext';
 import '@/styles/inline-practice.css';
 
@@ -26,6 +27,10 @@ export interface PracticePayload {
   practice_id: string;
   title: string;
   questions: PracticeQuestion[];
+  learning_task_id?: string;
+  assistance?: string;
+  project_id?: number;
+  conversation_id?: string;
 }
 
 interface Draft {
@@ -34,6 +39,7 @@ interface Draft {
   index: number;
   examId: number | null;
   submitted: boolean;
+  assistance: string;
 }
 
 interface PracticeResult {
@@ -48,14 +54,15 @@ interface PracticeResult {
 
 interface SubmittedPractice {
   exam_id: number;
+  assistance?: string | null;
   answers: { position: number; answer: string }[];
 }
 
-export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
+export function PracticeQuizCard({ payload, onResult }: { payload: PracticePayload; onResult?: () => void }) {
   const userId = useAuthStore(state => state.user?.id);
   const storageKey = `unimind:inline-practice:${userId}:${payload.practice_id}`;
   const [draft, setDraft] = useState<Draft>(() => {
-    const empty: Draft = { answers: {}, notes: {}, index: 0, examId: null, submitted: false };
+    const empty: Draft = { answers: {}, notes: {}, index: 0, examId: null, submitted: false, assistance: payload.assistance || 'unknown' };
     try { return { ...empty, ...JSON.parse(localStorage.getItem(storageKey) || 'null') }; }
     catch { return empty; }
   });
@@ -86,7 +93,7 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
 
   const saved = submission.data;
   if (saved && draft.examId !== saved.exam_id) {
-    setDraft({ ...draft, examId: saved.exam_id, submitted: true,
+    setDraft({ ...draft, examId: saved.exam_id, submitted: true, assistance: saved.assistance || draft.assistance,
       answers: Object.fromEntries(questions.map((item, position) => [item.id,
         saved.answers.find(answer => answer.position === position + 1)?.answer || ''])),
     });
@@ -119,6 +126,10 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
     refetchInterval: query => query.state.data && isActiveExamStatus(query.state.data.status) ? 2500 : false,
   });
   const result = detail.data;
+  const resultVersion = result ? `${result.status}:${result.graded_count}:${result.total_score}` : '';
+  useEffect(() => {
+    if (resultVersion) onResult?.();
+  }, [resultVersion, onResult]);
   const itemResult = result?.results.find(item => item.position === index + 1);
   const graded = itemResult?.status === 'graded';
 
@@ -138,12 +149,13 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
       try { localStorage.setItem(storageKey, JSON.stringify(submitted)); } catch { /* 继续提交。 */ }
       const { data } = await api.post('/quizzes/submit-exam/', {
         submission_id: payload.practice_id,
+        ...(payload.learning_task_id ? { learning_task_id: payload.learning_task_id, assistance: draft.assistance } : {}),
         answers: questions.map(item => ({ question_id: item.id, answer: draft.answers[item.id] })),
       });
       const examId = Number(data.exam_id);
       if (!Number.isInteger(examId) || examId <= 0) throw new Error('未收到练习结果编号，请重试提交。');
       setDraft(previous => ({ ...previous, examId }));
-      useExamActivityStore.getState().start({ examId, total: questions.length });
+      useExamActivityStore.getState().start({ examId, total: questions.length, href: learningUrl(`/tests/results/${examId}`, payload.project_id || null, payload.conversation_id) });
     } catch (failure) {
       setError(formatApiErrorToast(failure, '提交失败，请重试。'));
     } finally { inFlight.current = false; setSubmitting(false); }
@@ -197,9 +209,14 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
             {itemResult.feedback && <MarkdownContent content={processMathContent(itemResult.feedback)} />}
             {itemResult.analysis && <div><span className="um-inline-practice-caption">解析</span><MarkdownContent content={processMathContent(itemResult.analysis)} /></div>}
           </> : <p>{itemResult?.status === 'failed' ? '本题批改未完成，可在逐题复盘中重试。' : '本题正在批改，请稍候。'}</p>}
-          <Link className="um-inline-practice-text-button" to={`/tests/results/${draft.examId}`}>打开逐题复盘</Link>
+          <Link className="um-inline-practice-text-button" to={learningUrl(`/tests/results/${draft.examId}`, payload.project_id || null, payload.conversation_id)}>打开逐题复盘</Link>
         </>}
     </section>}
+    {payload.learning_task_id && <label className="um-inline-practice-assistance">本次作答获得了哪些帮助？
+      <select aria-label="本次作答帮助程度" disabled={locked} value={draft.assistance} onChange={event => setDraft(previous => ({ ...previous, assistance: event.target.value }))}>
+        <option value="unknown">尚未说明</option><option value="independent">独立作答</option><option value="hint">获得提示</option><option value="guided">逐步引导完成</option>
+      </select><small>按实际情况说明，提交后随成绩保留；未说明或逐步引导不增加独立证据。</small>
+    </label>}
     {error && <p className="um-inline-practice-error" role="alert">{error}</p>}
     {!draft.examId && submission.isPending && <p>正在读取提交状态…</p>}
     {!draft.examId && submission.isError && <p role="alert">暂时无法读取提交状态。<button type="button" onClick={() => void submission.refetch()}>重试读取</button></p>}

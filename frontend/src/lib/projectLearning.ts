@@ -5,10 +5,11 @@ import { useAuthStore } from '@/store/useAuthStore';
 
 export interface LearningStage { id: string; title: string; outcome: string; task: string; prerequisites: string[]; sources: string[]; }
 export interface LearningPlan { goal: string; deadline: string | null; weekly_minutes: number; stages: LearningStage[]; }
-export interface LearningResource { domain?: string; topic?: string; level?: string; edition?: string; library_revision?: number; id: string; title: string; url: string; excerpt: string; read_at: string; }
+export interface LearningResource { source_kind?: string; domain?: string; topic?: string; level?: string; edition?: string; library_revision?: number; id: string; title: string; url: string; excerpt: string; read_at: string; }
 export interface LearningEvent { id: number; kind: string; content: Record<string, unknown>; delivery: { saved: boolean; read: boolean | null; responded: boolean } | null; source: { id: number; text: string; conversation_id: string } | null; created_at: string; }
 export interface ProjectLearning {
   knowledge?: LearningKnowledge;
+  task_progress?: { completed: number; total: number; feedback: string; next_action: string; next_task_id: string | null };
   project_id: number; name: string; instructions: string; status: 'preparing' | 'active' | 'paused' | 'completed';
   plan: Partial<LearningPlan>; resources: LearningResource[]; current_stage: string; feedback: string; next_action: string;
   pending_plan: { plan?: LearningPlan; reason?: string; knowledge?: { title: string; revision: number; targets: string[]; depth: 'apply' | 'transfer' } }; revision: number; conversation_id: string | null;

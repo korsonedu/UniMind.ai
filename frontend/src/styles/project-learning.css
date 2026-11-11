@@ -24,3 +24,13 @@
 
 .um-knowledge-picker { margin:18px 0; }.um-knowledge-picker summary,.um-learning-knowledge details summary { cursor:pointer; }.um-knowledge-picker select { display:block; width:100%; margin:8px 0 14px; padding:8px; border:1px solid hsl(var(--border)); border-radius:8px; background:hsl(var(--background)); }.um-knowledge-picker fieldset { margin:14px 0; }.um-knowledge-target { display:flex; align-items:center; gap:8px; padding:5px 0; }.um-knowledge-nodes { list-style:none; padding:0; }.um-knowledge-nodes>li,.um-knowledge-recommendation { border-top:1px solid hsl(var(--border)); padding:18px 0; }.um-knowledge-estimates { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:14px 0; }.um-knowledge-estimate { padding:12px; background:hsl(var(--muted)/.45); border-radius:8px; font-size:12px; }.um-knowledge-estimate strong { font-weight:500; }.um-learning-knowledge blockquote { padding-left:12px; border-left:2px solid hsl(var(--border)); margin:10px 0; white-space:pre-wrap; }.um-learning-knowledge details p { margin:8px 0; }.um-learning-knowledge { overflow-wrap:anywhere; }
 @media(max-width:480px) { .um-knowledge-estimates { grid-template-columns:1fr; } }
+
+.um-learning-tasks { display: grid; gap: 12px; }
+.um-learning-task-list { list-style: none; padding: 0; display: grid; gap: 10px; }
+.um-learning-task-list > li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--um-color-border); }
+.um-learning-task-list h4, .um-learning-task-list p { margin: 0 0 5px; }
+.um-learning-task-detail { min-width: 0; display: grid; gap: 14px; }
+.um-learning-sample { padding: 16px; border: 1px solid var(--um-color-border); border-radius: 12px; }
+.um-inline-practice-assistance { display: grid; gap: 8px; margin: 12px 0; }
+.um-inline-practice-assistance select { padding: 8px; border: 1px solid var(--um-color-border); border-radius: 8px; color: inherit; background: var(--um-color-surface); }
+@media (max-width: 540px) { .um-learning-task-list > li { align-items: flex-start; flex-direction: column; } }

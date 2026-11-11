@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ArrowsClockwise, CircleNotch, CheckCircle } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 
 import api from '@/lib/api';
+import { learningUrl } from '@/lib/projectLearning';
 import { formatApiErrorToast } from '@/lib/apiError';
 import { queryKeys } from '@/lib/queryKeys';
 import { processMathContent } from '@/lib/utils';
@@ -73,6 +74,9 @@ export const ExamResultPage = () => {
   const { examId: rawExamId } = useParams<{ examId: string }>();
   const examId = Number(rawExamId);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const projectId = Number(searchParams.get('project'));
+  const returnToProject = Number.isSafeInteger(projectId) && projectId > 0 ? learningUrl('/xiaoyu', projectId, searchParams.get('conversation') || undefined) : null;
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'wrong' | 'pending'>('all');
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
@@ -111,7 +115,8 @@ export const ExamResultPage = () => {
   }, [data, filter]);
 
   if (!Number.isFinite(examId)) {
-    return <PageWrapper title="练习结果"><EmptyState title="练习不存在" description="链接缺少有效的练习编号。" /></PageWrapper>;
+    return <PageWrapper title="练习结果">
+      {returnToProject && <Link className="text-sm underline" to={returnToProject}>回到学习项目</Link>}<EmptyState title="练习不存在" description="链接缺少有效的练习编号。" /></PageWrapper>;
   }
 
   if (detail.isLoading) {
@@ -180,6 +185,7 @@ export const ExamResultPage = () => {
 
   return (
     <PageWrapper title="练习结果">
+      {returnToProject && <Link className="text-sm underline" to={returnToProject}>回到学习项目</Link>}
       <div className="um-exam-result">
         <header className="um-exam-result-header">
           <button type="button" className="um-exam-result-back" onClick={() => navigate('/tests')}>

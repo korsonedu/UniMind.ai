@@ -1,0 +1,239 @@
+{
+  "id": "function-foundations",
+  "version": "1",
+  "title": "高中数学·函数基础样板",
+  "scope": "仅含函数概念、函数值、基本定义域与简单图像判断四个节点；不等于完整高中函数课程。",
+  "source_kind": "unimind_original",
+  "notice": "UniMind 原创中文讲解、示例、单选题和解析。外部链接仅用于概念核对；本包不是网页实时读取结果，未复制参考教材的文字、题目或图片。",
+  "references": [
+    "https://openstax.org/books/algebra-and-trigonometry-2e/pages/3-1-functions-and-function-notation",
+    "https://openstax.org/books/algebra-and-trigonometry-2e/pages/3-2-domain-and-range"
+  ],
+  "nodes": [
+    {
+      "id": "function_concept",
+      "code": "UMF-FNF1-CONCEPT",
+      "title": "函数概念",
+      "outcome": "能按输入是否唯一对应输出判断一个关系是不是函数",
+      "prerequisites": [],
+      "quote": "判断函数时，先固定输入集合，再检查每个输入是否恰好对应一个输出。",
+      "explanation": "判断函数时，先固定输入集合，再检查每个输入是否恰好对应一个输出。不同的输入可以得到同一个输出；真正不允许的是同一个输入被分配两个不同输出。检查有限对应表时，要逐个查看所有约定的输入，不能只看一对。",
+      "example": "示例：输入整数 n，输出 n 的个位数字。2 和 12 都输出 2，仍符合函数要求，因为对每一个确定的 n，个位数字只有一个。若同一个输入 2 同时被规定输出 2 和 5，就不符合要求。",
+      "questions": [
+        {
+          "code": "FNF1-CONCEPT-PRE",
+          "phase": "pretest",
+          "text": "输入集合为 {-2, 0, 3}，规定 -2→1，0→1，3→2。输出是否是输入的函数？",
+          "options": [
+            "是，每个约定输入都只有一个输出",
+            "不是，因为 -2 和 0 的输出相同",
+            "不是，因为输入中有负数",
+            "只有输入和输出个数相同才是函数"
+          ],
+          "correct_answer": "A",
+          "explanation": "-2、0、3 各有唯一的输出。不同输入得到同一输出是允许的，所以这是函数。",
+          "difficulty_level": "entry"
+        },
+        {
+          "code": "FNF1-CONCEPT-PRACTICE",
+          "phase": "practice",
+          "text": "约定第一项为输入，输入集合为 {1, 2, 4}。下面哪组有序数对不能表示这个集合上的函数？",
+          "options": [
+            "{(1,2), (2,3), (4,5)}",
+            "{(1,0), (2,0), (4,0)}",
+            "{(1,2), (1,3), (2,4), (4,5)}",
+            "{(1,-1), (2,-2), (4,-4)}"
+          ],
+          "correct_answer": "C",
+          "explanation": "第三组把同一个输入 1 对应到 2 和 3 两个输出，违反唯一性。第二组虽然输出都为 0，仍是函数。",
+          "difficulty_level": "entry"
+        },
+        {
+          "code": "FNF1-CONCEPT-RECHECK",
+          "phase": "recheck",
+          "text": "停车时长 15、30、45 分钟，对应费用分别为 3、3、6 元。只讨论这三个时长和相应费用，下面哪句话正确？",
+          "options": [
+            "费用不是时长的函数，因为有两次费用相同",
+            "费用是时长的函数，但时长不是费用的函数",
+            "时长一定是费用的函数，因为费用都能找到时长",
+            "只要把表格倒过来，函数关系一定仍成立"
+          ],
+          "correct_answer": "B",
+          "explanation": "每个时长只有一个费用，所以费用是时长的函数；以费用为输入时，3 元对应 15 和 30 两个时长，因此反方向不是函数。",
+          "difficulty_level": "entry"
+        }
+      ]
+    },
+    {
+      "id": "function_value",
+      "code": "UMF-FNF1-VALUE",
+      "title": "函数值与代入",
+      "outcome": "能理解 f(a) 的含义，并将指定输入代入算出函数值",
+      "prerequisites": [
+        "function_concept"
+      ],
+      "quote": "f(a) 表示把输入 a 交给函数规则后得到的输出，不表示 f 与 a 相乘。",
+      "explanation": "f(a) 表示把输入 a 交给函数规则后得到的输出，不表示 f 与 a 相乘。代入时，表达式中代表输入的每一处符号都要换成同一个数；代入负数时保留括号，再按运算顺序计算。公式使用 x、t 或 u 作输入符号，不改变这一含义。",
+      "example": "示例：f(u)=2u²+1，则 f(-2)=2×(-2)²+1=9。平方作用于整个 -2，因此先得到 4；这与先写成 -2² 再计算的表达不同。",
+      "questions": [
+        {
+          "code": "FNF1-VALUE-PRE",
+          "phase": "pretest",
+          "text": "已知 f(x)=3x-4，f(2) 等于多少？",
+          "options": [
+            "2",
+            "6",
+            "10",
+            "-2"
+          ],
+          "correct_answer": "A",
+          "explanation": "把每一处 x 换成 2，得到 f(2)=3×2-4=2。",
+          "difficulty_level": "entry"
+        },
+        {
+          "code": "FNF1-VALUE-PRACTICE",
+          "phase": "practice",
+          "text": "已知 g(x)=x²-2x，g(-3) 等于多少？",
+          "options": [
+            "3",
+            "-3",
+            "15",
+            "-15"
+          ],
+          "correct_answer": "C",
+          "explanation": "g(-3)=(-3)²-2×(-3)=9+6=15。平方和第二项中的负号都要分别处理。",
+          "difficulty_level": "entry"
+        },
+        {
+          "code": "FNF1-VALUE-RECHECK",
+          "phase": "recheck",
+          "text": "已知 h(t)=(t+1)/(t-2)，h(5) 等于多少？",
+          "options": [
+            "6",
+            "3",
+            "1",
+            "2"
+          ],
+          "correct_answer": "D",
+          "explanation": "输入符号改为 t 仍按同样方式代入：h(5)=(5+1)/(5-2)=6/3=2；此时分母不为零。",
+          "difficulty_level": "entry"
+        }
+      ]
+    },
+    {
+      "id": "function_domain",
+      "code": "UMF-FNF1-DOMAIN",
+      "title": "定义域的基本限制",
+      "outcome": "在实数范围内，能同时检查分母非零与偶次根号内非负",
+      "prerequisites": [
+        "function_concept",
+        "function_value"
+      ],
+      "quote": "在实数范围内确定定义域，要让表达式中每一步运算都有意义。",
+      "explanation": "在实数范围内确定定义域，要让表达式中每一步运算都有意义。分母不能等于 0；偶次根号内的量不能小于 0。若一个式子同时出现这两类限制，输入必须同时满足它们，取允许集合的交集。根号内可以等于 0，除非这个根号还整体处在分母上。",
+      "example": "示例：y=√(x+6)/(x-2)。根号要求 x≥-6，分母要求 x≠2，因此定义域是满足 x≥-6 且 x≠2 的实数。这里的两个条件必须一起保留。",
+      "questions": [
+        {
+          "code": "FNF1-DOMAIN-PRE",
+          "phase": "pretest",
+          "text": "在实数范围内，y=1/(x+4) 的定义域应满足什么条件？",
+          "options": [
+            "x>-4",
+            "x≠4",
+            "x≠-4",
+            "x 可以是任意实数"
+          ],
+          "correct_answer": "C",
+          "explanation": "分母 x+4 不能为零，所以只需排除 x=-4；其余实数都可代入。",
+          "difficulty_level": "entry"
+        },
+        {
+          "code": "FNF1-DOMAIN-PRACTICE",
+          "phase": "practice",
+          "text": "在实数范围内，y=√(7-2x) 的定义域是什么？",
+          "options": [
+            "x<7/2",
+            "x≤7/2",
+            "x≥7/2",
+            "全体实数"
+          ],
+          "correct_answer": "B",
+          "explanation": "根号内 7-2x≥0，解得 x≤7/2。x=7/2 时根号内为 0，仍有意义，端点应包含。",
+          "difficulty_level": "easy"
+        },
+        {
+          "code": "FNF1-DOMAIN-RECHECK",
+          "phase": "recheck",
+          "text": "在实数范围内，y=√(x+3)/(x-1) 的定义域应满足什么条件？",
+          "options": [
+            "x≥-3",
+            "x≠1",
+            "x>-3 且 x≠1",
+            "x≥-3 且 x≠1"
+          ],
+          "correct_answer": "D",
+          "explanation": "根号内要求 x+3≥0，即 x≥-3；分母要求 x-1≠0，即 x≠1。两个条件同时成立，且 x=-3 可以取到。",
+          "difficulty_level": "easy"
+        }
+      ]
+    },
+    {
+      "id": "function_graph",
+      "code": "UMF-FNF1-GRAPH",
+      "title": "简单图像判断",
+      "outcome": "能用竖线法识别冲突输入，并解释图像点与函数值的关系",
+      "prerequisites": [
+        "function_concept",
+        "function_value",
+        "function_domain"
+      ],
+      "quote": "函数图像上的点 (a,b) 表示输入 a 时输出为 b，也就是 f(a)=b。",
+      "explanation": "函数图像上的点 (a,b) 表示输入 a 时输出为 b，也就是 f(a)=b。竖线 x=a 把输入固定为 a：如果它与同一关系图像有两个不同交点，就说明一个输入有两个输出，不能表示 y 是 x 的函数。不同竖线可以读出同一个纵坐标，这不违反函数要求。图像没有画出的输入，不能自行补上函数值。",
+      "example": "示例：图像只由点 (-3,2)、(0,-1)、(4,2) 组成。每条竖线至多穿过其中一个点，所以它表示有限输入集合上的函数，且 f(-3)=f(4)=2；对于输入 1，图中没有对应点，不能从这三点断言 f(1) 的值。",
+      "questions": [
+        {
+          "code": "FNF1-GRAPH-PRE",
+          "phase": "pretest",
+          "text": "某关系图像含 A(2,-1) 和 B(2,4) 两点，示意如下（坐标以标注为准）。仅凭这一信息，下面哪项判断成立？\n\n```text\ny\n4 |       ● B(2,4)\n  |\n0 +---------------- x\n-1|       ● A(2,-1)\n          2\n```",
+          "options": [
+            "一定表示函数，因为只标了两个点",
+            "一定不能表示 y 是 x 的函数，因为竖线 x=2 穿过两个不同点",
+            "还需要知道两个点之间的距离，才能判断",
+            "一定表示函数，因为两个纵坐标不相同"
+          ],
+          "correct_answer": "B",
+          "explanation": "A、B 的横坐标同为 2，纵坐标却不同。竖线 x=2 有两个交点，已经构成同一输入有两个输出的反例。",
+          "difficulty_level": "entry"
+        },
+        {
+          "code": "FNF1-GRAPH-PRACTICE",
+          "phase": "practice",
+          "text": "一个函数的图像只由 P(0,3)、Q(1,1)、R(2,2) 三个点组成。点 Q(1,1) 的正确含义是哪一项？",
+          "options": [
+            "输入为 1 时，输出为 1，即 f(1)=1",
+            "输入为 1 时，任意输出都可以",
+            "Q 表示定义域只有一个数 1",
+            "图像经过 Q 就能推出 f(3)=3"
+          ],
+          "correct_answer": "A",
+          "explanation": "点的横坐标给出输入，纵坐标给出相应输出，所以 Q(1,1) 表示 f(1)=1；它不能单独决定整个定义域或未给出的输入。",
+          "difficulty_level": "entry"
+        },
+        {
+          "code": "FNF1-GRAPH-RECHECK",
+          "phase": "recheck",
+          "text": "某关系图像是在 A(-2,3)、B(0,1)、C(2,3) 之间依次连成的折线，仅保留 -2≤x≤2 的部分。示意如下（坐标以标注为准）。下面哪项正确？\n\n```text\n            y\n3   *A      |       *C\n2       \\   |   /\n1           *B\n0 ----------+-----------x\n   -2       0       2\n```",
+          "options": [
+            "它不是函数，因为 A、C 的纵坐标相同",
+            "图像一定给出了 f(3) 的值",
+            "它是函数，且 f(-2)=f(2)=3",
+            "它不是函数，因为一条横线可穿过两个点"
+          ],
+          "correct_answer": "C",
+          "explanation": "在给定横坐标范围内，每条竖线与折线只有一个交点，所以它是函数。A、C 表示两个不同输入得到相同输出 3，这不违背函数要求；x=3 不在所给范围。",
+          "difficulty_level": "easy"
+        }
+      ]
+    }
+  ]
+}

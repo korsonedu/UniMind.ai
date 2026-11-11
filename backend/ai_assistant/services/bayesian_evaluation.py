@@ -59,8 +59,14 @@ def evaluate_records(records, cutoff, data_origin):
                 raise ValueError('Invalid task chronology or mode.')
             if record['outcome'] not in ('success', 'failure', 'unclear') or record['assistance'] not in ASSISTANCE_WEIGHTS:
                 raise ValueError('Invalid observation label.')
-            if any(type(record[key]) is not int or record[key] < 1 for key in ('event_id', 'message_id', 'probe_id', 'version_id')):
+            identifiers = ('event_id', 'result_id', 'version_id') if record.get('evidence_type') == 'formal' else ('event_id', 'message_id', 'probe_id', 'version_id')
+            if any(type(record[key]) is not int or record[key] < 1 for key in identifiers):
                 raise ValueError('Invalid observation identifier.')
+            if record.get('evidence_type') == 'formal':
+                from uuid import UUID
+                UUID(record['task_id'])
+                if record.get('label_source') != 'objective_answer_key':
+                    raise ValueError('Unknown formal label source.')
             if not isinstance(record['node_id'], str) or not record['node_id']:
                 raise ValueError('Missing node identifier.')
             if any(not isinstance(record[key], str) for key in ('question_hash', 'answer_hash')):
@@ -73,8 +79,11 @@ def evaluate_records(records, cutoff, data_origin):
     holdout = []
     for at, task_at, record in sorted(parsed, key=lambda item: (item[0], item[2]['event_id'])):
         node = (record['version_id'], record['node_id'])
-        keys = {(key, record[key]) for key in ('event_id', 'message_id', 'probe_id')}
-        keys.update((key, *node, record[key]) for key in ('question_hash', 'answer_hash') if record[key])
+        formal = record.get('evidence_type') == 'formal'
+        identifiers = ('event_id', 'result_id') if formal else ('event_id', 'message_id', 'probe_id')
+        keys = {(key, record[key]) for key in identifiers}
+        hashes = ('question_hash',) if formal else ('question_hash', 'answer_hash')
+        keys.update((key, *node, record[key]) for key in hashes if record[key])
         if seen.intersection(keys):
             counts['duplicate'] += 1
             continue
@@ -108,7 +117,9 @@ def evaluate_records(records, cutoff, data_origin):
         predictions.append({
             **{key: record[key] for key in ('event_id', 'version_id', 'node_id', 'mode', 'outcome')},
             'task_at': task_at.isoformat(), 'probabilities': probabilities, 'history_count': len(history),
+            'label_source': record.get('label_source', 'xiaoyu_rubric_judgement'),
         })
+    label_sources = sorted({row['label_source'] for row in predictions})
     return {
         'algorithm': {
             'version': ALGORITHM_VERSION, 'evaluation_protocol': 'frozen-temporal-holdout-v1',
@@ -117,7 +128,9 @@ def evaluate_records(records, cutoff, data_origin):
             'weighted_beta_prior': [1, 1], 'log_loss_clip': 1e-12, 'calibration_bin_count': 5,
         },
         'cutoff': cutoff.isoformat(), 'data_origin': data_origin,
-        'label_source': 'xiaoyu_rubric_judgement', 'calibrated': False, 'counts': counts,
+        'label_source': label_sources[0] if len(label_sources) == 1 else ('mixed' if label_sources else 'none'),
+        'metrics_by_label_source': {source: {model: _metrics([row for row in predictions if row['label_source'] == source], model) for model in MODELS} for source in label_sources},
+        'calibrated': False, 'counts': counts,
         'metrics': {model: {scope: _metrics([row for row in predictions if scope == 'overall' or row['mode'] == scope], model)
                             for scope in ('overall', 'apply', 'transfer')} for model in MODELS},
         'predictions': predictions,

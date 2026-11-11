@@ -39,7 +39,9 @@ def validate(data):
 
 
 def resource_data(row, *, compact=False):
-    return {key: getattr(row, key) for key in ('id', 'url', 'title', 'read_at', 'domain', 'topic', 'level', 'edition',
+    version = row.versions.order_by('-revision').first()
+    origin = {key: version.snapshot[key] for key in ('source_kind', 'content_version', 'references', 'not_web_read') if version and key in version.snapshot}
+    return origin | {key: getattr(row, key) for key in ('id', 'url', 'title', 'read_at', 'domain', 'topic', 'level', 'edition',
                                                'is_archived', 'revision')} | {'read_at': row.read_at.isoformat(), 'excerpt': row.excerpt[:500] if compact else row.excerpt}
 
 
@@ -155,6 +157,7 @@ def resource_operation(project, arguments, *, message=None):
         if existing:
             return {'resource': existing, 'notice': '项目已有这份资料的快照，保留原引用；需要更新时请重新读取原文。'}
         source = {key: getattr(row, key) for key in ('url', 'title', 'excerpt', 'domain', 'topic', 'level', 'edition')}
+        source.update({key: value for key, value in resource_data(row).items() if key in ('source_kind', 'content_version', 'references', 'not_web_read')})
         source.update(id=uuid4().hex, read_at=row.read_at.isoformat(), library_id=row.pk, library_revision=row.revision)
         return store_resource(project, source) | {'notice': '沿用此前读取的快照，未重新核验网页时效。'}
     if message or data['action'] not in ('update', 'archive', 'restore'):

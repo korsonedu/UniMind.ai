@@ -66,7 +66,7 @@ def test_dsh_routing_comparison(user):
     assert {t['function']['name'] for t in context['tools']} == {'find_learning_tools'}
     public_personal = {'search_courses', 'search_asr', 'present_learning_visual',
         'read_learning_project', 'plan_learning_project', 'record_learning_progress', 'set_learning_followup',
-        'find_learning_resources', 'manage_learning_resources', 'manage_learning_strategies', 'manage_learning_knowledge'}
+        'find_learning_resources', 'manage_learning_resources', 'manage_learning_strategies', 'manage_learning_knowledge', 'manage_learning_tasks'}
     assert {t['function']['name'] for t in context['available_tools']} == public_personal
     assert {t['function']['name'] for group in context['tool_groups'].values() for t in group['tools']} == public_personal
     assert not {'get_practice_questions', 'get_exam_history', 'get_student_detail', 'send_notification'} & set(context['routing']['candidate_names'])

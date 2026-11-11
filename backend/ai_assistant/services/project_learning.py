@@ -70,13 +70,31 @@ def current_project(user, context):
 
 def learning_data(project):
     state, _ = ProjectLearning.objects.get_or_create(project=project)
-    events = list(ProjectLearningEvent.objects.filter(project=project).exclude(kind='turn').select_related('message')[:30])
+    from users.feature_access import has_learning_feature
+    event_rows = ProjectLearningEvent.objects.filter(project=project).exclude(kind='turn')
+    if not has_learning_feature(project.user, 'quiz.exam'):
+        event_rows = event_rows.exclude(kind='assessment')
+    events = list(event_rows.select_related('message')[:30])
     from notifications.models import Notification
     notifications = dict(Notification.objects.filter(recipient=project.user,
         pk__in=[event.content['notification_id'] for event in events if event.content.get('notification_id')]).values_list('pk', 'is_read'))
     from .learning_library import project_strategy_uses
     from .learning_knowledge import knowledge_state
+    from .learning_tasks import task_data
+    version_id = (state.plan.get('knowledge_path') or {}).get('version_id')
+    tasks = [task_data(task) for task in project.learning_tasks.filter(knowledge_version_id=version_id).select_related('project', 'exam').order_by('created_at', 'pk')]
+    completed_tasks = [task for task in tasks if task['status'] == 'completed']
+    next_task = next((task for task in tasks if task['status'] in ('ready', 'partial', 'failed', 'processing')), None)
+    latest = max(completed_tasks, key=lambda task: str(task['summary'].get('completed_at') or ''), default=None)
+    task_progress = {'completed': len(completed_tasks), 'total': len(tasks),
+        'feedback': f"最近完成“{latest['title']}”，得分 {latest['summary']['total_score']}/{latest['summary']['max_score']}。" if latest else '',
+        'next_action': ('先复盘错误与解析，再继续：' if latest and latest['summary']['total_score'] < latest['summary']['max_score'] else '接下来：') + next_task['title'] if next_task else ('本轮任务已完成，按复习时间重新检查，并和小宇核对下一阶段。' if latest else ''),
+        'next_task_id': next_task['id'] if next_task else None}
+    if not next_task and len(completed_tasks) < len(tasks):
+        task_progress['next_action'] = '有任务内容当前不可用，请和小宇重新安排，已有成绩继续保留。'
     return {
+        'task_progress': task_progress,
+        'tasks': [{key: task[key] for key in ('id', 'title', 'version_id', 'node_id', 'stage_id', 'status', 'exam_id', 'assistance', 'review_due_at', 'summary')} for task in tasks],
         'knowledge': knowledge_state(project, state),
         'strategy_uses': project_strategy_uses(project),
         'project_id': project.pk, 'name': project.name, 'instructions': project.instructions,
@@ -291,6 +309,37 @@ def change_learning(project, data, *, message=None, model=False):
 
 def tool_operation(executor, name, arguments):
     project, message = current_project(executor.user, getattr(executor, 'learning_context', None))
+    if name == 'manage_learning_tasks':
+        from .learning_tasks import create_task, task_data
+        if arguments.get('action') == 'list':
+            data = compact_learning(learning_data(project))
+            return {'tasks': data['tasks'], 'task_progress': data['task_progress']}
+        if arguments.get('action') == 'read':
+            from django.shortcuts import get_object_or_404
+            from quizzes.services.practice_results import exam_result_payload
+            task_id = serializers.UUIDField().run_validation(arguments.get('task_id'))
+            task = get_object_or_404(project.learning_tasks.select_related('project', 'exam'), pk=task_id)
+            data = task_data(task)
+            if task.exam_id and data['status'] != 'unavailable':
+                data['results'] = [item for item in exam_result_payload(task.exam)['results'] if item['status'] == 'graded']
+            return data
+        if arguments.get('action') != 'create':
+            raise ValidationError('不支持的任务操作。')
+        with transaction.atomic():
+            ProjectLearning.objects.select_for_update().get(project=project)
+            assert_learning_turn(project, message)
+            key = hashlib.sha256(json.dumps(['task', message.pk, arguments], sort_keys=True).encode()).hexdigest()
+            previous = ProjectLearningEvent.objects.filter(request_key=key).first()
+            if previous:
+                task = project.learning_tasks.get(pk=previous.content['task_id'])
+            else:
+                task = create_task(project, arguments)
+                ProjectLearningEvent.objects.create(project=project, message=message, kind='task',
+                    request_key=key, content={'task_id': str(task.pk)})
+            data = task_data(task)
+            return {key: data[key] for key in ('id', 'title', 'status', 'version_id', 'node_id', 'stage_id')} | {
+                'href': f'/xiaoyu?project={project.pk}&learning_task={task.pk}',
+                'notice': '任务已准备，用户可在本项目学习安排中作答；不得代答或自报成绩。'}
     if name == 'manage_learning_knowledge':
         from .learning_knowledge import knowledge_operation
         return knowledge_operation(project, arguments, message=message)
@@ -317,6 +366,7 @@ def compact_learning(data):
     knowledge = data.get('knowledge', {})
     knowledge.pop('evidence', None)
     knowledge['nodes'] = [{'id': node['id'], 'title': node['title'], 'beliefs': node['beliefs']} for node in knowledge.get('nodes', [])]
+    data['tasks'] = data.get('tasks', [])[-15:]
     data['events'] = data['events'][:5]
     for event in data['events']:
         if event['source']:

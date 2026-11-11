@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ProjectLearningDialog, ProjectLearningResume } from '@/components/ProjectLearningPanel';
 import { Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain, Stethoscope, WarningCircle, PlayCircle } from '@phosphor-icons/react';
 import AgentChatLayout from '@/components/AgentChatLayout';
@@ -22,9 +23,12 @@ const SKILLS = [
 
 export const XiaoYu = () => {
   const { chat } = useXiaoYuChat();
+  const [searchParams] = useSearchParams();
+  const requestedTask = searchParams.get('learning_task');
+  const [dismissedTask, setDismissedTask] = useState<string | null>(null);
   const [learningOpen, setLearningOpen] = useState(false);
   useNotesSidebarAvailability(chat.hasConversation);
-  return <><ProjectLearningDialog open={learningOpen} onOpenChange={setLearningOpen} /><AgentChatLayout
+  return <><ProjectLearningDialog open={learningOpen || (!!requestedTask && dismissedTask !== requestedTask)} onOpenChange={open => { setLearningOpen(open); if (!open) setDismissedTask(requestedTask); }} /><AgentChatLayout
     contextPanel={chat.projectId ? () => <ProjectLearningResume /> : undefined}
     toolbarAction={{ icon: BookOpen, label: "学习安排", tooltip: "查看学习安排与反馈依据", onClick: () => setLearningOpen(true) }}
     appearance="native" layout="inline" enableNoteMentions inputTourClass="xiaoyu-input"

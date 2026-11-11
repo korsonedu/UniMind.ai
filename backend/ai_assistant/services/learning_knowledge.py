@@ -106,6 +106,8 @@ def validate_nodes(user, nodes):
         if citation['quote'] not in source.snapshot['excerpt']:
             raise ValidationError('知识引用必须是该资料版本实际读取片段中的原文。')
         citation.update(url=source.snapshot['url'], title=source.snapshot['title'], read_at=source.snapshot['read_at'])
+        if source.snapshot.get('source_kind'):
+            citation['source_kind'] = source.snapshot['source_kind']
 
 
 def validate_path(project, state, plan):
@@ -222,6 +224,14 @@ def knowledge_state(project, state, *, compact=False):
         observations.setdefault((check['node_id'], check['mode']), []).append({**check, 'at': event.created_at.isoformat()})
         evidence.append({'event_id': event.pk, 'message_id': event.message_id, 'source': event.message.content[:2000], 'conversation_id': str(event.message.conversation_id),
             'at': event.created_at.isoformat(), **check})
+    from .learning_task_evidence import formal_observations
+    formal, task_provenance = formal_observations(project, version.pk)
+    for row in formal:
+        observations.setdefault((row['node_id'], row['mode']), []).append(row)
+        evidence.append(row)
+    evidence.sort(key=lambda row: (row['at'], row['event_id']))
+    for rows in observations.values():
+        rows.sort(key=lambda row: row['at'])
     now = timezone.now()
     states = [{**node, 'beliefs': {mode: belief(observations.get((node['id'], mode), []), now) for mode in ('apply', 'transfer')}} for node in nodes]
     by_id = {node['id']: node for node in states}
@@ -244,14 +254,15 @@ def knowledge_state(project, state, *, compact=False):
             'reason': ('先了解常规应用表现' if mode == 'apply' else '已有常规独立证据，换情境检查候选迁移') +
                       ('；证据较早，安排重新检查' if estimate['stale_days'] and estimate['stale_days'] > 30 else '')})
     recommendations.sort(key=lambda row: (-row['score'], row['node_id']))
-    used = {row['probe_id'] for row in evidence}
+    used = {row['probe_id'] for row in evidence if 'probe_id' in row}
     probes = [{'id': event.pk, **event.content} for event in ProjectLearningEvent.objects.filter(project=project,
         kind='probe', message__isnull=False, content__version_id=version.pk).exclude(pk__in=used).order_by('-id')[:3]]
     result = {'algorithm': ALGORITHM_VERSION, 'version_id': version.pk, 'map_id': version.knowledge_map_id,
               'revision': version.revision, 'title': version.snapshot['title'], 'path': path, 'nodes': states,
               'recommendations': recommendations[:3], 'probes': probes,
-              'excluded_evidence_count': verified['excluded_provenance'],
-              'notice': '固定参数下的条件表现估计，尚未校准；不代表正式分数或真实掌握概率。迁移任务由小宇提出，尚未独立验证。'}
+              'excluded_evidence_count': verified['excluded_provenance'] + task_provenance['excluded_provenance'],
+              'repeated_question_count': task_provenance['repeated_questions'],
+              'notice': '固定参数下的条件表现估计，尚未校准；实际单选成绩与小宇判断分别保留。知识归属、帮助声明和迁移任务尚未独立验证，不代表真实掌握概率。'}
     if compact:
         result['nodes'] = [{'id': node['id'], 'title': node['title'], 'beliefs': node['beliefs']} for node in states]
     else:
@@ -313,6 +324,7 @@ def knowledge_operation(project, arguments, *, message=None):
                     resource_id=citation['resource_id'], revision=citation['revision'], resource__is_archived=False)
                 snapshot = original.snapshot
                 source = {k: snapshot[k] for k in ('url', 'title', 'excerpt', 'read_at', 'domain', 'topic', 'level', 'edition')}
+                source.update({key: snapshot[key] for key in ('source_kind', 'content_version', 'references', 'not_web_read') if key in snapshot})
                 source.update(id=uuid4().hex, library_id=citation['resource_id'], library_revision=citation['revision'], pinned=True)
                 sources[key] = store_resource(project, source)['resource']['id']
         state.refresh_from_db(fields=['resources'])
