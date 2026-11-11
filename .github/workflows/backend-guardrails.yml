@@ -53,6 +53,22 @@ jobs:
       - name: Install browser for learning tool smoke checks
         run: python -m playwright install --only-shell chromium
 
+      - name: Enable sandboxed Chromium in the CI runner
+        run: |
+          python - <<'PYTHON'
+          from pathlib import Path
+          import subprocess
+          browsers = list(Path.home().glob('.cache/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell'))
+          assert len(browsers) == 1, browsers
+          profile = Path('deploy/unimind-learning-chromium.apparmor').read_text()
+          original = '/opt/unimind-learning-worker/browsers/chromium_headless_shell-1217/chrome-headless-shell-linux64/chrome-headless-shell'
+          subprocess.run(['sudo', 'apparmor_parser', '-r'], input=profile.replace(original, str(browsers[0])), text=True, check=True)
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as runtime:
+              browser = runtime.chromium.launch(headless=True, chromium_sandbox=True)
+              browser.close()
+          PYTHON
+
       - name: Backend regression tests
         working-directory: backend
         run: python -m pytest
