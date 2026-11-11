@@ -8,6 +8,39 @@ from users.models import WeeklyAIQuotaConfig, WeeklyAIUsage, AIUsageReservation
 
 
 @pytest.mark.django_db
+def test_failed_experiment_keeps_replayable_evidence(user, settings, tmp_path):
+    from ai_assistant.services.dsh_xiaoyu import complete_turn
+    from ai_assistant.services.dsh_runtime import DshUnavailable
+    from ai_assistant.services.dsh_service import execute_tool, memory_snapshot
+    settings.DEBUG = settings.UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE = True
+    settings.UNIMIND_DSH_STATE_DIR = str(tmp_path)
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    user.is_member = True
+    user.save(update_fields=['is_member'])
+    bot = Bot.objects.create(name='小宇', bot_type='planner', system_prompt='合成')
+    cid = uuid4()
+    body = {'message': '合成交互讲题', 'request_id': str(uuid4()), 'conversation_id': str(cid), 'bot_id': bot.pk}
+    arguments = {'title': '合成实验', 'html': '<button id="go">计算</button><output id="out">41</output>',
+        'checks': [{'selector': '#go', 'action': 'click', 'expect_selector': '#out', 'expect_text': '42'}]}
+    report = {'ok': False, 'errors': ['期望 42，实际 41'], 'checks': [{'selector': '#go', 'ok': False}]}
+    def runtime(owner, action, **kwargs):
+        result = execute_tool(owner, 'build_learning_experiment', arguments, memory_snapshot(owner)['version'],
+            source=kwargs['reservation'].pk, chat_context=kwargs['chat_context'])
+        assert result.get('error')
+        raise DshUnavailable('实验尚未通过验证。')
+    with patch('ai_assistant.services.dsh_xiaoyu.run_site_action', side_effect=runtime), \
+            patch('ai_assistant.services.learning_experiments.preview', return_value=report):
+        with pytest.raises(DshUnavailable):
+            complete_turn(SimpleNamespace(user=user, data=body), bot, cid, body['message'], lambda event: None)
+    saved = AIUsageReservation.objects.get(user=user)
+    assert saved.status == 'released' and saved.response['is_error']
+    assert saved.response['learning_failure']['arguments'] == arguments
+    assert saved.response['learning_failure']['result']['preview'] == report
+    assert not AIChatMessage.objects.filter(conversation_id=cid).exists()
+    assert WeeklyAIUsage.objects.get(user=user).ai_calls == 0
+
+
+@pytest.mark.django_db
 def test_official_turn_persists_once_and_uses_auxiliary_tasks(user, settings, tmp_path):
     from ai_assistant.services.dsh_xiaoyu import complete_turn
     settings.UNIMIND_DSH_ENABLED = settings.UNIMIND_DSH_SITE_ENABLED = settings.UNIMIND_DSH_XIAOYU_ENABLED = True
@@ -48,7 +81,8 @@ def test_official_turn_failure_releases_and_never_uses_legacy(user, settings, tm
             complete_turn(SimpleNamespace(user=user, data=body), bot, cid, body['message'], lambda event: None)
         legacy.assert_not_called()
     assert not AIChatMessage.objects.filter(conversation_id=cid).exists()
-    assert AIUsageReservation.objects.get(user=user).status == 'released'
+    released = AIUsageReservation.objects.get(user=user)
+    assert released.status == 'released' and released.response['is_error'] is True
     native = {'finish_reason': 'completed', 'content': '同一请求重试完成',
               'session': {'id': 'b' * 32, 'messages': [{'role': 'assistant', 'cards': []}]}}
     with patch('ai_assistant.services.dsh_xiaoyu.run_site_action', return_value=native) as runtime:

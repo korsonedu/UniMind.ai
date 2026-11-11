@@ -32,6 +32,6 @@ def tool_status(event, allowed, calls):
             status = {'type': 'tool_status', 'call_id': call_id, 'name': name,
                       'status': 'failed' if failed else 'succeeded'}
             if failed:
-                status['error'] = {'code': 'tool_failed', 'message': '学习工具执行失败，请稍后重试。'}
+                status['error'] = {'code': 'tool_failed', 'message': '交互实验尚未通过验证，未挂载。' if name == 'build_learning_experiment' else '学习工具执行失败，请稍后重试。'}
             return status
     return None

@@ -18,6 +18,8 @@ class ChatRequestStatusView(APIView):
         if reservation:
             if reservation.status == 'succeeded' and not reservation.response.get('deleted'):
                 payload.update(status='completed', response=reservation.response)
+            elif reservation.status == 'released' and reservation.response.get('is_error'):
+                payload.update(status='failed', response=reservation.response)
             elif reservation.status == 'pending' and reservation.updated_at >= timezone.now() - timedelta(hours=1):
                 payload['status'] = 'pending'
         response = Response(payload)

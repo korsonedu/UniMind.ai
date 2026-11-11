@@ -34,7 +34,7 @@ export function TaskList({ data, onComplete }: TaskListProps) {
   const succeededCount = data.items.filter(item => item.status === 'succeeded').length;
   const failedCount = data.items.filter(item => item.status === 'failed').length;
   const terminalCount = succeededCount + failedCount;
-  const allSucceeded = data.completed && activeCount === 0 && succeededCount > 0 && failedCount === 0;
+  const allSucceeded = data.completed && !data.failed && activeCount === 0 && succeededCount > 0 && failedCount === 0;
 
   useEffect(() => {
     if (shouldExpandToolRun(previousRunId.current, data)) {
@@ -78,8 +78,8 @@ export function TaskList({ data, onComplete }: TaskListProps) {
         <span>
           {allSucceeded
             ? `全部完成 · ${succeededCount} 项`
-            : data.completed && failedCount > 0
-              ? `已完成 · ${succeededCount} 成功 · ${failedCount} 失败`
+            : data.completed && (data.failed || failedCount > 0)
+              ? `本轮未完成 · ${succeededCount} 成功 · ${failedCount} 失败`
               : `进行中 · ${terminalCount}/${data.items.length} 项`}
         </span>
       </button>

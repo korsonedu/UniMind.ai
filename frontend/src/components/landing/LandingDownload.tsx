@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowUpRight, DownloadSimple } from '@phosphor-icons/react';
 
 type Platform = 'mac' | 'windows';
-type Release = { version: string; prerelease: boolean; packages: Partial<Record<Platform, string>>; instructions: string };
+type Release = { version: string; prerelease: boolean; packages: Partial<Record<Platform, string>> };
 const labels = { mac: 'macOS · Apple 芯片', windows: 'Windows · x64' };
 
 function detectPlatform(): Platform | null {
@@ -49,7 +49,7 @@ export function LandingDownload({ entry }: { entry: string }) {
     </div>
     <p className="landing-download-note" aria-live="polite">
       {error ? <>暂时无法获取最新版本，<button type="button" onClick={() => { setError(false); setAttempt(value => value + 1); }}>重试</button></>
-        : release ? <>v{release.version}{release.prerelease && ' · 预发布版'}{platform === 'mac' && ' · 适用于 M 系列芯片，Intel Mac 暂不支持'}{!platform && ' · 请在电脑上安装'} · <a href={release.instructions} target="_blank" rel="noopener noreferrer">安装说明</a></>
+        : release ? <>v{release.version}{release.prerelease && ' · 预发布版'}{platform === 'mac' && ' · 适用于 M 系列芯片，Intel Mac 暂不支持'}{!platform && ' · 请在电脑上安装'}</>
           : '正在确认最新桌面版本'}
     </p>
   </div>;
