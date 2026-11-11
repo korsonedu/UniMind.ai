@@ -69,7 +69,7 @@ function ExperimentFrame({ payload }: { payload: ExperimentPayload }) {
     return inFlight.current;
   };
   const persistRef = useRef(persist);
-  persistRef.current = persist;
+  useEffect(() => { persistRef.current = persist; });
 
   useEffect(() => {
     const controller = new AbortController();
