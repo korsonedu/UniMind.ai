@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -35,11 +37,31 @@ jobs:
         working-directory: frontend/electron
         run: |
           Get-ChildItem release/*-setup.exe | Get-FileHash -Algorithm SHA256 | Format-List | Out-File windows-sha256.txt
+      - name: Verify packaged source
+        shell: bash
+        working-directory: frontend/electron
+        run: |
+          node <<'JS'
+          const fs = require('node:fs'), crypto = require('node:crypto'), cp = require('node:child_process');
+          const asar = require('@electron/asar');
+          const version = require('./package.json').version;
+          const archive = 'release/win-unpacked/resources/app.asar';
+          const metadata = JSON.parse(asar.extractFile(archive, 'package.json'));
+          if (metadata.version !== version) throw Error('Packaged version mismatch');
+          const hashes = {};
+          for (const file of ['dist/main.cjs', 'dist/preload.cjs']) {
+            const source = fs.readFileSync(file), packaged = asar.extractFile(archive, file);
+            if (!source.equals(packaged)) throw Error(`Packaged source mismatch: ${file}`);
+            hashes[file] = crypto.createHash('sha256').update(source).digest('hex');
+          }
+          fs.writeFileSync('windows-build-info.json', JSON.stringify({version, source_commit:cp.execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(), platform:'windows-x64', signature:'unsigned', installation_smoke:'not run', packaged_code_matches:true, hashes}, null, 2));
+          JS
       - uses: actions/upload-artifact@v4
         with:
           name: UniMind-Windows-x64-${{ github.sha }}
           path: |
             frontend/electron/release/*-setup.exe
             frontend/electron/windows-sha256.txt
+            frontend/electron/windows-build-info.json
           if-no-files-found: error
           retention-days: 14
