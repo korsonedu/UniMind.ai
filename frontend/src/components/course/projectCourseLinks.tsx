@@ -5,7 +5,7 @@ import { learningUrl } from '@/lib/projectLearning';
 function sameOriginCourseUrl(href?: string) {
   try {
     const url = href ? new URL(href, window.location.href) : null;
-    return url?.origin === window.location.origin && /^\/course\/\d+\/?$/.test(url.pathname) ? url : null;
+    return url?.origin === window.location.origin && /^\/(?:course\/\d+|courses)\/?$/.test(url.pathname) ? url : null;
   } catch { return null; }
 }
 

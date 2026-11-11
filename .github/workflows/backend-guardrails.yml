@@ -18,7 +18,7 @@ on:
 
 jobs:
   backend-checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       ACCOUNT_DEV_LOCAL_CACHE: "true"
       CELERY_BROKER_URL: "memory://"
