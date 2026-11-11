@@ -3,6 +3,8 @@ import http.client
 import ipaddress
 import socket
 import ssl
+from threading import Event, Timer
+from time import monotonic
 from html.parser import HTMLParser
 from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 from uuid import uuid4
@@ -14,23 +16,65 @@ from rest_framework.exceptions import ValidationError
 from ai_assistant.models import ProjectLearning
 
 
+PUBLIC_TEXT_TIMEOUT = 12
+
+
 def public_text(url):
+    # Synchronous OS DNS cannot be interrupted; charge/check its elapsed time.
+    deadline = monotonic() + PUBLIC_TEXT_TIMEOUT
+
+    def remaining():
+        seconds = deadline - monotonic()
+        if seconds <= 0:
+            raise TimeoutError('Public text deadline exceeded.')
+        return seconds
+
     for _ in range(4):
+        remaining()
         parts = urlsplit(url)
         if (parts.scheme != 'https' or not parts.hostname or parts.username or parts.password
                 or parts.port not in (None, 443) or len(url) > 3000):
             raise ValidationError('来源必须是公开的 HTTPS 页面。')
         host = parts.hostname.encode('idna').decode('ascii')
         addresses = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+        remaining()
         if not addresses or any(not ipaddress.ip_address(row[4][0]).is_global for row in addresses):
             raise ValidationError('不能读取内网、本机或保留地址。')
         pinned = addresses[0][4][0]
-        connection = http.client.HTTPSConnection(host, timeout=12, context=ssl.create_default_context())
-        connection._create_connection = lambda address, timeout, source_address=None: socket.create_connection((pinned, 443), timeout, source_address)
+        connection = http.client.HTTPSConnection(host, timeout=remaining(), context=ssl.create_default_context())
+        active_socket = [None]
+        expired = Event()
+
+        def connect(address, timeout, source_address=None):
+            sock = socket.create_connection((pinned, 443), min(timeout, remaining()), source_address)
+            active_socket[0] = sock
+            try:
+                sock.settimeout(remaining())  # TCP time is deducted before TLS.
+            except OSError:
+                sock.close()
+                raise
+            return sock
+
+        def abort():
+            expired.set()
+            transport = connection.sock or active_socket[0]
+            if transport is not None:
+                try:
+                    transport.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+
+        connection._create_connection = connect
+        timer = Timer(remaining(), abort)
+        timer.daemon = True
+        timer.start()
+        response = None
         try:
             path = quote(parts.path or '/', safe='/%:@!$&\'()*+,;=-._~') + (('?' + parts.query) if parts.query else '')
             connection.request('GET', path, headers={'User-Agent': 'UniMind-Learning/1.0', 'Accept-Encoding': 'identity'})
+            active_socket[0] = connection.sock
             response = connection.getresponse()
+            remaining()
             if response.status in (301, 302, 303, 307, 308):
                 location = response.getheader('Location')
                 if not location:
@@ -43,12 +87,20 @@ def public_text(url):
             if not any(token in kind for token in ('text/', 'xml', 'json')):
                 raise ValidationError('首期仅支持网页和文本来源，请提供可读页面。')
             raw = response.read(512001)
+            if expired.is_set():
+                raise TimeoutError('Public text deadline exceeded.')
+            remaining()
             if len(raw) > 512000:
                 raise ValidationError('页面过大，请选择更具体的知识页面。')
             text = raw.decode(response.headers.get_content_charset() or 'utf-8', errors='replace')
             return urlunsplit((parts.scheme, parts.netloc, parts.path, parts.query, '')), text
         finally:
+            timer.cancel()
+            if response is not None:
+                response.close()
             connection.close()
+            if active_socket[0] is not None:
+                active_socket[0].close()
     raise ValidationError('来源跳转次数过多。')
 
 

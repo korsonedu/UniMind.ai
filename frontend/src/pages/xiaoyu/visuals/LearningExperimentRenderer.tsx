@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowUpRight, SlidersHorizontal } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -69,7 +69,7 @@ function ExperimentFrame({ payload }: { payload: ExperimentPayload }) {
     return inFlight.current;
   };
   const persistRef = useRef(persist);
-  persistRef.current = persist;
+  useLayoutEffect(() => { persistRef.current = persist; });
 
   useEffect(() => {
     const controller = new AbortController();

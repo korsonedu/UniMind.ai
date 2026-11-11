@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { Link } from 'react-router-dom';
 import { Sparkle, X } from '@phosphor-icons/react';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
@@ -10,12 +10,21 @@ import { InlineVisualCard } from '@/components/InlineVisualCard';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
 import { AgentReplyContext } from '@/pages/xiaoyu/visuals/agentReplyContext';
 import { courseCitationComponents } from './courseCitations';
+import { projectCourseLinks } from './projectCourseLinks';
+import type { Message } from '@/hooks/useAgentConversation';
 import { useSystemStore } from '@/store/useSystemStore';
 
 interface Props {
   projectId: number; courseId: number; videoRef: RefObject<HTMLVideoElement | null>;
   mode: 'floating' | 'sidebar'; visible: boolean;
 }
+function ProjectCourseBubble({ message, index, projectId, conversationId, courseId, onSeek }: {
+  message: Message; index: number; projectId: number; conversationId: string; courseId: number; onSeek: (seconds: number) => void;
+}) {
+  return <ChatBubble native compact msg={message} isUser={message.role === 'user'} index={index} streaming={message.streaming}
+    markdownComponents={projectCourseLinks(projectId, conversationId, courseCitationComponents(message.metadata?.course_context, courseId, onSeek), courseId)} />;
+}
+
 export default function ProjectCourseChat({ projectId, courseId, videoRef, mode, visible }: Props) {
   const { chat, activate, setPageHooks, openingProject } = useXiaoYuChat();
   const query = useProjectLearning(chat.projectId === projectId ? projectId : null);
@@ -23,6 +32,9 @@ export default function ProjectCourseChat({ projectId, courseId, videoRef, mode,
   const snapshot = useRef<number | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const floating = mode === 'floating';
+  const handleSeek = useCallback((seconds: number) => {
+    if (videoRef.current) videoRef.current.currentTime = seconds;
+  }, [videoRef]);
   const sendShortcut = useSystemStore(state => state.sendShortcut);
   useEffect(activate, [activate]);
   useEffect(() => {
@@ -50,7 +62,7 @@ export default function ProjectCourseChat({ projectId, courseId, videoRef, mode,
         const visuals = message.toolStep?.visuals?.length ? message.toolStep.visuals : message.toolStep?.visual ? [message.toolStep.visual] : [];
         return <article key={message.id ?? message._id ?? index} className="um-course-project-message" data-role={message.role}><small>{message.role === 'user' ? '你' : '小宇'}</small>
           {(message.metadata?.dsh_cards as DshCard[] | undefined)?.map((card, i) => <DshToolCard key={i} card={card} />)}
-          {message.toolStep ? message.toolStep.status === 'succeeded' && visuals.length ? visuals.map((visual, i) => <InlineVisualCard key={i} visual={visual as VisualData} />) : <ToolStepMessage step={message.toolStep} /> : <ChatBubble native compact msg={message} isUser={message.role === 'user'} index={index} streaming={message.streaming} markdownComponents={courseCitationComponents(message.metadata?.course_context, courseId, seconds => { if (videoRef.current) videoRef.current.currentTime = seconds; })} />}
+          {message.toolStep ? message.toolStep.status === 'succeeded' && visuals.length ? visuals.map((visual, i) => <InlineVisualCard key={i} visual={visual as VisualData} />) : <ToolStepMessage step={message.toolStep} /> : <ProjectCourseBubble message={message} index={index} projectId={projectId} conversationId={chat.conversationId} courseId={courseId} onSeek={handleSeek} />}
         </article>;
       })}<div ref={bottom} /></div></AgentReplyContext.Provider>
       <form className="um-course-chat-composer" onSubmit={event => { event.preventDefault(); send(); }}><textarea aria-label="围绕当前课程继续项目学习" value={chat.input} onChange={event => update(event.target.value)} disabled={!ready || chat.loading} placeholder="结合当前课程，继续这个学习目标…" onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && (sendShortcut === 'enter' || event.ctrlKey || event.metaKey)) { event.preventDefault(); send(); } }} /><button className="um-agent-button um-agent-button-primary" disabled={!ready || chat.loading || !chat.input.trim()}>{chat.loading ? '正在思考…' : '发送'}</button></form>

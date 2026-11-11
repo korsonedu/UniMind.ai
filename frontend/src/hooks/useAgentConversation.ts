@@ -132,12 +132,6 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [projectId, updateProjectId] = useState<number | null>(null);
   const projectIdRef = useRef(projectId);
-  const setProjectId = useCallback((value: React.SetStateAction<number | null>) => {
-    const next = typeof value === 'function' ? value(projectIdRef.current) : value;
-    projectIdRef.current = next;
-    updateProjectId(next);
-    saveRecovery(scopeRef.current, conversationIdRef.current, { projectId: next });
-  }, []);
   const [sessionOpen, setSessionOpen] = useState(false);
   const [taskList, setTaskList] = useState<TaskListData | null>(null);
   const [chatWidth, setChatWidth] = useState(() => Math.min(Math.round(window.innerWidth * 0.36), 420));
@@ -164,6 +158,14 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const sessionsRevisionRef = useRef(0);
   const sessionSyncKeyRef = useRef('');
   const sessionMetadataRef = useRef(new Map<string, ConversationPatch>());
+  const selectionVersionRef = useRef(0);
+
+  const setProjectId = useCallback((value: React.SetStateAction<number | null>) => {
+    const next = typeof value === 'function' ? value(projectIdRef.current) : value;
+    projectIdRef.current = next;
+    updateProjectId(next);
+    saveRecovery(scopeRef.current, conversationIdRef.current, { projectId: next });
+  }, []);
 
   const loading = generatingIds.includes(conversationId);
   const identity = `${userId ?? ''}:${bot?.id ?? ''}`;
@@ -184,6 +186,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   }, []);
 
   const setConversationId = useCallback((id: string) => {
+    ++selectionVersionRef.current;
     conversationIdRef.current = id;
     updateConversationId(id);
     if (scopeRef.current) {
@@ -196,6 +199,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       saveRecovery(scopeRef.current, id, {}, true);
     }
   }, []);
+
+  const getSelectionVersion = useCallback(() => selectionVersionRef.current, []);
 
   const markGenerating = useCallback((id: string, active: boolean) => {
     const set = generatingRef.current;
@@ -403,13 +408,13 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       sendCountsRef.current.delete(id);
       setSessions(prev => prev.filter(s => s.conversationId !== id));
       if (conversationIdRef.current === id) {
-        setProjectId(session.projectId ?? null);
         messagesRef.current = [];
         setMessages([]);
         if (!scopeRef.current) setInput('');
         setTaskList(null);
         setActiveSessionId(null);
         setConversationId(crypto.randomUUID());
+        setProjectId(session.projectId ?? null);
       }
       toast.success('对话已删除');
     } catch {
@@ -939,7 +944,6 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   // ── Handlers ──
 
   const handleReset = useCallback((notify = true) => {
-    setProjectId(null);
     if (!bot) return;
     // 保留原会话的后台流；只清空当前视图并新建会话。
     messageBuffersRef.current.set(conversationIdRef.current, messagesRef.current);
@@ -949,6 +953,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     setTaskList(null);
     setActiveSessionId(null);
     setConversationId(crypto.randomUUID());
+    setProjectId(null);
     if (notify) toast.success(resetMessage);
   }, [bot, resetMessage, setConversationId, setProjectId]);
 
@@ -974,7 +979,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   }, []);
 
   return {
-    projectId, setProjectId,
+    projectId, setProjectId, getSelectionVersion,
     // State
     bot,
     messages,

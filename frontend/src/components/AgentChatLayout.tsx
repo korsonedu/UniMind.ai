@@ -1,5 +1,5 @@
 import { useNoteMentions } from '@/pages/notes/useNoteMentions';
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useSystemStore } from '@/store/useSystemStore';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -30,6 +30,7 @@ import { useChatUnreadStore } from '@/store/useChatUnreadStore';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { ContactAdminModal } from '@/components/ContactAdminModal';
 import { learningReset, type AIUsage, type LearningAccess } from '@/types/learning';
+import { projectCourseLinks } from './course/projectCourseLinks';
 
 // ── Types ──
 
@@ -231,6 +232,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   useLayoutEffect(() => { noteMentionsRef.current = noteMentions; }, [noteMentions]);
   const projectControls = useConversationProjects(appearance === 'native', projectId, setProjectId, setSessions, openProject);
   const selectedProjectName = projectControls.projects.find(project => project.id === projectId)?.name;
+  const markdownComponents = useMemo(() => projectCourseLinks(projectId, conversationId), [projectId, conversationId]);
 
   useEffect(() => {
     if (appearance !== 'native' || generatingIds.length > 0) return;
@@ -630,7 +632,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   if (msg.role === 'assistant' && Array.isArray(msg.metadata?.dsh_cards)) {
                     return <React.Fragment key={msg._id || i}>
                       {(msg.metadata.dsh_cards as DshCard[]).map((card, index) => <DshToolCard key={index} card={card} />)}
-                      {msg.content && <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} streaming={msg.streaming} />}
+                      {msg.content && <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} streaming={msg.streaming} markdownComponents={markdownComponents} />}
                     </React.Fragment>;
                   }
                   const stepVisuals = msg.toolStep?.visuals?.length
@@ -648,7 +650,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                           />
                         ))}
                         {msg.content && (
-                          <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} streaming={msg.streaming} />
+                          <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} streaming={msg.streaming} markdownComponents={markdownComponents} />
                         )}
                       </React.Fragment>
                     );
@@ -665,7 +667,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     return <ToolStepMessage key={msg._id || i} step={step} index={i} />;
                   }
                   // 普通消息 → ChatBubble
-                  return <ChatBubble native={appearance === 'native'} key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} streaming={msg.streaming} />;
+                  return <ChatBubble native={appearance === 'native'} key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} streaming={msg.streaming} markdownComponents={markdownComponents} />;
                 })}
                 {loading && (
                   <ChatBubble native={appearance === 'native'} msg={{ role: 'assistant', content: '' }} isUser={false} isThinking index={messages.length} />
@@ -834,7 +836,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 msg.toolStep ? (
                   <ToolStepMessage key={msg._id || i} step={msg.toolStep} index={i} />
                 ) : (
-                  <ChatBubble key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} compact streaming={msg.streaming} />
+                  <ChatBubble key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} compact streaming={msg.streaming} markdownComponents={markdownComponents} />
                 )
               ))}
               {loading && (
