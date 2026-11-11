@@ -627,12 +627,8 @@ USE_MEM0=true                      # mem0 语义记忆（需 pgvector 扩展）
 ### 邮件
 
 ```bash
-# Resend HTTP API（生产环境）
-EMAIL_BACKEND=core.email_service.ResendEmailBackend
-RESEND_API_KEY=re_xxx
-
-# 开发环境可用 console 后端:
-# EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+# 验证码和通知邮件使用飞书 SMTP（smtp.feishu.cn:465）
+FEISHU_NOTIFY_PASSWORD=<notification@unimind-ai.com 的 SMTP 授权密码>
 ```
 
 ### ASR 语音转文字
@@ -823,7 +819,7 @@ cd ../frontend && npm ci && npm run build
 ## 安全注意事项
 
 - **SECRET_KEY**：生产环境必须设置为至少 64 字符的随机值，可用 `python -c "import secrets; print(secrets.token_urlsafe(64))"` 生成
-- **API Key**：所有第三方 API Key（LLM、Gmail、GIPHY、ASR）必须通过环境变量注入，不得提交到版本控制
+- **API Key**：所有第三方 API Key 和 SMTP 授权密码必须通过环境变量注入，不得提交到版本控制
 - **数据库密码**：使用强随机密码，不要与其他系统重复
 - **HTTPS**：生产环境必须启用 HTTPS，建议使用 Let's Encrypt
 - **支付密钥**：支付宝/微信支付私钥等通过 `EncryptedCharField` / `EncryptedTextField`（Fernet AES）加密存储，加密密钥通过 `ENCRYPTION_KEY` 环境变量设置（默认从 SECRET_KEY 派生）

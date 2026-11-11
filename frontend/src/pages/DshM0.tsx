@@ -1,6 +1,7 @@
 import { SelectField, SelectOption } from '@/components/ui/select';
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
+import { getCsrfToken } from '@/lib/api';
 import { DshToolCard, type DshCard } from '@/components/DshToolCard';
 
 type Health = { sdk?: string; backend_configured: boolean; model_configured: boolean; mode: string; student?: { id: number; name: string } };
@@ -27,7 +28,7 @@ async function request<T>(path: string, data?: Record<string, unknown>, signal?:
   const base = site ? `${(import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')}/ai/dsh` : '/dsh-m0';
   const response = await fetch(`${base}${path}${site ? '/' : ''}`, {
     credentials: 'include', signal,
-    ...(data === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+    ...(data === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', ...(site ? { 'X-CSRFToken': await getCsrfToken() } : {}) }, body: JSON.stringify(data) }),
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -44,7 +45,7 @@ type StreamEvent = { type: string; text?: string; step?: number; name?: string; 
 async function streamTurn(body: Pending, signal: AbortSignal, emit: (event: StreamEvent) => void): Promise<Turn> {
   const base = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
   const response = await fetch(`${base}/ai/dsh/chat/stream/`, {
-    method: 'POST', credentials: 'include', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    method: 'POST', credentials: 'include', signal, headers: { 'Content-Type': 'application/json', 'X-CSRFToken': await getCsrfToken() }, body: JSON.stringify(body),
   });
   if (!response.ok) {
     const result = await response.json().catch(() => ({}));

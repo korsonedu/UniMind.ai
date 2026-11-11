@@ -74,7 +74,10 @@ class DesktopAuthSmokeTests(TestCase):
         self.assertEqual(replay.status_code, 400)
         self.assertNotIn('auth_token', replay.cookies)
         self.assertEqual(native.get('/api/users/me/').status_code, 200)
-        self.assertEqual(native.post('/api/users/logout/').status_code, 200)
+        self.assertEqual(native.post('/api/users/logout/').status_code, 403)
+        self.assertEqual(native.post('/api/users/logout/',
+            HTTP_X_CSRFTOKEN=native.cookies['csrftoken'].value,
+            HTTP_ORIGIN='http://testserver').status_code, 200)
         self.assertEqual(self.client.get('/api/users/me/').status_code, 200)
 
     def test_wrong_verifier_does_not_consume_code(self):

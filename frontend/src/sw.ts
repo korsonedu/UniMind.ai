@@ -3,8 +3,7 @@
 import { precacheAndRoute, cleanupOutdatedCaches, createHandlerBoundToURL } from 'workbox-precaching';
 import { clientsClaim } from 'workbox-core';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
-import { NetworkFirst, NetworkOnly } from 'workbox-strategies';
-import { ExpirationPlugin } from 'workbox-expiration';
+import { NetworkOnly } from 'workbox-strategies';
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Parameters<typeof precacheAndRoute>[0] };
 
@@ -20,23 +19,10 @@ registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html'), {
   denylist: [/^\/api\//, /^\/accounts\//, /^\/account-api\//, /^\/admin\//, /^\/media\//, /^\/static\//, /^\/assets\//, /^\/health\//],
 }));
 
-// API runtime caching
-registerRoute(
-  ({ url }) => url.pathname === '/api/users/me/' || url.pathname === '/api/desktop-release/',
-  new NetworkOnly(),
-);
-// Notes and practice data come from the encrypted desktop cache when offline;
-// never serve another account's cached response.
-registerRoute(
-  ({ url }) => url.pathname.startsWith('/api/notes/') || url.pathname.startsWith('/api/ai/practice/'),
-  new NetworkOnly(),
-);
+// Private API data stays out of shared browser caches. Desktop offline data is account-bound.
 registerRoute(
   /^https?:\/\/.*\/api\/.*/i,
-  new NetworkFirst({
-    cacheName: 'api-cache',
-    plugins: [new ExpirationPlugin({ maxEntries: 50, maxAgeSeconds: 300 })],
-  }),
+  new NetworkOnly(),
 );
 
 self.addEventListener('activate', event => {

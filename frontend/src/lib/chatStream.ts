@@ -18,7 +18,7 @@ export async function* readChatStream({
   signal,
   isCurrent,
 }: ReadChatStreamOptions): AsyncGenerator<ChatStreamPayload> {
-  const { url, init } = streamFetch('/api/ai/chat/stream/', body, signal);
+  const { url, init } = await streamFetch('/api/ai/chat/stream/', body, signal);
   const res = await fetch(url, init);
   if (!isCurrent()) return;
   if (!res.ok) {

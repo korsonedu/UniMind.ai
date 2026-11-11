@@ -47,6 +47,12 @@ class CourseMediaAuthenticationTests(TestCase):
         self.client.cookies['auth_token'] = LoginSession.issue(user=self.user).key
         self.assertEqual(self.client.get(self.url).status_code, 403)
 
+    def test_unpublished_course_media_is_denied(self):
+        self.course.is_published = False
+        self.course.save(update_fields=['is_published'])
+        self.client.cookies['auth_token'] = LoginSession.issue(user=self.user).key
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
     def test_inactive_cookie_is_denied(self):
         self.user.is_active = False
         self.user.save(update_fields=['is_active'])

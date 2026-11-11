@@ -21,18 +21,9 @@ from .views_admin import (
     SuperuserUserListView, UserTagListView, PermissionGroupListView,
 )
 from .views_institution import (
-    InstitutionDashboardView, PlatformAdminInstitutionOverviewView, RetiredInstitutionView,
-    InstitutionListView, InstitutionDetailView,
-    InstitutionStudentListView, InstitutionStudentDetailView,
-    InstitutionStudentStatsView, InstitutionStudentResetPasswordView,
-    InstitutionStudentRankingView,
-    InstitutionFeatureView,
-    PlanInviteCodeListView,
-    InstitutionMemberListView,
-    InstitutionAuditLogView, InstitutionNotificationConfigView,
-    InstitutionBusinessDashboardView, InstitutionDataExportView,
-    InstitutionStudentHealthView,
-    InstitutionJoinRequestListView,
+    PlatformAdminInstitutionOverviewView, RetiredInstitutionView,
+    InstitutionListView, InstitutionDetailView, InstitutionFeatureView,
+    PlanInviteCodeListView, InstitutionBusinessDashboardView,
 )
 from .views_sso import SSOAuthorizeView, SSOCallbackView
 from .accounts import desktop
@@ -96,7 +87,7 @@ urlpatterns = [
     path('institutions/overview/', PlatformAdminInstitutionOverviewView.as_view(), name='institution-overview'),
 
     # Institution — self-service (current user's institution)
-    path('institution/me/', InstitutionDashboardView.as_view(), name='institution-me'),
+    path('institution/me/', RetiredInstitutionView.as_view(), name='institution-me'),
     path('institution/me/update/', RetiredInstitutionView.as_view(), name='institution-self-update'),
     path('institution/me/directions/', RetiredInstitutionView.as_view(), name='institution-directions-update'),
     path('institution/me/features/', InstitutionFeatureView.as_view(), name='institution-features'),
@@ -106,33 +97,33 @@ urlpatterns = [
     path('check-invite/', RetiredInstitutionView.as_view(), name='check-invite'),
 
     # Institution — students
-    path('institution/me/students/', InstitutionStudentListView.as_view(), name='institution-student-list'),
-    path('institution/me/students/ranking/', InstitutionStudentRankingView.as_view(), name='institution-student-ranking'),
-    path('institution/me/students/<int:pk>/', InstitutionStudentDetailView.as_view(), name='institution-student-detail'),
-    path('institution/me/students/<int:pk>/stats/', InstitutionStudentStatsView.as_view(), name='institution-student-stats'),
-    path('institution/me/students/<int:pk>/reset-password/', InstitutionStudentResetPasswordView.as_view(), name='institution-student-reset-password'),
+    path('institution/me/students/', RetiredInstitutionView.as_view(), name='institution-student-list'),
+    path('institution/me/students/ranking/', RetiredInstitutionView.as_view(), name='institution-student-ranking'),
+    path('institution/me/students/<int:pk>/', RetiredInstitutionView.as_view(), name='institution-student-detail'),
+    path('institution/me/students/<int:pk>/stats/', RetiredInstitutionView.as_view(), name='institution-student-stats'),
+    path('institution/me/students/<int:pk>/reset-password/', RetiredInstitutionView.as_view(), name='institution-student-reset-password'),
 
     # Institution — members (owner + teacher management)
-    path('institution/me/members/', InstitutionMemberListView.as_view(), name='institution-member-list'),
+    path('institution/me/members/', RetiredInstitutionView.as_view(), name='institution-member-list'),
     path('institution/me/members/<int:pk>/role/', RetiredInstitutionView.as_view(), name='institution-member-role'),
 
 
     # Institution — audit log
-    path('institution/me/audit-logs/', InstitutionAuditLogView.as_view(), name='institution-audit-logs'),
+    path('institution/me/audit-logs/', RetiredInstitutionView.as_view(), name='institution-audit-logs'),
 
     # Institution — notification config
-    path('institution/me/notification-config/', InstitutionNotificationConfigView.as_view(), name='institution-notification-config'),
+    path('institution/me/notification-config/', RetiredInstitutionView.as_view(), name='institution-notification-config'),
     path('institution/me/business-dashboard/', InstitutionBusinessDashboardView.as_view(), name='institution-business-dashboard'),
-    path('institution/me/data-export/', InstitutionDataExportView.as_view(), name='institution-data-export'),
+    path('institution/me/data-export/', RetiredInstitutionView.as_view(), name='institution-data-export'),
 
 
     # Institution — student health (churn risk)
-    path('institution/me/student-health/', InstitutionStudentHealthView.as_view(), name='institution-student-health'),
+    path('institution/me/student-health/', RetiredInstitutionView.as_view(), name='institution-student-health'),
 
     # Institution invites + join requests
     path('institution/me/invites/', RetiredInstitutionView.as_view(), name='institution-invite-list'),
     path('institution/me/invites/<int:pk>/', RetiredInstitutionView.as_view(), name='institution-invite-detail'),
-    path('institution/me/join-requests/', InstitutionJoinRequestListView.as_view(), name='institution-join-request-list'),
+    path('institution/me/join-requests/', RetiredInstitutionView.as_view(), name='institution-join-request-list'),
     path('institution/me/join-requests/<int:pk>/review/', RetiredInstitutionView.as_view(), name='institution-join-request-review'),
 
 

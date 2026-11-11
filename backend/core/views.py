@@ -5,6 +5,15 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from users.permissions import IsPlatformAdmin
 from core.models import LegalDocument
+from django.middleware.csrf import get_token
+
+
+class CsrfTokenView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({'csrf_token': get_token(request)}, headers={'Cache-Control': 'no-store'})
 
 
 # ──────────────────────────────────────────────
