@@ -18,7 +18,7 @@ on:
 
 jobs:
   backend-checks:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     env:
       ACCOUNT_DEV_LOCAL_CACHE: "true"
       CELERY_BROKER_URL: "memory://"
@@ -43,6 +43,16 @@ jobs:
         run: |
           python -m playwright install --with-deps chromium
           sudo apt-get install -y fontconfig fonts-noto-cjk
+
+      - name: Browser sandbox preflight
+        run: |
+          python - <<'PYTHON'
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as runtime:
+              browser = runtime.chromium.launch(headless=True, chromium_sandbox=True)
+              assert browser.new_page().evaluate('6 * 7') == 42
+              browser.close()
+          PYTHON
 
       - name: Dependency vulnerability scan
         run: pip-audit --strict
