@@ -197,7 +197,9 @@ if IS_PROD and CORS_ALLOW_ALL_ORIGINS:
 CORS_ALLOWED_ORIGINS = _get_list("CORS_ALLOWED_ORIGINS")
 CORS_ALLOWED_ORIGIN_REGEXES = _get_list("CORS_ALLOWED_ORIGIN_REGEXES")
 CORS_ALLOW_CREDENTIALS = _get_bool("CORS_ALLOW_CREDENTIALS", default=True)
-CSRF_TRUSTED_ORIGINS = _get_list("CSRF_TRUSTED_ORIGINS")
+CSRF_TRUSTED_ORIGINS = _get_list("CSRF_TRUSTED_ORIGINS", [
+    "http://localhost:5173", "http://127.0.0.1:5173",
+] if DEBUG else [])
 
 # The account rollout is opt-in. No credentials are stored in the frontend.
 ACCOUNT_ENABLED = _get_bool("ACCOUNT_ENABLED")
@@ -401,10 +403,6 @@ CELERY_BEAT_SCHEDULE_FILENAME = os.getenv(
     str(BASE_DIR / "celerybeat-schedule"),
 )
 CELERY_BEAT_SCHEDULE = {
-    "compensate-missing-invoices-every-10m": {
-        "task": "payments.tasks.compensate_missing_invoices",
-        "schedule": 600.0,
-    },
     "expire-stale-orders-every-30m": {
         "task": "payments.tasks.expire_stale_orders",
         "schedule": 1800.0,  # 30 minutes

@@ -1,71 +1,19 @@
-import React, { useCallback, useState, useEffect } from 'react';
-import { Trophy, Medal, Spinner, Buildings } from '@phosphor-icons/react';
+import React from 'react';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
-import api from '@/lib/api';
-
-interface RankedUser {
-  id: number;
-  username: string;
-  nickname: string;
-  elo_score: number;
-  avatar_url: string;
-  email: string;
-  institution_role: string;
-}
-
-const rankBadge = (rank: number) => {
-  if (rank === 1) return <Trophy className="h-4 w-4 text-amber-500 fill-amber-500" aria-hidden="true" />;
-  if (rank === 2) return <Medal className="h-4 w-4 text-slate-400 fill-slate-400" aria-hidden="true" />;
-  if (rank === 3) return <Medal className="h-4 w-4 text-orange-600 fill-orange-600" aria-hidden="true" />;
-  return <span className="text-xs font-semibold text-muted-foreground tabular-nums w-4 text-center">{rank}</span>;
-};
 
 export const EloPopover: React.FC = () => {
   const user = useAuthStore(s => s.user);
-  const [ranking, setRanking] = useState<RankedUser[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const hasInstitution = !!user?.institution_id;
-
-  const fetchRanking = useCallback(() => {
-    if (!hasInstitution) return;
-    return api.get('/users/institution/me/students/ranking/').then((res) => {
-      setRanking(res.data || []);
-      setError(null);
-    })
-      .catch(() => {
-        setError('failed');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [hasInstitution]);
-
-
-
-  useEffect(() => {
-    if (open && user?.id) {
-      fetchRanking();
-    }
-  }, [open, user?.id, fetchRanking]);
-
-  const currentUserRank = ranking.findIndex(u => u.id === user?.id) + 1;
-  const currentUserInList = currentUserRank > 0;
 
   return (
-    <Popover open={open} onOpenChange={next => { setOpen(next); if (next && hasInstitution) { setLoading(true); setError(null); } }}>
+    <Popover>
       <PopoverTrigger asChild>
         <button
-          aria-label={`ELO ${user?.elo_score ?? '暂无'}，查看评分与排名`}
+          aria-label={`ELO ${user?.elo_score ?? '暂无'}，查看评分`}
           className="um-app-elo"
         >
           <span className="um-app-elo-label">ELO</span>
@@ -78,112 +26,11 @@ export const EloPopover: React.FC = () => {
         className="um-app-elo-panel w-[360px] p-0 border-border overflow-hidden"
       >
         <div className="px-5 pt-5 pb-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-muted-foreground">ELO 评分</p>
-              <p className="text-[26px] font-semibold text-foreground tabular-nums">{user?.elo_score}</p>
-            </div>
-          </div>
-          {currentUserInList && (
-            <p className="text-xs text-muted-foreground mt-1">
-              {`本机构排名第 ${currentUserRank} / ${ranking.length} 人`}
-            </p>
-          )}
+          <p className="text-xs font-medium text-muted-foreground">ELO 评分</p>
+          <p className="text-[26px] font-semibold text-foreground tabular-nums">{user?.elo_score}</p>
           <p className="text-xs text-muted-foreground leading-relaxed mt-2">
-            ELO 评分根据答题正确率、题目难度动态计算，反应你的真实学术水平。
+            ELO 评分根据答题正确率、题目难度动态计算。
           </p>
-        </div>
-
-        <div className="border-t border-border" />
-
-        <div className="px-1 py-2">
-          <div className="flex items-center gap-2 px-4 pb-2">
-            <Buildings className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-xs font-medium text-muted-foreground">机构排名</span>
-          </div>
-
-          {!hasInstitution && (
-            <div className="px-4 py-6 text-center">
-              <Buildings className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-xs font-medium text-muted-foreground">暂未加入机构</p>
-              <p className="text-xs text-muted-foreground mt-1">加入机构后可查看内部排名</p>
-            </div>
-          )}
-
-          {hasInstitution && loading && (
-            <div className="flex items-center justify-center py-8" aria-live="polite" aria-busy="true">
-              <Spinner className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          )}
-
-          {hasInstitution && error === 'failed' && (
-            <div className="px-4 py-6 text-center" aria-live="polite">
-              <p className="text-xs text-muted-foreground">排名加载失败，请稍后重试</p>
-            </div>
-          )}
-
-          {hasInstitution && !loading && !error && ranking.length > 0 && (
-            <div className="max-h-[300px] overflow-y-auto">
-              {ranking.slice(0, 15).map((u, i) => {
-                const rank = i + 1;
-                const isMe = u.id === user?.id;
-                return (
-                  <div
-                    key={u.id}
-                    className={cn(
-                      "flex items-center gap-3 px-4 py-2 mx-1 rounded-xl transition-colors",
-                      isMe && "bg-primary/5 border border-primary/10"
-                    )}
-                  >
-                    <div className="w-6 flex justify-center">{rankBadge(rank)}</div>
-                    <Avatar className="h-7 w-7 border border-border">
-                      <AvatarImage src={u.avatar_url} />
-                      <AvatarFallback className="text-xs font-medium">{(u.nickname || u.username)[0]}</AvatarFallback>
-                    </Avatar>
-                    <span className={cn(
-                      "flex-1 text-xs font-medium truncate",
-                      isMe ? "text-primary" : "text-foreground"
-                    )}>
-                      {u.nickname || u.username}
-                      {isMe && <span className="text-xs text-muted-foreground ml-1">(你)</span>}
-                    </span>
-                    <span className={cn(
-                      "text-xs font-semibold tabular-nums",
-                      isMe ? "text-primary" : "text-muted-foreground"
-                    )}>
-                      {u.elo_score}
-                    </span>
-                  </div>
-                );
-              })}
-
-              {!currentUserInList && (
-                <div className="px-4 py-3 text-center">
-                  <div className="text-xs text-muted-foreground/60 mb-1">…</div>
-                  <div className="flex items-center gap-3 px-4 py-2 mx-1 rounded-xl bg-primary/5 border border-primary/10">
-                    <div className="w-6 flex justify-center">
-                      <span className="text-xs font-semibold text-muted-foreground tabular-nums">-</span>
-                    </div>
-                    <Avatar className="h-7 w-7 border border-border">
-                      <AvatarImage src={user?.avatar_url} />
-                      <AvatarFallback className="text-xs font-medium">{user?.username?.[0]}</AvatarFallback>
-                    </Avatar>
-                    <span className="flex-1 text-xs font-medium text-primary truncate">
-                      {user?.nickname || user?.username}
-                      <span className="text-xs text-muted-foreground ml-1">(你)</span>
-                    </span>
-                    <span className="text-xs font-semibold tabular-nums text-primary">{user?.elo_score}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {hasInstitution && !loading && !error && ranking.length === 0 && (
-            <div className="px-4 py-6 text-center">
-              <p className="text-xs text-muted-foreground">暂无排名数据</p>
-            </div>
-          )}
         </div>
       </PopoverContent>
     </Popover>

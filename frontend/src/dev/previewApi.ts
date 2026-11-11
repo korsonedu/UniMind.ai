@@ -153,6 +153,7 @@ api.defaults.adapter = async config => {
     case '/ai/delete-conversation/': history = history.filter(message => message.conversation_id !== payload.conversation_id); delete projectFixtures.assignments[payload.conversation_id]; saveProjects(); break;
     case '/ai/reset/': break;
     case '/ai/feedback/': history = history.map(message => message.id === payload.message_id ? { ...message, feedback: payload.feedback } : message); break;
+    case '/csrf/': data = { csrf_token: 'local-preview' }; break;
     case '/users/institution/me/features/': data = { features: Object.values(FEATURES).filter(feature => !blockedFeatures.includes(feature)), is_platform_admin: false, institution: user.institution, usage: null }; break;
     case '/notifications/unread-count/': data = { unread_count: notifications.filter(item => !item.is_read).length }; break;
     case '/notifications/': data = notifications; break;
@@ -160,7 +161,6 @@ api.defaults.adapter = async config => {
     case '/notifications/clear/': notifications.splice(0); break;
     case '/users/achievements/': data = achievements; break;
     case '/users/me/achievements/': data = achievements.filter(item => item.is_unlocked); break;
-    case '/users/institution/me/students/ranking/': data = [user]; break;
     case '/courses/tags/': data = [...new Set(courses.flatMap(course => course.tags))].map(name => ({ name, count: courses.filter(course => course.tags.includes(name)).length })); break;
     case '/courses/learning-progress/': data = courses.filter(c => c.progress).map(c => ({ course: c.id, ...c.progress, duration: c.duration })); break;
     case '/courses/learning-goal/': {

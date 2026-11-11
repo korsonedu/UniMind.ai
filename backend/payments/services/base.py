@@ -71,8 +71,6 @@ def confirm_order(order_id: int, gateway_txn_id: str, raw_callback: dict, amount
         if order.status == 'paid':
             if order.gateway_order_id != gateway_txn_id:
                 raise ValueError('Payment transaction mismatch')
-            from payments.tasks import enqueue_invoice
-            transaction.on_commit(lambda: enqueue_invoice(order.id))
             logger.warning("Order %s already paid, ignoring duplicate callback", order.id)
             return
 
@@ -108,9 +106,5 @@ def confirm_order(order_id: int, gateway_txn_id: str, raw_callback: dict, amount
         else:
             duration = PLAN_DURATION_DAYS.get(order.billing_cycle, 30)
             activate_membership(order.user, order.plan, duration, source='payment')
-
-    # Generate invoice asynchronously
-    from payments.tasks import enqueue_invoice
-    transaction.on_commit(lambda: enqueue_invoice(order.id))
 
     logger.info("Order %s confirmed via %s, txn=%s", order.id, order.gateway, gateway_txn_id)

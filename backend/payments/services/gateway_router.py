@@ -16,7 +16,6 @@ import importlib
 _GATEWAY_MODULES = {
     'stub': 'payments.services.stub_gateway',
     'alipay': 'payments.services.alipay_gateway',
-    'wechat': 'payments.services.wechat_gateway',
 }
 
 

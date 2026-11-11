@@ -143,7 +143,7 @@ export class OfflineLibrary {
     const cookies = await session.defaultSession.cookies.get({ url: this.source, name: 'csrftoken' });
     const response = await session.defaultSession.fetch(new URL(route, this.source).href, {
       method: body ? 'POST' : 'GET', credentials: 'include', redirect: 'error', signal: AbortSignal.timeout(10000),
-      headers: { 'Content-Type': 'application/json', ...(cookies[0] ? { 'X-CSRFToken': cookies[0].value } : {}) },
+      headers: { 'Content-Type': 'application/json', Origin: new URL(this.source).origin, ...(cookies[0] ? { 'X-CSRFToken': cookies[0].value } : {}) },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
     if (response.status === 401 || (response.status === 403 && route === '/api/users/me/')) { await this.lock(); throw new Error('请重新登录后同步离线记录'); }
@@ -365,7 +365,7 @@ export class OfflineLibrary {
       const cookies = await session.defaultSession.cookies.get({ url: this.source, name: 'csrftoken' });
       const response = await session.defaultSession.fetch(new URL(`/api/courses/${event.courseId}/offline-progress/`, this.source).href, {
         method: 'POST', credentials: 'include', redirect: 'error', signal: AbortSignal.timeout(10000),
-        headers: { 'Content-Type': 'application/json', ...(cookies[0] ? { 'X-CSRFToken': cookies[0].value } : {}) },
+        headers: { 'Content-Type': 'application/json', Origin: new URL(this.source).origin, ...(cookies[0] ? { 'X-CSRFToken': cookies[0].value } : {}) },
         body: JSON.stringify(event.payload),
       });
       if (this.actor !== actor || this.epoch !== epoch) throw new Error('账号已变更');

@@ -159,17 +159,15 @@ def media_serve(request, path):
     range_header = request.META.get("HTTP_RANGE", "").strip()
 
     # ── Range request ──────────────────────────────────────────────────
-    m = _RANGE_RE.match(range_header)
+    m = _RANGE_RE.fullmatch(range_header)
     if m:
         first, last = m.groups()
-        start = int(first) if first else 0
-        end = int(last) if last else file_size - 1
-        if start >= file_size:
-            start = file_size - 1
-        if end >= file_size:
-            end = file_size - 1
-        if start > end:
-            start = end
+        start = int(first) if first else max(0, file_size - int(last or 0))
+        end = min(int(last), file_size - 1) if first and last else file_size - 1
+        if (not first and not last) or start >= file_size or start > end:
+            resp = HttpResponse(status=416)
+            resp['Content-Range'] = f'bytes */{file_size}'
+            return resp
 
         chunk = _iter_chunks(full, offset=start, size=end - start + 1)
         resp = StreamingHttpResponse(chunk, content_type=content_type, status=206)

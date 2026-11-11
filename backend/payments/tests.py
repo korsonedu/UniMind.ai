@@ -560,9 +560,9 @@ class OrderAPITests(APITestCase):
         self.assertEqual(resp.data['error'], '旧版机构套餐优惠码已停止使用。')
         self.assertFalse(Order.objects.exists())
 
-    def test_coupon_list_empty(self):
+    def test_coupon_list_retired(self):
         resp = self.client.get('/api/payments/coupons/')
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.status_code, status.HTTP_410_GONE)
 
 
 # ═══════════════════════════════════════════════════════════════════
