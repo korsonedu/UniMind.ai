@@ -85,7 +85,7 @@ def run(data):
                     errors.append(error)
             if capture and phase and not errors:
                 png = page.locator('iframe').screenshot(type='png', scale='css',
-                    animations='disabled', caret='hide', timeout=1200)
+                    animations='disabled', caret='hide', timeout=3000)
                 if (len(screenshots) >= 8 or len(png) > 512 * 1024
                         or sum(item['bytes'] for item in screenshots) + len(png) > 2 * 1024 * 1024):
                     errors.append('讲解截图超过审查容量，请简化画面后重试。')
