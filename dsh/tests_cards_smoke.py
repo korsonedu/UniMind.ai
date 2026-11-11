@@ -34,6 +34,25 @@ class CardsSmoke(unittest.TestCase):
         visual['type'] = 'practice_quiz'
         self.assertEqual(tool_cards(events(), context), [])
 
+    def test_task_navigation_requires_task_tool_result(self):
+        href = '/xiaoyu?project=7&learning_task=12345678-1234-1234-1234-123456789abc'
+        visual = {'type': 'data_card', 'payload': {'title': '学习任务', 'cta': {
+            'label': '打开学习任务', 'link': href}}}
+        context = {'tools': [{'function': {'name': name}}
+                             for name in ('manage_learning_tasks', 'search_courses')]}
+
+        def events(name):
+            return [{'type': 'tool/call', 'data': {'callId': 'task', 'name': name}},
+                    {'type': 'tool/result', 'data': {'meta': {'unimindCard': visual},
+                     'message': {'role': 'tool', 'toolCallId': 'task', 'content': []}}}]
+
+        self.assertEqual(len(tool_cards(events('manage_learning_tasks'), context)), 1)
+        self.assertEqual(tool_cards(events('search_courses'), context), [])
+        for link in ('https://example.com' + href, href + '&redirect=/admin',
+                     href.replace('project=7', 'project=0')):
+            visual['payload']['cta']['link'] = link
+            self.assertEqual(tool_cards(events('manage_learning_tasks'), context), [])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -28,7 +28,6 @@ class SubmitExamView(APIView):
 
     def post(self, request):
         questions_data = request.data.get('answers', [])
-        questions = validate_exam_answers(request.user, questions_data, request=request)
         submission_id = request.data.get('submission_id')
         if submission_id:
             submission_id = serializers.UUIDField().run_validation(submission_id)
@@ -39,6 +38,16 @@ class SubmitExamView(APIView):
             task_id = serializers.UUIDField().run_validation(task_id)
             if not submission_id:
                 raise serializers.ValidationError('学习任务必须提供原始提交编号。')
+            from ai_assistant.models import ProjectLearningTask
+            from ai_assistant.services.learning_tasks import personal_answers
+            requested_task = get_object_or_404(ProjectLearningTask, pk=task_id, project__user=request.user)
+            if requested_task.definition:
+                questions_data = personal_answers(questions_data)
+                questions = {}
+            else:
+                questions = validate_exam_answers(request.user, questions_data, request=request)
+        else:
+            questions = validate_exam_answers(request.user, questions_data, request=request)
         answers_hash = hashlib.sha256(json.dumps({
             'kind': 'exam', 'answers': sorted([
                 {'question_id': int(item['question_id']), 'answer': item.get('answer') or ''}
@@ -76,13 +85,13 @@ class SubmitExamView(APIView):
                 question = questions[int(item['question_id'])]
                 results.append(ExamQuestionResult(
                     exam=exam,
-                    question=question,
+                    question=question if question.pk else None,
                     position=position,
                     user_answer=item.get('answer') or '',
                     score=0,
                     max_score=question.get_max_score(),
                     status='pending',
-                    question_snapshot=question_snapshot(question),
+                    question_snapshot=task.question_snapshot[str(item['question_id'])] if task else question_snapshot(question),
                 ))
             ExamQuestionResult.objects.bulk_create(results)
             response = {'status': 'processing', 'exam_id': exam.id, 'total_questions': len(questions_data)}
@@ -160,15 +169,17 @@ class ExamRetryView(APIView):
                 question_id = int(question_id)
             except (TypeError, ValueError):
                 return Response({'error': '题目 ID 无效'}, status=400)
-            failed = failed.filter(question_id=question_id)
+            task = getattr(exam, 'learning_task', None)
+            failed = failed.filter(question__isnull=True) if question_id == 0 and task and task.definition else failed.filter(question_id=question_id)
 
         failed_items = list(failed.select_related('question'))
         if not failed_items:
             return Response(exam_status_payload(exam))
 
+        task = getattr(exam, 'learning_task', None)
         retry_data = [
-            {'question_id': item.question_id, 'answer': item.user_answer or ''}
-            for item in failed_items if item.question_id is not None
+            {'question_id': item.question_id if item.question_id is not None else 0, 'answer': item.user_answer or ''}
+            for item in failed_items if item.question_id is not None or (task and task.definition)
         ]
         with transaction.atomic():
             failed.update(status='pending', error_metadata={}, graded_at=None)

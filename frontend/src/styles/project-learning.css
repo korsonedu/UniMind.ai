@@ -34,3 +34,9 @@
 .um-inline-practice-assistance { display: grid; gap: 8px; margin: 12px 0; }
 .um-inline-practice-assistance select { padding: 8px; border: 1px solid var(--um-color-border); border-radius: 8px; color: inherit; background: var(--um-color-surface); }
 @media (max-width: 540px) { .um-learning-task-list > li { align-items: flex-start; flex-direction: column; } }
+
+.um-learning-task-criteria { padding: 14px; border: 1px solid var(--um-color-border); border-radius: 10px; }
+.um-learning-task-criteria h5 { font-weight: 500; }
+.um-learning-task-criteria ol { list-style: decimal; padding-left: 20px; margin: 8px 0; }
+.um-learning-task-criteria li { margin: 6px 0; }
+.um-learning-sample > summary { cursor: pointer; font-weight: 500; }

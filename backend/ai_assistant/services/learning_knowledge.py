@@ -262,7 +262,7 @@ def knowledge_state(project, state, *, compact=False):
               'recommendations': recommendations[:3], 'probes': probes,
               'excluded_evidence_count': verified['excluded_provenance'] + task_provenance['excluded_provenance'],
               'repeated_question_count': task_provenance['repeated_questions'],
-              'notice': '固定参数下的条件表现估计，尚未校准；实际单选成绩与小宇判断分别保留。知识归属、帮助声明和迁移任务尚未独立验证，不代表真实掌握概率。'}
+              'notice': '固定参数下的条件表现估计，尚未校准；标准答案比对、模型标准评价与对话判断分别保留。知识归属、帮助声明和迁移任务尚未独立验证，不代表真实掌握概率。'}
     if compact:
         result['nodes'] = [{'id': node['id'], 'title': node['title'], 'beliefs': node['beliefs']} for node in states]
     else:

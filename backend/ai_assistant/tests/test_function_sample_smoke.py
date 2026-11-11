@@ -91,4 +91,4 @@ class FunctionSampleSmoke(APITestCase):
         from ai_assistant.services.project_learning import learning_data
         progress = learning_data(self.project)
         self.assertIn('学习练习', progress['task_progress']['next_action'])
-        self.assertEqual(progress['followup_text'], progress['task_progress']['next_action'])
+        self.assertEqual(progress['followup_text'], progress['teaching_guidance']['next_action'])

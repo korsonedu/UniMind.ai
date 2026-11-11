@@ -85,10 +85,19 @@ PROJECT_LEARNING_TOOLS.append(tool('manage_learning_knowledge',
 
 
 PROJECT_LEARNING_TOOLS.append(tool('manage_learning_tasks',
-    '读取或创建当前项目的正式单选任务。先查当前题库的真实题号，将题目关联当前知识版本、节点及阶段；题目归属是教学建议。提交和评分由用户操作，模型不能传分数或代答。读回真实成绩后给一句反馈和下一步，帮助声明不等于自动验证独立性。',
-    obj({'action': {'type': 'string', 'enum': ['list', 'read', 'create']}, 'task_id': text('read时填写任务UUID，读取本人已评分原作答和解析'), 'version_id': {'type': 'integer'},
-         'node_id': text(), 'stage_id': text(), 'title': text(), 'instructions': text('讲解、示例与作答要求；不得直接泄露练习答案'),
+    '管理当前项目通用学习任务：list读取实际进展与teaching_guidance；read读取已评分原作答与标准后复盘；create从授权题库选题，或为本人项目原创开放任务。普通阶段计划可先诊断，无需先建地图；有地图须绑定当前版本节点。解释、计算、推理、案例与代码文本均可评价，但代码未运行不能称为验证通过。模型评分尚未独立复核。错误先补救，有帮助完成再换题独立检查；不代用户作答，不传入分数。',
+    obj({'action': {'type': 'string', 'enum': ['list', 'read', 'create']},
+         'task_id': text('read时填写任务UUID'), 'version_id': {'type': 'integer'}, 'node_id': text(),
+         'stage_id': text('当前计划阶段编号'), 'title': text(), 'instructions': text('讲解、非原题示例与作答要求，不能泄露任务参考解答'),
+         'purpose': {'type': 'string', 'enum': ['diagnostic', 'practice', 'recheck']},
+         'source_task_id': text('关联本人同项目、同版本的原任务；可跨阶段补前置，复测应围绕原知识单元'),
          'question_ids': {'type': 'array', 'items': {'type': 'integer'}, 'minItems': 1, 'maxItems': 10},
+         'definition': obj({'prompt': text('原创开放任务题干'),
+             'response_type': {'type': 'string', 'enum': ['explanation', 'calculation', 'reasoning', 'case', 'code']},
+             'criteria': {'type': 'array', 'items': text('公开、可核对的成果标准'), 'minItems': 1, 'maxItems': 8},
+             'reference_answer': text('服务器留存参考，不在提交前公开；缺乏依据时不编造确定结论'),
+             'sources': {'type': 'array', 'items': text('本人项目实际来源id；未核验的知识须明确说明')}},
+             ('prompt', 'response_type', 'criteria')),
          'mode': {'type': 'string', 'enum': ['apply', 'transfer']}}, ('action',))))
 
 

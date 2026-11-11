@@ -277,7 +277,9 @@ def _finalize_exam(user_id: int, exam_id: int) -> None:
             'total_score', 'max_score', 'grading_completed_at',
         ]
 
-        if not failed and graded_items:
+        from ai_assistant.models import ProjectLearningTask
+        personal_task = ProjectLearningTask.objects.filter(exam_id=exam.id).exclude(definition={}).exists()
+        if not failed and graded_items and not personal_task:
             locked_user = User.objects.select_for_update().filter(id=user_id).first()
             if locked_user:
                 avg_score = total_score / max_score if max_score else 0
@@ -315,8 +317,12 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
     ).exists():
         return
 
+    from ai_assistant.models import ProjectLearningTask
+    from ai_assistant.services.learning_tasks import validate_task_question, sync_exam_task_result, task_result_snapshot, personal_question
+    learning_task = ProjectLearningTask.objects.select_related('project__user').filter(exam_id=exam_id).first()
+    personal_task = bool(learning_task and learning_task.definition)
     try:
-        scope = get_content_institution_id()
+        scope = None if personal_task else get_content_institution_id()
     except PermissionDenied as exc:
         _fail_pending_items(exam_id, str(exc))
         _finalize_exam(user_id, exam_id)
@@ -332,9 +338,6 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
         exam.save(update_fields=['status', 'started_at'])
 
     items = list(ExamQuestionResult.objects.filter(exam_id=exam_id).order_by('position', 'id'))
-    from ai_assistant.models import ProjectLearningTask
-    from ai_assistant.services.learning_tasks import validate_task_question, sync_exam_task_result
-    learning_task = ProjectLearningTask.objects.filter(exam_id=exam_id).first()
     if not items:
         _finalize_exam(user_id, exam_id)
         return
@@ -343,15 +346,19 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
         if item.status == 'graded':
             continue
         try:
-            if get_content_institution_id() != scope:
-                raise ValidationError('内容范围已变更')
-            question = Question.objects.select_related('knowledge_point').filter(
-                pk=item.question_id, institution_id=scope,
-            ).first()
-            if not question:
-                raise ValidationError('题目不存在或不在当前内容范围')
-            if learning_task:
-                validate_task_question(learning_task, question)
+            if personal_task:
+                task_result_snapshot(learning_task, item)
+                question = personal_question(learning_task.definition)
+            else:
+                if get_content_institution_id() != scope:
+                    raise ValidationError('内容范围已变更')
+                question = Question.objects.select_related('knowledge_point').filter(
+                    pk=item.question_id, institution_id=scope,
+                ).first()
+                if not question:
+                    raise ValidationError('题目不存在或不在当前内容范围')
+                if learning_task:
+                    validate_task_question(learning_task, question)
             if learning_task and question.q_type == 'objective':
                 graded = _grade_answer(question, item.user_answer or '', objective_only=True)
             else:
@@ -368,16 +375,20 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
                 locked = ExamQuestionResult.objects.select_for_update().filter(pk=item.pk).first()
                 if not locked or locked.status == 'graded':
                     continue
-                question = Question.objects.select_related('knowledge_point').filter(
-                    pk=locked.question_id, institution_id=scope,
-                ).first()
-                if not question or get_content_institution_id() != scope:
-                    raise ValidationError('题目或内容范围已变更')
-                if learning_task:
-                    validate_task_question(learning_task, question)
-                _apply_memorix_status(
-                    user, question, graded['normalized_score'], graded['memorix_rating'],
-                )
+                if personal_task:
+                    task_result_snapshot(learning_task, locked)
+                    question = personal_question(learning_task.definition)
+                else:
+                    question = Question.objects.select_related('knowledge_point').filter(
+                        pk=locked.question_id, institution_id=scope,
+                    ).first()
+                    if not question or get_content_institution_id() != scope:
+                        raise ValidationError('题目或内容范围已变更')
+                    if learning_task:
+                        task_result_snapshot(learning_task, locked)
+                    _apply_memorix_status(
+                        user, question, graded['normalized_score'], graded['memorix_rating'],
+                    )
                 error = graded.get('error_analysis') or {}
                 locked.score = graded['score']
                 locked.max_score = graded['max_score']

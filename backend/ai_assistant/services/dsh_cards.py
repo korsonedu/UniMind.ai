@@ -24,6 +24,9 @@ def item(label, value, link=None):
 def build_tool_card(name, result):
     if name in {'get_learning_stats', 'get_knowledge_mastery_map', 'get_due_reviews', 'get_recent_practice_result', 'get_practice_questions'}:
         return result.get('visual')
+    if name == 'manage_learning_tasks' and result.get('href'):
+        return data_card(result['title'], [item('学习任务', '已准备，等待你实际作答')],
+            ('打开学习任务', result['href']), '提交后按已保存的标准评价，完成任务不代表已经掌握。')
     if name == 'search_courses':
         return data_card('相关课程', [item(c['title'], '打开课程', f"/course/{int(c['id'])}")
             for c in result.get('courses', [])[:10]], ('课程中心', '/courses'),

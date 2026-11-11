@@ -40,7 +40,7 @@ class Command(BaseCommand):
         report['formal_provenance'] = {key: value for key, value in task_provenance.items() if key != 'events'}
         report['scope'] = {'project_id': project.pk, 'version_id': options['version_id']}
         report['provenance'] = {key: value for key, value in verified.items() if key != 'events'}
-        report['notice'] = ('Offline fixed holdout with separately labelled XiaoYu rubric judgements and objective answer-key results; knowledge mapping and assistance declarations are unvalidated. '
+        report['notice'] = ('Offline fixed holdout with separately labelled XiaoYu rubric judgements, objective answer-key results and model rubric grades; knowledge mapping and assistance declarations are unvalidated. '
                             'Data origin is operator-declared. Scores do not establish calibration or learning improvement. '
                             'Historical source availability is rechecked at report time. No state or parameter writes.')
         self.stdout.write(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False))

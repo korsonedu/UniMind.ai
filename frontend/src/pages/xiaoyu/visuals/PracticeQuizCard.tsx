@@ -31,6 +31,8 @@ export interface PracticePayload {
   assistance?: string;
   project_id?: number;
   conversation_id?: string;
+  response_type?: 'explanation' | 'calculation' | 'reasoning' | 'case' | 'code';
+  label_source?: string;
 }
 
 interface Draft {
@@ -48,8 +50,9 @@ interface PracticeResult {
   max_score: number;
   graded_count: number;
   total_questions: number;
+  label_source?: string;
   results: { position: number; status: string; score: number; max_score: number;
-    is_correct: boolean; correct_answer: string; feedback: string; analysis: string }[];
+    is_correct: boolean; label_source?: string; correct_answer: string; feedback: string; analysis: string }[];
 }
 
 interface SubmittedPractice {
@@ -99,7 +102,7 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
     });
   }
 
-  useLearningSession({ enabled: active && workspaceActive && !locked && questions.length > 0,
+  useLearningSession({ enabled: active && workspaceActive && !locked && questions.length > 0 && questions.every(item => item.id > 0),
     kind: 'practice', questionIds: questions.map(item => item.id) });
 
   useEffect(() => {
@@ -132,6 +135,9 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
   }, [resultVersion, onResult]);
   const itemResult = result?.results.find(item => item.position === index + 1);
   const graded = itemResult?.status === 'graded';
+  const gradeSource = itemResult?.label_source || result?.label_source || payload.label_source;
+  const modelEvaluation = gradeSource === 'model_rubric_grade';
+  const modelResult = result?.label_source === 'model_rubric_grade' || result?.label_source === 'mixed' || (!result?.label_source && modelEvaluation);
 
   const activate = () => {
     if (!locked) window.dispatchEvent(new CustomEvent('unimind:practice-active', { detail: storageKey }));
@@ -168,7 +174,7 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
       if (!(event.target as HTMLElement).closest('[data-practice-toggle]')) activate();
     }}>
     <header className="um-inline-practice-header">
-      <div><span className="um-inline-practice-caption">随堂练习 · {questions.length} 题</span><h3>{payload.title || '随堂练习'}</h3></div>
+      <div><span className="um-inline-practice-caption">{payload.response_type ? '开放成果' : '随堂练习'} · {questions.length} 项</span><h3>{payload.title || '随堂练习'}</h3></div>
       {!locked && <button type="button" data-practice-toggle className="um-inline-practice-text-button" onClick={() => {
         if (active) setActive(false); else activate();
       }}>{active ? '暂停练习' : '开始／继续'}</button>}
@@ -188,7 +194,7 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
           onClick={() => setDraft(previous => ({ ...previous, answers: { ...previous.answers, [question.id]: option } }))}>
           <span>{String.fromCharCode(65 + optionIndex)}</span><MarkdownContent content={processMathContent(option)} />
         </button>)}
-      </div> : <textarea className="um-inline-practice-input" aria-label="本题答案" placeholder="写下你的分析或计算过程…" disabled={locked}
+      </div> : <textarea className="um-inline-practice-input" aria-label="本题答案" placeholder={payload.response_type === 'code' ? '粘贴代码，并说明思路、预期行为与已知结果…' : '写下你的解释、分析或计算过程…'} maxLength={payload.learning_task_id ? 20000 : undefined} spellCheck={payload.response_type !== 'code'} disabled={locked}
         value={draft.answers[question.id] || ''} onChange={event => setDraft(previous => ({ ...previous,
           answers: { ...previous.answers, [question.id]: event.target.value } }))} />}
     </article>
@@ -202,9 +208,10 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
       {!result ? <p>{detail.isError ? '暂时无法读取结果。' : '正在读取批改结果…'}{detail.isError && <button type="button" onClick={() => void detail.refetch()}>重试</button>}</p>
         : <>
           <p className="um-inline-practice-score">{isActiveExamStatus(result.status) ? `批改中 · ${result.graded_count}/${result.total_questions} 题`
-            : `${result.status === 'partial' || result.status === 'failed' ? '批改未全部完成 · ' : '本次得分 · '}${result.total_score}/${result.max_score}`}</p>
+            : `${result.status === 'partial' || result.status === 'failed' ? '批改未全部完成 · ' : modelResult ? '模型参考评分 · ' : '本次得分 · '}${result.total_score}/${result.max_score}`}</p>
           {graded ? <>
             <p>本题 {itemResult.score}/{itemResult.max_score} 分</p>
+            {payload.learning_task_id && <p className="um-inline-practice-caption">{modelEvaluation ? '模型依据任务标准评价，尚未独立复核。' : '按标准答案比对评分。'}{payload.response_type === 'code' && '代码仅作文本审阅，未执行或验证测试结果。'}</p>}
             {itemResult.correct_answer && <div><span className="um-inline-practice-caption">参考答案</span><MarkdownContent content={processMathContent(itemResult.correct_answer)} /></div>}
             {itemResult.feedback && <MarkdownContent content={processMathContent(itemResult.feedback)} />}
             {itemResult.analysis && <div><span className="um-inline-practice-caption">解析</span><MarkdownContent content={processMathContent(itemResult.analysis)} /></div>}

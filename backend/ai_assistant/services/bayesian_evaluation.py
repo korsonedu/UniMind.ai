@@ -65,7 +65,7 @@ def evaluate_records(records, cutoff, data_origin):
             if record.get('evidence_type') == 'formal':
                 from uuid import UUID
                 UUID(record['task_id'])
-                if record.get('label_source') != 'objective_answer_key':
+                if record.get('label_source') not in ('objective_answer_key', 'model_rubric_grade'):
                     raise ValueError('Unknown formal label source.')
             if not isinstance(record['node_id'], str) or not record['node_id']:
                 raise ValueError('Missing node identifier.')

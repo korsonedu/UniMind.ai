@@ -90,11 +90,15 @@ def learning_data(project):
         'feedback': f"最近完成“{latest['title']}”，得分 {latest['summary']['total_score']}/{latest['summary']['max_score']}。" if latest else '',
         'next_action': ('先复盘错误与解析，再继续：' if latest and latest['summary']['total_score'] < latest['summary']['max_score'] else '接下来：') + next_task['title'] if next_task else ('本轮任务已完成，按复习时间重新检查，并和小宇核对下一阶段。' if latest else ''),
         'next_task_id': next_task['id'] if next_task else None}
+    from .learning_guidance import teaching_guidance
+    progress_at = next((event.created_at for event in events if event.kind == 'progress'), None)
+    guidance = teaching_guidance(state, tasks, progress_at=progress_at)
     if not next_task and len(completed_tasks) < len(tasks):
         task_progress['next_action'] = '有任务内容当前不可用，请和小宇重新安排，已有成绩继续保留。'
     return {
+        'teaching_guidance': guidance,
         'task_progress': task_progress,
-        'tasks': [{key: task[key] for key in ('id', 'title', 'version_id', 'node_id', 'stage_id', 'status', 'exam_id', 'assistance', 'review_due_at', 'summary')} for task in tasks],
+        'tasks': [{key: task[key] for key in ('id', 'title', 'version_id', 'node_id', 'stage_id', 'status', 'exam_id', 'assistance', 'purpose', 'source_task_id', 'review_due_at', 'summary')} for task in tasks],
         'knowledge': knowledge_state(project, state),
         'strategy_uses': project_strategy_uses(project),
         'project_id': project.pk, 'name': project.name, 'instructions': project.instructions,
@@ -103,7 +107,7 @@ def learning_data(project):
         'pending_plan': state.pending_plan, 'revision': state.revision,
         'conversation_id': str(state.last_conversation.conversation_id) if state.last_conversation and state.last_conversation.project_id == project.pk else None,
         'followup_at': state.followup_at,
-        'followup_text': task_progress['next_action'] if task_progress['feedback'] and state.followup_text == state.next_action else state.followup_text,
+        'followup_text': guidance['next_action'] if guidance['feedback'] and state.followup_text == state.next_action else state.followup_text,
         'resume_at': state.resume_at,
         'server_time': timezone.localtime().isoformat(),
         'events': [{'id': event.pk, 'kind': event.kind, 'content': event.content,
@@ -315,7 +319,7 @@ def tool_operation(executor, name, arguments):
         from .learning_tasks import create_task, task_data
         if arguments.get('action') == 'list':
             data = compact_learning(learning_data(project))
-            return {'tasks': data['tasks'], 'task_progress': data['task_progress']}
+            return {'tasks': data['tasks'], 'task_progress': data['task_progress'], 'teaching_guidance': data['teaching_guidance']}
         if arguments.get('action') == 'read':
             from django.shortcuts import get_object_or_404
             from quizzes.services.practice_results import exam_result_payload

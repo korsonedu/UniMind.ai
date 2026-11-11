@@ -9,8 +9,9 @@ GROUPS = {
     'knowledge': ('知识地图与证据路径', '组织带来源知识单元、有向前置关系与目标深度；登记检查任务并更新贝叶斯证据。', (
         'read_learning_project', 'manage_learning_knowledge', 'manage_learning_tasks', 'plan_learning_project', 'record_learning_progress',
         'manage_learning_resources', 'find_learning_resources')),
-    'tasks': ('项目正式学习任务', '按当前项目知识节点安排正式单选任务，读取实际成绩与复习时间。', (
-        'read_learning_project', 'manage_learning_tasks', 'get_practice_questions', 'lookup_question', 'search_knowledge_tree')),
+    'tasks': ('项目任务与成果复盘', '准备本人项目开放任务或题库练习，读取已提交原作答、评价标准和结果，安排补救与换题检验。无需先建知识地图。', (
+        'read_learning_project', 'manage_learning_tasks', 'record_learning_progress', 'set_learning_followup',
+        'get_practice_questions', 'lookup_question', 'search_knowledge_tree')),
     'interactive': ('交互讲题', '取题并编写交互实验，在同一分组内完成题目讲解和可操作实验。', (
         'get_practice_questions', 'lookup_question', 'search_knowledge_tree', 'build_learning_experiment',
         'read_learning_experiment', 'register_session_tool', 'read_session_tool')),
@@ -69,6 +70,8 @@ def grouped_tools(allowed, message, recent_messages=None, project=False):
         initial = 'project'
     if any(word in message for word in ('学习目标', '阶段计划', '跟进', '暂停学习', '恢复学习', '学习安排')):
         initial = 'project'
+    if project and initial not in ('interactive', 'authoring', 'presentation', 'knowledge') and any(word in message for word in ('任务', '原作答', '评价', '成果', '复盘', '补救', '复测', '提交')):
+        initial = 'tasks'
     initial = initial if initial in groups else ''
     selected = list(groups[initial]['tools']) if initial else []
     if groups:

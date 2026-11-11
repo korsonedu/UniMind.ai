@@ -64,8 +64,10 @@ def _result_payload(result: ExamQuestionResult) -> dict:
         'subjective_type': _snapshot_value(snapshot, question, 'subjective_type'),
         'options': _options_list(_snapshot_value(snapshot, question, 'options')),
         'user_answer': result.user_answer or '',
-        'correct_answer': _snapshot_value(snapshot, question, 'correct_answer'),
-        'analysis': result.analysis or snapshot.get('ai_answer') or '',
+        'correct_answer': _snapshot_value(snapshot, question, 'correct_answer') if result.status == 'graded' else '',
+        'analysis': (result.analysis or snapshot.get('ai_answer') or '') if result.status == 'graded' else '',
+        'response_type': snapshot.get('response_type', ''),
+        'label_source': snapshot.get('label_source') or ('objective_answer_key' if snapshot.get('q_type') == 'objective' else 'model_rubric_grade'),
         'feedback': result.feedback or '',
         'error_type': result.error_type or '',
         'error_metadata': result.error_metadata or {},
@@ -91,6 +93,8 @@ def _summary_text(exam: QuizExam, results: list[dict]) -> str:
     total_score = sum(item['score'] for item in graded)
     max_score = sum(item['max_score'] for item in graded)
     correct = sum(1 for item in graded if item['is_correct'])
+    if max_score and any(item['label_source'] == 'model_rubric_grade' for item in graded):
+        return f'模型依据评价标准评分 {round(total_score, 1)}/{round(max_score, 1)}；尚未独立复核。'
     if max_score:
         rate = round(total_score / max_score * 100, 1)
         return exam.summary or f'正确率 {rate}%（{correct}/{len(graded)}）。'
@@ -143,6 +147,7 @@ def exam_result_payload(exam: QuizExam, include_results: bool = True) -> dict:
         'correct_rate': round(total_score / max_score * 100, 1) if max_score else 0,
         'correct_count': correct_count,
         'summary_text': _summary_text(exam, payload_results),
+        'label_source': 'model_rubric_grade' if any(item['label_source'] == 'model_rubric_grade' for item in payload_results) else 'objective_answer_key',
         'kp_breakdown': _kp_breakdown(payload_results),
         'href': f'/tests/results/{exam.id}',
     }
@@ -163,6 +168,7 @@ def exam_status_payload(exam: QuizExam) -> dict:
     total_score = aggregate['score'] or 0
     max_score = aggregate['max_score'] or 0
     total_questions = exam.total_questions or exam.results.count()
+    label_source = 'model_rubric_grade' if exam.results.filter(question_snapshot__q_type='subjective').exists() else 'objective_answer_key'
     summary = exam.summary or ''
     if exam.status in ('pending', 'grading'):
         summary = f'正在批改，已完成 {graded} / {total_questions} 题。'
@@ -171,7 +177,8 @@ def exam_status_payload(exam: QuizExam) -> dict:
     elif exam.status == 'failed':
         summary = summary or '批改未完成，请稍后重试。'
     elif not summary and max_score:
-        summary = f'正确率 {round(total_score / max_score * 100, 1)}%。'
+        summary = (f'模型依据评价标准评分 {round(total_score, 1)}/{round(max_score, 1)}；尚未独立复核。'
+                   if label_source == 'model_rubric_grade' else f'正确率 {round(total_score / max_score * 100, 1)}%。')
     return {
         'kind': 'exam',
         'id': exam.id,
@@ -183,6 +190,7 @@ def exam_status_payload(exam: QuizExam) -> dict:
         'max_score': round(max_score, 1),
         'correct_rate': round(total_score / max_score * 100, 1) if max_score else 0,
         'summary_text': summary,
+        'label_source': label_source,
         'href': f'/tests/results/{exam.id}',
         'completed_at': exam.grading_completed_at,
     }

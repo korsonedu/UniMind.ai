@@ -135,9 +135,16 @@ def setup_sample(project):
         'plan': {'goal': '用四个基础节点开始理解函数，并通过真实作答检查起点与后续表现。',
                  'weekly_minutes': 0, 'deadline': None, 'knowledge_path': prepared['knowledge_path'], 'stages': stages},
         'next_action': '先完成“函数概念”的一题起点检查，再阅读讲解与示例。', 'reason': '用户主动选择开始函数基础原创样板。'})
-    tasks = [create_task(project, {'version_id': version.pk, 'node_id': node['id'], 'stage_id': node['id'],
-             'title': f"{node['title']}｜{PHASE_TITLES[item['phase']]}", 'instructions': _instructions(node, item['phase']),
-             'question_ids': [question_ids[item['code']]], 'mode': 'apply'})
-             for node in content['nodes'] for item in node['questions']]
+    tasks = []
+    for node in content['nodes']:
+        previous = None
+        for item in node['questions']:
+            task = create_task(project, {'version_id': version.pk, 'node_id': node['id'], 'stage_id': node['id'],
+                'title': f"{node['title']}｜{PHASE_TITLES[item['phase']]}", 'instructions': _instructions(node, item['phase']),
+                'question_ids': [question_ids[item['code']]], 'mode': 'apply',
+                'purpose': {'pretest': 'diagnostic', 'practice': 'practice', 'recheck': 'recheck'}[item['phase']],
+                'source_task_id': str(previous.pk) if previous else None})
+            tasks.append(task)
+            previous = task
     return {'project': learning_data(project), 'tasks': [task_data(task) for task in tasks],
             'sample': {key: content[key] for key in ('id', 'version', 'title', 'scope', 'source_kind')}}

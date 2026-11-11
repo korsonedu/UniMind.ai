@@ -7,7 +7,12 @@ export interface LearningStage { id: string; title: string; outcome: string; tas
 export interface LearningPlan { goal: string; deadline: string | null; weekly_minutes: number; stages: LearningStage[]; }
 export interface LearningResource { source_kind?: string; domain?: string; topic?: string; level?: string; edition?: string; library_revision?: number; id: string; title: string; url: string; excerpt: string; read_at: string; }
 export interface LearningEvent { id: number; kind: string; content: Record<string, unknown>; delivery: { saved: boolean; read: boolean | null; responded: boolean } | null; source: { id: number; text: string; conversation_id: string } | null; created_at: string; }
+export interface TeachingGuidance {
+  status: 'inactive' | 'start' | 'awaiting' | 'retry' | 'remediate' | 'recheck' | 'continue' | 'review';
+  feedback: string; next_action: string; task_id: string | null; stage_id: string; reason: string; stalled: boolean;
+}
 export interface ProjectLearning {
+  teaching_guidance?: TeachingGuidance;
   knowledge?: LearningKnowledge;
   task_progress?: { completed: number; total: number; feedback: string; next_action: string; next_task_id: string | null };
   project_id: number; name: string; instructions: string; status: 'preparing' | 'active' | 'paused' | 'completed';
