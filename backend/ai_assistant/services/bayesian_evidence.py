@@ -80,6 +80,7 @@ def belief(observations, now):
         (1 - predicted_success) * _entropy(_updated(posterior, failure)))
     return {
         'mean': sum(theta * p for theta, p in zip(GRID, posterior)),
+        'predicted_success': predicted_success,
         'interval': [_quantile(posterior, .1), _quantile(posterior, .9)],
         'effective_count': round(effective_count, 6),
         'independent_count': independent_count,

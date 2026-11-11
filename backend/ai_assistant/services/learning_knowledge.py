@@ -187,6 +187,27 @@ def validate_check(project, state, message, raw, stage, assistance):
             'algorithm': ALGORITHM_VERSION, 'question': probe.content['question'], 'rubric': probe.content['rubric']}
 
 
+def verified_knowledge_events(project, version_id):
+    """Share the current provenance rules between the page and read-only evaluation."""
+    checks = list(ProjectLearningEvent.objects.filter(project=project, kind='progress',
+        content__knowledge_check__version_id=version_id).select_related('message').order_by('created_at', 'pk'))
+    probes_by_id = {probe.pk: probe for probe in ProjectLearningEvent.objects.filter(project=project, kind='probe',
+        pk__in=[event.content['knowledge_check']['probe_id'] for event in checks], message__isnull=False).select_related('message')}
+    excluded_count, other_algorithm = 0, 0
+    valid = []
+    for event in checks:
+        check = event.content['knowledge_check']
+        if check.get('algorithm') != ALGORITHM_VERSION:
+            other_algorithm += 1
+            continue
+        probe = probes_by_id.get(check['probe_id'])
+        if not event.message or not probe or check['quote'] not in event.message.content or not presented(probe, event.message):
+            excluded_count += 1
+            continue
+        valid.append((event, probe))
+    return {'events': valid, 'total': len(checks), 'excluded_provenance': excluded_count, 'other_algorithm': other_algorithm}
+
+
 def knowledge_state(project, state, *, compact=False):
     path = state.plan.get('knowledge_path')
     if not path:
@@ -195,20 +216,9 @@ def knowledge_state(project, state, *, compact=False):
     nodes = closure(version.snapshot, path['targets'])
     observations = {}
     evidence = []
-    checks = ProjectLearningEvent.objects.filter(project=project, kind='progress', message__isnull=False,
-        content__knowledge_check__version_id=version.pk).select_related('message').order_by('created_at', 'pk')
-    checks = list(checks)
-    probes_by_id = {probe.pk: probe for probe in ProjectLearningEvent.objects.filter(project=project, kind='probe',
-        pk__in=[event.content['knowledge_check']['probe_id'] for event in checks], message__isnull=False).select_related('message')}
-    excluded_count = 0
-    for event in checks:
+    verified = verified_knowledge_events(project, version.pk)
+    for event, probe in verified['events']:
         check = event.content['knowledge_check']
-        if check.get('algorithm') != ALGORITHM_VERSION:
-            continue
-        probe = probes_by_id.get(check['probe_id'])
-        if not probe or check['quote'] not in event.message.content or not presented(probe, event.message):
-            excluded_count += 1
-            continue
         observations.setdefault((check['node_id'], check['mode']), []).append({**check, 'at': event.created_at.isoformat()})
         evidence.append({'event_id': event.pk, 'message_id': event.message_id, 'source': event.message.content[:2000], 'conversation_id': str(event.message.conversation_id),
             'at': event.created_at.isoformat(), **check})
@@ -240,7 +250,7 @@ def knowledge_state(project, state, *, compact=False):
     result = {'algorithm': ALGORITHM_VERSION, 'version_id': version.pk, 'map_id': version.knowledge_map_id,
               'revision': version.revision, 'title': version.snapshot['title'], 'path': path, 'nodes': states,
               'recommendations': recommendations[:3], 'probes': probes,
-              'excluded_evidence_count': excluded_count,
+              'excluded_evidence_count': verified['excluded_provenance'],
               'notice': '固定参数下的条件表现估计，尚未校准；不代表正式分数或真实掌握概率。迁移任务由小宇提出，尚未独立验证。'}
     if compact:
         result['nodes'] = [{'id': node['id'], 'title': node['title'], 'beliefs': node['beliefs']} for node in states]
