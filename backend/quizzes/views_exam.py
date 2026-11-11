@@ -132,7 +132,7 @@ class ExamSubmissionView(APIView):
         saved = submission.response if isinstance(submission.response, dict) else {}
         exam = get_object_or_404(QuizExam, user=request.user, pk=saved.get('exam_id'))
         task = getattr(exam, 'learning_task', None)
-        return Response({'exam_id': exam.pk, 'assistance': task.assistance if task else None, 'answers': [
+        return Response({'exam_id': exam.pk, **({'assistance': task.assistance} if task else {}), 'answers': [
             {'position': item.position, 'answer': item.user_answer}
             for item in exam.results.order_by('position', 'id')
         ]})
