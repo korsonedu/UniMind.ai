@@ -52,6 +52,7 @@ jobs:
 
       - name: Install Chinese fonts for visual smoke checks
         run: |
+          printf '%s\n' 'https://archive.ubuntu.com/ubuntu' 'https://security.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk
 

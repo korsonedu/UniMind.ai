@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from ai_assistant.services.dsh_service import M0_TOOLS, build_context
+from ai_assistant.services.dsh_routing import grouped_tools
 from ai_engine.tool_permissions import filter_tools
 from ai_engine.tool_router import route_tools
 from ai_engine.tools import get_planner_tools
@@ -69,5 +70,9 @@ def test_dsh_routing_comparison(user):
         'find_learning_resources', 'manage_learning_resources', 'manage_learning_strategies', 'manage_learning_knowledge', 'manage_learning_tasks'}
     assert {t['function']['name'] for t in context['available_tools']} == public_personal
     assert {t['function']['name'] for group in context['tool_groups'].values() for t in group['tools']} == public_personal
+    tools, _, initial = grouped_tools(context['available_tools'], '请保存阶段计划并安排起点任务', project=True)
+    assert initial == 'tasks'
+    assert {'read_learning_project', 'plan_learning_project', 'manage_learning_tasks'} <= {t['function']['name'] for t in tools}
+    assert len(tools) <= 8
     assert not {'get_practice_questions', 'get_exam_history', 'get_student_detail', 'send_notification'} & set(context['routing']['candidate_names'])
     print('DSH_ROUTING_REPORT ' + json.dumps(report, ensure_ascii=False))
