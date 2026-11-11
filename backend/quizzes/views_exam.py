@@ -28,10 +28,26 @@ class SubmitExamView(APIView):
 
     def post(self, request):
         questions_data = request.data.get('answers', [])
-        questions = validate_exam_answers(request.user, questions_data, request=request)
         submission_id = request.data.get('submission_id')
         if submission_id:
             submission_id = serializers.UUIDField().run_validation(submission_id)
+        task_id = request.data.get('learning_task_id')
+        assistance = serializers.ChoiceField(choices=['independent', 'hint', 'guided', 'unknown']).run_validation(
+            request.data.get('assistance', 'unknown'))
+        if task_id:
+            task_id = serializers.UUIDField().run_validation(task_id)
+            if not submission_id:
+                raise serializers.ValidationError('学习任务必须提供原始提交编号。')
+            from ai_assistant.models import ProjectLearningTask
+            from ai_assistant.services.learning_tasks import personal_answers
+            requested_task = get_object_or_404(ProjectLearningTask, pk=task_id, project__user=request.user)
+            if requested_task.definition:
+                questions_data = personal_answers(questions_data)
+                questions = {}
+            else:
+                questions = validate_exam_answers(request.user, questions_data, request=request)
+        else:
+            questions = validate_exam_answers(request.user, questions_data, request=request)
         answers_hash = hashlib.sha256(json.dumps({
             'kind': 'exam', 'answers': sorted([
                 {'question_id': int(item['question_id']), 'answer': item.get('answer') or ''}
@@ -40,13 +56,25 @@ class SubmitExamView(APIView):
         }, sort_keys=True).encode()).hexdigest()
 
         with transaction.atomic():
+            task = None
             if submission_id:
                 request.user.__class__.objects.select_for_update().get(pk=request.user.pk)
+                from ai_assistant.models import ProjectLearningTask
+                from ai_assistant.services.learning_tasks import validate_task_submission
+                if task_id:
+                    task, questions = validate_task_submission(request.user, task_id, submission_id,
+                                                               questions_data, assistance)
+                elif ProjectLearningTask.objects.filter(pk=submission_id).exists():
+                    raise serializers.ValidationError('请从原学习任务提交。')
                 prior = PracticeSubmission.objects.filter(session_id=submission_id).first()
                 if prior:
                     if prior.user_id != request.user.pk or prior.answers_hash != answers_hash:
                         return Response({'error': '这组练习已提交，不能更换答案。'}, status=409)
+                    if task and task.exam_id != prior.response.get('exam_id'):
+                        return Response({'error': '已有提交不能关联到另一个学习任务。'}, status=409)
                     return Response(prior.response, status=202)
+                if task and task.exam_id:
+                    return Response({'error': '学习任务已经提交。'}, status=409)
             exam = QuizExam.objects.create(
                 user=request.user,
                 status='pending',
@@ -57,19 +85,23 @@ class SubmitExamView(APIView):
                 question = questions[int(item['question_id'])]
                 results.append(ExamQuestionResult(
                     exam=exam,
-                    question=question,
+                    question=question if question.pk else None,
                     position=position,
                     user_answer=item.get('answer') or '',
                     score=0,
                     max_score=question.get_max_score(),
                     status='pending',
-                    question_snapshot=question_snapshot(question),
+                    question_snapshot=task.question_snapshot[str(item['question_id'])] if task else question_snapshot(question),
                 ))
             ExamQuestionResult.objects.bulk_create(results)
             response = {'status': 'processing', 'exam_id': exam.id, 'total_questions': len(questions_data)}
             if submission_id:
                 PracticeSubmission.objects.create(user=request.user, session_id=submission_id,
                     answers_hash=answers_hash, response=response)
+            if task:
+                task.exam = exam
+                task.assistance = assistance
+                task.save(update_fields=['exam', 'assistance'])
             transaction.on_commit(
                 lambda: dispatch_exam_grading(request.user.id, exam.id, questions_data)
             )
@@ -99,7 +131,8 @@ class ExamSubmissionView(APIView):
         submission = get_object_or_404(PracticeSubmission, user=request.user, session_id=submission_id)
         saved = submission.response if isinstance(submission.response, dict) else {}
         exam = get_object_or_404(QuizExam, user=request.user, pk=saved.get('exam_id'))
-        return Response({'exam_id': exam.pk, 'answers': [
+        task = getattr(exam, 'learning_task', None)
+        return Response({'exam_id': exam.pk, 'assistance': task.assistance if task else None, 'answers': [
             {'position': item.position, 'answer': item.user_answer}
             for item in exam.results.order_by('position', 'id')
         ]})
@@ -136,15 +169,17 @@ class ExamRetryView(APIView):
                 question_id = int(question_id)
             except (TypeError, ValueError):
                 return Response({'error': '题目 ID 无效'}, status=400)
-            failed = failed.filter(question_id=question_id)
+            task = getattr(exam, 'learning_task', None)
+            failed = failed.filter(question__isnull=True) if question_id == 0 and task and task.definition else failed.filter(question_id=question_id)
 
         failed_items = list(failed.select_related('question'))
         if not failed_items:
             return Response(exam_status_payload(exam))
 
+        task = getattr(exam, 'learning_task', None)
         retry_data = [
-            {'question_id': item.question_id, 'answer': item.user_answer or ''}
-            for item in failed_items if item.question_id is not None
+            {'question_id': item.question_id if item.question_id is not None else 0, 'answer': item.user_answer or ''}
+            for item in failed_items if item.question_id is not None or (task and task.definition)
         ]
         with transaction.atomic():
             failed.update(status='pending', error_metadata={}, graded_at=None)

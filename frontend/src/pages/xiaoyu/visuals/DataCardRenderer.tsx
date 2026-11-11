@@ -1,14 +1,19 @@
 import React, { useCallback } from 'react';
 import { ArrowRight, ArrowUpRight, TrendDown, TrendUp } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
+import { useAgentReply } from './agentReplyContext';
+import { projectCoursePath } from '@/components/course/projectCourseLinks';
 
 const useSafeNavigate = () => {
   const navigate = useNavigate();
+  const { projectId, conversationId } = useAgentReply();
   return useCallback((link: string) => {
     if (!link) return;
-    if (link.startsWith('/')) navigate(link);
+    const coursePath = projectCoursePath(link, projectId, conversationId);
+    if (coursePath) navigate(coursePath);
+    else if (link.startsWith('/')) navigate(link);
     else if (link.startsWith('http')) window.open(link, '_blank', 'noopener,noreferrer');
-  }, [navigate]);
+  }, [navigate, projectId, conversationId]);
 };
 
 interface DataCardPayload {

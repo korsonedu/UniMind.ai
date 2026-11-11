@@ -3,6 +3,15 @@ from ai_engine.tool_router import classify_intent_keywords
 
 
 GROUPS = {
+    'project': ('目标学习与跟进', '读取当前项目；规划阶段、查公开资源、记录实际学习反馈、调整与主动跟进。', (
+        'read_learning_project', 'plan_learning_project', 'record_learning_progress',
+        'set_learning_followup', 'find_learning_resources', 'manage_learning_resources', 'manage_learning_strategies')),
+    'knowledge': ('知识地图与证据路径', '组织带来源知识单元、有向前置关系与目标深度；登记检查任务并更新贝叶斯证据。', (
+        'read_learning_project', 'manage_learning_knowledge', 'manage_learning_tasks', 'plan_learning_project', 'record_learning_progress',
+        'manage_learning_resources', 'find_learning_resources')),
+    'tasks': ('项目任务与成果复盘', '准备本人项目开放任务或题库练习，读取已提交原作答、评价标准和结果，安排补救与换题检验。无需先建知识地图。', (
+        'read_learning_project', 'manage_learning_tasks', 'record_learning_progress', 'set_learning_followup',
+        'get_practice_questions', 'lookup_question', 'search_knowledge_tree')),
     'interactive': ('交互讲题', '取题并编写交互实验，在同一分组内完成题目讲解和可操作实验。', (
         'get_practice_questions', 'lookup_question', 'search_knowledge_tree', 'build_learning_experiment',
         'read_learning_experiment', 'register_session_tool', 'read_session_tool')),
@@ -26,7 +35,7 @@ GROUPS = {
 }
 
 
-def grouped_tools(allowed, message, recent_messages=None):
+def grouped_tools(allowed, message, recent_messages=None, project=False):
     definitions = {t['function']['name']: t for t in allowed}
     groups = {key: {'title': title, 'description': description,
                    'tools': [definitions[name] for name in names if name in definitions]}
@@ -55,6 +64,14 @@ def grouped_tools(allowed, message, recent_messages=None):
         initial = 'authoring'
     if 'interactive' in groups and '交互' in message and '题' in message:
         initial = 'interactive'
+    if project and any(word in message for word in ('知识地图', '知识单元', '先修', '贝叶斯', '证据路径')):
+        initial = 'knowledge'
+    if project and initial not in ('interactive', 'authoring', 'presentation', 'practice', 'knowledge'):
+        initial = 'project'
+    if any(word in message for word in ('学习目标', '阶段计划', '跟进', '暂停学习', '恢复学习', '学习安排')):
+        initial = 'project'
+    if project and initial not in ('interactive', 'authoring', 'presentation', 'knowledge') and any(word in message for word in ('任务', '原作答', '评价', '成果', '复盘', '补救', '复测', '提交')):
+        initial = 'tasks'
     initial = initial if initial in groups else ''
     selected = list(groups[initial]['tools']) if initial else []
     if groups:

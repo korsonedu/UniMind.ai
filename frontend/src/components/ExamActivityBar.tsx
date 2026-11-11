@@ -82,7 +82,7 @@ export const ExamActivityBar = () => {
           </button>
         );
       })}
-      {hidden > 0 && <span className="exam-activity-more">还有 {hidden} 个任务在批改</span>}
+      {hidden > 0 && <span className="exam-activity-more">还有 {hidden} 条练习状态</span>}
     </section>
   );
 };

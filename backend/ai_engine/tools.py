@@ -626,7 +626,8 @@ GET_MY_ACHIEVEMENTS_SCHEMA = {
 
 def get_planner_tools():
     """学习规划师 Agent 工具集（含助教工具 + 规划专用工具）。"""
-    assistant = get_assistant_tools()
+    from ai_assistant.services.project_learning_tools import PROJECT_LEARNING_TOOLS
+    assistant = [*get_assistant_tools(), *PROJECT_LEARNING_TOOLS]
     planner_only = [
         _make_tool("get_learning_stats", "获取用户学习统计概览（已练题数、最近正确率、连续学习天数、诊断掌握度）。调用后自动在对话中展示学习概览卡片，文字只需解读。", GET_LEARNING_STATS_SCHEMA,
             impl_summary="聚合 UserQuestionStatus（reps>0）：已练题数、最近正确率、累计近似正确率、连续学习天数、诊断掌握度。需要 user_id。"),

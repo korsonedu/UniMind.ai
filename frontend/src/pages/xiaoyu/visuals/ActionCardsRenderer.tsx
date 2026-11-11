@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 
 import { useAgentReply } from './agentReplyContext';
+import { projectCoursePath } from '@/components/course/projectCourseLinks';
 
 type ReplyMode = 'single' | 'multi' | 'acknowledge' | 'input' | 'rating';
 
@@ -85,7 +86,7 @@ async function loadCompletionStatus(): Promise<Record<string, boolean>> {
 
 export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({ payload }) => {
   const navigate = useNavigate();
-  const { onReply } = useAgentReply();
+  const { onReply, projectId, conversationId } = useAgentReply();
   const cards = (payload.cards || []).filter(c => c.title);
   const [completedMap, setCompletedMap] = useState<Record<string, boolean>>({});
   const [chosenUrl, setChosenUrl] = useState<string | null>(null);
@@ -182,9 +183,11 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
     }
 
     // 跳转
-    if (url.startsWith('/')) navigate(url);
+    const coursePath = projectCoursePath(url, projectId, conversationId);
+    if (coursePath) navigate(coursePath);
+    else if (url.startsWith('/')) navigate(url);
     else if (url.startsWith('http')) window.open(url, '_blank', 'noopener,noreferrer');
-  }, [navigate, onReply, chosenUrl, ratingSent]);
+  }, [navigate, onReply, chosenUrl, ratingSent, projectId, conversationId]);
 
   // ── 多选确认 ──
   const handleMultiConfirm = useCallback(() => {

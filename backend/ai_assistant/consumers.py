@@ -182,6 +182,9 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             return
 
         try:
+            from types import SimpleNamespace
+            from .views_projects import save_new_conversation_project, add_project_context
+            save_new_conversation_project(SimpleNamespace(user=self.user, data={}), self.bot, conversation_id)
             note_data = note_data or {}
             note_context, note_sources = prepare_note_context(
                 self.user, self.bot, conversation_id, message,
@@ -199,6 +202,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                 conversation_id,
                 exclude_ids=(user_msg.id,),
             )
+            history_msgs = add_project_context(self.user, conversation_id, history_msgs)
             agent_history = history_msgs + ([{'role': 'user', 'content': note_context}] if note_context else [])
 
             student_context = ""
@@ -226,6 +230,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                     user=self.user,
                     message=message,
                     history=agent_history,
+                    chat_context={'conversation_id': str(conversation_id), 'message_id': user_msg.pk, 'bot_id': self.bot.pk},
                     institution=self.institution,
                     stream=True,
                     on_step=on_step,
@@ -256,6 +261,9 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             msg_metadata = self._build_metadata(tool_executor) or {}
             if note_sources:
                 msg_metadata['note_sources'] = note_sources
+            if _quota_earned and not engine_failed.is_set() and not self._cancelled.is_set() and _complete_ai_result(result, ai_content, msg_metadata):
+                from .services.project_learning import completed_learning_turn
+                msg_metadata['learning_turn'] = completed_learning_turn(user_msg.pk)
             from .services.chat_dispatch import build_tool_run_done_payload
             done_event = build_tool_run_done_payload(
                 result,

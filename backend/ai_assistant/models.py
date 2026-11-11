@@ -451,3 +451,128 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"UserProfile({self.user_id})"
+
+
+class ProjectLearning(models.Model):
+    project = models.OneToOneField(ConversationProject, on_delete=models.CASCADE, related_name='learning')
+    status = models.CharField(max_length=16, default='preparing')
+    plan = models.JSONField(default=dict, blank=True)
+    resources = models.JSONField(default=list, blank=True)
+    current_stage = models.CharField(max_length=60, blank=True)
+    feedback = models.TextField(blank=True)
+    next_action = models.TextField(blank=True)
+    pending_plan = models.JSONField(default=dict, blank=True)
+    revision = models.PositiveIntegerField(default=0)
+    last_conversation = models.ForeignKey(Conversation, null=True, blank=True, on_delete=models.SET_NULL)
+    followup_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    followup_text = models.TextField(blank=True)
+    resume_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class ProjectLearningEvent(models.Model):
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE, related_name='learning_events')
+    message = models.ForeignKey(AIChatMessage, null=True, blank=True, on_delete=models.SET_NULL)
+    kind = models.CharField(max_length=20)
+    content = models.JSONField(default=dict)
+    request_key = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-id']
+
+
+class LearningResource(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    url = models.URLField(max_length=3000)
+    url_hash = models.CharField(max_length=64)
+    title = models.CharField(max_length=200)
+    excerpt = models.TextField()
+    read_at = models.DateTimeField()
+    domain = models.CharField(max_length=100, blank=True)
+    topic = models.CharField(max_length=200, blank=True)
+    level = models.CharField(max_length=80, blank=True)
+    edition = models.CharField(max_length=80, blank=True)
+    is_archived = models.BooleanField(default=False)
+    revision = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'url_hash'], name='learning_resource_user_url')]
+
+
+class LearningStrategy(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    source_event = models.OneToOneField(ProjectLearningEvent, on_delete=models.CASCADE)
+    domain = models.CharField(max_length=100, blank=True)
+    topic = models.CharField(max_length=200, blank=True)
+    is_retired = models.BooleanField(default=False)
+    revision = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class LearningStrategyUse(models.Model):
+    strategy = models.ForeignKey(LearningStrategy, on_delete=models.CASCADE, related_name='uses')
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE)
+    message = models.ForeignKey(AIChatMessage, on_delete=models.CASCADE)
+    reason = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['strategy', 'message'], name='learning_strategy_use_message')]
+
+
+class LearningStrategyReview(models.Model):
+    use = models.ForeignKey(LearningStrategyUse, on_delete=models.CASCADE, related_name='reviews')
+    evidence_event = models.ForeignKey(ProjectLearningEvent, on_delete=models.CASCADE)
+    judgement = models.CharField(max_length=16, choices=[('support', '支持观察'), ('against', '相反观察'), ('uncertain', '尚不确定')])
+    reason = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['use', 'evidence_event'], name='learning_strategy_review_evidence')]
+
+
+class LearningResourceVersion(models.Model):
+    resource = models.ForeignKey(LearningResource, on_delete=models.CASCADE, related_name='versions')
+    revision = models.PositiveIntegerField()
+    snapshot = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['resource', 'revision'], name='learning_resource_version')]
+
+
+class LearningKnowledgeMap(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    title = models.CharField(max_length=200)
+    revision = models.PositiveIntegerField(default=1)
+
+
+class LearningKnowledgeVersion(models.Model):
+    knowledge_map = models.ForeignKey(LearningKnowledgeMap, on_delete=models.CASCADE, related_name='versions')
+    revision = models.PositiveIntegerField()
+    snapshot = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['knowledge_map', 'revision'], name='learning_knowledge_version')]
+
+
+class ProjectLearningTask(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE, related_name='learning_tasks')
+    knowledge_version = models.ForeignKey(LearningKnowledgeVersion, null=True, blank=True, on_delete=models.CASCADE)
+    node_id = models.CharField(max_length=60, blank=True)
+    stage_id = models.CharField(max_length=60)
+    title = models.CharField(max_length=200)
+    instructions = models.TextField()
+    question_ids = models.JSONField()
+    question_snapshot = models.JSONField()
+    definition = models.JSONField(default=dict, blank=True)
+    purpose = models.CharField(max_length=16, default='practice', choices=[('diagnostic', '起点检查'), ('practice', '练习'), ('recheck', '再次检验')])
+    source_task = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='followup_tasks')
+    mode = models.CharField(max_length=16, choices=[('apply', '应用'), ('transfer', '迁移')])
+    assistance = models.CharField(max_length=16, default='unknown')
+    exam = models.OneToOneField('quizzes.QuizExam', null=True, blank=True, on_delete=models.CASCADE, related_name='learning_task')
+    created_at = models.DateTimeField(auto_now_add=True)
