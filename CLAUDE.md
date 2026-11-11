@@ -53,7 +53,7 @@ UniMindCode/                  ← git 仓库根目录
 │   ├── study_room/             # 在线自习室
 │   ├── faq_system/             # 答疑系统
 │   ├── notifications/          # 站内通知
-│   ├── payments/               # 支付网关 (gateway_router 统一分发: stub/stripe/alipay/wechat/airwallex)
+│   ├── payments/               # AI 加量支付（支付宝／开发环境 stub）与历史支付记录
 │   ├── core/                   # 基础设施 (加密字段、Cookie认证、邮件、限流、文件校验、安全审计)
 │   └── prompts/                # 统一 Prompt 模板目录
 │       ├── quizzes/  ai_assistant/  courses/  pipeline/  grading/
@@ -122,9 +122,8 @@ CACHE_REDIS_URL=redis://127.0.0.1:6379/1      # Django 缓存用独立 db
 # AI 模型（按任务路由见 ai_engine/config.py，hot-swap 只需改顶部两个常量）
 # LLM_MODEL=                    # 全局覆盖（可选）
 
-# 邮件 (Resend HTTP API)
-EMAIL_BACKEND=core.email_service.ResendEmailBackend
-RESEND_API_KEY=re_xxx
+# 邮件（飞书 SMTP）
+FEISHU_NOTIFY_PASSWORD=<SMTP 授权密码>
 
 # 熔断器
 AI_CB_FAILURE_THRESHOLD=5  AI_CB_RECOVERY_TIMEOUT=300  AI_CB_WINDOW_TIMEOUT=60

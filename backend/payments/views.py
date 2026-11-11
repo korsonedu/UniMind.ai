@@ -4,26 +4,17 @@ Payment views — 通过 gateway_router 动态选择支付网关。
 import logging
 
 from rest_framework import status
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 
-from payments.models import Order, Invoice, Subscription, Coupon
-from payments.serializers import (
-    CreateOrderSerializer, OrderSerializer, InvoiceSerializer,
-    CouponSerializer, CouponValidateSerializer,
-)
-from payments.services.base import create_order, create_ai_addon_order, confirm_order, get_plan_price
-from payments.services.coupon import validate_coupon
-from payments.services.gateway_router import get_gateway, gateway_supports_subscriptions
-from payments.services.subscription import (
-    create_subscription, activate_subscription, cancel_subscription as cancel_sub_biz,
-    get_active_subscription,
-)
-from users.permissions import IsInstitutionOwner, is_institution_owner
+from payments.models import Order
+from payments.serializers import CreateOrderSerializer, OrderSerializer
+from payments.services.base import create_ai_addon_order, confirm_order
+from payments.services.gateway_router import get_gateway
+from payments.services.subscription import activate_subscription
 
 logger = logging.getLogger(__name__)
 
@@ -93,16 +84,6 @@ class OrderHistoryView(APIView):
         return Response(OrderSerializer(qs, many=True).data)
 
 
-class InvoiceListView(APIView):
-    """用户发票列表。"""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        orders = Order.objects.filter(user=request.user, status='paid')
-        invoices = Invoice.objects.filter(order__in=orders)
-        return Response(InvoiceSerializer(invoices, many=True).data)
-
-
 class SimulatePaymentView(APIView):
     """
     [开发专用] 模拟支付成功 — 直接确认订单，跳过真实支付。
@@ -135,128 +116,14 @@ class SimulatePaymentView(APIView):
         })
 
 
-# ── Subscription ──
+class RetiredCouponView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
 
-
-class CreateSubscriptionView(APIView):
-    """POST /api/payments/subscriptions/ — 创建订阅结账会话（网关无关）。"""
-    permission_classes = [IsAuthenticated, IsInstitutionOwner]
-
-    def post(self, request):
-        return Response({'error': '机构套餐已停止销售。'}, status=410)
-
-
-class SubscriptionStatusView(APIView):
-    """GET/POST /api/payments/subscriptions/me/ — 查看/取消机构订阅（网关无关）。"""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        inst = getattr(request.user, 'institution', None)
-        if not inst:
-            return Response({'error': '无机构归属'}, status=403)
-
-        sub = get_active_subscription(inst)
-        if not sub:
-            return Response({'subscription': None})
-
-        return Response({
-            'subscription': {
-                'id': sub.id,
-                'plan': sub.plan,
-                'billing_cycle': sub.billing_cycle,
-                'status': sub.status,
-                'gateway': sub.gateway,
-                'current_period_start': sub.current_period_start.isoformat() if sub.current_period_start else None,
-                'current_period_end': sub.current_period_end.isoformat() if sub.current_period_end else None,
-                'canceled_at': sub.canceled_at.isoformat() if sub.canceled_at else None,
-                'created_at': sub.created_at.isoformat(),
-            }
-        })
-
-    def post(self, request):
-        """取消订阅。"""
-        if not is_institution_owner(request.user):
-            return Response({'error': '仅机构所有者可操作'}, status=403)
-
-        inst = request.user.institution
-        sub = get_active_subscription(inst)
-        if not sub:
-            return Response({'error': '无活跃订阅'}, status=404)
-
-        # Cancel on gateway side
-        try:
-            if gateway_supports_subscriptions(sub.gateway):
-                gw = get_gateway(sub.gateway)
-                gw.cancel_subscription(sub)
-        except Exception:
-            logger.exception('Gateway cancel failed for subscription %s', sub.id)
-
-        # Always cancel locally
-        cancel_sub_biz(sub)
-        return Response({'success': True, 'status': 'canceled'})
-
-
-# ── Coupons ──
-
-
-class CouponValidateView(APIView):
-    """POST /api/payments/coupons/validate/ — 验证优惠码并预览折扣。"""
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
+    def _retired(self, request, *args, **kwargs):
         return Response({'error': '旧版机构套餐优惠码已停止使用。'}, status=410)
 
-
-class CouponListCreateView(APIView):
-    """GET/POST /api/payments/coupons/ — 列表+创建优惠券。"""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        inst = getattr(request.user, 'institution', None)
-        if request.user.is_superuser and not inst:
-            qs = Coupon.objects.filter(institution__isnull=True)
-        elif inst:
-            qs = Coupon.objects.filter(institution=inst) | Coupon.objects.filter(institution__isnull=True)
-        else:
-            qs = Coupon.objects.none()
-        ser = CouponSerializer(qs, many=True)
-        return Response(ser.data)
-
-    def post(self, request):
-        inst = getattr(request.user, 'institution', None)
-        if not inst and not request.user.is_superuser:
-            return Response({'error': '无权创建优惠券'}, status=403)
-
-        ser = CouponSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        ser.save(institution=inst, created_by=request.user)
-        return Response(ser.data, status=201)
-
-
-class CouponDetailView(APIView):
-    """PUT/DELETE /api/payments/coupons/<int:pk>/ — 更新/删除优惠券。"""
-    permission_classes = [IsAuthenticated]
-
-    def _get_coupon(self, pk, user):
-        inst = getattr(user, 'institution', None)
-        coupon = get_object_or_404(Coupon, pk=pk)
-        if coupon.institution and coupon.institution != inst:
-            raise PermissionDenied('无权操作此优惠券')
-        if not coupon.institution and not user.is_superuser:
-            raise PermissionDenied('无权操作平台通用优惠券')
-        return coupon
-
-    def put(self, request, pk):
-        coupon = self._get_coupon(pk, request.user)
-        ser = CouponSerializer(coupon, data=request.data, partial=True)
-        ser.is_valid(raise_exception=True)
-        ser.save()
-        return Response(ser.data)
-
-    def delete(self, request, pk):
-        coupon = self._get_coupon(pk, request.user)
-        coupon.delete()
-        return Response(status=204)
+    get = post = put = patch = delete = _retired
 
 
 # ── Referral ──
@@ -294,6 +161,8 @@ class WebhookView(APIView):
         gateway_name = request.query_params.get('gateway')
         if not gateway_name:
             return Response({'error': 'Missing gateway parameter'}, status=400)
+        if gateway_name not in {'stub', 'alipay'}:
+            return Response({'error': '不支持该支付网关。'}, status=400)
         if gateway_name != 'alipay':
             webhook_secret = getattr(settings, 'PAYMENT_WEBHOOK_SECRET', '')
             if not webhook_secret:

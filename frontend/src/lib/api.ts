@@ -8,13 +8,28 @@ const api = axios.create({
   timeout: 30000,
 });
 
+let csrfRequest: Promise<string> | null = null;
+export function getCsrfToken(): Promise<string> {
+  const cookie = document.cookie.split('; ').find(item => item.startsWith('csrftoken='));
+  if (cookie) return Promise.resolve(decodeURIComponent(cookie.slice('csrftoken='.length)));
+  if (!csrfRequest) {
+    csrfRequest = api.get('/csrf/')
+      .then(response => response.data.csrf_token as string)
+      .finally(() => { csrfRequest = null; });
+  }
+  return csrfRequest;
+}
+
 // Preview mode: platform admin previews another institution
 let _previewInstitutionId: number | null = null;
 export function setPreviewInstitutionId(id: number | null) { _previewInstitutionId = id; }
 export function getPreviewInstitutionId() { return _previewInstitutionId; }
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
   // Auth via httpOnly cookie (CookieTokenAuthentication) — no Authorization header needed
+  if (!['get', 'head', 'options'].includes(config.method?.toLowerCase() || 'get')) {
+    config.headers.set('X-CSRFToken', await getCsrfToken());
+  }
   // Attach preview institution ID for backend filtering
   if (_previewInstitutionId) {
     config.params = { ...config.params, preview_institution: _previewInstitutionId };
@@ -35,10 +50,11 @@ api.interceptors.response.use(
       }
       return Promise.reject(error);
     }
-    // Retry on 429 (rate limit) and network errors, max 2 retries
+    // Only reads may be replayed after a lost response.
     const config = error.config;
-    const retryCount = config.__retryCount || 0;
-    const isRetryable = config.url !== '/ai/practice/submit/' && (error.response?.status === 429 || !error.response);
+    const retryCount = config?.__retryCount || 0;
+    const isRetryable = config && ['get', 'head', 'options'].includes(config.method?.toLowerCase() || 'get')
+      && !axios.isCancel(error) && (error.response?.status === 429 || !error.response);
     if (isRetryable && retryCount < 2) {
       config.__retryCount = retryCount + 1;
       // Respect Retry-After header if present, otherwise exponential backoff
@@ -67,17 +83,18 @@ api.interceptors.response.use(
  *   - preview_institution query param (platform admin preview)
  *
  * Usage:
- *   const { url, init } = streamFetch('/ai/chat/stream/', { message: 'hi' }, controller.signal);
+ *   const { url, init } = await streamFetch('/api/ai/chat/stream/', { message: 'hi' }, controller.signal);
  *   const res = await fetch(url, init);
  */
-export function streamFetch(
+export async function streamFetch(
   path: string,
   body?: Record<string, unknown>,
   signal?: AbortSignal,
   extraHeaders?: Record<string, string>,
-): { url: string; init: RequestInit } {
+): Promise<{ url: string; init: RequestInit }> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'X-CSRFToken': await getCsrfToken(),
     ...extraHeaders,
   };
 

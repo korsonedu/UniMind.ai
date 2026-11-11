@@ -84,4 +84,4 @@ class BatchAssignTagsView(APIView):
         _assign_tags(course, tag_names, inst)
 
         relations = course.tag_relations.select_related('tag').all()
-        return Response(CourseTagSerializer([r.tag for r in relations], many=True).data)
+        return Response(CourseTagSerializer([r.tag for r in relations], many=True, context={'request': request}).data)

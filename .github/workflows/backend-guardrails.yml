@@ -91,7 +91,3 @@ jobs:
       - name: Frontend lint check
         working-directory: frontend
         run: npm run lint
-
-      - name: Admin frontend build check
-        working-directory: frontend/admin
-        run: npm run build

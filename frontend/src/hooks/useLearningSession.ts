@@ -1,5 +1,5 @@
 import { useEffect, type RefObject } from 'react';
-import api from '@/lib/api';
+import api, { getCsrfToken } from '@/lib/api';
 
 type Options = {
   enabled: boolean;
@@ -16,6 +16,7 @@ export function useLearningSession({ enabled, kind, courseId, questionIds, video
     if (!enabled) return;
     const video = videoRef?.current;
     if (kind === 'video' && !video) return;
+    void getCsrfToken().catch(() => {});
     const url = `${api.defaults.baseURL?.replace(/\/$/, '') || ''}/users/me/learning-sessions/`;
     const isActive = () => kind === 'video'
       ? !!video && !video.paused && !video.seeking && !video.ended && video.readyState >= 3
@@ -40,9 +41,9 @@ export function useLearningSession({ enabled, kind, courseId, questionIds, video
       if (body === lastSent) return;
       lastSent = body;
       // keepalive 尽量保留切页和关闭页面前的最后一段；累计快照可安全重试。
-      void fetch(url, { method: 'POST', credentials: 'include', keepalive: true,
-        headers: { 'Content-Type': 'application/json' }, body,
-      }).then(response => { if (!response.ok && lastSent === body) lastSent = ''; })
+      void getCsrfToken().then(csrfToken => fetch(url, { method: 'POST', credentials: 'include', keepalive: true,
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body,
+      })).then(response => { if (!response.ok && lastSent === body) lastSent = ''; })
         .catch(() => { if (lastSent === body) lastSent = ''; });
     };
 

@@ -109,8 +109,6 @@ export default defineConfig({
             '@tiptap/extension-placeholder',
             '@tiptap/extension-underline',
           ],
-          'vendor-stripe': ['@stripe/react-stripe-js', '@stripe/stripe-js'],
-          'vendor-tauri': ['@tauri-apps/api'],
           'vendor-axios': ['axios'],
         },
       },

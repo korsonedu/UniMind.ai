@@ -78,9 +78,9 @@ def check_tool_registry():
 def check_views():
     """验证关键 view 类存在"""
     from users.views_institution import (
-        InstitutionBusinessDashboardView, InstitutionDataExportView,
+        InstitutionBusinessDashboardView, RetiredInstitutionView,
     )
-    print(f"\n  ✅ 机构查询 2 个 View")
+    print(f"\n  ✅ 历史机构查询与停用入口")
 
     from quizzes.views_marketplace import (
         MarketplaceListView, MarketplaceDetailView,

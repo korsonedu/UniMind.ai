@@ -1,5 +1,6 @@
 from rest_framework import exceptions
-from rest_framework.authentication import TokenAuthentication, BaseAuthentication
+from django.middleware.csrf import get_token
+from rest_framework.authentication import TokenAuthentication, BaseAuthentication, SessionAuthentication
 from users.login_sessions import LoginSession
 
 
@@ -10,6 +11,8 @@ class CookieTokenAuthentication(TokenAuthentication):
         token = request.COOKIES.get('auth_token')
         token_obj = LoginSession.resolve(token)
         if token_obj:
+            SessionAuthentication().enforce_csrf(request)
+            get_token(request)
             return (token_obj.user, token_obj)
         return super().authenticate(request)
 

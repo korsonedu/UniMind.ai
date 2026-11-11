@@ -1,56 +1,12 @@
 import logging
-import os
 from datetime import timedelta
 
 from celery import shared_task
 from django.utils import timezone
 
-from payments.models import Order, Invoice
+from payments.models import Order
 
 logger = logging.getLogger(__name__)
-
-
-def enqueue_invoice(order_id: int):
-    if Invoice.objects.filter(order_id=order_id).exists():
-        return
-    try:
-        generate_invoice.delay(order_id)
-    except Exception:
-        # 已支付订单由定时补偿任务重试，不影响支付回调确认。
-        logger.exception("Failed to enqueue invoice for order %s", order_id)
-
-
-@shared_task(soft_time_limit=120, time_limit=180)
-def compensate_missing_invoices():
-    order_ids = Order.objects.filter(status='paid', invoice__isnull=True).values_list('id', flat=True)
-    for order_id in order_ids.iterator(chunk_size=200):
-        generate_invoice(order_id)
-
-
-@shared_task(soft_time_limit=30, time_limit=60)
-def generate_invoice(order_id: int):
-    """Generate PDF invoice for a paid order."""
-    from django.conf import settings
-
-    order = Order.objects.select_related('user').filter(pk=order_id).first()
-    if not order or order.status != 'paid':
-        logger.warning("invoice: order %s not ready (status=%s)", order_id, getattr(order, 'status', 'N/A'))
-        return
-
-    invoice_number = f"INV-{order.paid_at.strftime('%Y%m%d')}-{order_id:06d}"
-    pdf_path = f"invoices/{invoice_number}.pdf"
-
-    # Minimal placeholder — PDF rendering via weasyprint or similar in production
-    try:
-        # Placeholder: just create an empty record for now
-        # Full PDF rendering would use a template + weasyprint
-        Invoice.objects.get_or_create(
-            order=order,
-            defaults={'invoice_number': invoice_number, 'pdf_file': ''},
-        )
-        logger.info("Invoice %s created for order %s", invoice_number, order_id)
-    except Exception:
-        logger.exception("Failed to generate invoice for order %s", order_id)
 
 
 @shared_task(soft_time_limit=60, time_limit=120)
