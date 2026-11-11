@@ -32,6 +32,13 @@ canvas, svg { max-width: 100%; }
 .um-results .um-result-main { grid-column: 1 / -1; }
 .um-result-main b { font-size: 26px; line-height: 1.15; color: #fff; letter-spacing: -.04em; }
 .um-hint { font-size: 11px; line-height: 1.4; color: var(--um-muted); }
+.um-chart { min-width: 0; font-size: 12px; }
+.um-chart-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; color: var(--um-muted); }
+.um-chart-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.um-chart-legend > span { display: inline-flex; align-items: center; gap: 5px; overflow-wrap: anywhere; }
+.um-chart-legend i { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
+.um-chart svg, .um-stage .um-chart svg { display: block; width: 100%; height: auto; max-height: none; }
+.um-chart-axis-label { color: var(--um-muted); text-align: center; font-size: 11px; }
 @media (max-width: 480px) {
   body { padding: 12px; }
   .um-layout { grid-template-columns: 1fr; gap: 12px; }

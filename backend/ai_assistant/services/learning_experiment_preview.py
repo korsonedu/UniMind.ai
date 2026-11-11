@@ -1,4 +1,6 @@
 """Short-lived browser-only preview; generated code never executes in Python."""
+import base64
+import hashlib
 import json
 import subprocess
 import sys
@@ -12,15 +14,17 @@ def run(data):
             capture_output=True, text=True, timeout=1)
         if fonts.returncode or 'zh-cn' not in fonts.stdout.split('|'):
             return {'ok': False, 'errors': ['运行器缺少中文字体，无法可靠检查文字布局，尚未挂载。'], 'checks': []}
-    errors, results, messages = [], [], []
+    errors, results, messages, screenshots = [], [], [], []
+    capture = data.get('capture_screenshots', False)
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True, chromium_sandbox=True)
-        context = browser.new_context(service_workers='block', accept_downloads=False)
+        context = browser.new_context(service_workers='block', accept_downloads=False,
+            device_scale_factor=1, viewport={'width': 740, 'height': 480})
         context.route('**/*', lambda route: route.abort())
         page = context.new_page()
         page.set_default_timeout(1200)
         page.on('pageerror', lambda error: errors.append(str(error)[:500]))
-        page.set_content('<iframe sandbox="allow-scripts" style="width:700px;height:360px"></iframe>')
+        page.set_content('<iframe sandbox="allow-scripts" style="border:0;width:700px;height:360px"></iframe>')
         page.evaluate('''() => window.addEventListener('message', event => {
             if (event.source === document.querySelector('iframe').contentWindow && event.data?.channel === 'unimind-experiment') {
                 const messages = window.experimentMessages ||= [];
@@ -30,7 +34,7 @@ def run(data):
         page.locator('iframe').evaluate('(frame, document) => frame.srcdoc = document', data['document'])
         frame = page.frame_locator('iframe')
         frame.locator('body').wait_for()
-        def check_layout(width, height=360):
+        def check_layout(width, height=360, phase=None):
             page.locator('iframe').evaluate('''(element, size) => {
                 element.style.width = `${size[0]}px`;
                 element.style.height = `${size[1]}px`;
@@ -79,9 +83,22 @@ def run(data):
                 error = f'SVG标签重叠（{width}px宽）：{json.dumps(overlap, ensure_ascii=False)}。请分开标签或将图例移到图外，不要缩小字号掩盖。'
                 if error not in errors:
                     errors.append(error)
+            if capture and phase and not errors:
+                png = page.locator('iframe').screenshot(type='png', scale='css',
+                    animations='disabled', caret='hide', timeout=1200)
+                if (len(screenshots) >= 8 or len(png) > 512 * 1024
+                        or sum(item['bytes'] for item in screenshots) + len(png) > 2 * 1024 * 1024):
+                    errors.append('讲解截图超过审查容量，请简化画面后重试。')
+                else:
+                    screenshots.append({'id': f'{phase}-{width}', 'width': width, 'height': height,
+                        'phase': phase, 'bytes': len(png), 'sha256': hashlib.sha256(png).hexdigest(),
+                        'png': base64.b64encode(png).decode('ascii')})
 
-        check_layout(700)
-        for check in data['checks']:
+        check_layout(700, phase='initial')
+        if capture:
+            check_layout(360, 420, phase='initial')
+            check_layout(700)
+        for index, check in enumerate(data['checks']):
             try:
                 control = frame.locator(check['selector'])
                 if check['action'] == 'click':
@@ -95,17 +112,21 @@ def run(data):
                 from playwright.sync_api import expect
                 expect(frame.locator(check['expect_selector'])).to_contain_text(check['expect_text'], timeout=1200)
                 results.append({'selector': check['selector'], 'ok': True})
+                if capture:
+                    check_layout(700, phase=f'check-{index + 1}')
             except Exception as error:
                 results.append({'selector': check['selector'], 'ok': False, 'error': str(error)[:600]})
         check_layout(700)
-        check_layout(360, 420)
+        check_layout(360, 420, phase='final')
         messages = page.evaluate('window.experimentMessages || []')
         errors.extend(str(item.get('message', ''))[:500] for item in messages if item.get('type') == 'error')
         text = frame.locator('body').inner_text()[:1800]
         browser.close()
     return {'ok': not errors and all(item['ok'] for item in results),
         'errors': errors[:5], 'checks': results, 'text': text,
-        'note': '仅核验浏览器运行及指定交互，不证明教学内容或公式正确。'}
+        'document_sha256': hashlib.sha256(data['document'].encode()).hexdigest(),
+        'note': '仅核验浏览器运行及指定交互，不证明教学内容或公式正确。',
+        **({'screenshots': screenshots} if capture else {})}
 
 
 if __name__ == '__main__':

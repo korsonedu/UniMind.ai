@@ -120,7 +120,9 @@ def experiment_document(html, state):
 let state = INITIAL_STATE;
 const send = (type, value) => parent.postMessage({channel:'unimind-experiment',type,...value}, '*');
 const copy = value => JSON.parse(JSON.stringify(value));
+EXPERIMENT_COMPONENTS
 window.unimind = Object.freeze({
+  chart: renderChart,
   getState: () => copy(state),
   setState: value => { const data=JSON.stringify(value); if (!value || Array.isArray(value) || typeof value!=='object' || data.length>4096) throw Error('State must be a small JSON object'); state=copy(value); send('state',{state}); },
   report: summary => send('report',{state:copy(state),summary:String(summary).slice(0,1200)})
@@ -134,17 +136,36 @@ window.addEventListener('DOMContentLoaded', () => {
   }).observe(document.body);
 });
 })();
-</script></head><body>'''.replace('EXPERIMENT_STYLE', Path(__file__).with_name('learning_experiment.css').read_text()
+</script></head><body>'''.replace('EXPERIMENT_COMPONENTS', Path(__file__).with_name('learning_experiment_components.js').read_text()
+        ).replace('EXPERIMENT_STYLE', Path(__file__).with_name('learning_experiment.css').read_text()
         ).replace('INITIAL_STATE', initial) + html + '</body></html>'
 
 
-def preview(html, state, checks):
+def preview(html, state, checks, *, current=None):
     from .learning_worker import run
+    visual = getattr(settings, 'UNIMIND_LEARNING_VISUAL_REVIEW_ENABLED', False)
     try:
-        return run('learning_experiment_preview.py', {
-            'document': experiment_document(html, state), 'checks': checks})
+        report = run('learning_experiment_preview.py', {
+            'document': experiment_document(html, state), 'checks': checks,
+            'capture_screenshots': visual}, max_output_bytes=4 * 1024 * 1024 if visual else 65536)
     except (subprocess.TimeoutExpired, OSError, ValueError):
         return {'ok': False, 'errors': ['浏览器预览不可用或超时，请缩短代码并检查运行环境。'], 'checks': []}
+    frames = report.pop('screenshots', [])
+    if visual and report['ok']:
+        from .learning_experiment_review import reserve_review, review_screenshots
+        if not reserve_review(current):
+            report.update(ok=False, visual_review={'status': 'budget_exhausted'})
+            report.setdefault('errors', []).append('本轮视觉审查次数已用完或缺少当前提问授权，卡片尚未挂载。')
+        else:
+            review = review_screenshots(frames)
+            report['visual_review'] = review
+            report['note'] = '运行与截图审查均是局部验收，不证明公式、教学内容或未覆盖的操作状态正确。'
+            if review['status'] != 'passed':
+                report['ok'] = False
+                report.setdefault('errors', []).extend([
+                    f"视觉审查未通过（{issue['frame_id']}）：{issue['description']}" for issue in review['issues']
+                ] or [review.get('error', '视觉审查未通过，卡片尚未挂载。')])
+    return report
 
 
 def execute(user, name, arguments, chat_context):
@@ -172,15 +193,25 @@ def execute(user, name, arguments, chat_context):
         raise ExperimentConflict()
     if not previous and len(anchor.metadata.get('learning_experiments', {})) >= 6:
         raise ValidationError('本原型每个对话最多创建 6 个实验，请修改已有实验。')
-    report = preview(arguments['html'], previous['state'] if previous else {}, arguments['checks'])
+    report = preview(arguments['html'], previous['state'] if previous else {}, arguments['checks'], current=current)
     if not report['ok']:
-        return {'error': '实验没有通过浏览器检查，尚未挂载。请根据检查结果修正代码后重试。', 'preview': report}
+        status = report.get('visual_review', {}).get('status')
+        if status in {'unavailable', 'budget_exhausted'}:
+            error = '视觉审查未完成，卡片尚未挂载。无需修改源码；本轮停止构建，先用文字讲解并说明审查未完成。'
+        elif status == 'rejected':
+            error = '卡片没有通过视觉审查，尚未挂载。请按截图诊断修正布局，保留正确计算，再检查。'
+        else:
+            error = '实验没有通过浏览器检查，尚未挂载。请根据检查结果修正代码后重试。'
+        return {'error': error, 'preview': report}
     experiment_id = experiment_id or str(uuid4())
     # Read the latest state after the preview; never persist state produced by automated checks.
     anchor.refresh_from_db()
     latest = load_experiment(anchor, experiment_id) if previous else None
     if latest and latest['revision'] != previous['revision']:
         raise ExperimentConflict()
+    if (latest and getattr(settings, 'UNIMIND_LEARNING_VISUAL_REVIEW_ENABLED', False)
+            and latest['state_version'] != previous['state_version']):
+        raise ExperimentConflict('审查期间参数已变化，请重新读取并检查当前卡片。')
     experiment = {'experiment_id': experiment_id, 'title': arguments['title'], 'html': arguments['html'],
         'revision': previous['revision'] + 1 if previous else 1,
         'state': latest['state'] if latest else {}, 'state_version': latest['state_version'] if latest else 0,

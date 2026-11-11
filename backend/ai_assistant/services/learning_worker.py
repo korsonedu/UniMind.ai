@@ -10,7 +10,7 @@ import sys
 from django.conf import settings
 
 
-def run(filename, data):
+def run(filename, data, *, max_output_bytes=65536):
     with ExitStack() as stack:
         environment = {'PATH': os.defpath, 'HOME': str(Path.home())}
         command = [sys.executable, str(Path(__file__).with_name(filename))]
@@ -50,6 +50,6 @@ def run(filename, data):
                 os.killpg(process.pid, signal.SIGKILL)
                 process.communicate()
                 raise
-        if process.returncode or len(output) > 65536:
+        if process.returncode or len(output.encode()) > max_output_bytes:
             raise ValueError('学习运行器未能完成，请稍后重试。')
         return json.loads(output)
