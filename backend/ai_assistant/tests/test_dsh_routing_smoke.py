@@ -33,7 +33,8 @@ def test_dsh_routing_comparison(user):
     ]
     report = []
     for label, message, recent, required, forbidden in cases:
-        with patch('ai_engine.tool_router._classify_intent_llm', return_value=None):
+        with patch('ai_engine.tool_router._classify_intent_llm', return_value=None), \
+                patch('ai_engine.tool_router._retrieve_candidates', return_value=[]):
             start = perf_counter()
             legacy = route_tools(message, legacy_catalog, recent_messages=recent, bot_type='planner')
             legacy_ms = (perf_counter() - start) * 1000
@@ -76,3 +77,23 @@ def test_dsh_routing_comparison(user):
     assert len(tools) <= 8
     assert not {'get_practice_questions', 'get_exam_history', 'get_student_detail', 'send_notification'} & set(context['routing']['candidate_names'])
     print('DSH_ROUTING_REPORT ' + json.dumps(report, ensure_ascii=False))
+
+
+@pytest.mark.django_db
+def test_large_dsh_catalog_uses_grouped_discovery_without_semantic_network(user):
+    from ai_assistant.services.dsh_service import student_catalog
+    from ai_engine.tool_router import classify_intent_keywords
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    catalog = student_catalog(user)
+    assert len(catalog) > 32
+    with patch('ai_engine.tool_router._retrieve_candidates', side_effect=AssertionError('DSH context must not retrieve embeddings')) as retrieval:
+        context = build_context(user, '请保存阶段计划并安排起点任务')
+        retrieval.assert_not_called()
+    assert context['routing']['semantic_retrieval'] == 'not-used-grouped-discovery'
+    assert len(context['tools']) <= 8
+    assert all(len(group['tools']) <= 7 for group in context['tool_groups'].values())
+    assert {t['function']['name'] for t in context['tools']} <= M0_TOOLS | {'find_learning_tools'}
+    # The opt-out belongs to DSH; existing large-catalog callers keep semantic routing.
+    with patch('ai_engine.tool_router._retrieve_candidates', return_value=[]) as retrieval:
+        route_tools('请保存阶段计划并安排起点任务', catalog, intent_classifier=classify_intent_keywords)
+        retrieval.assert_called_once()

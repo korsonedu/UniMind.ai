@@ -96,7 +96,7 @@ def build_context(user, message, recent_messages=None, chat_context=None):
     cohort = cohort_info(user)
     catalog = student_catalog(user)
     candidates = route_tools(message, catalog, recent_messages=recent_messages,
-                             bot_type='planner', intent_classifier=classify_intent_keywords)
+                             bot_type='planner', intent_classifier=classify_intent_keywords, use_semantic=False)
     allowed = [t for t in catalog if t['function']['name'] in M0_TOOLS]
     if allowed:
         allowed.append(PRESENTATION_TOOL)
@@ -126,7 +126,7 @@ def build_context(user, message, recent_messages=None, chat_context=None):
             'available_schema_bytes': len(json.dumps(allowed, ensure_ascii=False).encode()),
             'initial_group': initial, 'max_visible_tools': 8,
             'model_intent': 'native-tool-discovery-quality-pending',
-            'semantic_retrieval': 'available-for-large-catalogs' if len(catalog) > 32 else 'not-used-small-catalog',
+            'semantic_retrieval': 'not-used-grouped-discovery',
         },
         'model_policy': {
             'operation': 'assistant.chat.planner', 'tier': 'fast',

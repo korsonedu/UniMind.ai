@@ -580,7 +580,7 @@ def route_tools(
     all_tools: List[dict],
     recent_messages: List[Dict[str, str]] = None,
     bot_type: str = "planner",
-    *, intent_classifier=None,
+    *, intent_classifier=None, use_semantic=True,
 ) -> List[dict]:
     """小工具集常驻只读能力；写入按意图选择，大工具集额外使用语义召回。"""
     _dbg = logging.getLogger("agent_debug")
@@ -589,7 +589,7 @@ def route_tools(
     if small_catalog and all(t["function"]["name"] in READ_ONLY_TOOLS for t in all_tools):
         return list(all_tools)
 
-    candidates = [] if small_catalog else _retrieve_candidates(user_message, bot_type, top_k=8)
+    candidates = [] if small_catalog or not use_semantic else _retrieve_candidates(user_message, bot_type, top_k=8)
     intent = (intent_classifier or classify_intent)(user_message, recent_messages, bot_type=bot_type)
     intent_map = BOT_INTENT_MAP.get(bot_type, PLANNER_INTENT_MAP)
     intent_tools = set(intent_map.get(intent, {}).get("tools", []))
