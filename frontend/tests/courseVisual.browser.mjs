@@ -115,7 +115,7 @@ export async function verifyCourseVisual() {
     const first = await send();
     await wait(() => draft().value === '同一次失败请求的图片必须保留');
     await seek(10);
-    check(button('改问当前片段').disabled, '失败待确认时禁止替换原提问截图');
+    check(!button('改问当前片段').disabled, '失败后允许更换提问截图');
     const retried = await send();
     check(JSON.stringify(first) === JSON.stringify(retried) && retried.visual.current.image === retryImage, '同次重试沿用完全相同的时间和两张原图');
     await screenshot('06-retry-original-image');
