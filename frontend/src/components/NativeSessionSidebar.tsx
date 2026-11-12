@@ -21,7 +21,7 @@ interface Props extends SessionSidebarProps {
 export default function NativeSessionSidebar({ sessions, activeSessionId, thinkingIds, unreadIds, onSelect, onDelete, onNew, projectControls: controls, onNewInProject, onUpdate, claimMenuRequest, initialInstructions }: Props) {
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
-  const [editing, setEditing] = useState<{ id?: number; name: string; instructions: string } | null>(null);
+  const [editing, setEditing] = useState<{ id?: number; name: string; instructions: string; planning?: boolean } | null>(null);
   const [deleting, setDeleting] = useState<{ projectId: number; name: string } | { session: ConversationSession; name: string } | null>(null);
   const [deletingPending, setDeletingPending] = useState(false);
   const [closedProjects, setClosedProjects] = useState<number[]>([]);
@@ -61,7 +61,7 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
         <Item disabled={updating || !session.conversationId} onSelect={() => { setSearchOpen(false); setRenaming({ session, name: session.title || session.label }); }}><PencilSimple size={15} />重命名</Item>
         <Item disabled={updating || !session.conversationId} onSelect={() => void update(session, { is_pinned: !session.isPinned })}><PushPin size={15} />{session.isPinned ? '取消置顶' : '置顶'}</Item>
         <Sub><SubTrigger disabled={updating || controls.error || !session.conversationId}><Folder size={15} className="mr-2" />移动到项目</SubTrigger><SubContent className="um-native-menu">
-          <Item disabled={!session.projectId} onSelect={() => void update(session, { project_id: null })}>未分类</Item>
+          <Item disabled={!session.projectId} onSelect={() => void update(session, { project_id: null })}>自由对话</Item>
           {controls.projects.map(project => <Item key={project.id} disabled={session.projectId === project.id} onSelect={() => { setClosedProjects(previous => previous.filter(id => id !== project.id)); void update(session, { project_id: project.id }); }}>{project.name}</Item>)}
         </SubContent></Sub>
         {onDelete && <><Separator /><Item className="um-agent-menu-danger" onSelect={() => setDeleting({ session, name: session.title || session.label })}><Trash size={15} />删除对话</Item></>}
@@ -72,7 +72,7 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
     const unread = session.conversationId ? unreadIds?.has(session.conversationId) : false;
     return <ContextMenu key={session.id}><ContextMenuTrigger asChild><li data-active={session.id === activeSessionId}>
     <button data-session-select aria-current={session.id === activeSessionId ? 'page' : undefined} onClick={() => select(session)} title={`${session.title || session.label} · ${session.messages.length} 条`}>
-      <span className="um-agent-session-title">{session.isPinned && <PushPin size={12} className="inline-block mr-1" aria-label="已置顶" />}<span className="um-agent-session-name">{session.title || session.label}</span>{thinking ? <span className="um-agent-session-thinking" role="status" aria-label="正在思考" title="正在思考" /> : unread ? <span className="um-agent-unread-dot" role="status" aria-label="有新回复" title="有新回复" /> : null}</span>{search && <span className="um-agent-session-meta">{controls.projects.find(project => project.id === session.projectId)?.name || '未分类'} · {session.lastTime ? new Date(session.lastTime).toLocaleDateString('zh-CN') : ''}</span>}
+      <span className="um-agent-session-title">{session.isPinned && <PushPin size={12} className="inline-block mr-1" aria-label="已置顶" />}<span className="um-agent-session-name">{session.title || session.label}</span>{thinking ? <span className="um-agent-session-thinking" role="status" aria-label="正在思考" title="正在思考" /> : unread ? <span className="um-agent-unread-dot" role="status" aria-label="有新回复" title="有新回复" /> : null}</span>{search && <span className="um-agent-session-meta">{controls.projects.find(project => project.id === session.projectId)?.name || '自由对话'} · {session.lastTime ? new Date(session.lastTime).toLocaleDateString('zh-CN') : ''}</span>}
     </button>
     <DropdownMenu><DropdownMenuTrigger asChild><button className="um-agent-session-menu um-agent-icon-button" aria-label={`对话菜单：${session.title || session.label}`}><DotsThree size={18} /></button></DropdownMenuTrigger>
       <DropdownMenuContent className="um-native-menu" align="start" onCloseAutoFocus={event => { if (renaming) event.preventDefault(); }}>
@@ -114,8 +114,7 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
             <Collapse open={!closed} id={`${projectsId}-${project.id}`}><ul className="um-agent-project-sessions">{projectSessions.map(session => renderSession(session))}{!projectSessions.length && <li className="um-agent-project-empty"><button data-session-new onClick={() => onNewInProject(project.id)}>开始对话</button></li>}</ul></Collapse>
           </section>;
         })}
-        {!controls.projects.length && !controls.error && !editing && <p className="um-agent-project-hint">设置学习目标，让小宇持续跟进</p>}
-        <div className="um-agent-section-label"><span>未分类</span></div>
+        <div className="um-agent-section-label"><span>自由对话</span></div>
       </>
       <ul>{uncategorized.map(session => renderSession(session))}</ul>
       {!uncategorized.length && <p className="um-agent-project-hint">暂无对话</p>}
@@ -132,15 +131,20 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
     <Dialog.Root open={editing !== null} onOpenChange={open => { if (!open && !controls.pending) setEditing(null); }}>
       <Dialog.Portal><Dialog.Overlay className="um-agent-project-overlay" /><Dialog.Content className="um-native-agent um-agent-project-dialog">
         <Dialog.Title>{editing?.id === undefined ? '新建项目' : '项目设置'}</Dialog.Title>
-        <Dialog.Description>项目内的对话共享你填写的学习目标与要求。</Dialog.Description>
+        <Dialog.Description className="sr-only">项目设置</Dialog.Description>
         {editing && <form onSubmit={async event => {
           event.preventDefault();
-          const saved = editing.id === undefined ? await controls.create(editing.name, editing.instructions) : await controls.update(editing.id, editing.name, editing.instructions);
+          const saved = editing.id === undefined ? await controls.create(editing.name, editing.instructions, !!editing.planning) : await controls.update(editing.id, editing.name, editing.instructions);
           if (saved) setEditing(null);
         }}>
           <label>项目名称<input autoFocus required aria-label="项目名称" placeholder="例如：金融学考研复习" maxLength={60} value={editing.name} disabled={controls.pending} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
-          <label>学习目标、背景与要求<textarea required aria-label="学习目标、背景与要求" placeholder="告诉小宇你的目标、目前的基础和期望的帮助。例如：12 月参加考试，利率理论比较薄弱，希望先讲解再用题目检验。" maxLength={4000} rows={5} value={editing.instructions} disabled={controls.pending} onChange={event => setEditing({ ...editing, instructions: event.target.value })} /></label>
-          <footer><button className="um-agent-button" type="button" onClick={() => setEditing(null)} disabled={controls.pending}>取消</button><button className="um-agent-button um-agent-button-primary" type="submit" disabled={controls.pending || !editing.name.trim() || !editing.instructions.trim()}>{controls.pending ? '保存中…' : editing.id === undefined ? '创建项目' : '保存'}</button></footer>
+          <label>项目背景与要求（选填）<textarea aria-label="项目背景与要求" maxLength={4000} rows={5} value={editing.instructions} disabled={controls.pending} onChange={event => setEditing({ ...editing, instructions: event.target.value })} /></label>
+          {editing.id === undefined && <fieldset className="um-project-mode" disabled={controls.pending}>
+            <legend>项目模式</legend>
+            <label><input type="radio" name="project-mode" checked={!editing.planning} onChange={() => setEditing({ ...editing, planning: false })} />自由对话</label>
+            <label><input type="radio" name="project-mode" checked={!!editing.planning} onChange={() => setEditing({ ...editing, planning: true })} />规划模式</label>
+          </fieldset>}
+          <footer><button className="um-agent-button" type="button" onClick={() => setEditing(null)} disabled={controls.pending}>取消</button><button className="um-agent-button um-agent-button-primary" type="submit" disabled={controls.pending || !editing.name.trim()}>{controls.pending ? '保存中…' : editing.id === undefined ? '创建项目' : '保存'}</button></footer>
         </form>}
       </Dialog.Content></Dialog.Portal>
     </Dialog.Root>

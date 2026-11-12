@@ -11,7 +11,7 @@ export interface ConversationProjectControls {
   pending: boolean;
   error: boolean;
   reload: () => void;
-  create: (name: string, instructions: string) => Promise<boolean>;
+  create: (name: string, instructions: string, planning: boolean) => Promise<boolean>;
   update: (id: number, name: string, instructions: string) => Promise<boolean>;
   remove: (id: number) => Promise<boolean>;
 }
@@ -30,12 +30,12 @@ export function useConversationProjects(enabled: boolean, projectId: number | nu
   }, []);
   useEffect(() => { if (enabled) void reload(); }, [enabled, reload]);
 
-  const save = async (name: string, instructions: string, id?: number) => {
+  const save = async (name: string, instructions: string, id?: number, planning = false) => {
     if (pending || !name.trim()) return false;
     setPending(true);
     try {
       const response = id === undefined
-        ? await api.post<ConversationProject>('/ai/projects/', { name: name.trim(), instructions: instructions.trim() })
+        ? await api.post<ConversationProject>('/ai/projects/', { name: name.trim(), instructions: instructions.trim(), planning_enabled: planning })
         : await api.patch<ConversationProject>(`/ai/projects/${id}/`, { name: name.trim(), instructions: instructions.trim() });
       setProjects(previous => id === undefined ? [...previous, response.data] : previous.map(project => project.id === id ? response.data : project));
       if (id === undefined) await openProject(response.data.id, undefined, instructions.trim());
@@ -45,7 +45,7 @@ export function useConversationProjects(enabled: boolean, projectId: number | nu
   };
   return {
     projects, projectId, pending, error, reload, open: id => { void openProject(id); },
-    create: (name, instructions) => save(name, instructions), update: (id, name, instructions) => save(name, instructions, id),
+    create: (name, instructions, planning) => save(name, instructions, undefined, planning), update: (id, name, instructions) => save(name, instructions, id),
     remove: async id => {
       if (pending) return false;
       setPending(true);

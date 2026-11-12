@@ -23,6 +23,8 @@ class LearningLibrarySmoke(APITestCase):
         self.bot = Bot.objects.create(name='小宇', bot_type='planner')
         self.project = ConversationProject.objects.create(user=self.user, name='函数概念')
         self.target = ConversationProject.objects.create(user=self.user, name='换个场景学习')
+        for project in (self.project, self.target):
+            ProjectLearning.objects.create(project=project, planning_enabled=True)
         self.plan = {'goal': '解释函数的单值对应', 'weekly_minutes': 120, 'deadline': None, 'stages': [
             {'id': 'concept', 'title': '函数概念', 'outcome': '独立判断一个新例子', 'task': '解释一个关系', 'prerequisites': [], 'sources': []}]}
         self.message = self.turn(self.project, '每个输入只能对应一个输出。')

@@ -18,6 +18,7 @@ class FunctionSampleSmoke(APITestCase):
         self.user = User.objects.create_user(username='function_sample_synthetic')
         CourseStudentStatus.objects.create(user=self.user, is_course_student=True)
         self.project = ConversationProject.objects.create(user=self.user, name='函数基础')
+        ProjectLearning.objects.create(project=self.project, planning_enabled=True)
         self.client.force_authenticate(self.user)
 
     def test_seed_is_partitioned_idempotent_and_does_not_replace_modified_questions(self):

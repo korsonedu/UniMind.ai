@@ -15,6 +15,7 @@ from ai_assistant.models import AgentMemory, AIChatMessage
 from .tool_executor import PlannerToolExecutor, set_permitted_tools
 from .dsh_cards import build_tool_card, build_learning_visual, PRESENTATION_TOOL
 from .dsh_routing import grouped_tools
+from .project_learning_tools import planning_for_chat, PROJECT_LEARNING_NAMES
 
 
 M0_TOOLS = frozenset({
@@ -107,7 +108,10 @@ def build_context(user, message, recent_messages=None, chat_context=None):
     authorization = [t for t in allowed if not t['function']['name'].startswith('session_')]
     from .project_learning import turn_project_context
     learning = turn_project_context(user, chat_context)
-    selected, groups, initial = grouped_tools(allowed, message, recent_messages, project=bool(learning))
+    planning = planning_for_chat(user, chat_context)
+    if not planning:
+        allowed = [tool for tool in allowed if tool['function']['name'] not in PROJECT_LEARNING_NAMES]
+    selected, groups, initial = grouped_tools(allowed, message, recent_messages, project=planning)
     context = {
         'protocol': 'unimind.dsh.m0.v1',
         'student': {'id': user.pk, 'name': user.nickname or user.username, 'cohort': cohort},
@@ -137,8 +141,10 @@ def build_context(user, message, recent_messages=None, chat_context=None):
     }
     if learning:
         context['learning_project'] = learning
+        context['system_prompt'] += learning
+    if planning:
         context['model_policy'].update(operation='assistant.chat.planner.learning', max_requests=6, max_tokens=4096, max_request_bytes=262144)
-        context['system_prompt'] += (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu/project_learning.txt').read_text() + learning
+        context['system_prompt'] += (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu/project_learning.txt').read_text()
     if executor:
         from .learning_experiments import conversation_experiments
         context['session_registry'] = session_registry(executor)

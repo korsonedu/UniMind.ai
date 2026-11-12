@@ -28,7 +28,7 @@ class TeachingSidecarIntegrationSmoke(APITestCase):
         self.project = ConversationProject.objects.create(user=self.user, name='计算机原理')
         self.conversation = Conversation.objects.create(user=self.user, bot=self.bot, project=self.project,
             conversation_id=uuid.uuid4())
-        ProjectLearning.objects.create(project=self.project, status='active', current_stage='start',
+        ProjectLearning.objects.create(project=self.project, planning_enabled=True, status='active', current_stage='start',
             plan={'goal': '解释缓存', 'stages': [{'id': 'start', 'title': '起点', 'knowledge_nodes': []}]})
         self.source = AIChatMessage.objects.create(user=self.user, bot=self.bot, role='user',
             conversation_id=self.conversation.conversation_id, content='我用日常例子解释缓存。')

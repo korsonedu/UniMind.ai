@@ -22,7 +22,7 @@ class FormalEvidenceSmoke(TestCase):
             project = ConversationProject.objects.create(user=user, name='函数')
             mapping = LearningKnowledgeMap.objects.create(user=user, title='函数')
             version = LearningKnowledgeVersion.objects.create(knowledge_map=mapping, revision=1, snapshot={'nodes': [{'id': 'n'}]})
-            ProjectLearning.objects.create(project=project, status='active', plan={'knowledge_path': {'version_id': version.pk}, 'stages': [{'id': 's', 'knowledge_nodes': ['n']}]})
+            ProjectLearning.objects.create(project=project, planning_enabled=True, status='active', plan={'knowledge_path': {'version_id': version.pk}, 'stages': [{'id': 's', 'knowledge_nodes': ['n']}]})
             questions = [Question.objects.create(text=f'第{i}个函数的值是多少？', options=['1', '2'], correct_answer='A') for i in range(2)]
             def record(question, assistance):
                 task = create_task(project, {'version_id': version.pk, 'node_id': 'n', 'stage_id': 's', 'title': '求值', 'instructions': '求函数值', 'question_ids': [question.pk], 'mode': 'apply'})

@@ -102,6 +102,7 @@ def learning_data(project):
         'knowledge': knowledge_state(project, state),
         'strategy_uses': project_strategy_uses(project),
         'project_id': project.pk, 'name': project.name, 'instructions': project.instructions,
+        'planning_enabled': state.planning_enabled, 'reminders_enabled': state.reminders_enabled,
         'status': state.status, 'plan': state.plan, 'resources': state.resources,
         'current_stage': state.current_stage, 'feedback': state.feedback, 'next_action': state.next_action,
         'pending_plan': state.pending_plan, 'revision': state.revision,
@@ -124,6 +125,9 @@ def project_context(user, conversation_id):
         conversation_id=conversation_id, project__user=user).first()
     if not conversation:
         return ''
+    if not ProjectLearning.objects.filter(project_id=conversation.project_id, planning_enabled=True).exists():
+        return '\n自由对话的项目背景：' + json.dumps({'name': conversation.project.name,
+            'instructions': conversation.project.instructions}, ensure_ascii=False)
     data = learning_data(conversation.project)
     data = compact_learning(data)
     for item in data['resources']:
@@ -178,6 +182,8 @@ def _clear_followup(state):
 
 
 def _schedule(state, data):
+    if not state.planning_enabled or not state.reminders_enabled:
+        return
     at = _time(data.get('followup_at'))
     if state.status == 'active' and state.next_action:
         state.followup_at = at or timezone.now() + timedelta(days=1)
@@ -225,7 +231,20 @@ def change_learning(project, data, *, message=None, model=False):
         raise LearningConflict()
     action = data.get('action')
     event = {'reason': str(data.get('reason', ''))[:2000]}
-    if action == 'plan':
+    if not state.planning_enabled:
+        raise ValidationError('当前项目使用自由对话。')
+    if action == 'reminders' and not model:
+        state.reminders_enabled = serializers.BooleanField().run_validation(data.get('enabled'))
+        if not state.reminders_enabled:
+            state.followup_at = None
+            state.followup_text = ''
+        elif not state.followup_at:
+            if state.status == 'paused':
+                state.followup_at = state.resume_at
+                state.followup_text = state.next_action
+            else:
+                _schedule(state, {})
+    elif action == 'plan':
         serializer = PlanSerializer(data=data.get('plan'))
         serializer.is_valid(raise_exception=True)
         plan = json.loads(json.dumps(serializer.validated_data, default=str))
@@ -276,11 +295,13 @@ def change_learning(project, data, *, message=None, model=False):
         _clear_followup(state)
         _schedule(state, data)
     elif action in ('pause', 'resume', 'complete', 'schedule'):
+        if action == 'schedule' and not state.reminders_enabled:
+            raise ValidationError('主动提醒已关闭。')
         if action == 'pause':
             state.status = 'paused'
             _clear_followup(state)
             state.resume_at = _time(data.get('resume_at'))
-            state.followup_at = state.resume_at
+            state.followup_at = state.resume_at if state.reminders_enabled else None
             state.followup_text = state.next_action
         elif action == 'complete':
             state.status = 'completed'
@@ -309,7 +330,7 @@ def change_learning(project, data, *, message=None, model=False):
         state.pending_plan = {}
     else:
         raise ValidationError('不支持的学习操作。')
-    if action not in ('plan', 'accept', 'reject') and state.pending_plan:
+    if action not in ('plan', 'accept', 'reject', 'reminders') and state.pending_plan:
         state.pending_plan = {}
     state.revision += 1
     state.save()
@@ -319,6 +340,8 @@ def change_learning(project, data, *, message=None, model=False):
 
 def tool_operation(executor, name, arguments):
     project, message = current_project(executor.user, getattr(executor, 'learning_context', None))
+    if not ProjectLearning.objects.filter(project=project, planning_enabled=True).exists():
+        raise ValidationError('当前项目使用自由对话。')
     if name == 'manage_learning_tasks':
         from .learning_tasks import create_task, task_data
         if arguments.get('action') == 'list':
