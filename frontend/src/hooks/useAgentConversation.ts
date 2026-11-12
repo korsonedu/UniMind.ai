@@ -122,8 +122,6 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const scopeRef = useRef<string | null>(null);
   const identityRef = useRef('');
   const recoveryEpochRef = useRef(0);
-  const recoveryBusyRef = useRef<number | null>(null);
-  const [recoveryStatuses, setRecoveryStatuses] = useState<Record<string, 'pending' | 'completed' | 'failed' | 'unknown'>>({});
   const [generatingIds, setGeneratingIds] = useState<string[]>([]);
   const [isComposing, setIsComposition] = useState(false);
   const [initialized, setInitialized] = useState(false);
@@ -404,7 +402,6 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       messageBuffersRef.current.delete(id);
       taskListsRef.current.delete(id);
       pendingSendsRef.current.delete(id);
-      setRecoveryStatuses(previous => { const next = { ...previous }; delete next[id]; return next; });
       sendCountsRef.current.delete(id);
       setSessions(prev => prev.filter(s => s.conversationId !== id));
       if (conversationIdRef.current === id) {
@@ -466,7 +463,6 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     sessionSyncKeyRef.current = '';
     ++sessionsRevisionRef.current;
     setGeneratingIds([]);
-    setRecoveryStatuses({});
     messagesRef.current = [];
     setMessages([]);
     setSessions([]);
@@ -485,11 +481,14 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     if (scopeRef.current === scope) return;
     const saved = readRecovery(scope);
     scopeRef.current = scope;
-    const restoredStatuses: Record<string, 'unknown'> = {};
     for (const [id, record] of Object.entries(saved.conversations)) {
-      if (record.pending) { pendingSendsRef.current.set(id, record.pending); restoredStatuses[id] = 'unknown'; }
+      if (!record.pending) continue;
+      pendingSendsRef.current.set(id, record.pending);
+      // Older clients could leave a request locked after disconnecting.
+      if (!generatingRef.current.has(id)) {
+        saveRecovery(scope, id, { pending: undefined, draft: record.draft || record.pending.text });
+      }
     }
-    setRecoveryStatuses(restoredStatuses);
     // Initialization may have fetched history, but it must not overwrite a newly typed draft.
     if (inputRevisionRef.current === 0 && saved.lastConversationId
         && (!options.initialConversationId || (!saved.conversations[options.initialConversationId]
@@ -509,75 +508,6 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       saveRecovery(scope, conversationIdRef.current, { draft: inputValueRef.current }, true);
     }
   }, [initialized, identity, bot, userId, options.courseId, options.initialConversationId, sessions, setConversationId, setProjectId]);
-
-  const recoverRequests = useCallback(async () => {
-    if (!bot || !userId || !navigator.onLine) return;
-    const epoch = recoveryEpochRef.current;
-    if (recoveryBusyRef.current === epoch) return;
-    recoveryBusyRef.current = epoch;
-    const scope = scopeRef.current;
-    const expectedIdentity = identity;
-    const isCurrent = () => epoch === recoveryEpochRef.current
-      && identityRef.current === expectedIdentity && useAuthStore.getState().user?.id === userId;
-    try {
-      for (const [id, pending] of [...pendingSendsRef.current]) {
-        if (!isCurrent()) return;
-        const draftAtStart = readRecovery(scope).conversations[id];
-        try {
-          const data = await api.get<{ status: 'pending' | 'completed' | 'failed' | 'unknown'; response?: { full_content?: string } }>(`/ai/chat-requests/${pending.id}/`)
-            .then(response => response.data, () => ({ status: 'unknown' as const }));
-          // History is authoritative; recovery never starts another model/tool request.
-          const history = await api.get<Message[]>('/ai/history/', { params: { bot_id: bot.id, conversation_id: id } });
-          if (!isCurrent() || pendingSendsRef.current.get(id)?.id !== pending.id) continue;
-          if (data.status === 'completed' || data.status === 'failed' || !streamsRef.current.has(id)) {
-            if (data.status === 'completed' || data.status === 'failed') abortStream(id);
-            const next = restoreVisualSteps(history.data.filter(message => message.content !== '[Thinking...]')
-              .map(message => ({ ...message, visible: true })));
-            if (data.status === 'failed') next.push({ _id: `failed-${pending.id}`, role: 'assistant',
-              content: data.response?.full_content || '本轮执行失败，未扣除问答额度，请重新发送。', visible: true });
-            messageBuffersRef.current.set(id, next);
-            if (id === conversationIdRef.current) { messagesRef.current = next; setMessages(next); }
-            syncSession(id, next);
-          }
-          setRecoveryStatuses(previous => ({ ...previous, [id]: data.status }));
-          if (data.status === 'unknown') toast.info('执行结果尚未确认，可稍后刷新历史', { id: `chat-recovery-${pending.id}` });
-          if (data.status === 'failed') toast.error(data.response?.full_content || '本轮执行失败，请重新发送。');
-          if (data.status === 'completed' || data.status === 'failed') {
-            pendingSendsRef.current.delete(id);
-            const saved = readRecovery(scope).conversations[id];
-            const clearDraft = data.status === 'completed' && saved?.draft === pending.text && saved.draftRevision === draftAtStart?.draftRevision;
-            saveRecovery(scope, id, { pending: undefined, ...(clearDraft ? { draft: '' } : {}) });
-            if (clearDraft && id === conversationIdRef.current && inputValueRef.current === pending.text) setInput('');
-          }
-        } catch {
-          if (isCurrent()) setRecoveryStatuses(previous => ({ ...previous, [id]: 'unknown' }));
-        }
-      }
-    } finally {
-      if (recoveryBusyRef.current === epoch) recoveryBusyRef.current = null;
-    }
-  }, [bot, userId, identity, abortStream, syncSession, setInput]);
-
-  useEffect(() => {
-    if (!initialized) return;
-    void recoverRequests();
-    const resume = () => { void recoverRequests(); };
-    window.addEventListener('online', resume);
-    window.addEventListener('focus', resume);
-    const unsubscribe = window.unimindDesktop?.onResume?.(resume);
-    return () => { window.removeEventListener('online', resume); window.removeEventListener('focus', resume); unsubscribe?.(); };
-  }, [initialized, recoverRequests]);
-
-  useEffect(() => {
-    if (!Object.values(recoveryStatuses).includes('pending')) return;
-    // Stop after one minute; a later online/focus/resume event can check again.
-    let attempts = 0;
-    const timer = window.setInterval(() => {
-      if (++attempts > 12) { window.clearInterval(timer); return; }
-      void recoverRequests();
-    }, 5000);
-    return () => window.clearInterval(timer);
-  }, [recoverRequests, Object.values(recoveryStatuses).includes('pending')]);
 
   // ── Auto-scroll ──
 
@@ -609,23 +539,9 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     const requestEpoch = recoveryEpochRef.current;
     const requestUserId = userId;
     const requestScope = scopeRef.current;
-    let sentInputRevision = inputRevisionRef.current;
+    const sentInputRevision = inputRevisionRef.current;
     const existingPending = pendingSendsRef.current.get(requestConversationId);
-    if (existingPending && existingPending.text !== text) {
-      toast.info('上一条提问的执行结果尚未确认，请先恢复历史。');
-      void recoverRequests();
-      return;
-    }
-
-    // 只中止同一会话的上一条请求，其他会话的后台流继续跑。
-    const previousEntry = streamsRef.current.get(requestConversationId);
-    if (previousEntry) {
-      streamsRef.current.delete(requestConversationId);
-      previousEntry.controller.abort();
-      previousEntry.reveal.dispose();
-      previousEntry.smoother?.dispose();
-      updateConversationMessages(requestConversationId, previous => previous.filter(message => !message.streaming));
-    }
+    if (generatingRef.current.has(requestConversationId)) return;
 
     const controller = new AbortController();
     const currentSend = (sendCountsRef.current.get(requestConversationId) ?? 0) + 1;
@@ -657,6 +573,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     let streamingId: string | null = null;
     let streamingContent = '';
     let completed = false;
+    const previousMessages = isVisible() ? messagesRef.current : messageBuffersRef.current.get(requestConversationId) ?? [];
     let settled = false;
     const settle = (outcome: 'completed' | 'error') => {
       if (settled) return;
@@ -664,7 +581,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       onRunSettledRef.current?.(requestConversationId, outcome);
     };
 
-    const body = existingPending ? JSON.parse(existingPending.key) : {
+    const body: Record<string, unknown> = {
       message: text, bot_id: bot.id, conversation_id: requestConversationId,
       ...(options.enableProjects ? { project_id: projectIdRef.current } : {}),
       ...(getExtraPayloadRef.current?.() ?? {}),
@@ -684,9 +601,9 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     }
     if (isVisible() && inputRevisionRef.current === sentInputRevision) {
       setInput('');
-      sentInputRevision = inputRevisionRef.current;
     }
 
+    const draftRevision = readRecovery(requestScope).conversations[requestConversationId]?.draftRevision;
     const reveal = createRevealQueue({
       isActive: isRequestActive,
       onReveal: (id) => {
@@ -838,29 +755,15 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
             streamingId ??= nextId();
             streamingContent += payload.delta;
             ensureSmoother().push(streamingContent);
-          } else if (payload.type === 'error') {
-            toast.error(payload.message || 'AI 调用失败');
           } else if (payload.done) {
-            if (!payload.is_error && !completed) notifyDesktop({ kind: 'chat', title: '小宇已完成回复', body: '打开 UniMind 查看回复。', route: options.courseId ? `/course/${options.courseId}?conversation=${requestConversationId}` : '/xiaoyu' });
+            if (payload.is_error) break;
             completed = true;
-            if (pendingSendsRef.current.get(requestConversationId)?.id === pending.id) {
-              pendingSendsRef.current.delete(requestConversationId);
-              saveRecovery(requestScope, requestConversationId, { pending: undefined });
-              setRecoveryStatuses(previous => ({ ...previous, [requestConversationId]: payload.is_error ? 'failed' : 'completed' }));
-            }
-            updateTaskList(previous => completeToolRun(previous, payload.run_id, !!payload.is_error));
+            notifyDesktop({ kind: 'chat', title: '小宇已完成回复', body: '打开 UniMind 查看回复。', route: options.courseId ? `/course/${options.courseId}?conversation=${requestConversationId}` : '/xiaoyu' });
+            pendingSendsRef.current.delete(requestConversationId);
+            saveRecovery(requestScope, requestConversationId, { pending: undefined });
+            updateTaskList(previous => completeToolRun(previous, payload.run_id));
             const finalContent = payload.full_content || '';
-            if (payload.is_error) {
-              if (streamingId) {
-                const id = streamingId;
-                updateConversationMessages(requestConversationId, previous => previous.filter(message => message._id !== id));
-              }
-              streamingId = null; streamingContent = '';
-              updateConversationMessages(requestConversationId, previous => [...previous, { _id: nextId(),
-                role: 'assistant', content: finalContent || '本轮执行失败，请重新发送。', visible: true }]);
-              if (isVisible() && inputRevisionRef.current === sentInputRevision) setInput(text);
-              toast.error(finalContent || 'AI 调用失败');
-            } else if (finalContent && streamingId) {
+            if (finalContent && streamingId) {
               const id = streamingId;
               // 先补全逐字泵，再写 metadata，避免残留帧覆盖最终内容。
               stopSmoother(finalContent);
@@ -903,43 +806,40 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
               onAllVisualsRef.current?.(doneVisuals);
             }
             if (isVisible()) onDoneRef.current?.();
-            settle(payload.is_error ? 'error' : 'completed');
-          } else if (payload.error) {
-            toast.error(payload.error);
+            settle('completed');
+            break;
           }
         } catch { /* skip malformed SSE events */ }
       }
-    } catch (err: unknown) {
-      if (!isRequestActive()) return;
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      const msg = err instanceof Error ? err.message : '发送失败，请重试';
-      toast.error(msg.includes('HTTP') || err instanceof TypeError ? '服务暂时不可用，请稍后再试' : msg);
-      if (isVisible() && inputRevisionRef.current === sentInputRevision) setInput(text);
-      settle('error');
+    } catch {
+      // A rejected request or interrupted stream follows the same local rollback.
     } finally {
-      const stillOwner = streamsRef.current.get(requestConversationId) === entry;
-      if (stillOwner) streamsRef.current.delete(requestConversationId);
-      if (!completed && streamingId && (stillOwner || messageBuffersRef.current.has(requestConversationId))) {
-        const id = streamingId;
-        updateConversationMessages(requestConversationId, previous => previous.filter(message => message._id !== id));
-      }
       reveal.dispose();
-      // 异常断流时补全已收到的文字；被取消时 isActive 已为 false，不会写回。
-      stopSmoother(streamingContent);
+      stopSmoother(completed ? streamingContent : undefined, !completed);
+      if (streamsRef.current.get(requestConversationId) === entry) streamsRef.current.delete(requestConversationId);
       if (isRequestActive()) {
-        updateConversationMessages(requestConversationId, previous => previous.map(message =>
-          message.visible === false || message.streaming ? { ...message, visible: true, streaming: false } : message
-        ));
+        markGenerating(requestConversationId, false);
+        if (!completed) {
+          updateTaskList(() => null);
+          updateConversationMessages(requestConversationId, () => previousMessages);
+          if (!previousMessages.length) {
+            setSessions(previous => previous.filter(session => session.conversationId !== requestConversationId));
+            if (isVisible()) setActiveSessionId(null);
+          }
+          const saved = readRecovery(requestScope).conversations[requestConversationId];
+          const restoreDraft = saved?.draftRevision === draftRevision && !saved?.draft;
+          saveRecovery(requestScope, requestConversationId, { pending: undefined, ...(restoreDraft ? { draft: text } : {}) });
+          if (isVisible() && restoreDraft && !inputValueRef.current) setInput(text);
+          settle('error');
+        } else {
+          updateConversationMessages(requestConversationId, previous => previous.map(message =>
+            message.visible === false || message.streaming ? { ...message, visible: true, streaming: false } : message
+          ));
+        }
         syncSession(requestConversationId, messageBuffersRef.current.get(requestConversationId) ?? []);
       }
-      if (stillOwner) markGenerating(requestConversationId, false);
-      if (!completed && isRequestActive()) {
-        settle('error');
-        setRecoveryStatuses(previous => ({ ...previous, [requestConversationId]: 'unknown' }));
-        void recoverRequests();
-      }
     }
-  }, [bot, userId, markGenerating, options.enableProjects, options.courseId, syncSession, updateConversationMessages, recoverRequests, setInput]);
+  }, [bot, userId, markGenerating, options.enableProjects, options.courseId, syncSession, updateConversationMessages, setInput]);
 
   // ── Handlers ──
 
@@ -998,10 +898,6 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     hasConversation,
     conversationId,
     taskList,
-    recovery: recoveryStatuses[conversationId] ?? null,
-    retryPendingRequest: () => { const pending = pendingSendsRef.current.get(conversationIdRef.current); if (pending) void doSend(pending.text); },
-    recoverRequests,
-
     // Refs
     scrollRef,
     inputRef,
