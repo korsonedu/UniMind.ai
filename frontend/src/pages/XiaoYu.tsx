@@ -30,7 +30,7 @@ export const XiaoYu = () => {
   useNotesSidebarAvailability(chat.hasConversation);
   return <><ProjectLearningDialog open={learningOpen || (!!requestedTask && dismissedTask !== requestedTask)} onOpenChange={open => { setLearningOpen(open); if (!open) setDismissedTask(requestedTask); }} /><AgentChatLayout
     contextPanel={chat.projectId ? () => <ProjectLearningResume /> : undefined}
-    toolbarAction={{ icon: BookOpen, label: "学习安排", tooltip: "查看学习安排与反馈依据", onClick: () => setLearningOpen(true) }}
+    toolbarAction={{ icon: BookOpen, label: '学习安排', tooltip: '查看学习安排', onClick: () => setLearningOpen(true) }}
     appearance="native" layout="inline" enableNoteMentions inputTourClass="xiaoyu-input"
     sidebar={props => <NativeSessionSidebar initialInstructions={chat.input} claimMenuRequest={props.claimMenuRequest} sessions={props.sessions} activeSessionId={props.activeSessionId} thinkingIds={props.thinkingIds} unreadIds={props.unreadIds} onSelect={props.onLoadSession} onUpdate={props.onUpdateSession} onDelete={props.onDeleteSession} onNew={props.onNewConversation} botDisplayName={props.botDisplayName} projectControls={props.projectControls} onNewInProject={props.onNewInProject} />}
     skills={SKILLS} typewriterWords={['让小宇分析薄弱知识点', '让小宇安排今天的复习', '让小宇推荐适合的课程', '让小宇看看复习进度']}
