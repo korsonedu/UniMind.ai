@@ -5,7 +5,7 @@ import { notifyDesktop } from '@/lib/desktop';
 import { useAuthStore } from '@/store/useAuthStore';
 import { deleteRecovery, readRecovery, recoveryScope, saveRecovery, type PendingChatRequest } from '@/lib/conversationRecovery';
 import { upsertChatMessage } from '@/lib/chatMessages';
-import { readChatStream } from '@/lib/chatStream';
+import { ChatRequestRejected, readChatStream } from '@/lib/chatStream';
 import { createRevealQueue, createStreamSmoother } from '@/lib/chatReveal';
 import { restoreVisualSteps } from '@/lib/visualHistory';
 // processMathContent removed — LLM outputs LaTeX directly
@@ -550,13 +550,24 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
             if (clearDraft && id === conversationIdRef.current && inputValueRef.current === pending.text) setInput('');
           }
         } catch {
-          if (isCurrent()) setRecoveryStatuses(previous => ({ ...previous, [id]: 'unknown' }));
+          if (isCurrent() && pendingSendsRef.current.get(id)?.id === pending.id) {
+            setRecoveryStatuses(previous => ({ ...previous, [id]: 'unknown' }));
+          }
         }
       }
     } finally {
       if (recoveryBusyRef.current === epoch) recoveryBusyRef.current = null;
     }
   }, [bot, userId, identity, abortStream, syncSession, setInput]);
+
+  const skipPendingRequest = () => {
+    const id = conversationIdRef.current;
+    if (recoveryStatuses[id] !== 'unknown' || !pendingSendsRef.current.has(id)) return;
+    abortStream(id);
+    pendingSendsRef.current.delete(id);
+    saveRecovery(scopeRef.current, id, { pending: undefined });
+    setRecoveryStatuses(previous => { const next = { ...previous }; delete next[id]; return next; });
+  };
 
   useEffect(() => {
     if (!initialized) return;
@@ -912,6 +923,11 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     } catch (err: unknown) {
       if (!isRequestActive()) return;
       if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (err instanceof ChatRequestRejected && !existingPending) {
+        pendingSendsRef.current.delete(requestConversationId);
+        saveRecovery(requestScope, requestConversationId, { pending: undefined });
+        setRecoveryStatuses(previous => ({ ...previous, [requestConversationId]: 'failed' }));
+      }
       const msg = err instanceof Error ? err.message : '发送失败，请重试';
       toast.error(msg.includes('HTTP') || err instanceof TypeError ? '服务暂时不可用，请稍后再试' : msg);
       if (isVisible() && inputRevisionRef.current === sentInputRevision) setInput(text);
@@ -933,7 +949,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
         syncSession(requestConversationId, messageBuffersRef.current.get(requestConversationId) ?? []);
       }
       if (stillOwner) markGenerating(requestConversationId, false);
-      if (!completed && isRequestActive()) {
+      if (!completed && isRequestActive() && pendingSendsRef.current.get(requestConversationId)?.id === pending.id) {
         settle('error');
         setRecoveryStatuses(previous => ({ ...previous, [requestConversationId]: 'unknown' }));
         void recoverRequests();
@@ -999,6 +1015,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     conversationId,
     taskList,
     recovery: recoveryStatuses[conversationId] ?? null,
+    skipPendingRequest,
     retryPendingRequest: () => { const pending = pendingSendsRef.current.get(conversationIdRef.current); if (pending) void doSend(pending.text); },
     recoverRequests,
 

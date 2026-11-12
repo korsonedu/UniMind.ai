@@ -72,7 +72,7 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
   const floating = mode === 'floating';
   const { setBot, setInitialized, groupIntoSessions, setSessions, handleLoadSession,
     bot, conversationId, input, setInput, messages, loading, initialized, scrollRef, doSend,
-    recovery, recoverRequests, handleReset, sessions, handleRefreshSessions,
+    recovery, recoverRequests, skipPendingRequest, handleReset, sessions, handleRefreshSessions,
     coursePosition, setCoursePosition } = useAgentConversation({
     findBot: findAssistantBot,
     courseId,
@@ -271,7 +271,9 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
             {loading && !messages.some(message => message.streaming) && <p className="um-course-chat-status" role="status">小宇正在查看课程内容…</p>}
           </div>
         </AgentReplyContext.Provider>
-        {recovering && <p className="um-course-chat-status">这条提问的结果正在确认，沿用原提问片段，确认前不能更新。<button type="button" onClick={() => void recoverRequests()}>刷新结果</button></p>}
+        {recovering && <p className="um-course-chat-status">这条提问的结果正在确认，沿用原提问片段，确认前不能更新。<button type="button" onClick={() => void recoverRequests()}>刷新结果</button>
+          {recovery === 'unknown' && <button type="button" onClick={skipPendingRequest}>跳过这次提问</button>}
+        </p>}
         {selected?.visual && <CourseVisualPreview visual={selected.visual} />}
         {draft?.error && !recovering && <div className="um-course-visual-error" role="alert"><p>{draft.error}</p>
           {draft.textOnly ? <p>已选择仅用讲稿提问。</p> : <button type="button" disabled={loading} onClick={() => { if (draftRef.current) updateDraft({ ...draftRef.current, textOnly: true }); }}>仅用讲稿提问</button>}

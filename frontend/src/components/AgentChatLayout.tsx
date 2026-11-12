@@ -191,7 +191,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     scrollRef, projectId, setProjectId,
     setInput, setSkillOpen, setSessionOpen, setIsComposition, setSessions,
     handleDragStart, handleLoadSession, handleRefreshSessions, handleDeleteSession, handleUpdateSession, handleReset,
-    handleSkillSelect, groupIntoSessions, doSend, recovery, recoverRequests, retryPendingRequest,
+    handleSkillSelect, groupIntoSessions, doSend, recovery, recoverRequests, retryPendingRequest, skipPendingRequest,
   } = chat;
 
   useEffect(() => { activate(); }, [activate]);
@@ -395,9 +395,15 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     <ContactAdminModal open={contactOpen} onOpenChange={setContactOpen} />
   </>;
 
-  const recoveryHint = window.unimindDesktop && (recovery === 'pending' || recovery === 'unknown') && <div className="um-agent-recovery" role="status">
+  const recoveryHint = (recovery === 'pending' || recovery === 'unknown') && <div className="um-agent-recovery" role="status">
     <p>{recovery === 'pending' ? '上一条提问仍在执行，正在恢复已有结果。' : '上一条提问的执行结果尚未确认，可以先刷新历史；手动重试可能再次执行原提问。'}</p>
-    <div><button type="button" disabled={loading} onClick={() => void recoverRequests()}>刷新历史</button>{recovery === 'unknown' && <button type="button" disabled={loading} onClick={retryPendingRequest}>手动重试原提问</button>}</div>
+    <div>
+      <button type="button" onClick={() => void recoverRequests()}>刷新历史</button>
+      {recovery === 'unknown' && <>
+        <button type="button" onClick={skipPendingRequest}>跳过这次提问</button>
+        <button type="button" disabled={loading} onClick={retryPendingRequest}>手动重试原提问</button>
+      </>}
+    </div>
   </div>;
 
   if (!hasConversation && appearance === 'native') {
@@ -456,6 +462,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 <p className="text-xs text-foreground/60">{landingDescription}</p>
               </div>
 
+              {recoveryHint}
               <div data-tour={inputTourClass} className="bg-card rounded-2xl border border-border/50 shadow-lg overflow-hidden transition-all duration-[180ms] focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
                 <textarea
                   value={input}
@@ -846,6 +853,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           </div>
 
           <div className="shrink-0 px-3 pb-3 pt-2">
+            {recoveryHint}
             <div className="rounded-2xl border border-border bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)] overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
               <textarea
                 value={input}

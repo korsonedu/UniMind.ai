@@ -3,6 +3,8 @@ import { streamFetch } from '@/lib/api';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ChatStreamPayload = Record<string, any>;
 
+export class ChatRequestRejected extends Error {}
+
 interface ReadChatStreamOptions {
   body: Record<string, unknown>;
   signal: AbortSignal;
@@ -24,7 +26,9 @@ export async function* readChatStream({
   if (!res.ok) {
     const data = await res.json().catch(() => null);
     const detail = data?.detail || data?.error || data?.message;
-    throw new Error(typeof detail === 'string' ? detail : `HTTP ${res.status}`);
+    const message = typeof detail === 'string' ? detail : `HTTP ${res.status}`;
+    if ([400, 401, 403, 404, 413, 429].includes(res.status)) throw new ChatRequestRejected(message);
+    throw new Error(message);
   }
 
   const reader = res.body?.getReader();
