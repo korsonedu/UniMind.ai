@@ -92,4 +92,9 @@ class FunctionSampleSmoke(APITestCase):
         from ai_assistant.services.project_learning import learning_data
         progress = learning_data(self.project)
         self.assertIn('学习练习', progress['task_progress']['next_action'])
-        self.assertEqual(progress['followup_text'], progress['teaching_guidance']['next_action'])
+        self.assertIsNone(progress['followup_at'])
+        self.assertEqual(progress['followup_text'], '')
+        enabled = self.client.patch(f'/api/ai/projects/{self.project.pk}/learning/', {
+            'action': 'reminders', 'enabled': True, 'revision': progress['revision']}, format='json')
+        self.assertEqual(enabled.status_code, 200)
+        self.assertEqual(enabled.data['followup_text'], progress['teaching_guidance']['next_action'])
