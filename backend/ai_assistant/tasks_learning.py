@@ -1,6 +1,7 @@
 """Durable, idempotent follow-ups; delivery does not consume a model request."""
 from celery import shared_task
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 from ai_assistant.models import AIChatMessage, ProjectLearning, ProjectLearningEvent
 from notifications.models import Notification
@@ -11,12 +12,15 @@ from users.feature_access import has_learning_feature
 def send_project_learning_followups():
     now = timezone.now()
     sent = 0
-    ids = ProjectLearning.objects.filter(followup_at__lte=now,
+    # Timed pauses still expire when notifications are muted.
+    ProjectLearning.objects.filter(status='paused', planning_enabled=True, reminders_enabled=False,
+        resume_at__lte=now).update(status='active', resume_at=None, revision=F('revision') + 1)
+    ids = ProjectLearning.objects.filter(planning_enabled=True, reminders_enabled=True, followup_at__lte=now,
         status__in=['active', 'paused']).values_list('pk', flat=True)[:100]
     for pk in list(ids):
         with transaction.atomic():
             state = ProjectLearning.objects.select_for_update(of=('self',)).select_related(
-                'project__user', 'last_conversation__bot').filter(pk=pk, followup_at__lte=now).first()
+                'project__user', 'last_conversation__bot').filter(pk=pk, planning_enabled=True, reminders_enabled=True, followup_at__lte=now).first()
             if not state:
                 continue
             user = state.project.user

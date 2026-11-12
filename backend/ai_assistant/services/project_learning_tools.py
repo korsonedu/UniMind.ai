@@ -105,12 +105,15 @@ PROJECT_LEARNING_TOOLS.append(tool('manage_learning_tasks',
 PROJECT_LEARNING_NAMES = frozenset(tool['function']['name'] for tool in PROJECT_LEARNING_TOOLS)
 
 
-def include_project_tools(tools, executor):
+def planning_for_chat(user, context):
     from ai_assistant.models import Conversation
-    context = getattr(executor, 'learning_context', None) or {}
-    if not context or not Conversation.objects.filter(user=executor.user,
-            conversation_id=context.get('conversation_id'), project__user=executor.user).exists():
-        return tools
+    return bool(context) and Conversation.objects.filter(user=user, project__user=user,
+        conversation_id=context.get('conversation_id'), project__learning__planning_enabled=True).exists()
+
+
+def include_project_tools(tools, executor):
+    if not planning_for_chat(getattr(executor, 'user', None), getattr(executor, 'learning_context', None)):
+        return [item for item in tools if item['function']['name'] not in PROJECT_LEARNING_NAMES]
     names = {item['function']['name'] for item in tools}
     return [*tools, *[definition for name, definition in executor._permitted_tool_definitions.items()
                      if name in PROJECT_LEARNING_NAMES and name not in names]]

@@ -23,6 +23,22 @@ class ProjectSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at')
 
 
+class ProjectCreateSerializer(ProjectSerializer):
+    planning_enabled = serializers.BooleanField(write_only=True, default=False)
+
+    class Meta(ProjectSerializer.Meta):
+        fields = (*ProjectSerializer.Meta.fields, 'planning_enabled')
+
+    @transaction.atomic
+    def create(self, validated_data):
+        from .models import ProjectLearning
+        enabled = validated_data.pop('planning_enabled')
+        project = super().create(validated_data)
+        if enabled:
+            ProjectLearning.objects.create(project=project, planning_enabled=True)
+        return project
+
+
 class ProjectAssignmentSerializer(serializers.Serializer):
     project_id = serializers.PrimaryKeyRelatedField(queryset=ConversationProject.objects.none(), allow_null=True)
 
@@ -32,7 +48,7 @@ class ProjectAssignmentSerializer(serializers.Serializer):
 
 
 class ProjectListCreateView(generics.ListCreateAPIView):
-    serializer_class = ProjectSerializer
+    serializer_class = ProjectCreateSerializer
     permission_classes = [IsMember]
 
     def get_queryset(self):

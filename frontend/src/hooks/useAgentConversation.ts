@@ -490,12 +490,15 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       }
     }
     // Initialization may have fetched history, but it must not overwrite a newly typed draft.
-    if (inputRevisionRef.current === 0 && saved.lastConversationId
+    const lastId = saved.lastConversationId;
+    const lastSession = lastId ? sessions.find(row => row.conversationId === lastId) : undefined;
+    const lastProject = lastSession ? lastSession.projectId : lastId && saved.conversations[lastId]?.projectId;
+    if (inputRevisionRef.current === 0 && lastId && !(options.enableProjects && lastProject)
         && (!options.initialConversationId || (!saved.conversations[options.initialConversationId]
           && !sessions.some(row => row.conversationId === options.initialConversationId)))) {
-      const id = saved.lastConversationId;
+      const id = lastId;
       setConversationId(id);
-      const session = sessions.find(row => row.conversationId === id);
+      const session = lastSession;
       const next = session?.messages ?? [];
       messagesRef.current = next;
       messageBuffersRef.current.set(id, next);
@@ -507,7 +510,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     } else {
       saveRecovery(scope, conversationIdRef.current, { draft: inputValueRef.current }, true);
     }
-  }, [initialized, identity, bot, userId, options.courseId, options.initialConversationId, sessions, setConversationId, setProjectId]);
+  }, [initialized, identity, bot, userId, options.courseId, options.initialConversationId, options.enableProjects, sessions, setConversationId, setProjectId]);
 
   // ── Auto-scroll ──
 

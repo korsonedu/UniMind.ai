@@ -25,7 +25,7 @@ class ProjectLearningSmoke(APITestCase):
         self.conversation = Conversation.objects.create(user=self.user, bot=self.bot, project=self.project, conversation_id=uuid.uuid4())
         self.message = AIChatMessage.objects.create(user=self.user, bot=self.bot, conversation_id=self.conversation.conversation_id,
             role='user', content='我认为每个输入应该对应唯一的输出。')
-        self.state = ProjectLearning.objects.create(project=self.project, last_conversation=self.conversation)
+        self.state = ProjectLearning.objects.create(project=self.project, planning_enabled=True, last_conversation=self.conversation)
         self.context = {'message_id': self.message.pk, 'conversation_id': str(self.conversation.conversation_id), 'bot_id': self.bot.pk}
         self.plan = {'goal': '理解函数', 'deadline': None, 'weekly_minutes': 120, 'stages': [
             {'id': 'function', 'title': '函数概念', 'outcome': '解释输入与输出的关系', 'task': '解释一个具体例子', 'prerequisites': [], 'sources': []},
@@ -35,6 +35,36 @@ class ProjectLearningSmoke(APITestCase):
 
     def make_plan(self):
         return change_learning(self.project, {'action': 'plan', 'revision': 0, 'plan': self.plan, 'next_action': '解释一个具体例子'}, message=self.message)
+
+    def test_planning_and_reminders_are_separate_opt_ins(self):
+        created = self.client.post('/api/ai/projects/', {'name': '自由对话'}, format='json')
+        self.assertEqual(created.status_code, 201)
+        url = f"/api/ai/projects/{created.data['id']}/learning/"
+        initial = self.client.get(url).data
+        self.assertFalse(initial['planning_enabled'])
+        self.assertFalse(initial['reminders_enabled'])
+        self.assertEqual(self.client.patch(url, {'action': 'planning', 'enabled': True, 'revision': 0}, format='json').status_code, 400)
+        self.conversation.project_id = created.data['id']
+        self.conversation.save(update_fields=['project_id'])
+        context = build_context(self.user, self.message.content, chat_context=self.context)
+        self.assertNotIn('plan_learning_project', [tool['function']['name'] for tool in context['available_tools']])
+        self.assertIn('error', execute_tool(self.user, 'plan_learning_project', {'revision': 0, 'plan': self.plan,
+            'next_action': '练习', 'reason': '检查', 'major_change': False}, memory_snapshot(self.user)['version'], chat_context=self.context))
+        opted_in = self.client.post('/api/ai/projects/', {'name': '考试准备', 'planning_enabled': True}, format='json')
+        preferences = self.client.get(f"/api/ai/projects/{opted_in.data['id']}/learning/").data
+        self.assertTrue(preferences['planning_enabled'])
+        self.assertFalse(preferences['reminders_enabled'])
+        plan = self.make_plan()
+        self.assertIsNone(plan['followup_at'])
+        reminders = {'action': 'reminders', 'enabled': True, 'revision': plan['revision']}
+        enabled = self.client.patch(self.url, reminders, format='json').data
+        self.assertIsNotNone(enabled['followup_at'])
+        disabled = self.client.patch(self.url, {**reminders, 'enabled': False, 'revision': enabled['revision']}, format='json').data
+        self.assertEqual(disabled['status'], 'active')
+        self.assertEqual(disabled['plan'], plan['plan'])
+        self.assertIsNone(disabled['followup_at'])
+        ProjectLearning.objects.filter(pk=self.state.pk).update(followup_at=timezone.now())
+        self.assertEqual(send_project_learning_followups()['sent'], 0)
 
     def test_personal_access_project_privacy_and_revision(self):
         self.assertEqual(self.client.get(self.url).status_code, 200)
@@ -75,7 +105,7 @@ class ProjectLearningSmoke(APITestCase):
 
     def test_followup_without_frontend_is_idempotent_and_pause_cancels(self):
         self.make_plan()
-        ProjectLearning.objects.filter(pk=self.state.pk).update(followup_at=timezone.now() - timedelta(seconds=1), followup_text='上次的函数条件已经说清楚，今天换个例子试试。')
+        ProjectLearning.objects.filter(pk=self.state.pk).update(reminders_enabled=True, followup_at=timezone.now() - timedelta(seconds=1), followup_text='上次的函数条件已经说清楚，今天换个例子试试。')
         self.assertEqual(send_project_learning_followups()['sent'], 1)
         self.assertEqual(send_project_learning_followups()['sent'], 0)
         notification = Notification.objects.get(recipient=self.user)
@@ -163,7 +193,7 @@ class ProjectLearningSmoke(APITestCase):
         from types import SimpleNamespace
         from ai_assistant.views_projects import save_new_conversation_project
         self.make_plan()
-        ProjectLearning.objects.filter(pk=self.state.pk).update(followup_at=timezone.now() - timedelta(seconds=1))
+        ProjectLearning.objects.filter(pk=self.state.pk).update(reminders_enabled=True, followup_at=timezone.now() - timedelta(seconds=1))
         send_project_learning_followups()
         delivered = self.client.get(self.url).data['events'][0]
         self.assertEqual(delivered['delivery'], {'saved': True, 'read': False, 'responded': False})
