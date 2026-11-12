@@ -155,6 +155,10 @@ def turn_project_context(user, context):
         value = project_context(user, message.conversation_id) if project_id else ''
         message.metadata['learning_snapshot'] = {'project_id': project_id, 'context': value}
         message.save(update_fields=['metadata'])
+        if project_id:
+            from .teaching_sidecar import freeze_turn, observe
+            observe(freeze_turn, ConversationProject.objects.get(pk=project_id, user=user), message,
+                    message.metadata['learning_snapshot'])
         return value
 
 
