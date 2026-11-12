@@ -263,9 +263,3 @@
 .um-full-preview-bar select { background: transparent; font: inherit; }
 .um-full-preview-bar a { color: var(--um-color-accent); }
 @media(max-width:600px) { .um-full-preview-bar { bottom: 75px; gap: 8px; max-width: calc(100% - 16px); flex-wrap: wrap; justify-content: center; white-space: normal; } .um-full-preview-bar .um-preview-name { display: none; } }
-
-.um-agent-recovery { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 0 0 10px; padding: 10px 12px; border-radius: 8px; background: var(--um-surface-3); color: var(--um-color-text-muted); font-size: 12px; line-height: 1.6; }
-.um-agent-recovery p { flex: 1 1 240px; }
-.um-agent-recovery > div { display: flex; flex-wrap: wrap; gap: 12px; }
-.um-agent-recovery button { text-decoration: underline; text-underline-offset: 3px; }
-.um-agent-recovery button:disabled { opacity: .5; }

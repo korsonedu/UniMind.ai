@@ -81,12 +81,12 @@ export async function verifyCourseDraft() {
     await wait(() => draft().value === '失败恢复验证');
     await seek(750);
     check(text().includes('07:50–08:50'), '失败恢复原草稿仍显示原片段');
-    check(button('改问当前片段').disabled, '待确认请求保留原片段');
-    await fill(''); await seek(750); await fill('失败恢复验证');
-    check(text().includes('07:50–08:50'), '待确认时清空后重输同一句仍显示原片段');
-    check(document.body.textContent.includes('沿用原提问片段，确认前不能更新'), '恢复期间明确提示沿用原片段');
+    check(!button('改问当前片段').disabled, '失败后可直接更新提问片段');
+    button('改问当前片段').click();
+    await wait(() => text().includes('12:00–13:00'));
+    await fill('继续问另一个问题');
     await send();
-    check(requestBodies.at(-1).course_context.video_seconds === 500, '失败重试payload仍使用原500秒');
+    check(requestBodies.at(-1).course_context.video_seconds === 750 && requestBodies.at(-1).message === '继续问另一个问题', '下一条提问使用更新后的片段');
     button('新对话').click();
     await wait(() => draft().value === '');
     check(text().includes('输入问题时固定提问片段'), '新对话清除所选片段');

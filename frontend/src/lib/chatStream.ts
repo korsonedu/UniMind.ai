@@ -63,7 +63,7 @@ export async function* readChatStream({
         }
       }
     }
-    if (isCurrent() && !completed) throw new Error('回答尚未确认完成，请重试以恢复同一请求。');
+    if (isCurrent() && !completed) throw new Error('回复流已中断。');
   } finally {
     try {
       await reader.cancel();

@@ -191,7 +191,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     scrollRef, projectId, setProjectId,
     setInput, setSkillOpen, setSessionOpen, setIsComposition, setSessions,
     handleDragStart, handleLoadSession, handleRefreshSessions, handleDeleteSession, handleUpdateSession, handleReset,
-    handleSkillSelect, groupIntoSessions, doSend, recovery, recoverRequests, retryPendingRequest,
+    handleSkillSelect, groupIntoSessions, doSend,
   } = chat;
 
   useEffect(() => { activate(); }, [activate]);
@@ -395,11 +395,6 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     <ContactAdminModal open={contactOpen} onOpenChange={setContactOpen} />
   </>;
 
-  const recoveryHint = window.unimindDesktop && (recovery === 'pending' || recovery === 'unknown') && <div className="um-agent-recovery" role="status">
-    <p>{recovery === 'pending' ? '上一条提问仍在执行，正在恢复已有结果。' : '上一条提问的执行结果尚未确认，可以先刷新历史；手动重试可能再次执行原提问。'}</p>
-    <div><button type="button" disabled={loading} onClick={() => void recoverRequests()}>刷新历史</button>{recovery === 'unknown' && <button type="button" disabled={loading} onClick={retryPendingRequest}>手动重试原提问</button>}</div>
-  </div>;
-
   if (!hasConversation && appearance === 'native') {
     return <TooltipProvider delayDuration={300}>
       <NativeAgentShell native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={toolbarAction && <button className="um-agent-button" onClick={toolbarAction.onClick}><toolbarAction.icon size={16} />{toolbarAction.label}</button>} title={conversationTitle || '新对话'}>
@@ -432,7 +427,6 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 <button className="um-agent-button um-agent-button-primary um-agent-send" disabled={loading || !input.trim() || !bot} onClick={() => doSend(input)} aria-label="发送消息"><ArrowUp size={18} /></button>
               </footer>
             </div>
-            {recoveryHint}
             {quotaHint}
             </div>
           </section>
@@ -688,7 +682,6 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           {/* Input */}
           <div className={cn("shrink-0 px-4 pb-4 pt-2", appearance === 'native' && 'um-agent-chat-input')}>
             <div className="max-w-3xl mx-auto">
-              {recoveryHint}
               <div data-tour={inputTourClass} className="rounded-2xl border border-border bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)] overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
                 {noteMentions.panel}
                 <textarea ref={nativeInputRef} rows={1}
