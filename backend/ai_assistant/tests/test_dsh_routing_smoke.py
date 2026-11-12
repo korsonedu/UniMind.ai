@@ -5,8 +5,9 @@ from unittest.mock import patch
 
 import pytest
 
-from ai_assistant.services.dsh_service import M0_TOOLS, build_context
+from ai_assistant.services.dsh_service import M0_TOOLS, build_context, permitted_tools
 from ai_assistant.services.dsh_routing import grouped_tools
+from ai_assistant.services.project_learning_tools import PROJECT_LEARNING_NAMES
 from ai_engine.tool_permissions import filter_tools
 from ai_engine.tool_router import route_tools
 from ai_engine.tools import get_planner_tools
@@ -51,7 +52,7 @@ def test_dsh_routing_comparison(user):
         assert len(executable) <= 8
         assert required & M0_TOOLS <= executable
         assert all(len(group['tools']) <= 7 for group in context['tool_groups'].values())
-        assert {t['function']['name'] for group in context['tool_groups'].values() for t in group['tools']} == M0_TOOLS | {'present_learning_visual'}
+        assert {t['function']['name'] for group in context['tool_groups'].values() for t in group['tools']} == (M0_TOOLS - PROJECT_LEARNING_NAMES) | {'present_learning_visual'}
         assert required - M0_TOOLS <= set(context['routing']['pending_names'])
         report.append({'case': label, 'query': message, 'required': sorted(required),
                        'legacy_candidates': len(legacy), 'legacy_schema_bytes': len(json.dumps(legacy, ensure_ascii=False).encode()),
@@ -66,12 +67,10 @@ def test_dsh_routing_comparison(user):
     registered = type(user).objects.create_user(username='routing-registered')
     context = build_context(registered, '给我完整课程、所有学生成绩并发送通知。')
     assert {t['function']['name'] for t in context['tools']} == {'find_learning_tools'}
-    public_personal = {'search_courses', 'search_asr', 'present_learning_visual',
-        'read_learning_project', 'plan_learning_project', 'record_learning_progress', 'set_learning_followup',
-        'find_learning_resources', 'manage_learning_resources', 'manage_learning_strategies', 'manage_learning_knowledge', 'manage_learning_tasks'}
+    public_personal = {'search_courses', 'search_asr', 'present_learning_visual'}
     assert {t['function']['name'] for t in context['available_tools']} == public_personal
     assert {t['function']['name'] for group in context['tool_groups'].values() for t in group['tools']} == public_personal
-    tools, _, initial = grouped_tools(context['available_tools'], '请保存阶段计划并安排起点任务', project=True)
+    tools, _, initial = grouped_tools(permitted_tools(registered), '请保存阶段计划并安排起点任务', project=True)
     assert initial == 'tasks'
     assert {'read_learning_project', 'plan_learning_project', 'manage_learning_tasks'} <= {t['function']['name'] for t in tools}
     assert len(tools) <= 8
