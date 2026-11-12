@@ -395,9 +395,16 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     <ContactAdminModal open={contactOpen} onOpenChange={setContactOpen} />
   </>;
 
+  const nativeToolbarAction = toolbarAction && (
+    <button type="button" className="um-agent-icon-button" onClick={toolbarAction.onClick}
+      aria-label={toolbarAction.label} title={toolbarAction.tooltip}>
+      <toolbarAction.icon size={18} aria-hidden="true" />
+    </button>
+  );
+
   if (!hasConversation && appearance === 'native') {
     return <TooltipProvider delayDuration={300}>
-      <NativeAgentShell native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={toolbarAction && <button className="um-agent-button" onClick={toolbarAction.onClick}><toolbarAction.icon size={16} />{toolbarAction.label}</button>} title={conversationTitle || '新对话'}>
+      <NativeAgentShell native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || '新对话'}>
         {contextPanel?.({ bot, conversationId })}
         <div className="um-agent-landing">
           <section className="um-agent-start" aria-label="开始对话">
@@ -562,7 +569,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (layout === 'inline') {
     return (
       <TooltipProvider delayDuration={300}>
-        <NativeAgentShell native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={toolbarAction && <button className="um-agent-button" onClick={toolbarAction.onClick}><toolbarAction.icon size={16} />{toolbarAction.label}</button>} title={conversationTitle || '新对话'}>
+        <NativeAgentShell native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || '新对话'}>
           {contextPanel?.({ bot, conversationId })}
 
           <div className={cn("flex-1 min-w-0 flex flex-col bg-white", appearance === 'native' && 'um-agent-chat-body')}>
