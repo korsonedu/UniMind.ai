@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ArrowsClockwise, CircleNotch, CheckCircle } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 
 import api from '@/lib/api';
+import { learningUrl } from '@/lib/projectLearning';
 import { formatApiErrorToast } from '@/lib/apiError';
 import { queryKeys } from '@/lib/queryKeys';
 import { processMathContent } from '@/lib/utils';
@@ -36,12 +37,15 @@ interface ExamResultItem {
   score: number;
   max_score: number;
   is_correct: boolean;
+  label_source?: string;
+  response_type?: string;
   kp_id: number | null;
   kp_name: string;
   kp_code: string;
 }
 
 interface ExamResultData {
+  label_source?: string;
   id: number;
   status: ExamStatus;
   created_at: string;
@@ -73,6 +77,9 @@ export const ExamResultPage = () => {
   const { examId: rawExamId } = useParams<{ examId: string }>();
   const examId = Number(rawExamId);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const projectId = Number(searchParams.get('project'));
+  const returnToProject = Number.isSafeInteger(projectId) && projectId > 0 ? learningUrl('/xiaoyu', projectId, searchParams.get('conversation') || undefined) : null;
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'wrong' | 'pending'>('all');
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
@@ -111,7 +118,8 @@ export const ExamResultPage = () => {
   }, [data, filter]);
 
   if (!Number.isFinite(examId)) {
-    return <PageWrapper title="练习结果"><EmptyState title="练习不存在" description="链接缺少有效的练习编号。" /></PageWrapper>;
+    return <PageWrapper title="练习结果">
+      {returnToProject && <Link className="text-sm underline" to={returnToProject}>回到学习项目</Link>}<EmptyState title="练习不存在" description="链接缺少有效的练习编号。" /></PageWrapper>;
   }
 
   if (detail.isLoading) {
@@ -140,6 +148,7 @@ export const ExamResultPage = () => {
   }
 
   const active = isActive(data.status);
+  const modelEvaluation = data.label_source === 'model_rubric_grade';
   const canRetry = data.status === 'partial' || data.status === 'failed';
 
   const retry = async () => {
@@ -180,6 +189,7 @@ export const ExamResultPage = () => {
 
   return (
     <PageWrapper title="练习结果">
+      {returnToProject && <Link className="text-sm underline" to={returnToProject}>回到学习项目</Link>}
       <div className="um-exam-result">
         <header className="um-exam-result-header">
           <button type="button" className="um-exam-result-back" onClick={() => navigate('/tests')}>
@@ -226,17 +236,18 @@ export const ExamResultPage = () => {
         <section className="um-exam-result-summary" aria-label="本轮总结">
           <div className="um-exam-result-metrics">
             <div><span>得分</span><strong>{data.max_score ? `${data.total_score} / ${data.max_score}` : '—'}</strong></div>
-            <div><span>正确率</span><strong>{data.max_score ? `${data.correct_rate}%` : '—'}</strong></div>
+            <div><span>{modelEvaluation ? '模型参考得分率' : '正确率'}</span><strong>{data.max_score ? `${data.correct_rate}%` : '—'}</strong></div>
             <div><span>已批改</span><strong>{data.graded_count} / {data.total_questions}</strong></div>
             <div><span>未完成</span><strong>{data.failed_count + (data.pending_count ?? 0)}</strong></div>
           </div>
           <div className="um-exam-result-progress" aria-hidden="true">
             <span style={{ width: `${data.total_questions ? Math.min(100, (data.graded_count / data.total_questions) * 100) : 0}%` }} />
           </div>
+          {modelEvaluation && <p className="text-sm text-muted-foreground">本页包含模型依据标准的参考评价，尚未独立复核，不代表已验证正确或已经掌握。</p>}
           <p className="um-exam-result-summary-text">{data.summary_text || '完成批改后，这里会显示本轮总结。'}</p>
           {data.kp_breakdown.length > 0 && (
             <div className="um-exam-result-kps">
-              <h2>知识点掌握</h2>
+              <h2>{modelEvaluation ? '按知识点的参考评价' : '知识点表现'}</h2>
               {data.kp_breakdown.map(item => (
                 <div className="um-exam-result-kp" key={item.kp_id}>
                   <span>{item.kp_name || '未命名知识点'}</span>
@@ -254,7 +265,7 @@ export const ExamResultPage = () => {
           <div className="um-exam-result-toolbar">
             <div className="um-exam-result-filters" role="group" aria-label="筛选题目">
               <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>全部 {data.results.length}</button>
-              <button type="button" aria-pressed={filter === 'wrong'} onClick={() => setFilter('wrong')}>只看错题 {counts.wrong}</button>
+              <button type="button" aria-pressed={filter === 'wrong'} onClick={() => setFilter('wrong')}>{modelEvaluation ? '需再核对' : '只看错题'} {counts.wrong}</button>
               <button type="button" aria-pressed={filter === 'pending'} onClick={() => setFilter('pending')}>未完成 {counts.pending}</button>
             </div>
             <span className="um-exam-result-count">本轮共 {data.total_questions} 题</span>
@@ -262,7 +273,7 @@ export const ExamResultPage = () => {
 
           {visibleResults.length === 0 ? (
             <EmptyState
-              title={filter === 'wrong' ? '本轮没有错题' : filter === 'pending' ? '所有题目都已批改' : '还没有逐题结果'}
+              title={filter === 'wrong' ? (modelEvaluation ? '没有标记需再核对的项目' : '本轮没有错题') : filter === 'pending' ? '所有题目都已批改' : '还没有逐题结果'}
               description={filter === 'pending' ? '完成批改后，这里会显示每一题的解析。' : undefined}
             />
           ) : (
@@ -270,7 +281,7 @@ export const ExamResultPage = () => {
               {visibleResults.map(item => {
                 const isOpen = !!expanded[item.position];
                 const itemStatus = item.status === 'graded'
-                  ? item.is_correct ? '正确' : '错误'
+                  ? item.label_source === 'model_rubric_grade' ? '模型参考评价' : item.is_correct ? '正确' : '错误'
                   : item.status === 'failed' ? '批改失败' : '批改中';
                 return (
                   <article
@@ -302,6 +313,7 @@ export const ExamResultPage = () => {
                       <div className="um-exam-result-item-body">
                         <div className="um-exam-result-question">
                           <MarkdownContent content={processMathContent(item.question_text)} />
+                          {item.label_source === 'model_rubric_grade' && <p className="text-sm text-muted-foreground">模型依据冻结标准的参考评价，尚未独立复核。{item.response_type === 'code' && '代码仅作文本审阅，未经执行。'}</p>}
                         </div>
                         {item.options.length > 0 && (
                           <ol className="um-exam-result-options">

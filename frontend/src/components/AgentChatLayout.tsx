@@ -1,5 +1,5 @@
 import { useNoteMentions } from '@/pages/notes/useNoteMentions';
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useSystemStore } from '@/store/useSystemStore';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -30,6 +30,7 @@ import { useChatUnreadStore } from '@/store/useChatUnreadStore';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { ContactAdminModal } from '@/components/ContactAdminModal';
 import { learningReset, type AIUsage, type LearningAccess } from '@/types/learning';
+import { projectCourseLinks } from './course/projectCourseLinks';
 
 // ── Types ──
 
@@ -170,7 +171,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   const dashboardRef = useRef<HTMLDivElement>(null);
   const nativeInputRef = useRef<HTMLTextAreaElement>(null);
   const noteMentionsRef = useRef<ReturnType<typeof useNoteMentions> | null>(null);
-  const { chat, activate, setPageHooks, unreadIds } = useXiaoYuChat();
+  const { chat, activate, setPageHooks, unreadIds, openProject } = useXiaoYuChat();
   const removeUnread = useChatUnreadStore(state => state.remove);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState('');
@@ -229,8 +230,9 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
   const noteMentions = useNoteMentions({ enabled: enableNoteMentions, disabled: loading, botId: bot?.id, conversationId, input, setInput, textareaRef: nativeInputRef });
   useLayoutEffect(() => { noteMentionsRef.current = noteMentions; }, [noteMentions]);
-  const projectControls = useConversationProjects(appearance === 'native', projectId, setProjectId, setSessions);
+  const projectControls = useConversationProjects(appearance === 'native', projectId, setProjectId, setSessions, openProject);
   const selectedProjectName = projectControls.projects.find(project => project.id === projectId)?.name;
+  const markdownComponents = useMemo(() => projectCourseLinks(projectId, conversationId), [projectId, conversationId]);
 
   useEffect(() => {
     if (appearance !== 'native' || generatingIds.length > 0) return;
@@ -348,7 +350,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   }, [sessions, activeSessionId, onSessionsReady, wrappedLoadSession, wrappedDeleteSession, wrappedReset]);
 
   const selectNewProject = (id: number | null) => {
-    wrappedReset(false, id);
+    if (id) void openProject(id);
+    else wrappedReset(false, null);
     setProjectPickerOpen(false);
     setProjectQuery('');
   };
@@ -399,7 +402,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
   if (!hasConversation && appearance === 'native') {
     return <TooltipProvider delayDuration={300}>
-      <NativeAgentShell native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} title={conversationTitle || '新对话'}>
+      <NativeAgentShell native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={toolbarAction && <button className="um-agent-button" onClick={toolbarAction.onClick}><toolbarAction.icon size={16} />{toolbarAction.label}</button>} title={conversationTitle || '新对话'}>
         {contextPanel?.({ bot, conversationId })}
         <div className="um-agent-landing">
           <section className="um-agent-start" aria-label="开始对话">
@@ -488,10 +491,10 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                       </div>
                     </PopoverContent>
                   </Popover>
-                  {toolbarAction && (
+                  {toolbarAction && appearance !== 'native' && (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button onClick={toolbarAction.onClick}
+                        <button aria-label={toolbarAction.label} onClick={toolbarAction.onClick}
                           className="p-1 rounded-md text-muted-foreground/55 hover:text-foreground/65 hover:bg-muted/50 transition-colors">
                           <toolbarAction.icon className="h-3.5 w-3.5" />
                         </button>
@@ -565,7 +568,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (layout === 'inline') {
     return (
       <TooltipProvider delayDuration={300}>
-        <NativeAgentShell native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} title={conversationTitle || '新对话'}>
+        <NativeAgentShell native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={toolbarAction && <button className="um-agent-button" onClick={toolbarAction.onClick}><toolbarAction.icon size={16} />{toolbarAction.label}</button>} title={conversationTitle || '新对话'}>
           {contextPanel?.({ bot, conversationId })}
 
           <div className={cn("flex-1 min-w-0 flex flex-col bg-white", appearance === 'native' && 'um-agent-chat-body')}>
@@ -618,7 +621,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           </div>
 
           {/* Messages — 内联视觉卡片 */}
-          <AgentReplyContext.Provider value={{ onReply: onActionReply }}>
+          <AgentReplyContext.Provider value={{ onReply: onActionReply, projectId, conversationId }}>
             <div ref={scrollRef} className="um-agent-scroll flex-1 overflow-y-auto min-h-0">
               <div className="max-w-3xl mx-auto p-4 space-y-4">
                 {messages.filter(m => m.role === 'user' || m.visible !== false).map((msg, i) => {
@@ -629,7 +632,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   if (msg.role === 'assistant' && Array.isArray(msg.metadata?.dsh_cards)) {
                     return <React.Fragment key={msg._id || i}>
                       {(msg.metadata.dsh_cards as DshCard[]).map((card, index) => <DshToolCard key={index} card={card} />)}
-                      {msg.content && <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} streaming={msg.streaming} />}
+                      {msg.content && <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} streaming={msg.streaming} markdownComponents={markdownComponents} />}
                     </React.Fragment>;
                   }
                   const stepVisuals = msg.toolStep?.visuals?.length
@@ -647,7 +650,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                           />
                         ))}
                         {msg.content && (
-                          <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} streaming={msg.streaming} />
+                          <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} streaming={msg.streaming} markdownComponents={markdownComponents} />
                         )}
                       </React.Fragment>
                     );
@@ -664,7 +667,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     return <ToolStepMessage key={msg._id || i} step={step} index={i} />;
                   }
                   // 普通消息 → ChatBubble
-                  return <ChatBubble native={appearance === 'native'} key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} streaming={msg.streaming} />;
+                  return <ChatBubble native={appearance === 'native'} key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} streaming={msg.streaming} markdownComponents={markdownComponents} />;
                 })}
                 {loading && (
                   <ChatBubble native={appearance === 'native'} msg={{ role: 'assistant', content: '' }} isUser={false} isThinking index={messages.length} />
@@ -724,10 +727,10 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                       </div>
                     </PopoverContent>
                   </Popover>
-                  {toolbarAction && (
+                  {toolbarAction && appearance !== 'native' && (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button onClick={toolbarAction.onClick}
+                        <button aria-label={toolbarAction.label} onClick={toolbarAction.onClick}
                           className="p-1.5 rounded-lg text-muted-foreground/55 hover:text-foreground/70 hover:bg-muted transition-colors">
                           <toolbarAction.icon className="h-3.5 w-3.5" />
                         </button>
@@ -833,7 +836,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 msg.toolStep ? (
                   <ToolStepMessage key={msg._id || i} step={msg.toolStep} index={i} />
                 ) : (
-                  <ChatBubble key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} compact streaming={msg.streaming} />
+                  <ChatBubble key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} compact streaming={msg.streaming} markdownComponents={markdownComponents} />
                 )
               ))}
               {loading && (
@@ -879,10 +882,10 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     </div>
                   </PopoverContent>
                 </Popover>
-                {toolbarAction && (
+                {toolbarAction && appearance !== 'native' && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <button onClick={toolbarAction.onClick}
+                      <button aria-label={toolbarAction.label} onClick={toolbarAction.onClick}
                         className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted transition-colors">
                         <toolbarAction.icon className="h-3.5 w-3.5" />
                       </button>

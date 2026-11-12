@@ -7,6 +7,7 @@ export interface ConversationProject { id: number; name: string; instructions: s
 export interface ConversationProjectControls {
   projects: ConversationProject[];
   projectId: number | null;
+  open: (id: number) => void;
   pending: boolean;
   error: boolean;
   reload: () => void;
@@ -15,7 +16,7 @@ export interface ConversationProjectControls {
   remove: (id: number) => Promise<boolean>;
 }
 
-export function useConversationProjects(enabled: boolean, projectId: number | null, setProjectId: Dispatch<SetStateAction<number | null>>, setSessions: Dispatch<SetStateAction<ConversationSession[]>>): ConversationProjectControls {
+export function useConversationProjects(enabled: boolean, projectId: number | null, setProjectId: Dispatch<SetStateAction<number | null>>, setSessions: Dispatch<SetStateAction<ConversationSession[]>>, openProject: (id: number, conversationId?: string, draft?: string) => Promise<void>): ConversationProjectControls {
   const [projects, setProjects] = useState<ConversationProject[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
@@ -37,12 +38,13 @@ export function useConversationProjects(enabled: boolean, projectId: number | nu
         ? await api.post<ConversationProject>('/ai/projects/', { name: name.trim(), instructions: instructions.trim() })
         : await api.patch<ConversationProject>(`/ai/projects/${id}/`, { name: name.trim(), instructions: instructions.trim() });
       setProjects(previous => id === undefined ? [...previous, response.data] : previous.map(project => project.id === id ? response.data : project));
+      if (id === undefined) await openProject(response.data.id, undefined, instructions.trim());
       return true;
     } catch { toast.error('项目保存失败，请重试'); return false; }
     finally { setPending(false); }
   };
   return {
-    projects, projectId, pending, error, reload,
+    projects, projectId, pending, error, reload, open: id => { void openProject(id); },
     create: (name, instructions) => save(name, instructions), update: (id, name, instructions) => save(name, instructions, id),
     remove: async id => {
       if (pending) return false;

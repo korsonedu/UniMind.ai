@@ -7,6 +7,8 @@ export interface PendingChatRequest {
   serverMessageId?: number;
 }
 export interface SavedConversation {
+  projectId?: number | null;
+  updatedAt?: number;
   draft?: string;
   draftRevision?: string;
   coursePosition?: number | null;
@@ -30,7 +32,7 @@ export function saveRecovery(scope: string | null, id: string, patch: SavedConve
   if (!scope) return;
   try {
     const saved = readRecovery(scope);
-    saved.conversations[id] = { ...saved.conversations[id], ...patch };
+    saved.conversations[id] = { ...saved.conversations[id], ...patch, updatedAt: Date.now() };
     if (remember) saved.lastConversationId = id;
     localStorage.setItem(scope, JSON.stringify(saved));
   } catch { /* Best effort when the device has no storage capacity. */ }

@@ -50,6 +50,12 @@ jobs:
         working-directory: backend
         run: python manage.py makemigrations --check --dry-run
 
+      - name: Install Chinese fonts for visual smoke checks
+        run: |
+          printf '%s\n' 'https://archive.ubuntu.com/ubuntu' 'https://security.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk
+
       - name: Install browser for learning tool smoke checks
         run: python -m playwright install --only-shell chromium
 

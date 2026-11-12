@@ -1,3 +1,4 @@
+import { learningUrl } from '@/lib/projectLearning';
 import { SelectField, SelectOption } from '@/components/ui/select';
 import { WorkspaceToolbar } from '@/components/WorkspaceToolbar';
 import { useEffect, useState, type CSSProperties } from 'react';
@@ -93,8 +94,8 @@ export function CourseCenter() {
   const filterLabel = !filter ? '' : grouping === 'module' ? matchingFilter?.module_name || '待归类' : grouping === 'album' ? matchingFilter?.album_name || '专辑' : filter;
   const selectedCourse = id ? courses.find(course => course.id === Number(id)) : undefined;
   const retry = () => setVersion(value => value + 1);
-  const resetFilters = () => { setOrdering('sort_order'); navigate('/courses'); };
-  const open = (course: Course, view = 'overview') => { navigate(`/course/${course.id}${view !== 'overview' ? `?view=${view}` : ''}`); setListOpen(false); };
+  const resetFilters = () => { setOrdering('sort_order'); navigate(learningUrl('/courses', Number(params.get('project')) || null, params.get('conversation') || undefined)); };
+  const open = (course: Course, view = 'overview') => { navigate(learningUrl(`/course/${course.id}${view !== 'overview' ? `?view=${view}` : ''}`, Number(params.get('project')) || null, params.get('conversation') || undefined)); setListOpen(false); };
   const changeQueue = async (course: Course, remove: boolean) => {
     setQueuePending(values => [...values, course.id]);
     try {

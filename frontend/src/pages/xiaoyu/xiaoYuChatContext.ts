@@ -16,6 +16,8 @@ export interface PageChatHooks {
 export interface XiaoYuChatContextValue {
   chat: ReturnType<typeof useAgentConversation>;
   unreadIds: ReadonlySet<string>;
+  openProject: (id: number, conversationId?: string, draft?: string) => Promise<void>;
+  openingProject: boolean;
   activate: () => void;
   setPageHooks: (hooks: PageChatHooks | null) => void;
 }

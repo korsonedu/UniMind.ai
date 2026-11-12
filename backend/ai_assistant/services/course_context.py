@@ -109,8 +109,10 @@ def prepare_course_context(request, bot, conversation_id):
     previous = AIChatMessage.objects.filter(user=request.user, bot=bot,
         conversation_id=conversation_id, role='user').order_by('id').first()
     previous_course = previous.metadata.get('course_context') if previous else None
+    from ai_assistant.models import Conversation
+    project_chat = Conversation.objects.filter(user=request.user, conversation_id=conversation_id, project__user=request.user).exists()
     if payload is None:
-        if previous_course:
+        if previous_course and not project_chat:
             raise ValidationError('课程提问需要附带本课时间戳。')
         return None
     if bot.bot_type != 'planner':
@@ -120,7 +122,7 @@ def prepare_course_context(request, bot, conversation_id):
     course = visible_courses(request).filter(pk=data.validated_data['course_id']).first()
     if course is None:
         raise NotFound('课程不存在或不可访问。')
-    if previous and (not previous_course or previous_course['course_id'] != course.pk):
+    if previous and not project_chat and (not previous_course or previous_course['course_id'] != course.pk):
         raise ValidationError('请在本课程的独立对话中提问。')
     transcript = VideoTranscript.objects.filter(course=course, asr_status='completed').first()
     if transcript is None:

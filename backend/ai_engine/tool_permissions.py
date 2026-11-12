@@ -1,6 +1,7 @@
 """按用户能力限制工具，机构套餐不再授予学习或管理能力。"""
 
 TOOL_FEATURES = {
+    **dict.fromkeys(("read_learning_project", "plan_learning_project", "record_learning_progress", "set_learning_followup", "find_learning_resources", "manage_learning_resources", "manage_learning_strategies", "manage_learning_knowledge", "manage_learning_tasks"), "ai.assistant"),
     'register_session_tool': 'ai.assistant', 'read_session_tool': 'ai.assistant',
     'build_learning_experiment': 'ai.assistant', 'read_learning_experiment': 'ai.assistant',
     'search_knowledge_tree': 'quiz.exam', 'get_user_weak_points': 'full.report',
@@ -30,8 +31,10 @@ def filter_tools(bot_type: str, institution, all_tools: list, user=None) -> list
         return []
     if is_platform_admin(user):
         return all_tools
-    if bot_type not in ('assistant', 'planner') or not is_course_student(user):
+    if bot_type not in ('assistant', 'planner'):
         return []
     features = set(learning_features(user))
     return [tool for tool in all_tools
-            if TOOL_FEATURES.get(tool['function']['name']) in features]
+            if TOOL_FEATURES.get(tool['function']['name']) in features
+            and (is_course_student(user) or (TOOL_FEATURES.get(tool['function']['name']) == 'ai.assistant'
+                 or tool['function']['name'] in ('search_courses', 'search_asr')))]

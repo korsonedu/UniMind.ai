@@ -1,3 +1,4 @@
+import ProjectCourseChat from './ProjectCourseChat';
 import { memo, useEffect, useRef, useState, type RefObject } from 'react';
 import { ArrowUp, ArrowCounterClockwise, ArrowsOut, ArrowsIn, Clock, NotePencil, Sparkle, ClockCounterClockwise, X } from '@phosphor-icons/react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -45,6 +46,8 @@ interface CourseChatPanelProps {
 export const CourseChatPanel = memo(function CourseChatPanel(props: CourseChatPanelProps) {
   const userId = useAuthStore(state => state.user?.id);
   const [params] = useSearchParams();
+  const projectId = Number(params.get('project'));
+  if (Number.isSafeInteger(projectId) && projectId > 0) return <ProjectCourseChat projectId={projectId} courseId={props.courseId} videoRef={props.videoRef} mode={props.mode} visible={props.visible} />;
   return <CourseChatSession key={`${props.courseId}:${userId}:${params.get('conversation') || ''}`} {...props} />;
 });
 

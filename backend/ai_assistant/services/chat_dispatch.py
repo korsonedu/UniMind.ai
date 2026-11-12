@@ -64,6 +64,7 @@ def dispatch_bot_chat(
     student_context: str = '',
     memory_context: str = '',
     adaptive_directives: str = '',
+    chat_context=None,
 ):
     """
     统一的 bot 对话调度。
@@ -76,6 +77,9 @@ def dispatch_bot_chat(
     # Create tool executor
     profile = get_bot_profile(bot.bot_type if bot else 'planner')
     tool_executor = profile.executor_class(user=user, institution=institution)
+    from .project_learning import turn_project_context
+    turn_project_context(user, chat_context)
+    tool_executor.learning_context = chat_context
 
     # 通用状态恢复钩子
     if profile.restore_state:
@@ -128,6 +132,7 @@ def dispatch_bot_chat_sync(
     student_context: str = '',
     memory_context: str = '',
     adaptive_directives: str = '',
+    chat_context=None,
 ):
     """
     同步版调度（用于 SSE 的 _sync_setup）。
@@ -139,6 +144,9 @@ def dispatch_bot_chat_sync(
 
     profile = get_bot_profile(bot.bot_type if bot else 'planner')
     tool_executor = profile.executor_class(user=user, institution=institution)
+    from .project_learning import turn_project_context
+    turn_project_context(user, chat_context)
+    tool_executor.learning_context = chat_context
 
     # 通用状态恢复钩子
     if profile.restore_state:
