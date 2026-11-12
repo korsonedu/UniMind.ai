@@ -190,6 +190,8 @@ def strategy_operation(project, arguments, *, message=None):
             raise ValidationError('这条实际表现还没有记录教学方法。')
         row, created = LearningStrategy.objects.get_or_create(source_event=event,
             defaults={'user': project.user, 'domain': data.get('domain', ''), 'topic': data.get('topic', '')})
+        from .teaching_sidecar import ensure_method_version, observe
+        observe(ensure_method_version, row)
         return {'strategy_id': row.pk, 'created': created, 'notice': '已留下带来源的候选方法，仍需后续表现检验。'}
     if action == 'review':
         use = get_object_or_404(LearningStrategyUse.objects.select_related('strategy__source_event__message', 'message'),
@@ -225,6 +227,8 @@ def strategy_operation(project, arguments, *, message=None):
             raise ValidationError('请在实际项目对话中试用仍有原始依据的方法，并说明适用原因。')
         use, created = LearningStrategyUse.objects.get_or_create(strategy=row, message=message,
             defaults={'project': project, 'reason': data['reason']})
+        from .teaching_sidecar import observe, record_strategy_use
+        observe(record_strategy_use, use, created=created)
         return {'use_id': use.pk, 'created': created, 'method': row.source_event.content['strategy'],
                 'notice': '只登记本轮试用意图；等后续另一轮实际表现再检查结果。'}
     if message or action not in ('retire', 'restore'):

@@ -125,6 +125,8 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                 if confirmed.status != 'succeeded' or confirmed.attempt_id != reservation.attempt_id:
                     raise DshUnavailable()
             # Auxiliary failures never turn a committed answer into a second paid retry.
+            from .teaching_sidecar import observe, record_turn_completion
+            observe(record_turn_completion, answer)
             try:
                 if getattr(settings, 'UNIMIND_DSH_TITLE_ENABLED', False) and needs_title:
                     generated = sync_generate_title(str(conversation_id), user.pk, bot.pk, expected_title=title)

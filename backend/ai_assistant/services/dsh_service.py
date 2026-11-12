@@ -153,6 +153,11 @@ def build_context(user, message, recent_messages=None, chat_context=None):
 
 
 def execute_tool(user, name, arguments, memory_version, source=None, chat_context=None, tool_revision=None):
+    def observed(result):
+        from .teaching_sidecar import observe, record_tool_result
+        observe(record_tool_result, user, chat_context, name, arguments, result)
+        return result
+
     prototype_names = {'build_learning_experiment', 'read_learning_experiment', 'register_session_tool', 'read_session_tool'}
     if name in prototype_names or name.startswith('session_'):
         executor = prototype_executor(user, chat_context)
@@ -173,7 +178,7 @@ def execute_tool(user, name, arguments, memory_version, source=None, chat_contex
                     response={'learning_failure': failure})
         if name in {'register_session_tool', 'read_session_tool'} and not result.get('error'):
             result['session_registry'] = session_registry(executor)
-        return result
+        return observed(result)
     definition = next((t for t in permitted_tools(user) if t['function']['name'] == name), None)
     if definition is None:
         raise PermissionDenied('当前账号无权使用此 M0 工具。')
@@ -184,13 +189,13 @@ def execute_tool(user, name, arguments, memory_version, source=None, chat_contex
         raise ValidationError({'arguments': error})
     if name == 'present_learning_visual':
         visual = build_learning_visual(arguments)
-        return {'presented': True, 'visual': visual}
+        return observed({'presented': True, 'visual': visual})
     if name == 'run_diagnostic':
         from .dsh_actions import prepare_diagnostic
-        return prepare_diagnostic(user, source)
+        return observed(prepare_diagnostic(user, source))
     if name == 'create_faq_ticket':
         from .dsh_actions import prepare_faq
-        return prepare_faq(user, arguments, source)
+        return observed(prepare_faq(user, arguments, source))
     executor = PlannerToolExecutor(user)
     executor.learning_context = chat_context
     set_permitted_tools(executor, [definition])
@@ -200,4 +205,4 @@ def execute_tool(user, name, arguments, memory_version, source=None, chat_contex
         card = build_tool_card(name, result)
         if card:
             result['visual'] = card
-    return result
+    return observed(result)

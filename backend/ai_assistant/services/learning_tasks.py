@@ -39,6 +39,7 @@ class TaskInput(serializers.Serializer):
     mode = serializers.ChoiceField(choices=['apply', 'transfer'], default='apply')
     purpose = serializers.ChoiceField(choices=['diagnostic', 'practice', 'recheck'], default='practice')
     source_task_id = serializers.UUIDField(required=False, allow_null=True)
+    strategy_use_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
 
     def validate(self, data):
         if bool(data['question_ids']) == bool(data.get('definition')):
@@ -112,6 +113,9 @@ def create_task(project, arguments):
     version = _validate_path(project, data.pop('version_id', None), data['node_id'], data['stage_id'])
     source_id = data.pop('source_task_id', None)
     source = get_object_or_404(ProjectLearningTask, pk=source_id, project=project) if source_id else None
+    use_id = data.pop('strategy_use_id', None)
+    from .teaching_sidecar import validate_strategy_use
+    strategy_use = validate_strategy_use(project, use_id) if use_id else None
     if source and source.knowledge_version_id != (version.pk if version else None):
         raise ValidationError('关联任务的知识版本不同，请按当前计划重新安排，不能自动混用旧证据。')
     if source and data['purpose'] == 'recheck' and source.node_id != data['node_id']:
@@ -149,7 +153,7 @@ def create_task(project, arguments):
         if prompts.intersection(task_prompt_hash(snapshot) for snapshot in source.question_snapshot.values()):
             raise ValidationError('再次检验请准备不同的题目，不能重复原任务。')
     task = ProjectLearningTask.objects.create(project=project, knowledge_version=version,
-        source_task=source, question_snapshot=snapshots, **data)
+        source_task=source, strategy_use=strategy_use, question_snapshot=snapshots, **data)
     if definition:
         task.question_snapshot = {'0': _personal_snapshot(task)}
         task.save(update_fields=['question_snapshot'])
@@ -235,10 +239,13 @@ def sync_task_result(result):
         'question_hash': task_question_hash(snapshot),
         'answer_hash': _hash(result.user_answer.strip()),
     }
-    ProjectLearningEvent.objects.get_or_create(
+    event, _ = ProjectLearningEvent.objects.get_or_create(
         request_key=hashlib.sha256(f'exam_result:{result.pk}'.encode()).hexdigest(),
         defaults={'project': task.project, 'kind': 'assessment', 'content': content},
     )
+    if task.strategy_use_id:
+        from .teaching_sidecar import observe, record_task_outcome
+        observe(record_task_outcome, task, result, event)
 
 
 def sync_exam_task_result(result_id):
@@ -275,6 +282,7 @@ def task_data(task):
         'node_id': task.node_id, 'stage_id': task.stage_id, 'title': task.title,
         'instructions': task.instructions, 'mode': task.mode, 'assistance': task.assistance,
         'purpose': task.purpose, 'source_task_id': str(task.source_task_id) if task.source_task_id else None,
+        **({'strategy_use_id': task.strategy_use_id} if task.strategy_use_id else {}),
         'response_type': task.definition.get('response_type'), 'criteria': task.definition.get('criteria', []),
         'label_source': label_source, 'sources': task.definition.get('sources', []),
         'status': status if available else 'unavailable',

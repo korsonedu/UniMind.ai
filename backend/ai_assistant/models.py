@@ -516,6 +516,9 @@ class LearningStrategyUse(models.Model):
     project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE)
     message = models.ForeignKey(AIChatMessage, on_delete=models.CASCADE)
     reason = models.TextField()
+    method_version = models.ForeignKey('LearningStrategyVersion', null=True, blank=True, on_delete=models.SET_NULL)
+    decision = models.JSONField(default=dict, blank=True)
+    exposure = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -572,7 +575,52 @@ class ProjectLearningTask(models.Model):
     definition = models.JSONField(default=dict, blank=True)
     purpose = models.CharField(max_length=16, default='practice', choices=[('diagnostic', '起点检查'), ('practice', '练习'), ('recheck', '再次检验')])
     source_task = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='followup_tasks')
+    strategy_use = models.ForeignKey(LearningStrategyUse, null=True, blank=True, on_delete=models.SET_NULL, related_name='outcome_tasks')
     mode = models.CharField(max_length=16, choices=[('apply', '应用'), ('transfer', '迁移')])
     assistance = models.CharField(max_length=16, default='unknown')
     exam = models.OneToOneField('quizzes.QuizExam', null=True, blank=True, on_delete=models.CASCADE, related_name='learning_task')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class TeachingMechanismVersion(models.Model):
+    kind = models.CharField(max_length=1, choices=[('G', '生成'), ('S', '选择'), ('E', '评价'), ('M', '改进')])
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE)
+    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL)
+    digest = models.CharField(max_length=64, unique=True)
+    content = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class LearningStrategyVersion(models.Model):
+    strategy = models.ForeignKey(LearningStrategy, on_delete=models.CASCADE, related_name='versions')
+    generator = models.ForeignKey(TeachingMechanismVersion, null=True, blank=True, on_delete=models.SET_NULL)
+    digest = models.CharField(max_length=64)
+    snapshot = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['strategy', 'digest'], name='learning_strategy_version_hash')]
+
+
+class LearningStrategyOutcome(models.Model):
+    use = models.ForeignKey(LearningStrategyUse, on_delete=models.CASCADE, related_name='task_outcomes')
+    task = models.ForeignKey(ProjectLearningTask, on_delete=models.CASCADE)
+    result = models.ForeignKey('quizzes.ExamQuestionResult', on_delete=models.CASCADE)
+    event = models.ForeignKey(ProjectLearningEvent, on_delete=models.CASCADE)
+    snapshot = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['use', 'result'], name='learning_strategy_outcome_result')]
+
+
+class TeachingResearchRun(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE)
+    kind = models.CharField(max_length=1, choices=[('G', '生成'), ('E', '评价')])
+    baseline = models.ForeignKey(TeachingMechanismVersion, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    candidate = models.ForeignKey(TeachingMechanismVersion, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    packet_hash = models.CharField(max_length=64)
+    protocol = models.JSONField()
+    report = models.JSONField()
     created_at = models.DateTimeField(auto_now_add=True)

@@ -1,0 +1,151 @@
+{
+  "schema_version": "rsi-shadow-1",
+  "provenance": {
+    "origin": "synthetic",
+    "split_note": "三类显式合成流程材料，不是冷留出或真实学习效果数据。"
+  },
+  "development": {
+    "goal": "保留正确性评价，并改进对独立表现依据的判断。",
+    "failure": "有提示或未知帮助的正确作答被当成独立支持。",
+    "teacher_help": "教学会帮助某些子步骤。",
+    "limitations": "仅用于影子流程与模型候选生成，未获独立人工标注。"
+  },
+  "cases": [
+    {
+      "id": "math-hint",
+      "domain": "高中数学",
+      "prompt": "解释根式分母函数的定义域从何而来。",
+      "response": "根号内非负，分母不能为零。",
+      "criteria": [
+        "说明每项约束的来源",
+        "区分提示与独立发现"
+      ],
+      "assistance": "hint",
+      "teacher_help": "教师已告诉学生根号内非负。"
+    },
+    {
+      "id": "cache-independent",
+      "domain": "计算机原理",
+      "prompt": "用自己的类比说明缓存与内存的容量和速度权衡。",
+      "response": "手边的便签少但好找，书架容量大而查找更慢；缓存更快但容量通常更小。",
+      "criteria": [
+        "比较方向合理",
+        "说明类比边界"
+      ],
+      "assistance": "independent",
+      "teacher_help": ""
+    },
+    {
+      "id": "fictional-case-unknown",
+      "domain": "虚构规则案例",
+      "prompt": "规则：蓝卡可入场，红卡须登记。甲持红卡，应怎样处理？",
+      "response": "先登记再入场。",
+      "criteria": [
+        "正确应用题内虚构规则",
+        "不推断现实法规"
+      ],
+      "assistance": "unknown",
+      "teacher_help": "帮助情况未记录。"
+    }
+  ],
+  "baseline": {
+    "instruction": "按题目冻结标准评价成果或生成适合目标的教学方法，说明依据。"
+  },
+  "fixture_candidate": {
+    "instruction": "按原标准处理正确性；先标出教师已帮助的子步骤，帮助未知时暂缓独立判断，并安排不同任务的后续检查。"
+  },
+  "budget": {
+    "max_tokens_per_call": 768,
+    "max_calls_per_arm": 8
+  },
+  "anchors": [],
+  "protocol": {
+    "note": "fixture值仅使两臂可运行；不用于证明候选优越。"
+  },
+  "fixture_outputs": {
+    "baseline": {
+      "math-hint": {
+        "generate": {
+          "method": "先检查当前解释，再结合一个不同例子讨论。",
+          "covered_subskills": [
+            "教师已告诉学生根号内非负。"
+          ],
+          "independent_check": "更换条件后重新解释，明确记录帮助。"
+        },
+        "evaluate": {
+          "score": 0.5,
+          "independent_support": false,
+          "reason": "预设合成回放输出；不代表真实模型或人工评分。"
+        }
+      },
+      "cache-independent": {
+        "generate": {
+          "method": "先检查当前解释，再结合一个不同例子讨论。",
+          "covered_subskills": [],
+          "independent_check": "更换条件后重新解释，明确记录帮助。"
+        },
+        "evaluate": {
+          "score": 0.5,
+          "independent_support": false,
+          "reason": "预设合成回放输出；不代表真实模型或人工评分。"
+        }
+      },
+      "fictional-case-unknown": {
+        "generate": {
+          "method": "先检查当前解释，再结合一个不同例子讨论。",
+          "covered_subskills": [
+            "帮助情况未记录。"
+          ],
+          "independent_check": "更换条件后重新解释，明确记录帮助。"
+        },
+        "evaluate": {
+          "score": 0.5,
+          "independent_support": false,
+          "reason": "预设合成回放输出；不代表真实模型或人工评分。"
+        }
+      }
+    },
+    "candidate": {
+      "math-hint": {
+        "generate": {
+          "method": "先检查当前解释，再结合一个不同例子讨论。",
+          "covered_subskills": [
+            "教师已告诉学生根号内非负。"
+          ],
+          "independent_check": "更换条件后重新解释，明确记录帮助。"
+        },
+        "evaluate": {
+          "score": 0.5,
+          "independent_support": false,
+          "reason": "预设合成回放输出；不代表真实模型或人工评分。"
+        }
+      },
+      "cache-independent": {
+        "generate": {
+          "method": "先检查当前解释，再结合一个不同例子讨论。",
+          "covered_subskills": [],
+          "independent_check": "更换条件后重新解释，明确记录帮助。"
+        },
+        "evaluate": {
+          "score": 0.5,
+          "independent_support": false,
+          "reason": "预设合成回放输出；不代表真实模型或人工评分。"
+        }
+      },
+      "fictional-case-unknown": {
+        "generate": {
+          "method": "先检查当前解释，再结合一个不同例子讨论。",
+          "covered_subskills": [
+            "帮助情况未记录。"
+          ],
+          "independent_check": "更换条件后重新解释，明确记录帮助。"
+        },
+        "evaluate": {
+          "score": 0.5,
+          "independent_support": false,
+          "reason": "预设合成回放输出；不代表真实模型或人工评分。"
+        }
+      }
+    }
+  }
+}
