@@ -454,6 +454,8 @@ class UserProfile(models.Model):
 
 
 class ProjectLearning(models.Model):
+    planning_enabled = models.BooleanField(default=False)
+    reminders_enabled = models.BooleanField(default=False)
     project = models.OneToOneField(ConversationProject, on_delete=models.CASCADE, related_name='learning')
     status = models.CharField(max_length=16, default='preparing')
     plan = models.JSONField(default=dict, blank=True)

@@ -329,7 +329,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     handleDeleteSession(session);
   }, [handleDeleteSession, removeUnread]);
 
-  const wrappedReset = useCallback((notify = true, nextProjectId = projectId) => {
+  const wrappedReset = useCallback((notify = true, nextProjectId: number | null = null) => {
     if (onReset) {
       onReset(() => handleReset(notify));
     } else {
@@ -337,7 +337,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     }
     if (appearance === 'native') setProjectId(nextProjectId);
     setVisual(null);
-  }, [appearance, handleReset, onReset, projectId, setProjectId]);
+  }, [appearance, handleReset, onReset, setProjectId]);
 
   useEffect(() => {
     onSessionsReady?.({
@@ -414,7 +414,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 <label className="um-agent-project-picker-search"><MagnifyingGlass size={16} /><input autoFocus aria-label="搜索项目" placeholder="搜索项目" value={projectQuery} onChange={event => setProjectQuery(event.target.value)} /></label>
                 <div className="um-agent-project-picker-list" role="group" aria-label="切换学习项目">{projectControls.projects.filter(project => project.name.toLowerCase().includes(projectQuery.trim().toLowerCase())).map(project => <button key={project.id} aria-pressed={project.id === projectId} onClick={() => selectNewProject(project.id)}><Folder size={16} /><span>{project.name}</span>{project.id === projectId && <Check size={16} />}</button>)}</div>
                 {!projectControls.projects.some(project => project.name.toLowerCase().includes(projectQuery.trim().toLowerCase())) && <p className="um-agent-project-picker-empty">没有匹配的项目</p>}
-                <button className="um-agent-project-picker-none" onClick={() => selectNewProject(null)}>未分类</button>
+                <button className="um-agent-project-picker-none" onClick={() => selectNewProject(null)}>自由对话</button>
               </PopoverContent>
             </Popover> 中做些什么？</> : contextPanel ? landingTitle : '我们要做些什么？'}</h2>
             <div className="w-full max-w-[680px]">

@@ -25,6 +25,7 @@ class LearningKnowledgeSmoke(APITestCase):
         self.other = User.objects.create_user(username='knowledge_other')
         self.bot = Bot.objects.create(name='小宇', bot_type='planner')
         self.project = ConversationProject.objects.create(user=self.user, name='执行与分支')
+        ProjectLearning.objects.create(project=self.project, planning_enabled=True)
         self.conversation = Conversation.objects.create(user=self.user, bot=self.bot, project=self.project, conversation_id=uuid.uuid4())
         with patch('ai_assistant.services.learning_resources.public_text', return_value=('https://example.org/flow', '<title>执行结构</title><p>程序按顺序执行指令。条件分支根据条件选择路径。</p>')):
             source = find_resources(self.project, {'url': 'https://example.org/flow'})['resource']

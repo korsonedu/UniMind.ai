@@ -148,12 +148,10 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
         if (draft) current.setInput(draft);
       }
       queryClient.setQueryData(learningKey(userId, id), data);
-      localStorage.setItem(`unimind:learning:project:${userId}`, String(id));
     } catch (error) {
       if (sequence === openSequence.current && chatRef.current.getSelectionVersion() === selectionVersion && useAuthStore.getState().user?.id === userId) {
         const status = (error as { response?: { status?: number } })?.response?.status;
         if (status === 404) {
-          if (localStorage.getItem(`unimind:learning:project:${userId}`) === String(id)) localStorage.removeItem(`unimind:learning:project:${userId}`);
           if (chatRef.current.projectId === id) chatRef.current.handleReset(false);
         }
         toast.error(status === 404 ? '这个项目或对话已删除，无法恢复旧安排。' : error instanceof Error ? error.message : '项目暂时无法打开，请重试。');
@@ -167,27 +165,21 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
     if (!userId || !chat.initialized) return;
     const params = new URLSearchParams(location.search);
     const explicit = params.get('project');
-    const key = `${userId}:${explicit ? location.key : 'initial'}`;
-    if (restored.current === key || (!explicit && restored.current.startsWith(`${userId}:`))) return;
-    if (explicit && !/^\d+$/.test(explicit)) return;
+    if (!explicit || !/^\d+$/.test(explicit)) return;
+    const key = `${userId}:${location.key}`;
+    if (restored.current === key) return;
     let cancelled = false;
     queueMicrotask(() => {
       if (cancelled) return;
       restored.current = key;
-      const id = Number(explicit || localStorage.getItem(`unimind:learning:project:${userId}`));
-      if (id) void openProject(id, explicit ? params.get('conversation') || undefined : undefined);
-      if (explicit) {
-        params.delete('project');
-        params.delete('conversation');
-        // Keep course context in its address. It is needed by the course assistant.
-        if (location.pathname === '/xiaoyu') navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
-      }
+      void openProject(Number(explicit), params.get('conversation') || undefined);
+      params.delete('project');
+      params.delete('conversation');
+      // Keep course context in its address for the course assistant.
+      if (location.pathname === '/xiaoyu') navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
     });
     return () => { cancelled = true; };
   }, [userId, chat.initialized, location.key, location.pathname, location.search, navigate, openProject]);
-  useEffect(() => {
-    if (userId && chat.projectId) localStorage.setItem(`unimind:learning:project:${userId}`, String(chat.projectId));
-  }, [userId, chat.projectId]);
   useEffect(() => {
     if (!chat.loading && chat.projectId && userId) void queryClient.invalidateQueries({ queryKey: learningKey(userId, chat.projectId) });
   }, [chat.loading, chat.messages.at(-1)?.id, chat.projectId, userId]);

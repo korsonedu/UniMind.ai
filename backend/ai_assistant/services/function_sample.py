@@ -106,9 +106,11 @@ def setup_sample(project):
     project = ConversationProject.objects.select_for_update().get(pk=project.pk, user_id=project.user_id)
     state, _ = ProjectLearning.objects.get_or_create(project=project)
     state = ProjectLearning.objects.select_for_update().get(pk=state.pk)
+    if not state.planning_enabled:
+        raise ValidationError('函数样板需要规划模式项目。')
     has_learning_messages = AIChatMessage.objects.filter(user=project.user, role='user',
         conversation_id__in=project.conversations.values('conversation_id')).exists()
-    if project.instructions.strip() or has_learning_messages or state.status != 'preparing' or state.plan or state.resources or state.pending_plan or state.revision:
+    if project.instructions.strip() or has_learning_messages or state.status != 'preparing' or state.plan or state.resources or state.pending_plan or (state.revision and project.learning_events.exclude(kind='reminders').exists()):
         raise ValidationError('函数样板只能在全新的待准备项目中开始，不能覆盖现有学习安排。')
     content = sample_content()
     question_ids = _seeded_questions(content)

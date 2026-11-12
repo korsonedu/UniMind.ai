@@ -19,9 +19,7 @@ def test_dsh_bridge_smoke(auth_client, user, settings):
     context = auth_client.post(url, {}, format='json').json()
     assert {t['function']['name'] for t in context['tools']} == {'find_learning_tools'}
     assert {t['function']['name'] for t in context['available_tools']} == {
-        'search_courses', 'search_asr', 'present_learning_visual',
-        'read_learning_project', 'plan_learning_project', 'record_learning_progress', 'set_learning_followup',
-        'find_learning_resources', 'manage_learning_resources', 'manage_learning_strategies', 'manage_learning_knowledge', 'manage_learning_tasks'}
+        'search_courses', 'search_asr', 'present_learning_visual'}
     for name in ('get_practice_questions', 'get_exam_history', 'send_notification'):
         assert auth_client.post(f'/api/ai/dsh/tools/{name}/', {
             'arguments': {}, 'memory_version': context['memory']['version'],

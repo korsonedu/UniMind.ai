@@ -222,7 +222,7 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
     {payload.learning_task_id && <label className="um-inline-practice-assistance">本次作答获得了哪些帮助？
       <select aria-label="本次作答帮助程度" disabled={locked} value={draft.assistance} onChange={event => setDraft(previous => ({ ...previous, assistance: event.target.value }))}>
         <option value="unknown">尚未说明</option><option value="independent">独立作答</option><option value="hint">获得提示</option><option value="guided">逐步引导完成</option>
-      </select><small>按实际情况说明，提交后随成绩保留；未说明或逐步引导不增加独立证据。</small>
+      </select>
     </label>}
     {error && <p className="um-inline-practice-error" role="alert">{error}</p>}
     {!draft.examId && submission.isPending && <p>正在读取提交状态…</p>}

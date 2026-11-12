@@ -18,6 +18,7 @@ class FunctionSampleSmoke(APITestCase):
         self.user = User.objects.create_user(username='function_sample_synthetic')
         CourseStudentStatus.objects.create(user=self.user, is_course_student=True)
         self.project = ConversationProject.objects.create(user=self.user, name='函数基础')
+        ProjectLearning.objects.create(project=self.project, planning_enabled=True)
         self.client.force_authenticate(self.user)
 
     def test_seed_is_partitioned_idempotent_and_does_not_replace_modified_questions(self):
@@ -91,4 +92,9 @@ class FunctionSampleSmoke(APITestCase):
         from ai_assistant.services.project_learning import learning_data
         progress = learning_data(self.project)
         self.assertIn('学习练习', progress['task_progress']['next_action'])
-        self.assertEqual(progress['followup_text'], progress['teaching_guidance']['next_action'])
+        self.assertIsNone(progress['followup_at'])
+        self.assertEqual(progress['followup_text'], '')
+        enabled = self.client.patch(f'/api/ai/projects/{self.project.pk}/learning/', {
+            'action': 'reminders', 'enabled': True, 'revision': progress['revision']}, format='json')
+        self.assertEqual(enabled.status_code, 200)
+        self.assertEqual(enabled.data['followup_text'], progress['teaching_guidance']['next_action'])
