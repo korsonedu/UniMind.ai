@@ -22,4 +22,6 @@
 
 首次部署需追加执行学习迁移 `ai_assistant.0030` 至 `0038`（先核对生产迁移记录），并核对 Celery 的 `ai_assistant.tasks_learning` 注册和每分钟 follow-up beat 配置。本人资料、通知跳转、任务提交、结果恢复、暂停与接续需要在真实入口核验。
 
+生产当前只有 Celery worker，没有 beat。部署 `deploy/unimind-learning-followups.service` 与同名 timer，在迁移、worker 注册和健康检查完成后启用 timer，每分钟仅投递学习跟进任务，不连带启用其他历史 beat 任务。若以后启用包含同一任务的 beat，应停用这个 timer。
+
 合并与部署授权分别处理；本轮只准备可评审版本，不联系学习者或写入生产数据。真实教学观察、各领域资源质量和 BEP 校准仍待后续积累。

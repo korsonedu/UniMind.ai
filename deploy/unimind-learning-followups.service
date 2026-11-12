@@ -1,0 +1,11 @@
+[Unit]
+Description=Enqueue UniMind project learning follow-ups
+After=network-online.target unimind-celery.service
+Wants=unimind-celery.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/unimind/backend
+EnvironmentFile=/opt/unimind/backend/.env
+ExecStart=/opt/unimind/backend/venv/bin/python manage.py shell -c "from ai_assistant.tasks_learning import send_project_learning_followups; send_project_learning_followups.delay()"
+TimeoutStartSec=30

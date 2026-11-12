@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule UniMind project learning follow-ups every minute
+
+[Timer]
+OnBootSec=60s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Unit=unimind-learning-followups.service
+
+[Install]
+WantedBy=timers.target
