@@ -209,7 +209,7 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
     <section hidden={floating && !open} className="um-course-chat" role={floating ? 'dialog' : 'region'} aria-modal={floating ? false : undefined} aria-label="小宇课程助手" onKeyDown={event => { if (floating && event.key === 'Escape') close(); }}>
     <header className="um-course-chat-header">
       <span className="um-course-assistant-orb" data-thinking={loading || undefined}><Sparkle size={18} weight="fill" /></span>
-      <div className="um-course-chat-heading"><h2>小宇</h2><p>{loading ? '正在查看课程内容…' : '结合本段讲稿回答'}</p></div>
+      <div className="um-course-chat-heading"><h2>小宇</h2></div>
       <DropdownMenu onOpenChange={value => { if (value) void handleRefreshSessions(); }}>
         <DropdownMenuTrigger asChild><button type="button" className="um-course-assistant-icon" aria-label="本课对话" title="本课对话" disabled={!initialized}><ClockCounterClockwise size={18} /></button></DropdownMenuTrigger>
         <DropdownMenuContent className="um-course-chat-history" align="end">
@@ -230,7 +230,7 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
       : <>
         <AgentReplyContext.Provider value={{ onReply: send }}>
           <div className="um-course-chat-messages" ref={scrollRef} aria-live="polite">
-            {!messages.length && <div className="um-course-chat-empty"><p>哪里没听懂，直接问我</p><span>我会结合截图和这段课程的讲稿来回答。</span>
+            {!messages.length && <div className="um-course-chat-empty"><p>哪里没听懂，直接问我</p>
               <div className="um-course-chat-suggestions"><button type="button" onClick={() => send('请解释一下这里的核心概念。')}>解释这一步</button><button type="button" onClick={() => send('结合这里的讲解，举一个简单的例子。')}>举个例子</button></div>
             </div>}
             {visibleMessages.map((message, index) => {
@@ -240,12 +240,12 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
                 : undefined;
               return <div className="um-course-chat-message" key={message._id ?? message.id ?? index}>
                 {anchor && message.role === 'user' && <button type="button" className="um-course-chat-time" onClick={() => onSeek(anchor.video_seconds)} aria-label={`回到提问位置 ${formatDuration(anchor.video_seconds)}`}><Clock size={13} />{formatDuration(anchor.video_seconds)}</button>}
-                {anchor?.visual && message.role === 'user' && <CourseVisualPreview visual={anchor.visual} compact />}
+                {anchor?.visual && message.role === 'user' && <CourseVisualPreview visual={anchor.visual} />}
                 {message.toolStep ? <ToolStepMessage step={message.toolStep} /> : <>
                   {(message.metadata?.dsh_cards as VisualData[] | undefined)?.map((visual, cardIndex) => <InlineVisualCard key={cardIndex} visual={visual} />)}
                   <ChatBubble native compact msg={message} isUser={message.role === 'user'} index={index} streaming={message.streaming} markdownComponents={courseCitationComponents(message.metadata?.course_context, courseId, onSeek)} />
                 </>}
-                {anchor?.start_seconds !== undefined && anchor.end_seconds !== undefined && message.role === 'assistant' && <button type="button" className="um-course-chat-source" onClick={() => onSeek(anchor.start_seconds!)}><Clock size={13} />讲稿参考 {formatDuration(anchor.start_seconds)}–{formatDuration(anchor.end_seconds)} · 点击回看</button>}
+                {anchor?.start_seconds !== undefined && anchor.end_seconds !== undefined && message.role === 'assistant' && <button type="button" className="um-course-chat-source" onClick={() => onSeek(anchor.start_seconds!)}><Clock size={13} />讲稿参考 {formatDuration(anchor.start_seconds)}–{formatDuration(anchor.end_seconds)}</button>}
                 {anchor && message.role === 'assistant' && !message.toolStep && message.id && !message.streaming && <div className="um-course-chat-note">
                   {noteId ? <Link to={`/notes/${noteId}`}><NotePencil size={13} />打开笔记</Link>
                     : <button type="button" disabled={savingNote !== null} onClick={() => void saveNote(message.id!)}><NotePencil size={13} />{savingNote === message.id ? '正在保存…' : '存为笔记'}</button>}
@@ -260,16 +260,16 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
           {draft.textOnly ? <p>已选择仅用讲稿提问。</p> : <button type="button" disabled={loading} onClick={() => { if (draftRef.current) updateDraft({ ...draftRef.current, textOnly: true }); }}>仅用讲稿提问</button>}
         </div>}
         <form className="um-course-chat-composer" onSubmit={event => { event.preventDefault(); send(input, true); }}>
-          <div className="um-course-chat-fragment"><span><Clock size={14} />{input.trim() && selectedPosition !== null
+          {input.trim() && <div className="um-course-chat-fragment"><span><Clock size={14} />{selectedPosition !== null
             ? `已固定 ${formatDuration(Math.max(0, selectedPosition - 30))}–${formatDuration(selectedPosition + 30)}`
-            : input.trim() ? '请重新选择提问片段' : '输入时固定提问片段'}</span>
+            : '未选择提问片段'}</span>
             <div>{input.trim() && selectedPosition !== null && <button type="button" disabled={loading} onClick={() => onSeek(Math.max(0, selectedPosition - 30))}>回看</button>}
               <button type="button" disabled={loading || !input.trim()} onClick={() => { updateDraft(freeze()); }}>改问当前片段</button></div>
-          </div>
+          </div>}
           <div className="um-course-chat-field">
             <textarea ref={composerRef} value={input} onChange={event => editDraft(event.target.value)} disabled={loading} aria-label="向小宇提问" placeholder="问问这段课程…" rows={2}
               onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && (sendShortcut === 'enter' || event.ctrlKey || event.metaKey)) { event.preventDefault(); send(input, true); } }} />
-            <div className="um-course-chat-send-row"><span>{sendShortcut === 'enter' ? 'Enter 发送 · Shift+Enter 换行' : '⌘ / Ctrl+Enter 发送'}</span>
+            <div className="um-course-chat-send-row">
               <button type="submit" disabled={loading || !input.trim() || (!draft?.visual && !draft?.textOnly)} aria-label="发送课程问题"><ArrowUp size={18} /></button></div>
           </div>
         </form>
@@ -279,8 +279,8 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
   </div>;
 }
 
-function CourseVisualPreview({ visual, compact = false }: { visual: CourseVisual; compact?: boolean }) {
-  return <details className="um-course-visual" open={compact ? undefined : true}>
+function CourseVisualPreview({ visual }: { visual: CourseVisual }) {
+  return <details className="um-course-visual">
     <summary><img src={visual.current.image} alt="提问画面缩略图" />画面 {formatDuration(visual.current.video_seconds)} · 查看原图</summary>
     <div className="um-course-visual-content">
       <img src={visual.current.image} alt={`提问时的完整画面 ${formatDuration(visual.current.video_seconds)}`} />
