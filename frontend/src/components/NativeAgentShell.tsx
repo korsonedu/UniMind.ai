@@ -6,11 +6,14 @@ import { useDirectoryWidth } from '@/hooks/useDirectoryWidth';
 import { DirectoryResizeHandle } from './DirectoryResizeHandle';
 import { WorkspaceTrail } from './WorkspaceTrail';
 
-interface Props { native?: boolean; sidebar?: ReactNode; onNew: () => void; children: ReactNode; title?: string; label?: string; action?: ReactNode; }
+export interface AgentWorkspace { active: boolean; header: ReactNode; activity: ReactNode; chatContext?: ReactNode; }
+
+interface Props { workspace?: AgentWorkspace; native?: boolean; sidebar?: ReactNode; onNew: () => void; children: ReactNode; title?: string; label?: string; action?: ReactNode; }
 
 /** Opt-in presentation; the existing Agent runtime and workbench keep their behavior. */
-export function NativeAgentShell({ native, sidebar, onNew, children, title = '新对话', label = '小宇', action }: Props) {
+export function NativeAgentShell({ native, sidebar, onNew, children, title = '新对话', label = '小宇', action, workspace }: Props) {
   const [open, setOpen] = useState(false);
+  const [mobileChat, setMobileChat] = useState(false);
   const directory = useDirectoryWidth();
   if (!native) return <div className="h-full flex um-motion-surface animate-in fade-in duration-[180ms] ease-out">{sidebar}{children}</div>;
   return <div className="um-native-agent um-agent-workspace" data-directory-hidden={directory.collapsed} data-directory-animated={directory.animated || undefined}>
@@ -35,7 +38,12 @@ export function NativeAgentShell({ native, sidebar, onNew, children, title = '�
         </div>
         <div className="um-agent-toolbar-actions">{action}<button className="um-agent-icon-button um-agent-toolbar-new" onClick={onNew} aria-label="新对话" title="新对话"><Plus size={17} /></button></div>
       </WorkspaceToolbar>
-      {children}
+      {workspace?.header}
+      <div className="um-agent-work-panels" data-activity={!!workspace?.active} data-mobile-chat={mobileChat}>
+        <section className="um-agent-activity" aria-label="当前学习活动" hidden={!workspace?.active}>{workspace?.activity}</section>
+        <div className="um-agent-conversation" aria-label="小宇对话">{workspace?.chatContext}{children}</div>
+      </div>
+      {workspace?.active && <button className="um-work-mobile-chat um-agent-button" onClick={() => setMobileChat(value => !value)}>{mobileChat ? '回到学习活动' : '与小宇对话'}</button>}
     </section>
   </div>;
 }

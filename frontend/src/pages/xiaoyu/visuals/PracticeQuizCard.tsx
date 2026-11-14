@@ -224,6 +224,7 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
         <option value="unknown">尚未说明</option><option value="independent">独立作答</option><option value="hint">获得提示</option><option value="guided">逐步引导完成</option>
       </select>
     </label>}
+    {payload.learning_task_id && draft.assistance === 'unknown' && <p className="um-learning-muted">本次成绩会保存；帮助程度尚未说明，暂不计入独立表现。</p>}
     {error && <p className="um-inline-practice-error" role="alert">{error}</p>}
     {!draft.examId && submission.isPending && <p>正在读取提交状态…</p>}
     {!draft.examId && submission.isError && <p role="alert">暂时无法读取提交状态。<button type="button" onClick={() => void submission.refetch()}>重试读取</button></p>}

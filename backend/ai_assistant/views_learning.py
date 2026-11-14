@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from users.permissions import IsMember
-from .models import ConversationProject
+from .models import ConversationProject, Conversation
 from .services.project_learning import change_learning, learning_data
 from .services.learning_resources import find_resources
 
@@ -13,11 +13,16 @@ class ProjectLearningView(APIView):
 
     def get(self, request, pk):
         project = get_object_or_404(ConversationProject, pk=pk, user=request.user)
+        if request.query_params.get('conversation_id'):
+            conversation_id = serializers.UUIDField().run_validation(request.query_params['conversation_id'])
+            if Conversation.objects.filter(conversation_id=conversation_id).exclude(user=request.user, project=project).exists():
+                from django.http import Http404
+                raise Http404
         return Response(learning_data(project))
 
     def patch(self, request, pk):
         project = get_object_or_404(ConversationProject, pk=pk, user=request.user)
-        if request.data.get('action') not in ('pause', 'resume', 'complete', 'schedule', 'accept', 'reject', 'reminders'):
+        if request.data.get('action') not in ('pause', 'resume', 'complete', 'schedule', 'accept', 'reject', 'reminders', 'focus'):
             raise serializers.ValidationError('学习进展通过当前项目对话记录。')
         return Response(change_learning(project, request.data))
 

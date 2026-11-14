@@ -122,7 +122,7 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
     const selectionVersion = chatRef.current.getSelectionVersion();
     setOpeningProject(true);
     try {
-      const { data } = await api.get<ProjectLearning>(`/ai/projects/${id}/learning/`);
+      const { data } = await api.get<ProjectLearning>(`/ai/projects/${id}/learning/`, { params: explicitConversation ? { conversation_id: explicitConversation } : undefined });
       const current = chatRef.current;
       if (!current.bot || sequence !== openSequence.current || chatRef.current.getSelectionVersion() !== selectionVersion || useAuthStore.getState().user?.id !== userId) return;
       const saved = readRecovery(recoveryScope(userId, current.bot.id));
@@ -136,13 +136,14 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
       const sessions = current.groupIntoSessions(messages);
       const candidates = sessions.filter(session => session.projectId === id);
       const target = selectedId ? candidates.find(session => session.conversationId === selectedId) : candidates.at(-1);
-      if (explicitConversation && !target) throw new Error('这段对话不属于当前项目，或已删除。');
+      if (explicitConversation && !target && messages.length) throw new Error('这段对话不属于当前项目，或已删除。');
       if (target) {
         current.setSessions(previous => [...previous.filter(item => item.conversationId !== target.conversationId), target]);
         current.handleLoadSession(target, false, true);
       } else {
         current.handleReset(false);
-        if (draftEntry && !messages.length) current.setConversationId(draftEntry[0]);
+        if (explicitConversation && !messages.length) current.setConversationId(explicitConversation);
+        else if (draftEntry && !messages.length) current.setConversationId(draftEntry[0]);
         current.setProjectId(id);
         if (draftEntry?.[1].draft && !messages.length) current.setInput(draftEntry[1].draft);
         if (draft) current.setInput(draft);

@@ -13,7 +13,7 @@ from rest_framework.exceptions import APIException, PermissionDenied, Validation
 from ai_assistant.models import AIChatMessage, Conversation
 from ai_assistant.services.title_generator import sync_generate_title
 from ai_assistant.services.memory_service import extract_memories_async
-from ai_assistant.views_projects import save_new_conversation_project
+from ai_assistant.views_projects import save_new_conversation_project, learning_activity_metadata
 from notes.context import prepare_note_context, conversation_uses_notes
 from notes.awareness import note_message_metadata
 from users.learning import confirm_ai_call, finish_ai_call, release_ai_call
@@ -92,7 +92,7 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
             session_id = previous.metadata.get('dsh_session_id') if previous else None
             current = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=conversation_id,
                 role='user', content=message,
-                metadata=note_message_metadata(notes, sources, request.data.get('note_selection', '')))
+                metadata={**note_message_metadata(notes, sources, request.data.get('note_selection', '')), **learning_activity_metadata(request, conversation_id)})
             if course_context:
                 current.metadata['course_context'] = course_context
                 current.save(update_fields=['metadata'])

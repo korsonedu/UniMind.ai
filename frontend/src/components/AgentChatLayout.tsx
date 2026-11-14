@@ -23,7 +23,7 @@ import type { Icon } from '@phosphor-icons/react';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
 import { AgentReplyContext } from '@/pages/xiaoyu/visuals/agentReplyContext';
 import { TaskList } from '@/components/TaskList';
-import { NativeAgentShell } from '@/components/NativeAgentShell';
+import { NativeAgentShell, type AgentWorkspace } from '@/components/NativeAgentShell';
 import { useConversationProjects, type ConversationProjectControls } from '@/hooks/useConversationProjects';
 import { Link } from 'react-router-dom';
 import { useChatUnreadStore } from '@/store/useChatUnreadStore';
@@ -54,6 +54,7 @@ export interface RightPanelProps {
 }
 
 export interface AgentChatLayoutProps {
+  workspace?: AgentWorkspace;
   appearance?: 'native';
   // Skills
   skills: Skill[];
@@ -162,7 +163,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     inputTourClass,
     sidebar,
     onSessionsReady,
-    appearance,
+    appearance, workspace,
   } = props;
 
   const setPageHeader = useSystemStore(state => state.setPageHeader);
@@ -404,7 +405,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
   if (!hasConversation && appearance === 'native') {
     return <TooltipProvider delayDuration={300}>
-      <NativeAgentShell native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || '新对话'}>
+      <NativeAgentShell workspace={workspace} native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || '新对话'}>
         {contextPanel?.({ bot, conversationId })}
         <div className="um-agent-landing">
           <section className="um-agent-start" aria-label="开始对话">
@@ -569,7 +570,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (layout === 'inline') {
     return (
       <TooltipProvider delayDuration={300}>
-        <NativeAgentShell native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || '新对话'}>
+        <NativeAgentShell workspace={workspace} native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || '新对话'}>
           {contextPanel?.({ bot, conversationId })}
 
           <div className={cn("flex-1 min-w-0 flex flex-col bg-white", appearance === 'native' && 'um-agent-chat-body')}>
