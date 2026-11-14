@@ -97,6 +97,7 @@ INSTALLED_APPS = [
     "core",
     "payments",
     "backoffice",
+    "knowledge_builder",
 ]
 # 企业版裁剪：ENABLED_APPS 非空时只保留列出的模块（django/channels/rest 等基础 app 始终保留）
 if ENABLED_APPS is not None:
@@ -508,6 +509,7 @@ CELERY_TASK_QUEUES = (
 )
 
 CELERY_TASK_ROUTES = {
+    "knowledge_builder.tasks.build_knowledge_tree": {"queue": "low_priority"},
     # ── high_priority ──
     "ai_assistant.tasks.record_trajectory_async": {"queue": "high_priority"},
     "ai_assistant.tasks.generate_conversation_title": {"queue": "high_priority"},

@@ -96,6 +96,8 @@ if _APP_ON('notifications'):
     urlpatterns.append(path("api/notifications/", include("notifications.urls")))
 if _APP_ON('payments'):
     urlpatterns.append(path("api/payments/", include("payments.urls")))
+if _APP_ON('knowledge_builder'):
+    urlpatterns.append(path("api/knowledge-builder/", include("knowledge_builder.urls")))
 # API v1 (external, API Key auth)
 from users.views_institution import RetiredInstitutionView
 urlpatterns += [
