@@ -15,6 +15,8 @@
 .um-learning-work-status strong { font-weight:600; font-size:14px; }
 .um-learning-work-status span, .um-learning-work-status p { font-size:12px; color:var(--um-color-text-muted); }
 .um-learning-work-status p { margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:70vw; }
+.um-learning-work-status .um-learning-work-next { display:flex; gap:10px; align-items:baseline; }
+.um-learning-work-next strong { min-width:0; overflow:hidden; text-overflow:ellipsis; color:var(--um-color-text); font-size:16px; }
 .um-learning-work-header > nav { display:flex; gap:18px; width:100%; overflow-x:auto; }
 .um-learning-work-header > nav button { flex:none; display:inline-flex; align-items:center; gap:6px; padding:10px 0; border-bottom:2px solid transparent; font-size:12px; color:var(--um-color-text-muted); }
 .um-learning-work-header > nav button[aria-pressed=true] { color:var(--um-color-accent); border-color:var(--um-color-accent); }
@@ -28,6 +30,13 @@
 .um-work-section-heading p, .um-work-scope { font-size:12px; color:var(--um-color-text-muted); }
 .um-work-section-heading h2 { margin:0; }
 .um-work-view .um-learning-task-detail { border:0; padding:0; margin:0; }
+.um-work-view .um-learning-task-detail > h4 { font-size:20px; font-weight:600; line-height:1.4; }
+.um-work-view .um-inline-practice { padding:0; }
+.um-work-view .um-inline-practice-header { margin-bottom:12px; }
+.um-work-view .um-inline-practice-header h3 { display:none; }
+.um-work-view .um-inline-practice[data-single-question=true] :is(.um-inline-practice-nav,.um-inline-practice-progress,.um-inline-practice-segments,.um-inline-practice-question > .um-inline-practice-caption,.um-inline-practice-footer > div) { display:none; }
+.um-work-view .um-inline-practice-options button p { margin:0; }
+.um-work-view .um-inline-practice-footer { margin-top:16px; justify-content:flex-end; }
 .um-work-master-detail { display:grid; grid-template-columns:minmax(130px,32%) minmax(0,1fr); min-height:220px; gap:22px; margin:20px 0; }
 .um-work-master-detail nav { display:flex; flex-direction:column; align-self:start; gap:4px; }
 .um-work-master-detail nav button { display:flex; align-items:center; gap:8px; padding:10px; text-align:left; font-size:13px; border-radius:6px; }

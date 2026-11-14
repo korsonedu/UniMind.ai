@@ -54,7 +54,7 @@ def teaching_guidance(state, tasks, *, progress_at=None, focus_task_id=None):
                 'next_action': '先恢复这次未完成的评价，已成功的部分继续保留。',
                 'reason': '评价失败或部分完成不代表答错，也不触发重复记分。'}
     completed = sorted((task for task in tasks if task['status'] == 'completed'), key=_time)
-    ready = [task for task in tasks if task['status'] == 'ready']
+    ready = sorted((task for task in tasks if task['status'] == 'ready'), key=lambda task: task['created_at'], reverse=True)
     if not completed:
         task = next((task for task in ready if task.get('purpose') == 'diagnostic'), ready[0] if ready else None)
         return {**result, 'task_id': task['id'] if task else None, 'stage_id': task['stage_id'] if task else state.current_stage,

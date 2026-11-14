@@ -59,6 +59,17 @@ export function useLearningWorkspace() {
   const task = tasks.find(item => item.id === selection.task);
   const guidance = project?.teaching_guidance;
   const mainTask = tasks.find(item => item.id === guidance?.task_id);
+  const taskRoot = (id: string | undefined) => {
+    let current = tasks.find(item => item.id === id);
+    while (current?.source_task_id) {
+      const parent = tasks.find(item => item.id === current?.source_task_id);
+      if (!parent) break;
+      current = parent;
+    }
+    return current?.id;
+  };
+  const onMainline = !!task && task.is_current !== false && task.stage_id === project?.current_stage
+    && taskRoot(task.id) === taskRoot(project?.focus_task_id || mainTask?.id);
   const stages = project?.plan.stages || [];
   const stage = stages.find(item => item.id === (stageId || project?.current_stage)) || stages[0];
   const currentStage = stages.find(item => item.id === project?.current_stage);
@@ -133,9 +144,9 @@ export function useLearningWorkspace() {
     finally { setBusy(false); }
   };
   const activityOpen = selection.view !== 'chat';
-  const primaryLabel = project?.status === 'paused' || project?.status === 'completed' ? '恢复学习' : mainTask ? guidance?.status === 'remediate' ? '查看缺口' : guidance?.status === 'awaiting' ? '查看评价进度' : '继续当前任务' : project?.status === 'preparing' ? '和小宇明确起点' : '请小宇接续';
+  const primaryLabel = project?.status === 'paused' || project?.status === 'completed' ? '恢复学习' : mainTask ? guidance?.status === 'remediate' ? mainTask.summary ? '复盘这次作答' : '开始补救任务' : guidance?.status === 'awaiting' ? '查看评价进度' : '继续当前任务' : project?.status === 'preparing' ? '和小宇明确起点' : '请小宇接续';
   const header = project ? <header className="um-learning-work-header">
-    <div className="um-learning-work-status"><div><strong>{project.name}</strong><span>{project.planning_enabled ? project.status === 'paused' ? '已暂停' : project.status === 'completed' ? '已结束' : guidanceLabels[guidance?.status || 'start'] : '自由对话'}</span></div><p title={project.plan.goal || project.instructions}>{project.plan.goal || project.instructions || '从当前的问题开始'}</p>{project.planning_enabled && <p>{currentStage?.title && `${currentStage.title} · `}{guidance?.next_action || '和小宇了解起点'}</p>}</div>
+    <div className="um-learning-work-status"><div><strong>{project.name}</strong><span>{project.planning_enabled ? project.status === 'paused' ? '已暂停' : project.status === 'completed' ? '已结束' : guidanceLabels[guidance?.status || 'start'] : '自由对话'}</span></div><p title={project.plan.goal || project.instructions}>{project.plan.goal || project.instructions || '从当前的问题开始'}</p>{project.planning_enabled && <><p>当前阶段：{currentStage?.title || '起点待了解'}</p><p className="um-learning-work-next" title={guidance?.next_action}><span>下一步</span><strong>{mainTask?.title || guidance?.next_action || '和小宇了解起点'}</strong></p></>}</div>
     {project.planning_enabled && !(selection.view === 'task' && mainTask?.id === task?.id) && <button className="um-agent-button um-agent-button-primary" disabled={busy || openingProject} onClick={() => void continueLearning()}>{primaryLabel}<ArrowRight size={15} /></button>}
     <nav aria-label="项目学习视图">{navigation.map(item => <button key={item.view} aria-pressed={selection.view === item.view} onClick={() => show(item.view)}><item.icon size={16} />{item.title}</button>)}</nav>
     {project.pending_plan.plan && <button className="um-work-pending" onClick={() => show('proposal')}>有学习范围调整待确认 <ArrowRight size={14} /></button>}
@@ -144,10 +155,10 @@ export function useLearningWorkspace() {
     {!chat.projectId ? <section className="um-work-empty"><BookOpen size={30} /><h2>从已有项目继续</h2><p>选择项目后查看它的学习安排与知识关系。</p>{projectsQuery.data?.map(item => <button className="um-agent-button" key={item.id} onClick={() => void openProject(item.id)}>{item.name}</button>)}<Link to="/xiaoyu?new=project">创建学习项目</Link></section>
       : openingProject || query.isPending ? <p role="status">正在读取当前项目…</p> : query.isError || !project ? <p role="alert">项目暂时无法读取。<button onClick={() => void query.refetch()}>重试</button></p> : <>
       <div className="um-work-view" hidden={selection.view !== 'task'}>
-        <header className="um-work-section-heading"><button className="um-agent-button" onClick={() => show(selection.returnView)}><ArrowLeft size={15} />返回{selection.returnView === 'knowledge' ? '知识关系' : selection.returnView === 'chat' ? '对话' : '任务记录'}</button>
-          {task?.is_current !== false && task && active && task.id !== mainTask?.id && <button className="um-agent-button" disabled={busy} onClick={() => void act('focus', { task_id: task.id })}>改为本次学习</button>}</header>
-        {task && task.id !== mainTask?.id && <p className="um-work-scope">正在查看其他任务，当前学习主线保持不变。</p>}
-        {tasksQuery.isPending ? <p role="status">正在读取任务…</p> : tasksQuery.isError ? <p role="alert">任务无法读取。<button onClick={() => void tasksQuery.refetch()}>重试</button></p> : !task ? <p>这项任务不在当前项目中，或已不可用。</p> : <LearningTaskDetail active={selection.view === 'task'} project={project} task={task} tasks={tasks} refresh={refresh} onSelect={id => id && openTask(id)} onClose={() => show('chat')} onStudy={() => ask('请读取当前查看任务已评价的原作答、标准和反馈，解释具体缺口并给出下一步。需要复测时关联原任务，准备不同内容，不代我作答。', { task_id: task.id })} />}
+        <header className="um-work-section-heading"><button className="um-agent-button" onClick={() => show(selection.returnView)}><ArrowLeft size={15} />返回{navigation.find(item => item.view === selection.returnView)?.title || '任务记录'}</button>
+          {task?.is_current !== false && task && active && !onMainline && <button className="um-agent-button" disabled={busy} onClick={() => void act('focus', { task_id: task.id })}>改为本次学习</button>}</header>
+        {task && !onMainline && <p className="um-work-scope">正在查看其他任务，当前学习主线保持不变。</p>}
+        {tasksQuery.isPending ? <p role="status">正在读取任务…</p> : tasksQuery.isError ? <p role="alert">任务无法读取。<button onClick={() => void tasksQuery.refetch()}>重试</button></p> : !task ? <p>这项任务不在当前项目中，或已不可用。</p> : <LearningTaskDetail active={selection.view === 'task'} project={project} task={task} tasks={tasks} refresh={refresh} onSelect={id => id && openTask(id)} onClose={() => show('chat')} onStudy={() => ask('请读取当前查看任务已评价的原作答、标准和反馈，只用两小段说明具体卡点和接下来的一项行动。已有适合的补救或复测任务时直接接续；没有时再关联原任务准备不同内容，等待我实际作答。', { task_id: task.id })} />}
       </div>
       <div className="um-work-view" hidden={selection.view !== 'knowledge'}><LearningKnowledgeView project={project} selected={selection.node} onSelect={id => { clearDiscussion(); setSelection(previous => ({ ...previous, node: id })); }} onStudy={ask} onTask={id => openTask(id, 'knowledge')} /></div>
       <div className="um-work-view" hidden={selection.view !== 'path'}><h2>学习路径</h2><p>当前：{currentStage?.title || '起点待了解'}。查看其他阶段不会改变学习主线。</p><div className="um-work-master-detail"><nav aria-label="学习阶段">{stages.map((item, index) => <button key={item.id} aria-pressed={item.id === stage?.id} onClick={() => { clearDiscussion(); setStageId(item.id); }}><span>{index + 1}</span>{item.title}{item.id === project.current_stage && <small>当前</small>}</button>)}</nav><section>{stage ? <><h3>{stage.title}</h3><p>{stage.outcome}</p><p>{stage.task}</p><p>前置：{stage.prerequisites.map(id => stages.find(item => item.id === id)?.title || id).join('、') || '无'}</p>{tasks.filter(item => item.stage_id === stage.id && item.is_current !== false).map(item => <button className="um-agent-button" key={item.id} onClick={() => openTask(item.id, 'path')}>{item.title}</button>)}</> : <><p>先与小宇明确可以开始的一段学习。</p>{project.planning_enabled && !project.instructions.trim() && <button className="um-agent-button" disabled={busy} onClick={() => void setupSample()}>体验函数基础样板</button>}</>}</section></div><details className="um-work-preferences"><summary>项目安排</summary><label>主动提醒<Switch checked={project.reminders_enabled} disabled={busy || !project.planning_enabled} onCheckedChange={enabled => void act('reminders', { enabled })} /></label>{project.planning_enabled && <button className="um-agent-button" disabled={busy || project.status === 'preparing'} onClick={() => void act(active ? 'pause' : 'resume')}>{active ? '暂停学习' : '恢复学习'}</button>}{active && <button className="um-agent-button" disabled={busy} onClick={() => void act('complete')}>结束当前目标</button>}</details></div>

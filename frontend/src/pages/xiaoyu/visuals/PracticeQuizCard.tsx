@@ -169,7 +169,7 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
 
   if (!question) return null;
 
-  return <section className="um-inline-practice" aria-label={payload.title || '随堂练习'}
+  return <section className="um-inline-practice" data-single-question={questions.length === 1 || undefined} aria-label={payload.title || '随堂练习'}
     onFocusCapture={event => {
       if (!(event.target as HTMLElement).closest('[data-practice-toggle]')) activate();
     }}>
