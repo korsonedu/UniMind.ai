@@ -10,8 +10,8 @@ import '@/styles/notes.css';
 
 const blankNote = (): Note => ({ id: 0, title: '', content: '', notebook: null, tags: [], is_favorite: false, version: 1, deleted_at: null, updated_at: '', backlinks: [] });
 
-export default function NotesSidebar({ userId, initialNoteId, visible, onSelect, onClose }: {
-  userId: number; initialNoteId: number | null; visible: boolean; onSelect: (id: number | null) => void; onClose: () => void;
+export default function NotesSidebar({ userId, initialNoteId, openRequest, visible, onSelect, onClose }: {
+  userId: number; initialNoteId: number | null; openRequest?: { id: number; sequence: number } | null; visible: boolean; onSelect: (id: number | null, title?: string) => void; onClose: () => void;
 }) {
   const navigate = useNavigate();
   const [items, setItems] = useState<Note[]>([]);
@@ -37,7 +37,8 @@ export default function NotesSidebar({ userId, initialNoteId, visible, onSelect,
     setMessage('');
     setItems(current => [value, ...current.filter(item => item.id !== value.id)]);
     void cacheNote(userId, value);
-  }, [userId]);
+    onSelect(value.id, value.title);
+  }, [userId, onSelect]);
   const { note, dirty, status, error, load, change, flush } = useNoteSave(onSaved);
   const currentId = useRef<number | null>(null);
   const ownsSession = () => active.current && useAuthStore.getState().user?.id === userId;
@@ -88,7 +89,7 @@ export default function NotesSidebar({ userId, initialNoteId, visible, onSelect,
           const id = result.find(item => item.id === firstNoteId.current)?.id ?? result[0]?.id;
           const next = id ? await readNote(id) : null;
           if (cancelled) return;
-          load(next); currentId.current = next?.id ?? null; onSelect(next?.id ?? null);
+          load(next); currentId.current = next?.id ?? null; onSelect(next?.id ?? null, next?.title);
           initialized.current = true;
         }
       } catch { if (!cancelled) setListError('笔记加载失败，请重试。你仍可以先写下内容。'); }
@@ -105,7 +106,7 @@ export default function NotesSidebar({ userId, initialNoteId, visible, onSelect,
       try {
         const result = await notesApi.create(null, noteDraft(draftRef.current));
         if (!ownsSession()) return;
-        load(result); currentId.current = result.id; onSelect(result.id);
+        load(result); currentId.current = result.id; onSelect(result.id, result.title);
         change(noteDraft(draftRef.current));
         onSaved(result);
       } catch (cause) {
@@ -141,7 +142,7 @@ export default function NotesSidebar({ userId, initialNoteId, visible, onSelect,
     if (id !== currentId.current) {
       const next = await readNote(id);
       if (!ownsSession()) return;
-      load(next); currentId.current = next.id; onSelect(next.id); setEditorKey(value => value + 1);
+      load(next); currentId.current = next.id; onSelect(next.id, next.title); setEditorKey(value => value + 1);
       if (content.current) content.current.scrollTop = 0;
     }
     setPickerOpen(false);
@@ -154,6 +155,13 @@ export default function NotesSidebar({ userId, initialNoteId, visible, onSelect,
   });
   // Only the full note workspace replaces this editing session. Other pages keep it mounted.
   const blocker = useBlocker(({ nextLocation }) => nextLocation.pathname.startsWith('/notes') && (dirty || creating || switching || (!note && (!!draft.content.trim() || !!draft.title.trim()))));
+  const handledOpenRequest = useRef<number | null>(null);
+  const openRequestedNote = useEffectEvent((id: number) => { void open(id); });
+  useEffect(() => {
+    if (!visible || loading || switching || creating || blocker.state !== 'unblocked' || !openRequest || handledOpenRequest.current === openRequest.sequence) return;
+    handledOpenRequest.current = openRequest.sequence;
+    openRequestedNote(openRequest.id);
+  }, [openRequest, visible, loading, switching, creating, blocker.state]);
   const leaving = useRef(false);
   const saveForNavigation = useEffectEvent(save);
   useEffect(() => {
