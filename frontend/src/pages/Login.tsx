@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
@@ -17,6 +18,7 @@ type LoginTab = 'password' | 'code';
 export const Login: React.FC = () => window.unimindDesktop ? <DesktopLogin /> : <WebLogin />;
 
 const WebLogin: React.FC = () => {
+  useLocale();
   const [tab, setTab] = useState<LoginTab>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -79,7 +81,7 @@ const WebLogin: React.FC = () => {
       await fetchFeatures();
       navigate(returnTo, { replace: true });
     } catch (err: unknown) {
-      setError(formatApiErrorToast(err, '登录失败'));
+      setError(formatApiErrorToast(err, t('登录失败')));
     } finally {
       setLoading(false);
     }
@@ -90,7 +92,7 @@ const WebLogin: React.FC = () => {
   const handleSendCode = async () => {
     if (!email.trim()) return;
     if (!isValidEmail(email)) {
-      setError('请输入有效的邮箱地址');
+      setError(t('请输入有效的邮箱地址'));
       return;
     }
     setSendingCode(true);
@@ -102,24 +104,24 @@ const WebLogin: React.FC = () => {
       params.set('purpose', 'login_by_code');
       navigate(`/verify-code?${params}`);
     } catch (err: unknown) {
-      setError(formatApiErrorToast(err, '发送失败，请稍后重试'));
+      setError(formatApiErrorToast(err, t('发送失败，请稍后重试')));
       setSendingCode(false);
     }
   };
 
   return (
     <AuthLayout
-      title="欢迎回来"
-      subtitle={tab === 'password' ? '登录你的 UniMind 账号' : '新用户将自动创建账号'}
+      title={t('欢迎回来')}
+      subtitle={tab === 'password' ? t('登录你的 UniMind 账号') : t('新用户将自动创建账号')}
       footer={
         tab === 'password' ? (
           <p className="text-sm text-[#6E6E73] dark:text-white/40">
-            没有账号？
+            {t('没有账号？')}
             <Link
               to={`/register?${registerParams}`}
               className="text-[#1D1D1F] dark:text-white font-medium hover:underline ml-1"
             >
-              注册
+              {t('注册')}
             </Link>
           </p>
         ) : undefined
@@ -138,7 +140,7 @@ const WebLogin: React.FC = () => {
             }
           `}
         >
-          密码登录
+          {t('密码登录')}
         </button>
         <button
           type="button"
@@ -151,7 +153,7 @@ const WebLogin: React.FC = () => {
             }
           `}
         >
-          验证码登录
+          {t('验证码登录')}
         </button>
       </div>
 
@@ -166,7 +168,7 @@ const WebLogin: React.FC = () => {
       {/* Shared email field */}
       <div className="space-y-1.5 mb-4">
         <label htmlFor="login-email" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
-          邮箱
+          {t('邮箱')}
         </label>
         <Input
           id="login-email"
@@ -186,12 +188,12 @@ const WebLogin: React.FC = () => {
         <form onSubmit={handlePasswordLogin} className="space-y-4">
           <div className="space-y-1.5">
             <label htmlFor="login-password" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
-              密码
+              {t('密码')}
             </label>
             <Input
               id="login-password"
               type="password"
-              placeholder="输入密码"
+              placeholder={t('输入密码')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
@@ -206,7 +208,7 @@ const WebLogin: React.FC = () => {
             className="w-full h-12 rounded-xl font-semibold tracking-tight text-[15px]"
             disabled={loading}
           >
-            {loading ? '登录中...' : '登录'}
+            {loading ? t('登录中...') : t('登录')}
           </Button>
         </form>
       )}
@@ -221,10 +223,10 @@ const WebLogin: React.FC = () => {
             disabled={sendingCode || !email.trim()}
             onClick={handleSendCode}
           >
-            {sendingCode ? <Spinner className="h-4 w-4 animate-spin" /> : '发送验证码'}
+            {sendingCode ? <Spinner className="h-4 w-4 animate-spin" /> : t('发送验证码')}
           </Button>
           <p className="text-xs text-[#AEAEB2] dark:text-white/25 text-center pt-1">
-            未注册邮箱自动创建账号，验证码 10 分钟内有效
+            {t('未注册邮箱自动创建账号，验证码 10 分钟内有效')}
           </p>
         </div>
       )}
@@ -232,7 +234,7 @@ const WebLogin: React.FC = () => {
         <input type="hidden" name="csrfmiddlewaretoken" value={remembered.csrf_token} />
         <input type="hidden" name="next" value={returnTo} />
         <input type="hidden" name="account_id" value={remembered.user.id} />
-        <p className="text-xs text-muted-foreground mb-3">使用已有账号继续</p>
+        <p className="text-xs text-muted-foreground mb-3">{t('使用已有账号继续')}</p>
         <button type="submit" className="flex w-full items-center gap-3 rounded-xl border border-border p-4 text-left hover:bg-muted/50">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-muted text-lg" aria-hidden="true">{remembered.user.nickname.slice(0, 1)}</span>
           <span className="min-w-0 flex-1"><span className="block text-sm font-medium">{remembered.user.nickname}</span><span className="block truncate text-xs text-muted-foreground">{remembered.user.email}</span></span>

@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { noteDraft, notesApi, type Note, type NoteDraft } from '@/lib/notes';
@@ -5,6 +6,7 @@ import { flushOfflineOutbox, offlineCacheSupported, queueNoteSave, removeQueuedN
 import { useAuthStore } from '@/store/useAuthStore';
 
 export function useNoteSave(onSaved: (note: Note) => void) {
+  useLocale();
   const [documentKey, setDocumentKey] = useState(0);
   const [note, setNote] = useState<Note | null>(null);
   const [saving, setSaving] = useState(false);
@@ -100,5 +102,5 @@ export function useNoteSave(onSaved: (note: Note) => void) {
     window.addEventListener('beforeunload', protect);
     return () => window.removeEventListener('beforeunload', protect);
   }, []);
-  return { note, documentKey, dirty, status, error, load, change, flush, syncSaved };
+  return { note, documentKey, dirty, status: t(status), error: t(error), load, change, flush, syncSaved };
 }

@@ -1,3 +1,4 @@
+import { getLocale, t, useLocale } from '@/i18n';
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { ArrowLeft, ArrowSquareOut, CaretDown, Check, FileText, MagnifyingGlass, Plus, Star, X } from '@phosphor-icons/react';
 import { useBlocker, useNavigate } from 'react-router-dom';
@@ -13,6 +14,7 @@ const blankNote = (): Note => ({ id: 0, title: '', content: '', notebook: null, 
 export default function NotesSidebar({ userId, initialNoteId, openRequest, visible, onSelect, onClose }: {
   userId: number; initialNoteId: number | null; openRequest?: { id: number; sequence: number } | null; visible: boolean; onSelect: (id: number | null, title?: string) => void; onClose: () => void;
 }) {
+  useLocale();
   const navigate = useNavigate();
   const [items, setItems] = useState<Note[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -81,7 +83,7 @@ export default function NotesSidebar({ userId, initialNoteId, openRequest, visib
           const cached = await loadOfflineCache(userId);
           if (!cached) throw new Error('no-cache');
           result = cached.notes.filter(item => !item.deleted_at);
-          if (!cancelled) setListError('当前显示本地笔记，联网后可刷新。');
+          if (!cancelled) setListError(t('当前显示本地笔记，联网后可刷新。'));
         }
         if (cancelled) return;
         setItems(result);
@@ -92,7 +94,7 @@ export default function NotesSidebar({ userId, initialNoteId, openRequest, visib
           load(next); currentId.current = next?.id ?? null; onSelect(next?.id ?? null, next?.title);
           initialized.current = true;
         }
-      } catch { if (!cancelled) setListError('笔记加载失败，请重试。你仍可以先写下内容。'); }
+      } catch { if (!cancelled) setListError(t('笔记加载失败，请重试。你仍可以先写下内容。')); }
       finally { if (!cancelled) setLoading(false); }
     };
     void refreshNotes();
@@ -110,7 +112,7 @@ export default function NotesSidebar({ userId, initialNoteId, openRequest, visib
         change(noteDraft(draftRef.current));
         onSaved(result);
       } catch (cause) {
-        if (ownsSession()) setMessage('新笔记未能保存，文字仍在这里。请重试保存。');
+        if (ownsSession()) setMessage(t('新笔记未能保存，文字仍在这里。请重试保存。'));
         throw cause;
       } finally {
         creation.current = null;
@@ -135,7 +137,7 @@ export default function NotesSidebar({ userId, initialNoteId, openRequest, visib
     if (operation.current || loading || blocker.state !== 'unblocked') return;
     operation.current = true; setSwitching(true); setMessage('');
     try { await save(); if (ownsSession()) await work(); }
-    catch { if (ownsSession()) setMessage('操作未完成，当前内容已保留。请检查网络或保存状态后重试。'); }
+    catch { if (ownsSession()) setMessage(t('操作未完成，当前内容已保留。请检查网络或保存状态后重试。')); }
     finally { operation.current = false; if (ownsSession()) setSwitching(false); }
   };
   const open = (id: number) => run(async () => {
@@ -168,7 +170,7 @@ export default function NotesSidebar({ userId, initialNoteId, openRequest, visib
     if (blocker.state !== 'blocked' || switching || leaving.current) return;
     leaving.current = true;
     void saveForNavigation().then(() => blocker.proceed()).catch(() => {
-      setMessage('保存未完成，请重试后再打开完整笔记。'); blocker.reset();
+      setMessage(t('保存未完成，请重试后再打开完整笔记。')); blocker.reset();
     }).finally(() => { leaving.current = false; });
   }, [blocker, switching]);
   const disabled = loading || switching || creating || blocker.state !== 'unblocked';
@@ -176,33 +178,33 @@ export default function NotesSidebar({ userId, initialNoteId, openRequest, visib
   const matches = [ ...(note ? [note] : []), ...items.filter(item => item.id !== note?.id) ]
     .filter(item => (!favorites || item.is_favorite) && `${item.title}\n${item.content}`.toLowerCase().includes(query.trim().toLowerCase()));
 
-  return <aside className="um-notes-sidebar notes-workspace" aria-label="笔记侧栏" onKeyDown={event => { if (event.key === 'Escape' && pickerOpen && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation(); setPickerOpen(false); } }}>
+  return <aside className="um-notes-sidebar notes-workspace" aria-label={t('笔记侧栏')} onKeyDown={event => { if (event.key === 'Escape' && pickerOpen && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation(); setPickerOpen(false); } }}>
     <header className="um-notes-sidebar-header">
-      <strong>笔记</strong>
-      <button type="button" aria-label="新建笔记" title="新建笔记" disabled={disabled} onClick={() => void newNote()}><Plus size={18} /></button>
-      <button type="button" aria-label="打开完整笔记" title="在完整页面中整理" disabled={disabled} onClick={() => void run(() => navigate(currentId.current ? `/notes/${currentId.current}` : '/notes'))}><ArrowSquareOut size={17} /></button>
-      <button type="button" onClick={onClose} aria-label="收起笔记" title="收起笔记，保留当前内容"><X size={18} /></button>
+      <strong>{t('笔记')}</strong>
+      <button type="button" aria-label={t('新建笔记')} title={t('新建笔记')} disabled={disabled} onClick={() => void newNote()}><Plus size={18} /></button>
+      <button type="button" aria-label={t('打开完整笔记')} title={t('在完整页面中整理')} disabled={disabled} onClick={() => void run(() => navigate(currentId.current ? `/notes/${currentId.current}` : '/notes'))}><ArrowSquareOut size={17} /></button>
+      <button type="button" onClick={onClose} aria-label={t('收起笔记')} title={t('收起笔记，保留当前内容')}><X size={18} /></button>
     </header>
     <div className="um-notes-document-bar">
-      <button type="button" className="um-notes-switch" aria-label={pickerOpen ? '返回当前笔记' : '切换笔记'} aria-expanded={pickerOpen} aria-controls="um-notes-picker" disabled={disabled} onClick={() => { setPickerOpen(value => !value); if (!pickerOpen) setRefresh(value => value + 1); }}>
-        <span>{pickerOpen ? '返回当前笔记' : displayed.title || '随手记'}</span>{pickerOpen ? <ArrowLeft size={14} /> : <CaretDown size={14} />}
+      <button type="button" className="um-notes-switch" aria-label={pickerOpen ? t('返回当前笔记') : t('切换笔记')} aria-expanded={pickerOpen} aria-controls="um-notes-picker" disabled={disabled} onClick={() => { setPickerOpen(value => !value); if (!pickerOpen) setRefresh(value => value + 1); }}>
+        <span>{pickerOpen ? t('返回当前笔记') : displayed.title || t('随手记')}</span>{pickerOpen ? <ArrowLeft size={14} /> : <CaretDown size={14} />}
       </button>
-      <span>{pickerOpen ? '切换笔记' : note ? '继续记录' : '输入后自动保存'}</span>
+      <span>{pickerOpen ? t('切换笔记') : note ? t('继续记录') : t('输入后自动保存')}</span>
     </div>
-    {(message || error) && <div role="alert" className="notes-save-error">{error || message}<button type="button" disabled={disabled} onClick={() => void run(() => {})}>重试保存</button></div>}
+    {(message || error) && <div role="alert" className="notes-save-error">{error || message}<button type="button" disabled={disabled} onClick={() => void run(() => {})}>{t('重试保存')}</button></div>}
     <div ref={content} className="um-notes-sidebar-content" hidden={pickerOpen} inert={switching || loading || blocker.state !== 'unblocked'} aria-busy={switching || loading}>
-      {loading ? <div className="um-notes-skeleton" role="status" aria-label="正在加载笔记"><i /><i /><i /></div> : <NoteEditor compact autoFocus={visible} key={editorKey} note={displayed} notebooks={[]} onChange={edit} onOpen={id => void open(id)} />}
+      {loading ? <div className="um-notes-skeleton" role="status" aria-label={t('正在加载笔记')}><i /><i /><i /></div> : <NoteEditor compact autoFocus={visible} key={editorKey} note={displayed} notebooks={[]} onChange={edit} onOpen={id => void open(id)} />}
     </div>
-    {pickerOpen && <section id="um-notes-picker" className="um-notes-picker" aria-label="选择笔记">
-      <label className="um-notes-search"><MagnifyingGlass size={16} /><input autoFocus aria-label="搜索笔记" placeholder="搜索标题或正文" value={query} onChange={event => setQuery(event.target.value)} />{query && <button type="button" aria-label="清空搜索" onClick={() => setQuery('')}><X size={14} /></button>}</label>
-      <div className="um-notes-picker-heading"><span>{query.trim() ? `${matches.length} 篇匹配` : favorites ? '收藏的笔记' : '最近编辑'}</span><button type="button" aria-pressed={favorites} onClick={() => setFavorites(value => !value)}><Star size={14} weight={favorites ? 'fill' : 'regular'} />收藏</button></div>
-      {listError && <p className="um-notes-list-error" role="status">{listError}<button type="button" onClick={() => setRefresh(value => value + 1)}>刷新</button></p>}
+    {pickerOpen && <section id="um-notes-picker" className="um-notes-picker" aria-label={t('选择笔记')}>
+      <label className="um-notes-search"><MagnifyingGlass size={16} /><input autoFocus aria-label={t('搜索笔记')} placeholder={t('搜索标题或正文')} value={query} onChange={event => setQuery(event.target.value)} />{query && <button type="button" aria-label={t('清空搜索')} onClick={() => setQuery('')}><X size={14} /></button>}</label>
+      <div className="um-notes-picker-heading"><span>{query.trim() ? t('{0} 篇匹配', { 0: matches.length }) : favorites ? t('收藏的笔记') : t('最近编辑')}</span><button type="button" aria-pressed={favorites} onClick={() => setFavorites(value => !value)}><Star size={14} weight={favorites ? 'fill' : 'regular'} />{t('收藏')}</button></div>
+      {listError && <p className="um-notes-list-error" role="status">{listError}<button type="button" onClick={() => setRefresh(value => value + 1)}>{t('刷新')}</button></p>}
       <div className="um-notes-results">{matches.map(item => <button type="button" className="um-notes-result" key={item.id} aria-current={note?.id === item.id ? 'true' : undefined} disabled={disabled} onClick={() => void open(item.id)}>
-        <div><strong>{item.title || '未命名笔记'}</strong>{note?.id === item.id ? <Check size={15} /> : item.is_favorite && <Star size={13} />}</div>
-        <span>{item.content.replace(/[#*`>]/g, '').slice(0, 100) || '还没有正文'}</span><small>{new Date(item.updated_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}</small>
-      </button>)}{!matches.length && <div className="um-notes-picker-empty"><FileText size={28} /><p>{query.trim() ? '没有找到相关笔记' : favorites ? '还没有收藏的笔记' : '还没有笔记'}</p><span>{query.trim() ? '换个关键词，或新建一篇记录。' : '点击右上角的 +，开始记录。'}</span></div>}</div>
+        <div><strong>{item.title || t('未命名笔记')}</strong>{note?.id === item.id ? <Check size={15} /> : item.is_favorite && <Star size={13} />}</div>
+        <span>{item.content.replace(/[#*`>]/g, '').slice(0, 100) || t('还没有正文')}</span><small>{new Date(item.updated_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}</small>
+      </button>)}{!matches.length && <div className="um-notes-picker-empty"><FileText size={28} /><p>{query.trim() ? t('没有找到相关笔记') : favorites ? t('还没有收藏的笔记') : t('还没有笔记')}</p><span>{query.trim() ? t('换个关键词，或新建一篇记录。') : t('点击右上角的 +，开始记录。')}</span></div>}</div>
     </section>}
-    {!pickerOpen && listError && <p className="um-notes-list-error">{listError}<button type="button" onClick={() => setRefresh(value => value + 1)}>刷新</button></p>}
-    <footer className="um-notes-sidebar-footer"><span role="status" data-error={!!(message || error)}><i />{loading ? '正在加载…' : creating ? '正在创建…' : message || error ? '内容已保留，尚未保存' : note ? status : '尚未创建笔记'}</span><span>关闭侧栏可继续学习</span></footer>
+    {!pickerOpen && listError && <p className="um-notes-list-error">{listError}<button type="button" onClick={() => setRefresh(value => value + 1)}>{t('刷新')}</button></p>}
+    <footer className="um-notes-sidebar-footer"><span role="status" data-error={!!(message || error)}><i />{loading ? t('正在加载…') : creating ? t('正在创建…') : message || error ? t('内容已保留，尚未保存') : note ? status : t('尚未创建笔记')}</span><span>{t('关闭侧栏可继续学习')}</span></footer>
   </aside>;
 }

@@ -11,6 +11,7 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 
 from ai_assistant.models import AIChatMessage, Conversation
+from ai_assistant.services.language import request_language
 from ai_assistant.services.title_generator import sync_generate_title
 from ai_assistant.services.memory_service import extract_memories_async
 from ai_assistant.views_projects import save_new_conversation_project
@@ -92,7 +93,8 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
             session_id = previous.metadata.get('dsh_session_id') if previous else None
             current = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=conversation_id,
                 role='user', content=message,
-                metadata=note_message_metadata(notes, sources, request.data.get('note_selection', '')))
+                metadata={**note_message_metadata(notes, sources, request.data.get('note_selection', '')),
+                          'ui_language': request_language(request)})
             if course_context:
                 current.metadata['course_context'] = course_context
                 current.save(update_fields=['metadata'])
@@ -116,7 +118,7 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                 title = Conversation.objects.get(user=user, conversation_id=conversation_id).title
                 needs_title = not title
                 if not title:
-                    title = ' '.join(message.split())[:15]
+                    title = ' '.join(message.split())[:80 if request_language(request) == 'en' else 15]
                 Conversation.objects.filter(user=user, conversation_id=conversation_id).update(title=title, updated_at=timezone.now())
                 payload = {'done': True, 'full_content': result['content'], 'message_id': answer.pk,
                     'user_message': user_event, 'conversation_title': title, 'metadata': metadata,

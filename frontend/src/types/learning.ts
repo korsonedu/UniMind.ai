@@ -1,3 +1,4 @@
+import { getLocale } from '@/i18n';
 export interface AIAddonProduct {
   id: number;
   name: string;
@@ -36,6 +37,6 @@ export interface LearningCatalog {
   products: AIAddonProduct[];
 }
 
-export const learningPrice = (cents: number) => new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(cents / 100);
-export const learningDate = (value: string) => new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', dateStyle: 'medium' }).format(new Date(value));
-export const learningReset = (value: string) => new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+export const learningPrice = (cents: number) => new Intl.NumberFormat(getLocale(), { style: 'currency', currency: 'CNY' }).format(cents / 100);
+export const learningDate = (value: string) => new Intl.DateTimeFormat(getLocale(), { dateStyle: 'medium' }).format(new Date(value));
+export const learningReset = (value: string) => new Intl.DateTimeFormat(getLocale(), { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));

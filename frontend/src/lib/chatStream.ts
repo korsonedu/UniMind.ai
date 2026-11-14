@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { streamFetch } from '@/lib/api';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -24,7 +25,7 @@ export async function* readChatStream({
   if (!res.ok) {
     const data = await res.json().catch(() => null);
     const detail = data?.detail || data?.error || data?.message;
-    throw new Error(typeof detail === 'string' ? detail : `HTTP ${res.status}`);
+    throw new Error(typeof detail === 'string' ? t(detail) : `HTTP ${res.status}`);
   }
 
   const reader = res.body?.getReader();
@@ -63,7 +64,7 @@ export async function* readChatStream({
         }
       }
     }
-    if (isCurrent() && !completed) throw new Error('回复流已中断。');
+    if (isCurrent() && !completed) throw new Error(t('回复流已中断。'));
   } finally {
     try {
       await reader.cancel();

@@ -1,3 +1,5 @@
+import { LanguageSelect } from '@/components/LanguageSelect';
+import { t, useLocale } from '@/i18n';
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from '@phosphor-icons/react';
@@ -11,6 +13,7 @@ import { COPYRIGHT_YEAR } from '@/constants/version';
 import '@/styles/landing.css';
 
 export function Landing() {
+  useLocale();
   const user = useAuthStore(state => state.user);
   const entry = user ? '/xiaoyu' : '/register';
   const pageRef = useRef<HTMLDivElement>(null);
@@ -95,47 +98,47 @@ export function Landing() {
     <div className="landing-atmosphere" aria-hidden="true"><div className="landing-background" /><div className="landing-refraction" /><div className="landing-light-sweep" /><div className="landing-floor-reflection" /></div>
     <header className="landing-header landing-wrap">
       <svg className="landing-nav-fiber" aria-hidden="true"><path pathLength="1" /><path pathLength="1" /></svg>
-      <Link to="/" aria-label="UniMind 首页" className="landing-brand"><img src="/Unimind_logo_wide.png" alt="UniMind.ai" width="150" height="34" /></Link>
-      <nav aria-label="首页导航">
-        <div className="landing-nav-links"><a href="#tools">探索小宇</a><a href="#workspace">学习空间</a><a href="#download">下载客户端</a><Link to="/pricing">AI 加量</Link></div>
-        <div className="landing-nav-actions">{!user && <Link to="/login">登录</Link>}<Link to={entry} className="landing-nav-entry">{user ? '进入学习空间' : '开始体验'}<ArrowUpRight size={16} /></Link></div>
+      <Link to="/" aria-label={t('UniMind 首页')} className="landing-brand"><img src="/Unimind_logo_wide.png" alt="UniMind.ai" width="150" height="34" /></Link>
+      <nav aria-label={t('首页导航')}>
+        <div className="landing-nav-links"><a href="#tools">{t('探索小宇')}</a><a href="#workspace">{t('学习空间')}</a><a href="#download">{t('下载客户端')}</a><Link to="/pricing">{t('AI 加量')}</Link></div>
+        <div className="landing-nav-actions"><LanguageSelect />{!user && <Link to="/login">{t('登录')}</Link>}<Link to={entry} className="landing-nav-entry">{user ? t('进入学习空间') : t('开始体验')}<ArrowUpRight size={16} /></Link></div>
       </nav>
     </header>
 
     <main>
       <section className="landing-hero landing-wrap" id="agent">
         <div className="landing-hero-copy">
-          <h1 aria-label="和小宇一起，将人工智能转化为人类智慧"><span className="landing-hero-invitation">和小宇一起</span><span className="landing-hero-statement"><span data-text="将人工智能">将人工智能</span><span data-text="转化为人类智慧">转化为人类智慧</span></span></h1>
-          <p className="landing-hero-description"><span>查资料、画图讲解、练习与复习，</span><span>和小宇一起把问题弄清楚。</span></p>
+          <h1 aria-label={t('和小宇一起，将人工智能转化为人类智慧')}><span className="landing-hero-invitation">{t('和小宇一起')}</span><span className="landing-hero-statement"><span data-text={t('将人工智能')}>{t('将人工智能')}</span><span data-text={t('转化为人类智慧')}>{t('转化为人类智慧')}</span></span></h1>
+          <p className="landing-hero-description"><span>{t('查资料、画图讲解、练习与复习，')}</span><span>{t('和小宇一起把问题弄清楚。')}</span></p>
           <LandingDownload entry={entry} />
         </div>
       </section>
 
-      <section className="landing-agent landing-wrap" id="agent-preview" aria-label="小宇对话界面" data-landing-depth>
+      <section className="landing-agent landing-wrap" id="agent-preview" aria-label={t('小宇对话界面')} data-landing-depth>
         <AgentShowcase />
       </section>
 
-      <section className="landing-experience" id="tools" aria-label="探索小宇的工具"><LearningInstrument /></section>
+      <section className="landing-experience" id="tools" aria-label={t('探索小宇的工具')}><LearningInstrument /></section>
 
-      <section className="landing-product landing-wrap" id="workspace" aria-label="学习空间界面">
+      <section className="landing-product landing-wrap" id="workspace" aria-label={t('学习空间界面')}>
         <figure className="landing-product-main">
-          <figcaption><div><span>课程与资料</span><p>课程、课件与学习进度，放在一起。</p></div><Link to="/courses">浏览课程<ArrowUpRight size={18} /></Link></figcaption>
-          <div className="landing-product-stage" data-landing-depth><div className="landing-ui-frame"><img src="/screenshots/landing-workspace-desktop-demo.webp" alt="虚构学员小林的课程、课件、学习进度与历史活动" width="4800" height="3000" loading="lazy" /></div></div>
+          <figcaption><div><span>{t('课程与资料')}</span><p>{t('课程、课件与学习进度，放在一起。')}</p></div><Link to="/courses">{t('浏览课程')}<ArrowUpRight size={18} /></Link></figcaption>
+          <div className="landing-product-stage" data-landing-depth><div className="landing-ui-frame"><img src="/screenshots/landing-workspace-desktop-demo.webp" alt={t('虚构学员小林的课程、课件、学习进度与历史活动')} width="4800" height="3000" loading="lazy" /></div></div>
         </figure>
         <figure className="landing-product-secondary">
-          <div className="landing-product-stage" data-landing-depth><div className="landing-ui-frame"><img src="/screenshots/landing-learning-records-demo.webp" alt="虚构学员的练习表现、知识掌握和历史考试记录" width="3840" height="2400" loading="lazy" /></div></div>
-          <figcaption><span>学习记录</span><p>查看练习表现，<br />了解知识掌握情况。</p><Link to="/report-card">查看学习记录<ArrowUpRight size={18} /></Link></figcaption>
+          <div className="landing-product-stage" data-landing-depth><div className="landing-ui-frame"><img src="/screenshots/landing-learning-records-demo.webp" alt={t('虚构学员的练习表现、知识掌握和历史考试记录')} width="3840" height="2400" loading="lazy" /></div></div>
+          <figcaption><span>{t('学习记录')}</span><p>{t('查看练习表现，')}<br />{t('了解知识掌握情况。')}</p><Link to="/report-card">{t('查看学习记录')}<ArrowUpRight size={18} /></Link></figcaption>
         </figure>
       </section>
 
       <section className="landing-start landing-wrap">
         <LandingCoda />
-        <h2>试着问小宇一个问题。</h2>
-        <Link to={entry} className="landing-button">{user ? '回到小宇' : '开始体验'}<ArrowUpRight size={19} /></Link>
+        <h2>{t('试着问小宇一个问题。')}</h2>
+        <Link to={entry} className="landing-button">{user ? t('回到小宇') : t('开始体验')}<ArrowUpRight size={19} /></Link>
       </section>
 
     </main>
 
-    <footer className="landing-footer landing-wrap"><span>© {COPYRIGHT_YEAR} 北京融知高科 · UniMind.ai</span><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">京ICP备2023012726号-2</a><Link to="/terms">用户协议</Link><Link to="/privacy">隐私政策</Link></div></footer>
+    <footer className="landing-footer landing-wrap"><span>© {COPYRIGHT_YEAR} {t('北京融知高科 · UniMind.ai')}</span><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">{t('京ICP备2023012726号-2')}</a><Link to="/terms">{t('用户协议')}</Link><Link to="/privacy">{t('隐私政策')}</Link></div></footer>
   </div>;
 }

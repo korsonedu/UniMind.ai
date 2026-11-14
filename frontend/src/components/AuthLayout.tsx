@@ -1,3 +1,5 @@
+import { LanguageSelect } from './LanguageSelect';
+import { t, useLocale } from '@/i18n';
 import React, { useEffect, useRef, useState } from 'react';
 
 
@@ -10,6 +12,7 @@ interface AuthLayoutProps {
 }
 
 export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitle, footer }) => {
+  useLocale();
   const panelRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
 
@@ -53,14 +56,14 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
 
           <div className="space-y-4">
             <h2 className="text-[64px] font-bold tracking-tight text-[#1D1D1F] dark:text-white leading-snug">
-              AI 驱动的新一代
+              {t('AI 驱动的新一代')}
               <br />
-              智能学习平台
+              {t('智能学习平台')}
             </h2>
             <p className="text-[24px] leading-relaxed text-[#6E6E73] dark:text-white/40">
-              知识图谱 × 自适应记忆 × 智能教练
+              {t('知识图谱 × 自适应记忆 × 智能教练')}
               <br />
-              为每个学习者量身定制
+              {t('为每个学习者量身定制')}
             </p>
           </div>
 
@@ -76,6 +79,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
       {/* ── Right Form Panel ── */}
       <div className="flex flex-col items-center justify-center bg-white dark:bg-[#0b0d10] px-6 py-12 lg:px-16 lg:py-16">
         <div className="w-full max-w-[400px]">
+          <div className="mb-6 flex justify-end"><LanguageSelect /></div>
           {/* Mobile-only logo */}
           <div className="lg:hidden flex flex-col items-center gap-4 mb-10">
             <img

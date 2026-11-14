@@ -13,6 +13,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .models import AIChatMessage, AgentMemory, Bot, BotVisibility, Conversation
+from .services.language import request_language
 from .serializers import AIChatMessageSerializer, AgentMemorySerializer, BotSerializer, ConversationSerializer
 from .utils import get_student_academic_context
 from .views_projects import add_project_context, save_new_conversation_project
@@ -459,7 +460,8 @@ class AIChatView(APIView):
             user_msg = AIChatMessage.objects.create(
                 user=request.user, role='user', content=user_message,
                 bot=bot, conversation_id=conversation_id,
-                metadata=note_message_metadata(note_context, note_sources, request.data.get('note_selection', '')),
+                metadata={**note_message_metadata(note_context, note_sources, request.data.get('note_selection', '')),
+                          'ui_language': request_language(request)},
             )
             record_event('ai_chat_start', user=request.user, properties={'bot_id': bot_id})
 
@@ -656,7 +658,8 @@ class AIChatStreamView(APIView):
             user_msg = AIChatMessage.objects.create(
                 user=request.user, role='user', content=user_message,
                 bot=bot, conversation_id=conversation_id,
-                metadata=note_message_metadata(note_context, note_sources, request.data.get('note_selection', '')),
+                metadata={**note_message_metadata(note_context, note_sources, request.data.get('note_selection', '')),
+                          'ui_language': request_language(request)},
             )
             if course_context:
                 user_msg.metadata['course_context'] = course_context

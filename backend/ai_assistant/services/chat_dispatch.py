@@ -186,6 +186,8 @@ def dispatch_bot_chat_sync(
         record_trigger(applicable)
         logger.debug("experience_applicator: injected %d experiences for user %s", len(applicable), user.id)
 
+    from .language import language_instruction
+    system_prompt += language_instruction(user, chat_context)
     messages = [{'role': 'system', 'content': system_prompt}]
     for msg in history:
         if msg['role'] in ('user', 'assistant') and msg['content']:

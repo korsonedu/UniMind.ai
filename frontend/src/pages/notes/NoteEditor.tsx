@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { SelectField, SelectOption } from '@/components/ui/select';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -16,6 +17,7 @@ interface Props {
   onOpen: (id: number) => void; autoFocus?: boolean; compact?: boolean;
 }
 export default function NoteEditor({ note, notebooks, onChange, onOpen, autoFocus = false, compact = false }: Props) {
+  const locale = useLocale();
   const navigate = useNavigate();
   const [dialog, setDialog] = useState<NoteDialogOptions | null>(null);
   const [linkQuery, setLinkQuery] = useState<{ from: number; to: number; query: string } | null>(null);
@@ -27,11 +29,11 @@ export default function NoteEditor({ note, notebooks, onChange, onOpen, autoFocu
   const changeRef = useRef(onChange);
   useLayoutEffect(() => { changeRef.current = onChange; }, [onChange]);
   const editor = useEditor({
-    extensions: [NoteMath, StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: { openOnClick: false } }), Markdown.configure({ html: false }), Placeholder.configure({ placeholder: '开始书写…' })],
+    extensions: [NoteMath, StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: { openOnClick: false } }), Markdown.configure({ html: false }), Placeholder.configure({ placeholder: () => t('开始书写…') })],
     content: note.content,
     autofocus: autoFocus ? 'end' : false,
     editable: !note.deleted_at,
-    editorProps: { attributes: { class: 'notes-prose', 'aria-label': '笔记正文' } },
+    editorProps: { attributes: { class: 'notes-prose', 'aria-label': t('笔记正文') } },
     onUpdate: ({ editor: instance }) => {
       changeRef.current({ content: (instance.storage as Editor['storage'] & { markdown: { getMarkdown: () => string } }).markdown.getMarkdown() });
       const { $from, from } = instance.state.selection;
@@ -41,6 +43,7 @@ export default function NoteEditor({ note, notebooks, onChange, onOpen, autoFocu
   });
   useEffect(() => {
     if (!editor) return;
+    editor.setOptions({ editorProps: { attributes: { class: "notes-prose", "aria-label": t('笔记正文') } } });
     const update = () => {
       const items: { pos: number; level: number; text: string }[] = [];
       editor.state.doc.descendants((node, pos) => {
@@ -51,7 +54,7 @@ export default function NoteEditor({ note, notebooks, onChange, onOpen, autoFocu
     update();
     editor.on('update', update);
     return () => { editor.off('update', update); };
-  }, [editor]);
+  }, [editor, locale]);
   useEffect(() => {
     if (!linkQuery) return;
     const controller = new AbortController();
@@ -63,36 +66,36 @@ export default function NoteEditor({ note, notebooks, onChange, onOpen, autoFocu
   }, [linkQuery]);
   const insertLink = (target: Note) => {
     if (!editor || !linkQuery) return;
-    editor.chain().focus().insertContentAt({ from: linkQuery.from, to: linkQuery.to }, [{ type: 'text', text: target.title || '未命名笔记', marks: [{ type: 'link', attrs: { href: `/notes/${target.id}` } }] }]).run();
+    editor.chain().focus().insertContentAt({ from: linkQuery.from, to: linkQuery.to }, [{ type: 'text', text: target.title || t('未命名笔记'), marks: [{ type: 'link', attrs: { href: `/notes/${target.id}` } }] }]).run();
     setLinkQuery(null);
   };
   const toolbar = (label: string, icon: React.ReactNode, action: () => void, active = false) => <button type="button" className="notes-icon-button" aria-label={label} title={label} aria-pressed={active} onMouseDown={e => e.preventDefault()} onClick={action}>{icon}</button>;
   return <>
     {!compact && <div className="notes-editor-meta">
-      <SelectField aria-label="所属笔记本" value={note.notebook ?? ''} disabled={!!note.deleted_at} onValueChange={value => onChange({ notebook: value ? Number(value) : null })}>
-        <SelectOption value="">未分类</SelectOption>{notebooks.map(book => <SelectOption key={book.id} value={book.id}>{notebookPath(book.id, notebooks)}</SelectOption>)}
+      <SelectField aria-label={t('所属笔记本')} value={note.notebook ?? ''} disabled={!!note.deleted_at} onValueChange={value => onChange({ notebook: value ? Number(value) : null })}>
+        <SelectOption value="">{t('未分类')}</SelectOption>{notebooks.map(book => <SelectOption key={book.id} value={book.id}>{notebookPath(book.id, notebooks)}</SelectOption>)}
       </SelectField>
-      <button type="button" className="notes-icon-button" aria-label={note.is_favorite ? '取消收藏' : '收藏'} title={note.is_favorite ? '取消收藏' : '收藏'} aria-pressed={note.is_favorite} disabled={!!note.deleted_at} onClick={() => onChange({ is_favorite: !note.is_favorite })}><Star size={18} weight={note.is_favorite ? 'fill' : 'regular'} /></button>
+      <button type="button" className="notes-icon-button" aria-label={note.is_favorite ? t('取消收藏') : t('收藏')} title={note.is_favorite ? t('取消收藏') : t('收藏')} aria-pressed={note.is_favorite} disabled={!!note.deleted_at} onClick={() => onChange({ is_favorite: !note.is_favorite })}><Star size={18} weight={note.is_favorite ? 'fill' : 'regular'} /></button>
     </div>}
-    <input className="notes-title" aria-label="笔记标题" placeholder="未命名笔记" value={note.title} readOnly={!!note.deleted_at} onChange={e => onChange({ title: e.target.value })} />
-    {!compact && <label className="notes-tags"><Tag size={16} /><input aria-label="笔记标签，逗号分隔" placeholder="标签" value={tagInput} disabled={!!note.deleted_at} onChange={e => { setTagInput(e.target.value); onChange({ tags: [...new Set(e.target.value.split(/[,，]/).map(t => t.trim()).filter(Boolean))] }); }} /></label>}
+    <input className="notes-title" aria-label={t('笔记标题')} placeholder={t('未命名笔记')} value={note.title} readOnly={!!note.deleted_at} onChange={e => onChange({ title: e.target.value })} />
+    {!compact && <label className="notes-tags"><Tag size={16} /><input aria-label={t('笔记标签，逗号分隔')} placeholder={t('标签')} value={tagInput} disabled={!!note.deleted_at} onChange={e => { setTagInput(e.target.value); onChange({ tags: [...new Set(e.target.value.split(/[,，]/).map(t => t.trim()).filter(Boolean))] }); }} /></label>}
     <div className="notes-editor-toolbar">
-      <button type="button" aria-expanded={showOutline} onClick={() => setShowOutline(value => !value)}>目录</button>
-      {editor && !note.deleted_at && <div role="group" aria-label="文字格式">
-        {toolbar('粗体', <TextB size={18} />, () => { editor.chain().focus().toggleBold().run(); }, editor.isActive('bold'))}
-        {toolbar('斜体', <TextItalic size={18} />, () => { editor.chain().focus().toggleItalic().run(); }, editor.isActive('italic'))}
-        {toolbar('标题', <TextH size={18} />, () => { editor.chain().focus().toggleHeading({ level: 2 }).run(); }, editor.isActive('heading'))}
-        {toolbar('列表', <ListBullets size={18} />, () => { editor.chain().focus().toggleBulletList().run(); }, editor.isActive('bulletList'))}
-        {toolbar('编号', <ListNumbers size={18} />, () => { editor.chain().focus().toggleOrderedList().run(); }, editor.isActive('orderedList'))}
-        {toolbar('引用', <Quotes size={18} />, () => { editor.chain().focus().toggleBlockquote().run(); }, editor.isActive('blockquote'))}
-        {toolbar('代码', <CodeBlock size={18} />, () => { editor.chain().focus().toggleCodeBlock().run(); }, editor.isActive('codeBlock'))}
-        {toolbar('链接', <LinkIcon size={18} />, () => setDialog({ title: '链接地址', initialValue: editor.getAttributes('link').href || 'https://', onConfirm: href => { editor.chain().focus().extendMarkRange('link').setLink({ href }).run(); } }))}
-        {toolbar('公式', <FunctionIcon size={18} />, () => setDialog({ title: 'LaTeX 公式', initialValue: editor.getAttributes('noteMath').latex || 'x^2', onConfirm: latex => { editor.chain().focus().insertContent({ type: 'noteMath', attrs: { latex, delimiter: '$' } }).run(); } }))}
-        {toolbar('撤销', <ArrowUUpLeft size={18} />, () => { editor.chain().focus().undo().run(); })}
+      <button type="button" aria-expanded={showOutline} onClick={() => setShowOutline(value => !value)}>{t('目录')}</button>
+      {editor && !note.deleted_at && <div role="group" aria-label={t('文字格式')}>
+        {toolbar(t('粗体'), <TextB size={18} />, () => { editor.chain().focus().toggleBold().run(); }, editor.isActive('bold'))}
+        {toolbar(t('斜体'), <TextItalic size={18} />, () => { editor.chain().focus().toggleItalic().run(); }, editor.isActive('italic'))}
+        {toolbar(t('标题'), <TextH size={18} />, () => { editor.chain().focus().toggleHeading({ level: 2 }).run(); }, editor.isActive('heading'))}
+        {toolbar(t('列表'), <ListBullets size={18} />, () => { editor.chain().focus().toggleBulletList().run(); }, editor.isActive('bulletList'))}
+        {toolbar(t('编号'), <ListNumbers size={18} />, () => { editor.chain().focus().toggleOrderedList().run(); }, editor.isActive('orderedList'))}
+        {toolbar(t('引用'), <Quotes size={18} />, () => { editor.chain().focus().toggleBlockquote().run(); }, editor.isActive('blockquote'))}
+        {toolbar(t('代码'), <CodeBlock size={18} />, () => { editor.chain().focus().toggleCodeBlock().run(); }, editor.isActive('codeBlock'))}
+        {toolbar(t('链接'), <LinkIcon size={18} />, () => setDialog({ title: t('链接地址'), initialValue: editor.getAttributes('link').href || 'https://', onConfirm: href => { editor.chain().focus().extendMarkRange('link').setLink({ href }).run(); } }))}
+        {toolbar(t('公式'), <FunctionIcon size={18} />, () => setDialog({ title: t('LaTeX 公式'), initialValue: editor.getAttributes('noteMath').latex || 'x^2', onConfirm: latex => { editor.chain().focus().insertContent({ type: 'noteMath', attrs: { latex, delimiter: '$' } }).run(); } }))}
+        {toolbar(t('撤销'), <ArrowUUpLeft size={18} />, () => { editor.chain().focus().undo().run(); })}
       </div>}
     </div>
     <div className="notes-document-layout">
-    {showOutline && <nav className="notes-outline" aria-label="笔记目录">{headings.length ? headings.map(heading => <button type="button" key={heading.pos} style={{ paddingLeft: `${(heading.level - 1) * 12 + 8}px` }} onClick={() => { if (!editor) return; editor.commands.setTextSelection(heading.pos + 1); editor.view.domAtPos(heading.pos + 1).node.parentElement?.scrollIntoView({ block: 'center', behavior: 'smooth' }); editor.commands.focus(); }}>{heading.text || '无标题'}</button>) : <span>暂无标题</span>}</nav>}
+    {showOutline && <nav className="notes-outline" aria-label={t('笔记目录')}>{headings.length ? headings.map(heading => <button type="button" key={heading.pos} style={{ paddingLeft: `${(heading.level - 1) * 12 + 8}px` }} onClick={() => { if (!editor) return; editor.commands.setTextSelection(heading.pos + 1); editor.view.domAtPos(heading.pos + 1).node.parentElement?.scrollIntoView({ block: 'center', behavior: 'smooth' }); editor.commands.focus(); }}>{heading.text || t('无标题')}</button>) : <span>{t('暂无标题')}</span>}</nav>}
     <div className="notes-editor-body" onClick={event => {
       const anchor = (event.target as HTMLElement).closest('a');
       const match = anchor?.getAttribute('href')?.match(/^\/notes\/(\d+)$/);
@@ -101,15 +104,15 @@ export default function NoteEditor({ note, notebooks, onChange, onOpen, autoFocu
       if (courseLink && (event.metaKey || event.ctrlKey)) { event.preventDefault(); navigate(courseLink[0]); }
     }}>
       <EditorContent editor={editor} />
-      {linkQuery && <div className="notes-link-picker" role="dialog" aria-label="链接笔记">
-        <div className="notes-row"><strong>链接到笔记</strong><button aria-label="关闭链接搜索" title="关闭" onClick={() => setLinkQuery(null)}><X size={16} /></button></div>
-        <input autoFocus aria-label="搜索链接笔记" placeholder="搜索标题或正文" value={linkQuery.query} onChange={e => setLinkQuery({ ...linkQuery, query: e.target.value })} />
-        {matches.slice(0, 12).map(target => <button key={target.id} onClick={() => insertLink(target)}><span>{target.title || '未命名笔记'}</span><small>{notebookPath(target.notebook, notebooks)}</small></button>)}
-        {!matches.length && <p>{searchFailed ? '搜索失败，请重试。' : '没有匹配的笔记。'}</p>}
+      {linkQuery && <div className="notes-link-picker" role="dialog" aria-label={t('链接笔记')}>
+        <div className="notes-row"><strong>{t('链接到笔记')}</strong><button aria-label={t('关闭链接搜索')} title={t('关闭')} onClick={() => setLinkQuery(null)}><X size={16} /></button></div>
+        <input autoFocus aria-label={t('搜索链接笔记')} placeholder={t('搜索标题或正文')} value={linkQuery.query} onChange={e => setLinkQuery({ ...linkQuery, query: e.target.value })} />
+        {matches.slice(0, 12).map(target => <button key={target.id} onClick={() => insertLink(target)}><span>{target.title || t('未命名笔记')}</span><small>{notebookPath(target.notebook, notebooks)}</small></button>)}
+        {!matches.length && <p>{searchFailed ? t('搜索失败，请重试。') : t('没有匹配的笔记。')}</p>}
       </div>}
     </div>
     </div>
-    <div className="notes-backlinks"><span>反向链接 · {note.backlinks.length}</span>{note.backlinks.map(link => <button key={link.id} onClick={() => onOpen(link.id)}>{link.title || '未命名笔记'}</button>)}</div>
+    <div className="notes-backlinks"><span>{t('反向链接 ·')} {note.backlinks.length}</span>{note.backlinks.map(link => <button key={link.id} onClick={() => onOpen(link.id)}>{link.title || t('未命名笔记')}</button>)}</div>
     {dialog && <NoteDialog {...dialog} onClose={() => setDialog(null)} />}
   </>;
 }

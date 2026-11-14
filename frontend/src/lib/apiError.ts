@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import axios from 'axios';
 
 export type NormalizedApiError = {
@@ -28,10 +29,10 @@ function extractDRFMessage(payload: Record<string, unknown> | undefined): string
   // 优先从 error / detail / message 字段提取（可能为 string 或 string[]）
   for (const key of ['error', 'detail', 'message']) {
     const val = payload[key];
-    if (typeof val === 'string' && val.trim()) return val.trim();
+    if (typeof val === 'string' && val.trim()) return t(val.trim());
     if (Array.isArray(val)) {
       const first = val.find((v: unknown) => typeof v === 'string' && v.trim());
-      if (first) return first as string;
+      if (first) return t(first as string);
     }
   }
 
@@ -40,7 +41,7 @@ function extractDRFMessage(payload: Record<string, unknown> | undefined): string
     if (field === 'code' || field === 'request_id') continue;
     if (Array.isArray(msgs)) {
       const first = msgs.find((m: unknown) => typeof m === 'string' && m.trim());
-      if (first) return `${field}: ${first}`;
+      if (first) return `${field}: ${t(first)}`;
     }
   }
 
@@ -81,6 +82,6 @@ export function normalizeApiError(error: unknown, fallbackMessage = '请求失�
 
 export function formatApiErrorToast(error: unknown, fallbackMessage = '请求失败，请检查网络后重试'): string {
   const normalized = normalizeApiError(error, fallbackMessage);
-  if (normalized.requestId) return `${normalized.message} (RID: ${normalized.requestId})`;
-  return normalized.message;
+  if (normalized.requestId) return `${t(normalized.message)} (RID: ${normalized.requestId})`;
+  return t(normalized.message);
 }

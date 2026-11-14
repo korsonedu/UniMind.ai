@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { Spinner } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
@@ -16,6 +17,7 @@ export const Loading: React.FC<LoadingProps> = ({
   size = 'md',
   className,
 }) => {
+  useLocale();
   const content = (
     <div
       className={cn(
@@ -26,7 +28,7 @@ export const Loading: React.FC<LoadingProps> = ({
     >
       <Spinner className={cn('animate-spin text-muted-foreground/30', sizeMap[size])} />
       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">{message}</p>
-      {fullScreen && <p className="text-xs italic text-muted-foreground">别慌，飞船正在接通信号。——《银河搭车客指南》</p>}
+      {fullScreen && <p className="text-xs italic text-muted-foreground">{t('别慌，飞船正在接通信号。——《银河搭车客指南》')}</p>}
     </div>
   );
 

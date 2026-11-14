@@ -155,6 +155,8 @@ def build_context(user, message, recent_messages=None, chat_context=None):
         if 'build_learning_experiment' not in executor._permitted_tool_definitions:
             context['system_prompt'] += '\n本轮不属于解答讲解，不生成交互卡片。出题、统计、计划等使用原有工具和文字。'
         context['system_prompt'] += '\n已有工具直接调用，不重复发现。仅当所需工具不在当前列表时，才通过 find_learning_tools 选择分组：编写或注册能力选 authoring；调用已有会话工具选 session。尚未注册工具时不要进入 session。每次最多使用一个分组。'
+    from .language import language_instruction
+    context['system_prompt'] += language_instruction(user, chat_context)
     return context
 
 

@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { toast } from 'sonner';
 import api from '@/lib/api';
@@ -17,6 +18,7 @@ export interface ConversationProjectControls {
 }
 
 export function useConversationProjects(enabled: boolean, projectId: number | null, setProjectId: Dispatch<SetStateAction<number | null>>, setSessions: Dispatch<SetStateAction<ConversationSession[]>>, openProject: (id: number, conversationId?: string, draft?: string) => Promise<void>): ConversationProjectControls {
+  useLocale();
   const [projects, setProjects] = useState<ConversationProject[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
@@ -40,7 +42,7 @@ export function useConversationProjects(enabled: boolean, projectId: number | nu
       setProjects(previous => id === undefined ? [...previous, response.data] : previous.map(project => project.id === id ? response.data : project));
       if (id === undefined) await openProject(response.data.id, undefined, instructions.trim());
       return true;
-    } catch { toast.error('项目保存失败，请重试'); return false; }
+    } catch { toast.error(t('项目保存失败，请重试')); return false; }
     finally { setPending(false); }
   };
   return {
@@ -54,9 +56,9 @@ export function useConversationProjects(enabled: boolean, projectId: number | nu
         setProjects(previous => previous.filter(project => project.id !== id));
         setSessions(previous => previous.filter(session => session.projectId !== id));
         setProjectId(previous => previous === id ? null : previous);
-        toast.success('项目及其中的对话已删除');
+        toast.success(t('项目及其中的对话已删除'));
         return true;
-      } catch { toast.error('项目删除失败，请重试'); return false; }
+      } catch { toast.error(t('项目删除失败，请重试')); return false; }
       finally { setPending(false); }
     },
   };
