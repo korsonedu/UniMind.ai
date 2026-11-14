@@ -1,5 +1,6 @@
 import { SelectField, SelectOption } from '@/components/ui/select';
 import { DesktopSettings } from '@/components/DesktopSettings';
+import { ThemeSceneSwitch } from '@/components/settings/ThemeSceneSwitch';
 import { APP_VERSION, APP_BUILD } from '@/constants/version';
 import { useDesktopStore } from '@/lib/desktop';
 import NoteAISettings from './notes/NoteAISettings';
@@ -10,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useSystemStore, DEFAULT_EXPERIENCE, type ExperiencePreferences, type ThemeMode } from '@/store/useSystemStore';
+import { useSystemStore, DEFAULT_EXPERIENCE, type ExperiencePreferences } from '@/store/useSystemStore';
 import { ArrowCounterClockwise, FloppyDisk, CreditCard, ArrowRight, MagnifyingGlass, UserCircle, Palette, Notebook, ShieldCheck, Database, DownloadSimple, Desktop, ChatCircle, GraduationCap } from '@phosphor-icons/react';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import api from '@/lib/api';
@@ -144,9 +145,12 @@ export const Settings: React.FC = () => {
         </form>}
         {current?.id === 'appearance' && <>
           <p className="um-settings-preference-note">仅此设备，更改后立即生效并自动保存。</p>
-          <h3 className="um-settings-group-title">界面</h3>
+          <section className="um-settings-appearance" aria-labelledby="settings-appearance">
+            <div><h3 id="settings-appearance">界面外观</h3><p>选择亮色、暗色，或随系统外观自动切换。</p></div>
+            <ThemeSceneSwitch value={theme} onChange={setTheme} reduceMotion={reduceMotion} />
+          </section>
+          <h3 className="um-settings-group-title">阅读与显示</h3>
           <section className="um-settings-group">
-            <div className="um-settings-row"><div><label htmlFor="settings-appearance">界面外观</label><p>选择浅色、深色，或随系统外观自动切换。</p></div><SelectField id="settings-appearance" value={theme} onValueChange={value => setTheme(value as ThemeMode)}><SelectOption value="system">跟随系统</SelectOption><SelectOption value="light">浅色</SelectOption><SelectOption value="dark">深色</SelectOption></SelectField></div>
             <div className="um-settings-row"><div><label htmlFor="settings-reading-size">阅读字号</label><p>调整对话、笔记和课程正文的文字大小。</p></div><SelectField id="settings-reading-size" value={readingSize} onValueChange={value => setExperience({ readingSize: value as ExperiencePreferences['readingSize'] })}><SelectOption value="standard">标准</SelectOption><SelectOption value="large">较大</SelectOption><SelectOption value="larger">更大</SelectOption></SelectField></div>
             <div className="um-settings-row"><div><label htmlFor="settings-density">列表密度</label><p>调整桌面端会话、课程和笔记列表的行距，手机保留触控间距。</p></div><SelectField id="settings-density" value={density} onValueChange={value => setExperience({ density: value as ExperiencePreferences['density'] })}><SelectOption value="standard">标准</SelectOption><SelectOption value="compact">紧凑</SelectOption></SelectField></div>
             <div className="um-settings-row"><div><label htmlFor="settings-reduce-motion">减少界面动效</label><p>减少工作区过渡和回复文字淡入。系统已开启减少动态效果时始终遵循。</p></div><Switch id="settings-reduce-motion" checked={reduceMotion} onCheckedChange={value => setExperience({ reduceMotion: value })} /></div>

@@ -39,6 +39,9 @@
 .um-settings-workspace .um-settings-icon-button:hover { background: var(--um-color-hover); }
 .um-settings-footer { display: flex; justify-content: flex-end; margin-top: 16px; }
 .um-settings-preference-note { color: var(--um-color-text-muted); font-size: 12px; line-height: 1.6; }
+.um-settings-appearance { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 28px 20px 32px; margin-top: 8px; border-bottom: 1px solid var(--um-color-border); }
+.um-settings-appearance h3 { font-size: 14px; font-weight: var(--um-weight-medium); }
+.um-settings-appearance p { margin-top: 6px; color: var(--um-color-text-muted); font-size: 12px; line-height: 1.6; }
 .um-settings-workspace button { font-size: 13px; font-weight: var(--um-weight-medium); }
 .um-settings-workspace button svg { flex-shrink: 0; }
 .um-settings-note-intro { padding-top: 18px; color: var(--um-color-text-muted); font-size: 13px; line-height: 1.75; text-wrap: pretty; }
@@ -69,6 +72,8 @@
   .um-settings-heading h2 { font-size: 24px; }
   .um-settings-group { padding-inline: 16px; }
   .um-settings-group-title { margin-top: 24px; }
+  .um-settings-appearance { flex-direction: column; align-items: flex-start; gap: 20px; padding: 24px 0; }
+  .um-settings-appearance .um-theme-switch { align-self: center; flex-basis: auto; }
   .um-settings-row { flex-wrap: wrap; gap: 12px; }
   .um-settings-row > div:first-child { flex-basis: 100%; }
   .um-settings-row > :is(input, textarea), .um-settings-control { width: 100%; }
