@@ -68,6 +68,14 @@ def current_project(user, context):
     return conversation.project, message
 
 
+def _focused_task(project, state):
+    version_id = (state.plan.get('knowledge_path') or {}).get('version_id')
+    tasks = project.learning_tasks.filter(knowledge_version_id=version_id, stage_id=state.current_stage)
+    event = project.learning_events.filter(kind='focus', content__version_id=version_id).first()
+    focused = tasks.filter(pk=event.content['task_id']).first() if event else None
+    return focused or tasks.order_by('created_at', 'pk').first()
+
+
 def learning_data(project):
     state, _ = ProjectLearning.objects.get_or_create(project=project)
     from users.feature_access import has_learning_feature
@@ -92,8 +100,8 @@ def learning_data(project):
         'next_task_id': next_task['id'] if next_task else None}
     from .learning_guidance import teaching_guidance
     progress_at = next((event.created_at for event in events if event.kind == 'progress' and event.content.get('stage') == state.current_stage and event.content.get('mainline', True)), None)
-    focus = project.learning_events.filter(kind='focus', content__version_id=version_id).first()
-    focus_task_id = focus.content.get('task_id') if focus else None
+    focused = _focused_task(project, state)
+    focus_task_id = str(focused.pk) if focused else None
     guidance = teaching_guidance(state, tasks, progress_at=progress_at, focus_task_id=focus_task_id)
     # All learner surfaces follow the same current episode. Other tasks still keep their results.
     task_progress.update(feedback=guidance['feedback'], next_action=guidance['next_action'], next_task_id=guidance['task_id'])
@@ -135,19 +143,28 @@ def activity_snapshot(project, raw):
         pk = serializers.UUIDField().run_validation(raw['task_id'])
         task = get_object_or_404(project.learning_tasks.select_related('project', 'exam'), pk=pk)
         data = task_data(task)
-        result = {'kind': 'task', 'task': data, 'mainline': task.stage_id == project.learning.current_stage}
-        focus = project.learning_events.filter(kind='focus', content__version_id=task.knowledge_version_id).first()
-        if focus:
+        result = {'kind': 'task', 'task': data, 'mainline': data['is_current'] and task.stage_id == project.learning.current_stage}
+        focused = _focused_task(project, project.learning)
+        if focused:
             def root(item):
                 while item.source_task_id:
                     item = item.source_task
                 return item.pk
-            focused = project.learning_tasks.filter(pk=focus.content['task_id']).first()
-            result['mainline'] = result['mainline'] and bool(focused and root(focused) == root(task))
+            result['mainline'] = result['mainline'] and data['is_current'] and root(focused) == root(task)
         if data.get('summary') and task.exam_id:
             from quizzes.services.practice_results import exam_result_payload
             result['results'] = exam_result_payload(task.exam)
         return json.loads(json.dumps(result, default=str))
+    if raw.get('stage_id') or raw.get('resource_id'):
+        from django.http import Http404
+        state = project.learning
+        key = 'stage_id' if raw.get('stage_id') else 'resource_id'
+        selected = serializers.CharField(max_length=60).run_validation(raw[key])
+        items = state.plan.get('stages', []) if key == 'stage_id' else state.resources
+        item = next((row for row in items if row['id'] == selected), None)
+        if not item:
+            raise Http404
+        return {'kind': 'stage' if key == 'stage_id' else 'resource', 'content': item, 'mainline': False}
     version_id = serializers.IntegerField(min_value=1).run_validation(raw.get('version_id'))
     version = owned_version(project, version_id)
     targets = raw.get('targets') or ([raw['node_id']] if raw.get('node_id') else [])
@@ -162,8 +179,10 @@ def project_context(user, conversation_id):
     if not conversation:
         return ''
     if not ProjectLearning.objects.filter(project_id=conversation.project_id, planning_enabled=True).exists():
-        return '\n自由对话的项目背景：' + json.dumps({'name': conversation.project.name,
-            'instructions': conversation.project.instructions}, ensure_ascii=False)
+        message = AIChatMessage.objects.filter(user=user, conversation_id=conversation_id, role='user').order_by('-id').first()
+        return '\n自由对话的项目背景（查看内容不启用规划或改变项目模式）：' + json.dumps({'name': conversation.project.name,
+            'instructions': conversation.project.instructions,
+            'viewed_activity': message.metadata.get('learning_activity') if message else None}, ensure_ascii=False, default=str)
     data = learning_data(conversation.project)
     data = compact_learning(data)
     message = AIChatMessage.objects.filter(user=user, conversation_id=conversation_id, role='user').order_by('-id').first()
@@ -339,12 +358,13 @@ def change_learning(project, data, *, message=None, model=False):
         stage_data = next(item for item in state.plan['stages'] if item['id'] == stage)
         event['context'] = {'goal': state.plan['goal'], 'stage': stage_data['title'], 'outcome': stage_data['outcome']}
         event.update(observation=observation, feedback=feedback, mainline=on_mainline, assistance=assistance,
-                     strategy=str(data.get('strategy', ''))[:2000], next_action=state.next_action, stage=stage)
+                     strategy=str(data.get('strategy', ''))[:2000], next_action=next_action, stage=stage)
         if data.get('knowledge_check') is not None:
             from .learning_knowledge import validate_check
             event['knowledge_check'] = validate_check(project, state, message, data['knowledge_check'], stage_data, assistance)
-        _clear_followup(state)
-        _schedule(state, data)
+        if on_mainline:
+            _clear_followup(state)
+            _schedule(state, data)
     elif action in ('pause', 'resume', 'complete', 'schedule'):
         if action == 'schedule' and not state.reminders_enabled:
             raise ValidationError('主动提醒已关闭。')

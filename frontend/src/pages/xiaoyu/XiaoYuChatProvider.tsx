@@ -173,11 +173,13 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
     queueMicrotask(() => {
       if (cancelled) return;
       restored.current = key;
-      void openProject(Number(explicit), params.get('conversation') || undefined);
-      params.delete('project');
-      params.delete('conversation');
-      // Keep course context in its address for the course assistant.
-      if (location.pathname === '/xiaoyu') navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      void openProject(Number(explicit), params.get('conversation') || undefined).then(() => {
+        if (cancelled) return;
+        params.delete('project');
+        params.delete('conversation');
+        // Keep deep-link selections until the target project has received them.
+        if (location.pathname === '/xiaoyu') navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      });
     });
     return () => { cancelled = true; };
   }, [userId, chat.initialized, location.key, location.pathname, location.search, navigate, openProject]);

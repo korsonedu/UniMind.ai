@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, BookOpen, ChatCircle, TreeStructure, ListBullets, Files, ClockCounterClockwise } from '@phosphor-icons/react';
@@ -42,9 +42,8 @@ export function useLearningWorkspace() {
     const requestedView = params.get('learning_view');
     return requested ? { ...saved, view: 'task', task: requested } : requestedView === 'knowledge' ? { ...saved, view: 'knowledge' } : saved;
   });
-  const [discussion, setDiscussion] = useState<{ title: string; payload: Record<string, unknown> } | null>(null);
+  const [discussion, setDiscussion] = useState<{ scope: string; title: string; payload: Record<string, unknown> | null } | null>(null);
   const discussionRef = useRef<Record<string, unknown> | undefined>(undefined);
-  const getExtraPayload = useCallback(() => discussionRef.current ? { learning_activity: discussionRef.current } : {}, []);
   const [history, setHistory] = useState(false);
   const [resourceId, setResourceId] = useState('');
   const [stageId, setStageId] = useState('');
@@ -63,7 +62,16 @@ export function useLearningWorkspace() {
   const stages = project?.plan.stages || [];
   const stage = stages.find(item => item.id === (stageId || project?.current_stage)) || stages[0];
   const currentStage = stages.find(item => item.id === project?.current_stage);
+  const viewedNode = project?.knowledge?.nodes.find(item => item.id === selection.node) || project?.knowledge?.nodes.find(item => currentStage?.knowledge_nodes?.includes(item.id)) || project?.knowledge?.nodes[0];
   const resource = project?.resources.find(item => item.id === resourceId) || project?.resources[0];
+  const scope = selection.view === 'task' ? `task:${task?.id}` : selection.view === 'knowledge' ? `node:${project?.knowledge?.version_id}:${viewedNode?.id}` : selection.view === 'path' ? `stage:${stage?.id}` : selection.view === 'resources' ? `resource:${resource?.id}` : 'chat';
+  const implicitDiscussion = selection.view === 'task' && task ? { title: task.title, payload: { task_id: task.id } } : selection.view === 'knowledge' && viewedNode ? { title: viewedNode.title, payload: { node_id: viewedNode.id, version_id: project?.knowledge?.version_id } } : selection.view === 'path' && stage ? { title: stage.title, payload: { stage_id: stage.id } } : selection.view === 'resources' && resource ? { title: resource.title, payload: { resource_id: resource.id } } : null;
+  const currentDiscussion = discussion?.scope === scope ? discussion : implicitDiscussion;
+  useLayoutEffect(() => { discussionRef.current = undefined; }, [scope]);
+  const getExtraPayload = useCallback(() => {
+    const payload = discussionRef.current || currentDiscussion?.payload;
+    return payload ? { learning_activity: payload } : {};
+  }, [currentDiscussion]);
   const active = project?.status === 'active';
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: learningKey(userId, chat.projectId) });
@@ -79,23 +87,23 @@ export function useLearningWorkspace() {
     setSelection(previous => requestedTask ? { ...previous, view: 'task', task: requestedTask } : { ...previous, view: 'knowledge' });
   }
   useEffect(() => {
-    if (!requestedTask && requestedView !== 'knowledge') return;
+    if ((!requestedTask && requestedView !== 'knowledge') || openingProject || (params.get('project') && Number(params.get('project')) !== chat.projectId)) return;
     const next = new URLSearchParams(params); next.delete('learning_task'); next.delete('learning_view');
     setParams(next, { replace: true });
-  }, [params, requestedTask, requestedView, setParams]);
+  }, [params, requestedTask, requestedView, setParams, openingProject, chat.projectId]);
   const context = (title: string, payload?: Record<string, unknown>) => {
     discussionRef.current = payload;
-    setDiscussion(payload ? { title, payload } : null);
+    setDiscussion({ scope, title, payload: payload || null });
   };
-  const show = (view: View) => setSelection(previous => ({ ...previous, view }));
+  const clearDiscussion = () => { discussionRef.current = undefined; setDiscussion(null); };
+  const show = (view: View) => { clearDiscussion(); setSelection(previous => ({ ...previous, view })); };
   const openTask = (id: string, returnView: View = selection.view) => {
-    const item = tasks.find(row => row.id === id);
-    context(item?.title || '学习任务', { task_id: id });
+    clearDiscussion();
     setSelection(previous => ({ ...previous, view: 'task', task: id, returnView: returnView === 'task' ? previous.returnView : returnView }));
   };
   const ask = (text: string, payload?: Record<string, unknown>) => {
     if (chat.loading) { toast.info('小宇正在处理上一条消息，请稍后继续。'); return; }
-    if (payload) context(discussion?.title || '当前学习内容', payload);
+    if (payload) context(currentDiscussion?.title || '当前学习内容', payload);
     chat.doSend(text, true);
   };
   const act = async (action: string, extra: Record<string, unknown> = {}) => {
@@ -112,7 +120,7 @@ export function useLearningWorkspace() {
     if (!project) return;
     if (project.status === 'paused' || project.status === 'completed') { await act('resume'); return; }
     if (mainTask) {
-      if (mainTask.stage_id !== project.current_stage && !(await act('focus', { task_id: mainTask.id }))) return;
+      if (project.focus_task_id !== mainTask.id && !(await act('focus', { task_id: mainTask.id }))) return;
       openTask(mainTask.id); return;
     }
     ask('请读取本项目当前学习主线与已有成果，接续当前阶段。已有待答或复测任务时直接使用；否则结合当前缺口准备具体任务。请先呈现任务，等我实际作答。');
@@ -139,14 +147,14 @@ export function useLearningWorkspace() {
         <header className="um-work-section-heading"><button className="um-agent-button" onClick={() => show(selection.returnView)}><ArrowLeft size={15} />返回{selection.returnView === 'knowledge' ? '知识关系' : selection.returnView === 'chat' ? '对话' : '任务记录'}</button>
           {task?.is_current !== false && task && active && task.id !== mainTask?.id && <button className="um-agent-button" disabled={busy} onClick={() => void act('focus', { task_id: task.id })}>改为本次学习</button>}</header>
         {task && task.id !== mainTask?.id && <p className="um-work-scope">正在查看其他任务，当前学习主线保持不变。</p>}
-        {tasksQuery.isPending ? <p role="status">正在读取任务…</p> : tasksQuery.isError ? <p role="alert">任务无法读取。<button onClick={() => void tasksQuery.refetch()}>重试</button></p> : !task ? <p>这项任务不在当前项目中，或已不可用。</p> : <LearningTaskDetail project={project} task={task} tasks={tasks} refresh={refresh} onSelect={id => id && openTask(id)} onStudy={() => ask('请读取当前查看任务已评价的原作答、标准和反馈，解释具体缺口并给出下一步。需要复测时关联原任务，准备不同内容，不代我作答。', { task_id: task.id })} />}
+        {tasksQuery.isPending ? <p role="status">正在读取任务…</p> : tasksQuery.isError ? <p role="alert">任务无法读取。<button onClick={() => void tasksQuery.refetch()}>重试</button></p> : !task ? <p>这项任务不在当前项目中，或已不可用。</p> : <LearningTaskDetail project={project} task={task} tasks={tasks} refresh={refresh} onSelect={id => id && openTask(id)} onClose={() => show('chat')} onStudy={() => ask('请读取当前查看任务已评价的原作答、标准和反馈，解释具体缺口并给出下一步。需要复测时关联原任务，准备不同内容，不代我作答。', { task_id: task.id })} />}
       </div>
-      <div className="um-work-view" hidden={selection.view !== 'knowledge'}><LearningKnowledgeView project={project} selected={selection.node} onSelect={id => { setSelection(previous => ({ ...previous, node: id })); const node = project.knowledge?.nodes.find(item => item.id === id); context(node?.title || '知识节点', { node_id: id, version_id: project.knowledge?.version_id }); }} onStudy={ask} onTask={id => openTask(id, 'knowledge')} /></div>
-      <div className="um-work-view" hidden={selection.view !== 'path'}><h2>学习路径</h2><p>当前：{currentStage?.title || '起点待了解'}。查看其他阶段不会改变学习主线。</p><div className="um-work-master-detail"><nav aria-label="学习阶段">{stages.map((item, index) => <button key={item.id} aria-pressed={item.id === stage?.id} onClick={() => setStageId(item.id)}><span>{index + 1}</span>{item.title}{item.id === project.current_stage && <small>当前</small>}</button>)}</nav><section>{stage ? <><h3>{stage.title}</h3><p>{stage.outcome}</p><p>{stage.task}</p><p>前置：{stage.prerequisites.map(id => stages.find(item => item.id === id)?.title || id).join('、') || '无'}</p>{tasks.filter(item => item.stage_id === stage.id && item.is_current !== false).map(item => <button className="um-agent-button" key={item.id} onClick={() => openTask(item.id, 'path')}>{item.title}</button>)}</> : <><p>先与小宇明确可以开始的一段学习。</p>{project.planning_enabled && !project.instructions.trim() && <button className="um-agent-button" disabled={busy} onClick={() => void setupSample()}>体验函数基础样板</button>}</>}</section></div><details className="um-work-preferences"><summary>项目安排</summary><label>主动提醒<Switch checked={project.reminders_enabled} disabled={busy || !project.planning_enabled} onCheckedChange={enabled => void act('reminders', { enabled })} /></label>{project.planning_enabled && <button className="um-agent-button" disabled={busy || project.status === 'preparing'} onClick={() => void act(active ? 'pause' : 'resume')}>{active ? '暂停学习' : '恢复学习'}</button>}{active && <button className="um-agent-button" disabled={busy} onClick={() => void act('complete')}>结束当前目标</button>}</details></div>
+      <div className="um-work-view" hidden={selection.view !== 'knowledge'}><LearningKnowledgeView project={project} selected={selection.node} onSelect={id => { clearDiscussion(); setSelection(previous => ({ ...previous, node: id })); }} onStudy={ask} onTask={id => openTask(id, 'knowledge')} /></div>
+      <div className="um-work-view" hidden={selection.view !== 'path'}><h2>学习路径</h2><p>当前：{currentStage?.title || '起点待了解'}。查看其他阶段不会改变学习主线。</p><div className="um-work-master-detail"><nav aria-label="学习阶段">{stages.map((item, index) => <button key={item.id} aria-pressed={item.id === stage?.id} onClick={() => { clearDiscussion(); setStageId(item.id); }}><span>{index + 1}</span>{item.title}{item.id === project.current_stage && <small>当前</small>}</button>)}</nav><section>{stage ? <><h3>{stage.title}</h3><p>{stage.outcome}</p><p>{stage.task}</p><p>前置：{stage.prerequisites.map(id => stages.find(item => item.id === id)?.title || id).join('、') || '无'}</p>{tasks.filter(item => item.stage_id === stage.id && item.is_current !== false).map(item => <button className="um-agent-button" key={item.id} onClick={() => openTask(item.id, 'path')}>{item.title}</button>)}</> : <><p>先与小宇明确可以开始的一段学习。</p>{project.planning_enabled && !project.instructions.trim() && <button className="um-agent-button" disabled={busy} onClick={() => void setupSample()}>体验函数基础样板</button>}</>}</section></div><details className="um-work-preferences"><summary>项目安排</summary><label>主动提醒<Switch checked={project.reminders_enabled} disabled={busy || !project.planning_enabled} onCheckedChange={enabled => void act('reminders', { enabled })} /></label>{project.planning_enabled && <button className="um-agent-button" disabled={busy || project.status === 'preparing'} onClick={() => void act(active ? 'pause' : 'resume')}>{active ? '暂停学习' : '恢复学习'}</button>}{active && <button className="um-agent-button" disabled={busy} onClick={() => void act('complete')}>结束当前目标</button>}</details></div>
       <div className="um-work-view" hidden={selection.view !== 'records'}><div className="um-work-section-heading"><h2>{history ? '历史版本任务' : '当前任务记录'}</h2><button className="um-agent-button" onClick={() => setHistory(value => !value)}>{history ? '查看当前版本' : '查看历史版本'}</button></div>{tasksQuery.isPending && <p role="status">正在读取任务…</p>}{tasksQuery.isError && <p role="alert">记录无法读取。<button onClick={() => void tasksQuery.refetch()}>重试</button></p>}<div className="um-work-task-directory">{tasks.filter(item => history ? item.is_current === false : item.is_current !== false).map(item => <button key={item.id} onClick={() => openTask(item.id, 'records')}><strong>{item.title}</strong><span>{item.is_current === false && !item.exam_id ? '此版本已停止使用' : item.summary ? `${item.summary.total_score}/${item.summary.max_score} 分${item.summary.label_source === 'model_rubric_grade' ? ' · 模型参考评价' : ''}` : item.status === 'ready' ? '待作答' : item.status === 'processing' ? '评价中' : '评价未完成'}<ArrowRight size={15} /></span></button>)}</div>{!tasks.some(item => history ? item.is_current === false : item.is_current !== false) && <p>{history ? '暂无历史版本任务。' : '当前安排尚未准备学习任务，可以请小宇接续。'}</p>}</div>
-      <div className="um-work-view" hidden={selection.view !== 'resources'}><h2>项目资料</h2><div className="um-work-master-detail"><nav aria-label="项目资料目录">{project.resources.map(item => <button key={item.id} aria-pressed={item.id === resource?.id} onClick={() => setResourceId(item.id)}>{item.title}</button>)}</nav><section>{resource ? <><h3>{resource.title}</h3><p>{resource.source_kind === 'unimind_original' ? '原创内容快照' : '已读取资料'} · {new Date(resource.read_at).toLocaleDateString('zh-CN')}</p><MarkdownContent content={resource.excerpt} />{resource.source_kind !== 'unimind_original' && <a href={resource.url} target="_blank" rel="noreferrer">打开原文</a>}</> : <p>还没有项目资料，可以在对话中补充学习来源。</p>}</section></div><details><summary>跨项目资料与方法复用</summary><LearningLibraryPanel project={project} onStudy={ask} /></details></div>
-      <div className="um-work-view" hidden={selection.view !== 'proposal'}><h2>学习安排调整</h2>{project.pending_plan.plan ? <><p>{project.pending_plan.reason}</p><dl className="um-work-change-summary"><dt>目标</dt><dd>{project.pending_plan.plan.goal}</dd><dt>学习范围</dt><dd>{project.pending_plan.knowledge?.targets.join('、') || '按阶段安排'}</dd><dt>学习深度</dt><dd>{project.pending_plan.knowledge?.depth === 'transfer' ? '迁移应用' : '理解与应用'}</dd></dl>{project.pending_plan.plan.knowledge_path?.version_id !== project.knowledge?.version_id && <p>已有作答保留在原版本，新版本暂不继承这些观察。旧版未提交任务将停止作答，草稿保留用于回看。</p>}<details><summary>查看调整后的阶段</summary>{project.pending_plan.plan.stages.map(item => <p key={item.id}>{item.title}：{item.outcome}</p>)}</details><div className="um-work-actions"><button className="um-agent-button um-agent-button-primary" disabled={busy} onClick={async () => { if (await act('accept')) show('path'); }}>采用调整</button><button className="um-agent-button" disabled={busy} onClick={async () => { if (await act('reject')) show('chat'); }}>保留原安排</button></div></> : <p>当前没有待确认的调整。</p>}</div>
+      <div className="um-work-view" hidden={selection.view !== 'resources'}><h2>项目资料</h2><div className="um-work-master-detail"><nav aria-label="项目资料目录">{project.resources.map(item => <button key={item.id} aria-pressed={item.id === resource?.id} onClick={() => { clearDiscussion(); setResourceId(item.id); }}>{item.title}</button>)}</nav><section>{resource ? <><h3>{resource.title}</h3><p>{resource.source_kind === 'unimind_original' ? '原创内容快照' : '已读取资料'} · {new Date(resource.read_at).toLocaleDateString('zh-CN')}</p><MarkdownContent content={resource.excerpt} />{resource.source_kind !== 'unimind_original' && <a href={resource.url} target="_blank" rel="noreferrer">打开原文</a>}</> : <p>还没有项目资料，可以在对话中补充学习来源。</p>}</section></div><details><summary>跨项目资料与方法复用</summary><LearningLibraryPanel project={project} onStudy={ask} /></details></div>
+      <div className="um-work-view" hidden={selection.view !== 'proposal'}><h2>学习安排调整</h2>{project.pending_plan.plan ? <><p>{project.pending_plan.reason}</p><dl className="um-work-change-summary"><dt>目标</dt><dd>{project.pending_plan.plan.goal}</dd><dt>学习范围</dt><dd>{project.pending_plan.knowledge?.targets.join('、') || '按阶段安排'}</dd><dt>学习深度</dt><dd>{project.pending_plan.knowledge?.depth === 'transfer' ? '迁移应用' : '理解与应用'}</dd></dl><h3>阶段变化</h3><p>{project.pending_plan.plan.stages.filter(item => !stages.some(old => old.id === item.id && old.title === item.title && old.outcome === item.outcome)).map(item => item.title).join('、') || '阶段内容保持不变'}{stages.some(old => !project.pending_plan.plan!.stages.some(item => item.id === old.id)) && '；部分原阶段将移出当前安排'}</p><h3>对当前任务的影响</h3><p>{project.pending_plan.plan.knowledge_path?.version_id !== project.knowledge?.version_id || (mainTask && !project.pending_plan.plan.stages.some(item => item.id === mainTask.stage_id)) ? '原任务进入历史，未提交任务停止作答；草稿保留用于回看。需要为新安排准备任务。' : '当前任务与作答记录保留，调整不会自动完成任务。'}</p>{project.pending_plan.plan.knowledge_path?.version_id !== project.knowledge?.version_id && <p>已有作答保留在原版本，新版本暂不继承这些观察。旧版未提交任务将停止作答，草稿保留用于回看。</p>}<details><summary>查看调整后的阶段</summary>{project.pending_plan.plan.stages.map(item => <p key={item.id}>{item.title}：{item.outcome}</p>)}</details><div className="um-work-actions"><button className="um-agent-button um-agent-button-primary" disabled={busy} onClick={async () => { if (await act('accept')) show('path'); }}>采用调整</button><button className="um-agent-button" disabled={busy} onClick={async () => { if (await act('reject')) show('chat'); }}>保留原安排</button></div></> : <p>当前没有待确认的调整。</p>}</div>
     </>}
   </div>;
-  return { workspace: { active: activityOpen, header, activity, chatContext: discussion ? <div className="um-work-chat-context"><span>正在讨论：{discussion.title}</span><button aria-label="取消当前内容引用" onClick={() => context('')}>取消引用</button></div> : activityOpen ? <div className="um-work-chat-context">小宇 · 当前项目对话</div> : null } satisfies AgentWorkspace, getExtraPayload, openLearning: () => show(project?.planning_enabled ? 'path' : 'knowledge') };
+  return { workspace: { active: activityOpen, header, activity, chatContext: currentDiscussion?.payload ? <div className="um-work-chat-context"><span>正在讨论：{currentDiscussion.title}</span><button aria-label="取消当前内容引用" onClick={() => context('')}>取消引用</button></div> : activityOpen ? <div className="um-work-chat-context">小宇 · 当前项目对话</div> : null } satisfies AgentWorkspace, getExtraPayload, openLearning: () => show(project?.planning_enabled ? 'path' : 'knowledge') };
 }

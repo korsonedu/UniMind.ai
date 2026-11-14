@@ -1,6 +1,8 @@
 """Workspace smoke: persistent focus, side-activity isolation and owned context."""
 from types import SimpleNamespace
 from uuid import uuid4
+from datetime import timedelta
+from django.utils import timezone
 from django.test import override_settings
 from rest_framework.test import APITestCase
 from django.http import Http404
@@ -45,6 +47,11 @@ class LearningWorkspaceSmoke(APITestCase):
             activity_snapshot(foreign, {'task_id': str(self.first.pk)})
 
     def test_side_activity_supplies_context_without_moving_mainline(self):
+        self.state.reminders_enabled = True
+        self.state.followup_at = timezone.now() + timedelta(days=3)
+        self.state.followup_text = '继续当前主线'
+        self.state.save()
+        reminder = self.state.followup_at
         viewed = activity_snapshot(self.project, {'task_id': str(self.other.pk)})
         self.assertFalse(viewed['mainline'])
         self.assertEqual(viewed['task']['id'], str(self.other.pk))
@@ -57,8 +64,14 @@ class LearningWorkspaceSmoke(APITestCase):
             message=message, model=True)
         self.assertEqual(result['current_stage'], 'concept')
         self.assertNotEqual(result['feedback'], '旁支任务完成')
+        self.assertEqual(result['followup_at'], reminder)
+        self.assertEqual(result['followup_text'], '继续当前主线')
         self.assertEqual(result['teaching_guidance']['task_id'], str(self.first.pk))
         self.assertFalse(self.project.learning_events.get(kind='progress').content['mainline'])
+        self.state.refresh_from_db()
+        self.state.plan['knowledge_path'] = {'version_id': 999}
+        self.state.save()
+        self.assertFalse(activity_snapshot(self.project, {'task_id': str(self.first.pk)})['mainline'])
 
     def test_later_side_stage_success_does_not_replace_unresolved_mainline(self):
         state = SimpleNamespace(status='active', current_stage='concept', feedback='', next_action='继续检查',

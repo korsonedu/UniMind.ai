@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { ArrowRight } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import type { ProjectLearning } from '@/lib/projectLearning';
@@ -65,7 +66,7 @@ export function LearningKnowledgeView({ project, selected, onSelect, onStudy, on
         {!!targets.length && <p>本次纳入：{version.data.nodes.filter(item => closure.has(item.id)).map(item => item.title).join('、')}。包含所选目标需要的前置知识。</p>}
         <button className="um-agent-button um-agent-button-primary" disabled={!targets.length || busy || version.isFetching || !project.planning_enabled} onClick={() => void prepare()}>{busy ? '正在准备来源…' : '请小宇形成调整方案'}</button></>}
       {project.planning_enabled && <button className="um-agent-button" onClick={() => onStudy('请结合当前项目的目标，从本人资料库实际版本与原文引用整理知识地图，并与我确定学习范围。')}>和小宇构建地图</button>}
-      {!project.planning_enabled && <p>当前是自由对话项目。采用学习范围需要新建规划项目。</p>}
+      {!project.planning_enabled && <p>当前是自由对话项目。采用学习范围需要<Link to="/xiaoyu?new=project">新建规划项目</Link>，创建时选择规划模式。</p>}
       {error && <p role="alert">{error}</p>}
     </div> : node ? <>
       <div className="um-work-section-heading"><p>关系为教学建议，当前学习安排保持不变。</p><button className="um-learning-text-button" onClick={() => setAllNodes(value => !value)}>{allNodes ? '收起全部节点' : `查看全部 ${nodes.length} 个节点`}</button></div>
@@ -77,7 +78,7 @@ export function LearningKnowledgeView({ project, selected, onSelect, onStudy, on
       </div>
       <p>{node.outcome}</p>
       <div className="um-work-node-evidence"><h3>目前了解的表现</h3><p>{node.beliefs?.apply.effective_count ? `常规应用：${node.beliefs.apply.independent_count} 次独立观察，包含答对与答错。` : '常规应用：尚无可计入的作答观察。'}{node.beliefs?.transfer.effective_count ? `迁移检查：${node.beliefs.transfer.independent_count} 次独立观察。` : '迁移应用仍需实际检查。'}</p>
-        <button className="um-agent-button" disabled={!project.planning_enabled} onClick={() => onStudy(`请解释当前查看的“${node.title}”，结合它的前置知识和本项目实际表现，说明它与当前任务的关系。`, activity)}>请小宇解释这个节点</button>
+        <button className="um-agent-button" onClick={() => onStudy(`请解释当前查看的“${node.title}”，结合它的前置知识和本项目实际表现，说明它与当前任务的关系。`, activity)}>请小宇解释这个节点</button>
         <details><summary>知识内容的来源</summary><p>{node.citation.title} · 资料版本 {node.citation.revision}</p><blockquote>{node.citation.quote}</blockquote><p>引用支持知识内容，前置关系尚未独立验证。</p></details>
         {node.beliefs && <details><summary>条件估计与计算说明</summary>{(['apply', 'transfer'] as const).map(mode => <p key={mode}>{mode === 'apply' ? '常规应用' : '迁移应用'}：均值 {node.beliefs![mode].mean.toFixed(2)}，80%条件范围 {node.beliefs![mode].interval.map(v => v.toFixed(2)).join(' 至 ')}。有效权重 {node.beliefs![mode].effective_count}。</p>)}<p>固定参数尚未校准，不代表真实掌握概率。提示降低证据权重，引导与帮助未知的记录不更新估计。</p></details>}
       </div>
