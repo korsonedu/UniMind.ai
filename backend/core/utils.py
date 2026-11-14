@@ -12,7 +12,7 @@ def get_content_institution_id():
             raise ValueError
         return int(value)
     except (TypeError, ValueError):
-        raise PermissionDenied('科晟内容范围尚未配置，请联系管理员。')
+        raise PermissionDenied('内容访问范围尚未配置，请联系管理员。')
 
 
 def get_content_institution():
@@ -22,7 +22,7 @@ def get_content_institution():
         return None
     institution = Institution.objects.filter(pk=institution_id, is_active=True).first()
     if institution is None:
-        raise PermissionDenied('科晟内容范围不可用，请联系管理员。')
+        raise PermissionDenied('内容访问范围不可用，请联系管理员。')
     return institution
 
 
@@ -35,5 +35,5 @@ def apply_institution_filter(qs, user, request=None, institution_field='institut
             params = request.GET
         preview_id = params.get('preview_institution')
         if preview_id and str(preview_id) != str(institution_id if institution_id is not None else 'global'):
-            raise PermissionDenied('仅可访问科晟内容范围。')
+            raise PermissionDenied('仅可访问已授权的内容范围。')
     return qs.filter(**{f'{institution_field}_id': institution_id})

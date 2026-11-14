@@ -57,11 +57,6 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
               <br />
               智能学习平台
             </h2>
-            <p className="text-[24px] leading-relaxed text-[#6E6E73] dark:text-white/40">
-              知识图谱 × 自适应记忆 × 智能教练
-              <br />
-              为每个学习者量身定制
-            </p>
           </div>
 
           {/* Subtle feature dots */}

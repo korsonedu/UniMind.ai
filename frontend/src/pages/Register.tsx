@@ -97,7 +97,6 @@ export const Register: React.FC = () => {
   return (
     <AuthLayout
       title="创建账号"
-      subtitle="开启你的 UniMind 学习之旅"
       footer={
         <p className="text-sm text-[#6E6E73] dark:text-white/40">
           已有账号？
