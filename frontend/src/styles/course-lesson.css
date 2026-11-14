@@ -87,17 +87,23 @@ body:has(.um-lesson[data-resizing='true']) * { cursor: col-resize !important; }
 .um-course-chat-header h2 { margin: 0 0 2px; font-size: 14px; font-weight: var(--um-weight-semibold); }
 .um-course-assistant-icon { display: grid; place-items: center; flex: 0 0 28px; height: 28px; border-radius: 7px; color: var(--um-color-text-muted); cursor: pointer; }
 .um-course-assistant-icon:hover { background: var(--um-color-hover); color: var(--um-color-text); }
-.um-course-chat-header p, .um-course-chat-status { margin: 0; color: var(--um-color-text-muted); font-size: 12px; line-height: 1.7; }
+.um-course-chat-status { margin: 0; color: var(--um-color-text-muted); font-size: 12px; line-height: 1.7; }
 .um-course-chat-status button { text-decoration: underline; cursor: pointer; }
 .um-course-chat-messages { flex: 1 1 auto; height: min(32dvh, 280px); min-height: 80px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .um-course-assistant[data-expanded='true'] .um-course-chat-messages { height: min(58dvh, 500px); }
 .um-course-chat-empty { padding: 24px 8px; color: var(--um-color-text-muted); font-size: 13px; line-height: 1.8; }
 .um-course-chat-empty p { margin: 0 0 6px; color: var(--um-color-text); }
-.um-course-chat-empty span { font-size: 12px; }
 .um-course-chat-suggestions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .um-course-chat-suggestions button { padding: 5px 10px; border: 1px solid var(--um-color-border); border-radius: var(--um-radius-control); color: var(--um-color-text); font-size: 12px; cursor: pointer; }
 .um-course-chat-suggestions button:hover { background: var(--um-color-hover); }
 .um-course-chat-message { min-width: 0; margin-bottom: 14px; }
+.um-course-chat .prose {
+  --tw-prose-body: var(--um-color-text);
+  --tw-prose-headings: var(--um-color-text);
+  --tw-prose-quotes: var(--um-color-text);
+  --tw-prose-counters: var(--um-color-text-muted);
+  --tw-prose-bullets: var(--um-color-text-muted);
+}
 .um-course-chat .um-native-chat-bubble > div { min-width: 0; max-width: 100%; }
 .um-course-chat [data-native-message] { min-width: 0; max-width: 100%; }
 .um-course-chat-time, .um-course-chat-source { display: flex; align-items: center; gap: 5px; padding: 4px 6px; color: var(--um-color-accent); font-size: 12px; font-variant-numeric: tabular-nums; cursor: pointer; text-align: left; }
@@ -108,8 +114,7 @@ body:has(.um-lesson[data-resizing='true']) * { cursor: col-resize !important; }
 .um-course-chat-note button:disabled { opacity: .5; cursor: default; }
 .um-course-chat-composer { display: flex; flex-direction: column; flex-shrink: 0; gap: 8px; }
 .um-course-chat-field textarea { display: block; width: 100%; resize: vertical; min-height: 56px; max-height: 176px; padding: 12px 14px 8px; border: 0; border-radius: var(--um-radius-composer) var(--um-radius-composer) 0 0; background: transparent; color: var(--um-color-text); font-size: var(--um-font-chat); line-height: var(--um-line-chat); outline: none; }
-.um-course-chat-send-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 10px 10px; }
-.um-course-chat-send-row span { font-size: 12px; color: var(--um-color-text-muted); }
+.um-course-chat-send-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 4px 10px 10px; }
 .um-course-chat-send-row button { display: grid; place-items: center; flex: 0 0 32px; height: 32px; border-radius: 50%; color: var(--um-color-on-accent); background: var(--um-color-accent); cursor: pointer; }
 .um-course-chat-send-row button:disabled { background: var(--um-color-disabled); color: var(--um-color-text-muted); cursor: default; }
 .um-course-chat-new { display: flex; align-items: center; gap: 5px; align-self: flex-end; font-size: 12px; color: var(--um-color-text-muted); cursor: pointer; }
@@ -176,7 +181,6 @@ body:has(.um-lesson[data-resizing='true']) * { cursor: col-resize !important; }
   .um-lesson-controls { transition: none; }
 }
 
-.um-course-chat-heading p { overflow-wrap: anywhere; }
 .um-course-mode-mobile { display: none; }
 .um-course-chat-history { width: min(280px, calc(100vw - 32px)); max-height: 50dvh; overflow-y: auto; border-radius: var(--um-radius-dialog); box-shadow: var(--um-shadow-overlay); }
 .um-course-chat-history [role='menuitem'] { display: block; white-space: normal; overflow-wrap: anywhere; font-size: 13px; }
