@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.models import SecurityAuditLog
+from core.security_audit import record_security_event
 from .authentication import DirectusAdminAuthentication
 from .common import content_institution, paginate
 from . import courses, people, quizzes, uploads, commerce, teaching, transcripts
@@ -75,12 +76,13 @@ class OperationView(APIView):
         request_id = serializers.UUIDField().run_validation(data.get('request_id'))
         if operation.startswith(('courses.', 'modules.', 'uploads.', 'knowledge.', 'questions.')):
             content_institution(required=True)
+        request.request_id = str(request_id)
         try:
             with transaction.atomic():
                 result = WRITES[operation](request, data)
                 if not getattr(request, 'backoffice_no_change', False):
-                    SecurityAuditLog.objects.create(
-                        event_type='admin_action', user=request.user, request_id=str(request_id),
+                    record_security_event(
+                        'admin_action', request=request, user=request.user,
                         detail=json.dumps({'channel': 'directus', 'operator': request.auth, 'operation': operation,
                                            'target': result.get('id'), 'updated': result.get('updated'),
                                            'enabled_features': result.get('enabled_features'),

@@ -243,8 +243,6 @@ class LoginView(APIView):
 
     @method_decorator(rate_limit(key_prefix="login", max_requests=10, window_seconds=300))
     def post(self, request, *args, **kwargs):
-        from core.models import SecurityAuditLog
-
         login_id = request.data.get('email') or request.data.get('username') or ''
         password = request.data.get('password')
         logger.debug("Login attempt id=%s", login_id)
@@ -252,105 +250,43 @@ class LoginView(APIView):
         if not login_id or not password:
             return Response({'error': '请提供邮箱和密码'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 查找用户（锁定检查需要拿到 user 对象）
-        target_user = None
-        if '@' in str(login_id):
-            target_user = User.objects.filter(email__iexact=login_id).first()
-        else:
+        from django.core.exceptions import ValidationError
+        from users.accounts.services import authenticate_account
+        try:
+            user = authenticate_account(request, str(login_id), password)
+        except ValidationError as exc:
             target_user = User.objects.filter(username=login_id).first()
+            if not target_user:
+                target_user = User.objects.filter(email__iexact=login_id).first()
+            locked = bool(target_user and target_user.locked_until and target_user.locked_until > timezone.now())
+            return Response({'error': '；'.join(exc.messages), 'code': 'account_locked' if locked else 'invalid_credentials'},
+                            status=423 if locked else 401)
 
-        # 账号锁定检查
-        if target_user and target_user.locked_until and target_user.locked_until > timezone.now():
-            remaining = int((target_user.locked_until - timezone.now()).total_seconds() / 60) + 1
-            SecurityAuditLog.objects.create(
-                event_type='login_locked',
-                user=target_user,
-                ip_address=_get_client_ip(request),
-                user_agent=request.META.get('HTTP_USER_AGENT', '')[:255],
-                detail=f'账号锁定中，剩余 {remaining} 分钟',
-            )
-            security_logger.warning("login_locked user=%s ip=%s remaining=%dmin", target_user.username, _get_client_ip(request), remaining)
-            return Response(
-                {'error': f'账号已锁定，请 {remaining} 分钟后重试', 'code': 'account_locked'},
-                status=status.HTTP_423_LOCKED,
-            )
+        with transaction.atomic():
+            User.objects.select_for_update().get(pk=user.pk)
+            token = LoginSession.issue(user)
+        record_event('user_login', user=user)
 
-        # 执行认证
-        user = None
-        if target_user:
-            user = authenticate(username=target_user.username, password=password)
-        else:
-            user = authenticate(username=login_id, password=password)
+        # 异步预计算用户画像（用于自适应指令）
+        try:
+            from ai_assistant.tasks import precompute_user_profile
+            precompute_user_profile.delay(user_id=user.id)
+        except Exception:
+            pass  # 异步任务失败不影响登录
 
-        client_ip = _get_client_ip(request)
-        user_agent = request.META.get('HTTP_USER_AGENT', '')[:255]
-
-        if user:
-            # 登录成功：重置失败计数
-            if user.failed_login_count > 0 or user.locked_until:
-                user.failed_login_count = 0
-                user.locked_until = None
-                user.save(update_fields=['failed_login_count', 'locked_until'])
-            with transaction.atomic():
-                User.objects.select_for_update().get(pk=user.pk)
-                token = LoginSession.issue(user)
-            user.last_login = timezone.now()
-            user.save(update_fields=['last_login'])
-            SecurityAuditLog.objects.create(
-                event_type='login_success',
-                user=user,
-                ip_address=client_ip,
-                user_agent=user_agent,
-            )
-            security_logger.info("login_success user=%s ip=%s", user.username, client_ip)
-            record_event('user_login', user=user)
-            
-            # 异步预计算用户画像（用于自适应指令）
-            try:
-                from ai_assistant.tasks import precompute_user_profile
-                precompute_user_profile.delay(user_id=user.id)
-            except Exception:
-                pass  # 异步任务失败不影响登录
-            
-            response = Response({
-                'token': token.key,
-                'user': UserSerializer(user).data
-            })
-            is_secure = getattr(settings, 'IS_PROD', False)
-            response.set_cookie(
-                'auth_token', token.key,
-                httponly=True,
-                secure=is_secure,
-                samesite='Lax',
-                max_age=30 * 24 * 3600,
-            )
-            return response
-        else:
-            # 登录失败：累加计数，≥5次锁定15分钟
-            if target_user:
-                target_user.failed_login_count += 1
-                if target_user.failed_login_count >= 5:
-                    target_user.locked_until = timezone.now() + datetime.timedelta(minutes=15)
-                    SecurityAuditLog.objects.create(
-                        event_type='login_locked',
-                        user=target_user,
-                        ip_address=client_ip,
-                        user_agent=user_agent,
-                        detail=f'连续失败 {target_user.failed_login_count} 次，锁定 15 分钟',
-                    )
-                    security_logger.warning("account_locked user=%s ip=%s failures=%d", target_user.username, client_ip, target_user.failed_login_count)
-                else:
-                    SecurityAuditLog.objects.create(
-                        event_type='login_failure',
-                        user=target_user,
-                        ip_address=client_ip,
-                        user_agent=user_agent,
-                        detail=f'第 {target_user.failed_login_count} 次失败',
-                    )
-                    security_logger.info("login_failure user=%s ip=%s attempt=%d", target_user.username, client_ip, target_user.failed_login_count)
-                target_user.save(update_fields=['failed_login_count', 'locked_until'])
-            logger.debug("Authentication failed id=%s", login_id)
-            return Response({'error': '邮箱或密码错误'}, status=status.HTTP_401_UNAUTHORIZED)
+        response = Response({
+            'token': token.key,
+            'user': UserSerializer(user).data
+        })
+        is_secure = getattr(settings, 'IS_PROD', False)
+        response.set_cookie(
+            'auth_token', token.key,
+            httponly=True,
+            secure=is_secure,
+            samesite='Lax',
+            max_age=30 * 24 * 3600,
+        )
+        return response
 
 
 class LoginByCodeView(APIView):
@@ -546,13 +482,19 @@ class UpdatePasswordView(generics.UpdateAPIView):
         user = self.get_object()
         old_p = request.data.get('old_password', '')
         new_p = request.data.get('new_password', '')
-        if not new_p or len(str(new_p)) < 8:
-            return Response({'error': '新密码至少需要 8 位'}, status=400)
+        from django.core.exceptions import ValidationError
+        from users.accounts.forms import clean_account_password
+        from core.security_audit import record_security_event
+        try:
+            clean_account_password(str(new_p))
+        except ValidationError as exc:
+            return Response({'error': '；'.join(exc.messages)}, status=400)
         if old_p and old_p == new_p:
             return Response({'error': '新密码不能与旧密码相同'}, status=400)
         if user.check_password(old_p):
             user.set_password(new_p)
             user.save(update_fields=['password'])
+            record_security_event('password_change', request=request, user=user, detail='authenticated_change')
             # 删除所有旧 token，使泄露的 token 失效，创建新 token 保持登录
             new_token = LoginSession.issue(user)
             resp = Response({'status': 'ok'})

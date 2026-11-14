@@ -13,6 +13,7 @@ from django.utils.dateparse import parse_datetime
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from core.rate_limit import _incr_cache
+from core.security_audit import record_security_event
 from users.models import User
 
 
@@ -157,15 +158,19 @@ def authenticate_account(request, identifier, password):
         candidates = list(User.objects.filter(email__iexact=identifier).values_list('pk', flat=True)[:2])
     if len(candidates) != 1:
         make_password(password)
+        record_security_event('login_failure', request=request, detail='account_not_unique_or_missing')
         raise ValidationError('账号或密码不正确；邮箱对应多个账号时请使用原用户名并联系我们。')
     with transaction.atomic():
         user = User.objects.select_for_update().get(pk=candidates[0])
         if not user.is_active or (user.locked_until and user.locked_until > timezone.now()):
+            event_type = 'login_locked' if user.is_active else 'login_failure'
             error = '账号暂不可用，请稍后重试或联系我们。'
         elif authenticate(request, username=user.username, password=password) is None:
+            event_type = 'login_failure'
             user.failed_login_count += 1
             if user.failed_login_count >= 5:
                 user.locked_until = timezone.now() + timedelta(minutes=15)
+                event_type = 'login_locked'
             user.save(update_fields=['failed_login_count', 'locked_until'])
             error = '账号或密码不正确。'
         else:
@@ -173,11 +178,13 @@ def authenticate_account(request, identifier, password):
             user.locked_until = None
             user.last_login = timezone.now()
             user.save(update_fields=['failed_login_count', 'locked_until', 'last_login'])
+            record_security_event('login_success', request=request, user=user)
             return user
+    record_security_event(event_type, request=request, user=user)
     raise ValidationError(error)
 
 
-def reset_account_password(*, email, code, password):
+def reset_account_password(*, email, code, password, request=None):
     from .forms import clean_account_password
     clean_account_password(password)
     users = list(User.objects.filter(email__iexact=email, email_verified=True, is_active=True)[:2])
@@ -190,3 +197,4 @@ def reset_account_password(*, email, code, password):
         user.failed_login_count = 0
         user.locked_until = None
         user.save(update_fields=['password', 'failed_login_count', 'locked_until'])
+        record_security_event('password_change', request=request, user=user, detail='email_reset')

@@ -1,7 +1,9 @@
 from django.contrib import admin
+from users.accounts.forms import LockedAdminAuthenticationForm
 from .admin_base import PlatformModelAdmin
 from .models import PromptTemplate, PromptQualityLog, LegalDocument
 
+admin.site.login_form = LockedAdminAuthenticationForm
 admin.site.site_header = 'UniMind 统一管理后台'
 admin.site.site_title = 'UniMind 管理'
 admin.site.index_title = '内容与服务配置'

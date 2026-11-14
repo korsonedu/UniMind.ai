@@ -257,6 +257,11 @@ OAUTH2_PROVIDER = {
 }
 CSRF_COOKIE_SAMESITE = os.getenv("CSRF_COOKIE_SAMESITE", "Lax")
 SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
+AUTH_SESSION_IDLE_SECONDS = _get_int("AUTH_SESSION_IDLE_SECONDS", 1800)
+if AUTH_SESSION_IDLE_SECONDS <= 0:
+    raise ImproperlyConfigured("AUTH_SESSION_IDLE_SECONDS must be positive.")
+SESSION_COOKIE_AGE = AUTH_SESSION_IDLE_SECONDS
+SESSION_SAVE_EVERY_REQUEST = True
 
 SESSION_COOKIE_SECURE = _get_bool("SESSION_COOKIE_SECURE", default=IS_PROD)
 CSRF_COOKIE_SECURE = _get_bool("CSRF_COOKIE_SECURE", default=IS_PROD)
@@ -544,18 +549,14 @@ LOGGING = {
             "formatter": "verbose",
         },
         "file_api": {
-            "class": "logging.handlers.RotatingFileHandler",
+            "class": "logging.handlers.WatchedFileHandler",
             "filename": os.path.join(LOG_DIR, "api_access.log"),
-            "maxBytes": 50 * 1024 * 1024,  # 50MB
-            "backupCount": 180,
             "formatter": "verbose",
             "encoding": "utf-8",
         },
         "file_security": {
-            "class": "logging.handlers.RotatingFileHandler",
+            "class": "logging.handlers.WatchedFileHandler",
             "filename": os.path.join(LOG_DIR, "security.log"),
-            "maxBytes": 50 * 1024 * 1024,
-            "backupCount": 180,
             "formatter": "verbose",
             "encoding": "utf-8",
         },
