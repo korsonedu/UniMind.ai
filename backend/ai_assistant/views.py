@@ -77,6 +77,8 @@ def _reserve_chat_request(user, data, bot):
     }
     if 'course_context' in data:
         request_content['course_context'] = data['course_context']
+    if 'learning_activity' in data:
+        request_content['learning_activity'] = data['learning_activity']
     fingerprint = hashlib.sha256(json.dumps(request_content, sort_keys=True).encode()).hexdigest()
     return reserve_ai_call(user, data.get('request_id'), fingerprint=fingerprint)
 

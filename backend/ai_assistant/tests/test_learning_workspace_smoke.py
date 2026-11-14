@@ -86,3 +86,23 @@ class LearningWorkspaceSmoke(APITestCase):
         self.assertEqual(result['status'], 'remediate')
         self.assertEqual(result['stage_id'], 'concept')
         self.assertEqual(result['task_id'], 'first')
+
+    def test_selected_node_stays_explicit_beside_its_prerequisites(self):
+        from ai_assistant.services.function_sample import seed_content, setup_sample
+        project = ConversationProject.objects.create(user=self.user, name='节点引用冒烟样本')
+        ProjectLearning.objects.create(project=project, planning_enabled=True)
+        seed_content()
+        result = setup_sample(project)
+        viewed = activity_snapshot(project, {'version_id': result['project']['knowledge']['version_id'], 'node_id': 'function_value'})
+        self.assertEqual(viewed['node_id'], 'function_value')
+        self.assertEqual(viewed['targets'], ['function_value'])
+        self.assertEqual([node['id'] for node in viewed['nodes']], ['function_concept', 'function_value'])
+        self.assertFalse(viewed['mainline'])
+        bot = Bot.objects.create(name='小宇', bot_type='planner')
+        conversation = Conversation.objects.create(user=self.user, project=project, bot=bot, conversation_id=uuid4())
+        message = AIChatMessage.objects.create(user=self.user, bot=bot, conversation_id=conversation.conversation_id,
+            role='user', content='解释正在查看的节点。', metadata={'learning_activity': viewed})
+        from ai_assistant.services.dsh_service import build_context
+        context = build_context(self.user, message.content, chat_context={'conversation_id': str(conversation.conversation_id),
+            'bot_id': bot.pk, 'message_id': message.pk})
+        self.assertEqual(context['learning_activity']['node_id'], 'function_value')

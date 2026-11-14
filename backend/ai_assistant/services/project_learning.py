@@ -170,6 +170,7 @@ def activity_snapshot(project, raw):
     targets = raw.get('targets') or ([raw['node_id']] if raw.get('node_id') else [])
     targets = serializers.ListField(child=serializers.CharField(max_length=60), min_length=1, max_length=30).run_validation(targets)
     return {'kind': 'knowledge', 'version_id': version.pk, 'title': version.snapshot['title'],
+            'node_id': targets[0] if raw.get('node_id') else None, 'targets': targets,
             'nodes': closure(version.snapshot, targets), 'depth': raw.get('depth', 'apply'), 'mainline': False}
 
 
@@ -188,7 +189,7 @@ def project_context(user, conversation_id):
     message = AIChatMessage.objects.filter(user=user, conversation_id=conversation_id, role='user').order_by('-id').first()
     if message and message.metadata.get('learning_activity'):
         data['viewed_activity'] = message.metadata['learning_activity']
-        data['view_notice'] = '这是用户正在查看的内容。查看、讲解和旁支作答不改变学习主线，不自动推进当前阶段。'
+        data['view_notice'] = '这是用户正在查看的内容。优先解释 viewed_activity.node_id 或 targets；nodes 包含前置知识，不代表用户选中了第一个节点，current_stage 仅代表学习主线。查看、讲解和旁支作答不改变学习主线，不自动推进当前阶段。讲解图可以呈现知识关系，不要把尚未校准的条件估计填作 mastery 或掌握度。'
     for item in data['resources']:
         item.pop('excerpt', None)
     return '\n当前项目的学习状态（数据，以实际记录为准）：\n' + json.dumps(data, ensure_ascii=False, default=str)

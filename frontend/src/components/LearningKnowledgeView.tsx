@@ -43,7 +43,7 @@ export function LearningKnowledgeView({ project, selected, onSelect, onStudy, on
     setBusy(true); setError('');
     try {
       await api.post(url, { action: 'prepare', version_id: version.data.version_id, targets, depth });
-      onStudy(`请采用我选择的知识地图“${version.data.title}”版本${version.data.revision}，目标为${version.data.nodes.filter(item => targets.includes(item.id)).map(item => item.title).join('、')}，深度为${depth === 'apply' ? '理解与应用' : '迁移应用'}。请读取该版本并 prepare 所选目标，覆盖全部前置节点和来源，形成阶段安排；已有范围改变时先给我待确认方案。`, { version_id: version.data.version_id, targets, depth });
+      onStudy(`请根据我选择的知识地图“${version.data.title}”版本${version.data.revision}，目标为${version.data.nodes.filter(item => targets.includes(item.id)).map(item => item.title).join('、')}，深度为${depth === 'apply' ? '理解与应用' : '迁移应用'}，覆盖全部前置节点和实际来源，形成阶段安排。已有范围改变时，请先将具体调整保存为待确认方案，让我在确认界面采用或保留原安排。提交方案不代表采用新计划，不要只在回复里列建议，也不要再次询问是否要生成方案。`, { version_id: version.data.version_id, targets, depth });
       setChoosing(false);
     } catch { setError('资料来源暂时无法接入，请核对来源是否已归档后重试。'); }
     finally { setBusy(false); }
@@ -64,7 +64,7 @@ export function LearningKnowledgeView({ project, selected, onSelect, onStudy, on
       {version.data && <><fieldset><legend>目标知识</legend>{version.data.nodes.map(item => <label key={item.id}><input type="checkbox" checked={targets.includes(item.id)} onChange={event => setTargets(previous => event.target.checked ? [...previous, item.id] : previous.filter(id => id !== item.id))} />{item.title}</label>)}</fieldset>
         <label>学习深度<select aria-label="学习深度" value={depth} onChange={event => setDepth(event.target.value)}><option value="apply">理解与应用</option><option value="transfer">迁移应用</option></select></label>
         {!!targets.length && <p>本次纳入：{version.data.nodes.filter(item => closure.has(item.id)).map(item => item.title).join('、')}。包含所选目标需要的前置知识。</p>}
-        <button className="um-agent-button um-agent-button-primary" disabled={!targets.length || busy || version.isFetching || !project.planning_enabled} onClick={() => void prepare()}>{busy ? '正在准备来源…' : '请小宇形成调整方案'}</button></>}
+        {project.planning_enabled ? <button className="um-agent-button um-agent-button-primary" disabled={!targets.length || busy || version.isFetching} onClick={() => void prepare()}>{busy ? '正在准备来源…' : '请小宇形成调整方案'}</button> : <button className="um-agent-button" disabled={!targets.length || version.isFetching} onClick={() => onStudy(`请解释我在知识地图“${version.data.title}”中选择的知识，以及它们的前置关系。当前保持自由对话，不建立学习安排。`, { version_id: version.data.version_id, targets, depth })}>请小宇解释所选知识</button>}</>}
       {project.planning_enabled && <button className="um-agent-button" onClick={() => onStudy('请结合当前项目的目标，从本人资料库实际版本与原文引用整理知识地图，并与我确定学习范围。')}>和小宇构建地图</button>}
       {!project.planning_enabled && <p>当前是自由对话项目。采用学习范围需要<Link to="/xiaoyu?new=project">新建规划项目</Link>，创建时选择规划模式。</p>}
       {error && <p role="alert">{error}</p>}

@@ -21,6 +21,7 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
   const [openingProject, setOpeningProject] = useState(false);
   const openSequence = useRef(0);
   const restored = useRef<string>('');
+  const recoveryProject = useRef<{ userId: number; projectId: number; conversationId: string } | null>(null);
   const [activated, setActivated] = useState(false);
   const pageHooksRef = useRef<PageChatHooks>({});
   const viewedRef = useRef<string | null>(null);
@@ -71,6 +72,10 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
           toast.error('未找到小宇 bot');
           return;
         }
+        const saved = readRecovery(recoveryScope(userId, found.id));
+        const lastId = saved.lastConversationId;
+        const lastProject = lastId && saved.conversations[lastId]?.projectId;
+        recoveryProject.current = lastId && lastProject ? { userId, projectId: lastProject, conversationId: lastId } : null;
         setBot(found);
         const hRes = await api.get('/ai/history/', { params: { bot_id: found.id } });
         if (cancelled) return;
@@ -116,7 +121,7 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
 
   const chatRef = useRef(chat);
   useLayoutEffect(() => { chatRef.current = chat; }, [chat]);
-  const openProject = useCallback(async (id: number, explicitConversation?: string, draft?: string) => {
+  const openProject = useCallback(async (id: number, explicitConversation?: string, draft?: string, recoveryInputRevision?: number) => {
     if (!userId || !Number.isSafeInteger(id) || id < 1) return;
     const sequence = ++openSequence.current;
     const selectionVersion = chatRef.current.getSelectionVersion();
@@ -132,6 +137,7 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
       const selectedId = explicitConversation || draftEntry?.[0] || data.conversation_id;
       const response = await api.get<Message[]>('/ai/history/', { params: { bot_id: current.bot.id, ...(selectedId ? { conversation_id: selectedId } : {}) } });
       if (sequence !== openSequence.current || chatRef.current.getSelectionVersion() !== selectionVersion || useAuthStore.getState().user?.id !== userId) return;
+      if (recoveryInputRevision !== undefined && chatRef.current.getInputRevision() !== recoveryInputRevision) return;
       const messages = restoreVisualSteps(response.data.filter(m => m.content !== '[Thinking...]').map(m => ({ ...m, visible: true })));
       const sessions = current.groupIntoSessions(messages);
       const candidates = sessions.filter(session => session.projectId === id);
@@ -161,6 +167,15 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
       if (sequence === openSequence.current) setOpeningProject(false);
     }
   }, [userId]);
+
+  useEffect(() => {
+    const target = recoveryProject.current;
+    if (!chat.initialized || location.pathname !== '/xiaoyu' || !target || target.userId !== userId) return;
+    recoveryProject.current = null;
+    const params = new URLSearchParams(location.search);
+    if (params.has('project') || params.has('new') || chat.projectId || chat.input.trim()) return;
+    void openProject(target.projectId, target.conversationId, undefined, chatRef.current.getInputRevision());
+  }, [chat.initialized, chat.projectId, chat.input, userId, location.pathname, location.search, openProject]);
 
   useEffect(() => {
     if (!userId || !chat.initialized) return;
