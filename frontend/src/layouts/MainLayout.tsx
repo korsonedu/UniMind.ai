@@ -143,7 +143,6 @@ export const MainLayout: React.FC = () => {
   const sidebarVisible = notesOpen && sidebarAvailable;
   const activeSidebarView = courseSidebarAvailable || sidebarView === 'notes' ? sidebarView : 'home';
   const notesVisible = sidebarVisible && activeSidebarView === 'notes';
-  useEffect(() => { if (notesVisible) setNotesMounted(true); }, [notesVisible]);
   const sidebarTools = courseSidebarAvailable ? [
     { id: 'chat' as const, label: '小宇', icon: ChatCircle },
     { id: 'outline' as const, label: '课程大纲', icon: ListBullets },
