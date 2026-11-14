@@ -57,7 +57,7 @@ export function CourseTree({ courses, treeCourses, selectedId, loading, error, q
   const moduleOptions = [...new Map(courses.filter(course => !subjectFilter || subjectName(course) === subjectFilter).map(course => [courseGroups(course, 'module')[1], course])).entries()]
     .sort(([, left], [, right]) => (left.module ? left.module_sort_order || 0 : Infinity) - (right.module ? right.module_sort_order || 0 : Infinity) || (left.module_name || '').localeCompare(right.module_name || '', 'zh-CN'));
   const toggle = (key: string) => setCollapsed(previous => { const next = new Set(previous); if (next.has(key)) next.delete(key); else next.add(key); return next; });
-  const leaves = (items: Course[]) => items.map(course => <li key={course.id}><button type="button" className="um-course-list-item" title={course.title} aria-current={selectedId === course.id ? 'page' : undefined} onClick={() => onSelect(course)}><span className="um-course-list-title">{course.title}</span></button></li>);
+  const leaves = (items: Course[]) => items.map(course => <li key={course.id}><button type="button" className="um-course-list-item um-course-tree-leaf" title={`${course.title} · 课程，点击打开`} aria-description="课程，可直接打开" aria-current={selectedId === course.id ? 'page' : undefined} onClick={() => onSelect(course)}><span className="um-course-list-title">{course.title}</span></button></li>);
   return <div className="um-course-list">
     <div className="um-course-list-heading"><h2>课程</h2><span className="um-course-muted">{!loading && !error && `${filtersActive || query.trim() ? `${matchingCourses.length} / ` : ''}${courses.length} 门`}</span></div>
     <div className="um-course-directory-tools">
