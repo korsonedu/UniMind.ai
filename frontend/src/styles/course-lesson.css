@@ -226,3 +226,22 @@ body:has(.um-lesson[data-resizing='true']) * { cursor: col-resize !important; }
 .um-course-visual-error p { margin: 4px 0; }
 .um-course-visual-error button { color: var(--um-color-accent); text-decoration: underline; cursor: pointer; }
 .um-course-chat-message .um-course-visual { margin: 4px 0 8px; }
+
+.um-course-detail-player > .um-lesson-unified { grid-template-columns:minmax(0,1fr); max-width:none; gap:0; }
+.um-lesson-unified .um-lesson-intro { flex:0 0 auto; padding-top:20px; border-top:1px solid var(--um-color-border); }
+.um-lesson-unified .um-lesson-intro h2 { margin:0 0 12px; font-size:14px; font-weight:var(--um-weight-semibold); }
+.um-lesson-unified .um-lesson-description { max-height:none; overflow:visible; }
+.um-lesson-unified .um-lesson-description p { font-size:14px; }
+.um-course-sidebar-content { display:flex; flex-direction:column; width:100%; min-width:0; min-height:0; padding:16px 20px 20px; }
+.um-course-sidebar-content h2 { margin:0 0 14px; font-size:14px; font-weight:var(--um-weight-semibold); line-height:1.5; }
+.um-course-sidebar-content .um-lesson-empty { margin:0; color:var(--um-color-text-muted); font-size:13px; line-height:1.7; }
+.um-course-sidebar-content .um-lesson-outline-count { margin:-7px 0 12px; color:var(--um-color-text-muted); font-size:12px; }
+.um-course-sidebar-chat { display:flex; flex:1; min-height:0; }
+.um-course-sidebar-chat[hidden] { display:none; }
+.um-course-sidebar-chat .um-course-assistant { position:static; flex:1; width:100%; min-width:0; min-height:0; max-height:none; align-items:stretch; pointer-events:auto; }
+.um-course-sidebar-chat .um-course-chat { flex:1; height:100%; max-height:none; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.um-course-sidebar-chat .um-course-chat-header h2 { margin:0; }
+.um-course-sidebar-chat .um-course-chat-messages { height:0; flex:1; }
+.um-course-sidebar-chat .um-course-chat-footer { justify-content:flex-end; }
+.um-course-sidebar-content .um-lesson-outline-section { flex:1; }
+.um-course-sidebar-content .um-lesson-outline-items { flex:1; max-height:none; }

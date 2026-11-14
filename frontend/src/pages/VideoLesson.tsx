@@ -1,20 +1,19 @@
 import { useSystemStore, type ExperiencePreferences } from '@/store/useSystemStore';
 import type { Course } from '@/types/api';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { flushSync } from 'react-dom';
+import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
+import { createPortal, flushSync } from 'react-dom';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Play, Pause, Star, FileText, Download, ArrowsOut, ArrowsIn, ClosedCaptioning, SpeakerHigh, SpeakerX } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { OutlinePanel } from '@/components/course/OutlinePanel';
 import { SubtitlesOverlay } from '@/components/course/SubtitlesOverlay';
-import { LessonLayout } from '@/components/course/LessonLayout';
 import { CourseChatPanel } from '@/components/course/CourseChatPanel';
 import { toast } from 'sonner';
 import { shouldTogglePlayback } from './videoLessonKeyboard';
 import { useLearningSession } from '@/hooks/useLearningSession';
 import { useDesktopStore } from '@/lib/desktop';
-import { useNotesSidebarAvailability } from '@/components/WorkspaceContext';
+import { CourseSidebarContext, useNotesSidebarAvailability } from '@/components/WorkspaceContext';
 import '@/styles/course-lesson.css';
 
 const formatTime = (s: number) => {
@@ -27,14 +26,12 @@ interface VideoLessonProps {
   isFavorite?: boolean;
   favoritePending?: boolean;
   onFavoriteChange?: () => void;
-  sidebarToggleHost?: HTMLElement | null;
 }
 
-export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, favoritePending = false, onFavoriteChange, sidebarToggleHost }) => {
+export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, favoritePending = false, onFavoriteChange }) => {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const linkedPosition = searchParams.get('t');
-  const linkedConversation = searchParams.get('conversation');
   const linkedSeconds = linkedPosition?.trim() ? Number(linkedPosition) : null;
   const updateUser = useAuthStore(s => s.updateUser);
   const userId = useAuthStore(s => s.user?.id);
@@ -46,10 +43,8 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   const [hasAwarded, setHasAwarded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const { videoSpeed: playbackRate, videoSubtitles: subtitlesVisible, courseAssistantMode, setExperience } = useSystemStore();
-  const [sidebarSelection, setSidebarSelection] = useState<{ view: 'chat' | 'materials'; conversation: string | null }>({ view: 'chat', conversation: linkedConversation });
-  const sidebarView = sidebarSelection.conversation === linkedConversation ? sidebarSelection.view : 'chat';
-  const setSidebarView = useCallback((view: 'chat' | 'materials') => setSidebarSelection({ view, conversation: linkedConversation }), [linkedConversation]);
+  const { videoSpeed: playbackRate, videoSubtitles: subtitlesVisible, setExperience } = useSystemStore();
+  const { host: sidebarHost, view: sidebarView, visible: sidebarVisible, setAvailable: setSidebarAvailable } = useContext(CourseSidebarContext);
   const [showControls, setShowControls] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -69,11 +64,6 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     && (!offlineDownload.expiresAt || offlineDownload.expiresAt > offlineNow);
   const [offlinePending, setOfflinePending] = useState(false);
 
-  const changeAssistantMode = useCallback((mode: ExperiencePreferences['courseAssistantMode']) => {
-    setExperience({ courseAssistantMode: mode });
-    if (mode === 'sidebar') setSidebarView('chat');
-  }, [setExperience, setSidebarView]);
-
   const handleOffline = async () => {
     const desktop = window.unimindDesktop;
     if (!desktop) return;
@@ -89,6 +79,11 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   };
 
   useNotesSidebarAvailability(!loading && course?.id === courseId);
+  const sidebarReady = !loading && course?.id === courseId;
+  useEffect(() => {
+    setSidebarAvailable(sidebarReady);
+    return () => setSidebarAvailable(false);
+  }, [sidebarReady, courseId, setSidebarAvailable]);
   useLearningSession({ enabled: !loading && course?.id === courseId && !!course.video_file, kind: 'video', courseId, videoRef });
 
   useEffect(() => {
@@ -312,8 +307,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   if (!course) return <div className="um-lesson um-lesson-state">课程未找到</div>;
 
   return (
-    <LessonLayout aspectRatio={videoAspectRatio} toolbarHost={sidebarToggleHost} revealKey={searchParams.get('conversation')}>
-      {({ expandSidebar }) => <>
+    <div className="um-lesson um-lesson-unified" style={{ '--um-video-aspect-ratio': videoAspectRatio } as React.CSSProperties}>
       <section className="um-lesson-view" aria-label="视频与课程信息">
         <div className="um-lesson-stage">
         <div
@@ -402,33 +396,31 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
             <button className="um-lesson-favorite" disabled={favoritePending || !onFavoriteChange} onClick={onFavoriteChange} aria-pressed={isFavorite}><Star size={18} weight={isFavorite ? 'fill' : 'regular'} />{isFavorite ? '已收藏' : '收藏'}</button>
           </div>
         </header>
+        <section className="um-lesson-intro" aria-labelledby="lesson-intro-heading">
+          <h2 id="lesson-intro-heading">课程简介</h2>
+          <div className="um-lesson-description"><p>{course.description || '暂无课程简介'}</p></div>
+        </section>
       </section>
-      <aside className="um-lesson-sidebar" data-assistant-mode={courseAssistantMode} aria-label="学习侧栏">
-        {courseAssistantMode === 'sidebar' && <div className="um-lesson-sidebar-tabs" role="group" aria-label="右侧内容">
-          <button type="button" aria-pressed={sidebarView === 'chat'} onClick={() => setSidebarView('chat')}>小宇</button>
-          <button type="button" aria-pressed={sidebarView === 'materials'} onClick={() => setSidebarView('materials')}>课程内容</button>
-        </div>}
-        <CourseChatPanel key={`${userId}:${courseId}`} courseId={courseId} videoRef={videoRef}
-          mode={courseAssistantMode} visible={courseAssistantMode === 'floating' || sidebarView === 'chat'}
-          onModeChange={changeAssistantMode} onExpandSidebar={expandSidebar} onSeek={seekTo} />
-        <div className="um-course-info" hidden={courseAssistantMode === 'sidebar' && sidebarView !== 'materials'}>
+      {sidebarHost && createPortal(<aside className="um-course-sidebar-content" aria-label="课程侧栏">
+        <div id="sidebar-panel-chat" role="tabpanel" aria-labelledby="sidebar-tab-chat" className="um-course-sidebar-chat" hidden={sidebarView !== 'chat'}>
+          <CourseChatPanel key={`${userId}:${courseId}`} courseId={courseId} videoRef={videoRef}
+            mode="sidebar" visible={sidebarVisible && sidebarView === 'chat'} onSeek={seekTo} />
+        </div>
+        <div id="sidebar-panel-outline" role="tabpanel" aria-labelledby="sidebar-tab-outline" className="um-course-info" hidden={sidebarView !== 'outline'}>
         <section className="um-lesson-outline-section" aria-labelledby="lesson-outline-heading">
           <h2 id="lesson-outline-heading">课程大纲</h2>
           {course.ai_outline_enabled !== false ? <OutlinePanel courseId={courseId} videoRef={videoRef} /> : <p className="um-lesson-empty">本课程暂无大纲</p>}
         </section>
+        </div>
+        <div id="sidebar-panel-materials" role="tabpanel" aria-labelledby="sidebar-tab-materials" className="um-course-info" hidden={sidebarView !== 'materials'}>
         <section className="um-lesson-resources" aria-labelledby="lesson-resources-heading">
           <h2 id="lesson-resources-heading">课程资料</h2>
           {course.courseware && <a href={course.courseware} download target="_blank" rel="noopener noreferrer"><FileText size={18} /><span>教学课件</span><Download size={16} /></a>}
           {course.reference_materials && <a href={course.reference_materials} download target="_blank" rel="noopener noreferrer"><FileText size={18} /><span>参考资料</span><Download size={16} /></a>}
           {!course.courseware && !course.reference_materials && <p className="um-lesson-empty">暂无课程资料</p>}
         </section>
-        <section className="um-lesson-intro" aria-labelledby="lesson-intro-heading">
-          <h2 id="lesson-intro-heading">课程简介</h2>
-          <div className="um-lesson-description" tabIndex={0}><p>{course.description || '暂无课程简介'}</p></div>
-        </section>
         </div>
-      </aside>
-      </>}
-    </LessonLayout>
+      </aside>, sidebarHost)}
+    </div>
   );
 };
