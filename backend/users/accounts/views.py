@@ -107,7 +107,7 @@ def account_reset_password(request):
     form = ResetPasswordForm(request.POST if request.method == 'POST' else None)
     if request.method == 'POST' and form.is_valid():
         try:
-            reset_account_password(**form.cleaned_data)
+            reset_account_password(request=request, **form.cleaned_data)
             return redirect('/accounts/login/?' + urlencode({'next': next_path, 'reset': '1'}))
         except ValidationError as exc:
             form.add_error(None, exc)

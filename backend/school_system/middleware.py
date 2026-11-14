@@ -100,7 +100,7 @@ class APIAccessLogMiddleware:
         start = time.perf_counter()
         response = self.get_response(request)
 
-        is_api_path = str(getattr(request, "path", "")).startswith("/api/")
+        is_api_path = str(getattr(request, "path", "")).startswith(("/api/", "/accounts/", "/account-api/", "/admin/"))
         if is_api_path:
             duration_ms = round((time.perf_counter() - start) * 1000, 2)
             request_id = getattr(request, "request_id", "-")

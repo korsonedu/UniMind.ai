@@ -20,7 +20,7 @@ class CookieTokenAuthentication(TokenAuthentication):
         token = LoginSession.resolve(key)
         if token:
             return (token.user, token)
-        return super().authenticate_credentials(key)
+        raise exceptions.AuthenticationFailed('登录已失效，请重新登录。')
 
 
 class APIKeyAuthentication(BaseAuthentication):
