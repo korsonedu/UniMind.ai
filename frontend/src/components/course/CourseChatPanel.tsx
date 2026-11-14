@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type RefObject } from 'react';
+import { memo, useContext, useEffect, useRef, useState, type RefObject } from 'react';
 import { ArrowUp, ArrowCounterClockwise, ArrowsOut, ArrowsIn, Clock, NotePencil, Sparkle, ClockCounterClockwise, X } from '@phosphor-icons/react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSystemStore } from '@/store/useSystemStore';
@@ -9,6 +9,7 @@ import { normalizeApiError } from '@/lib/apiError';
 import { useAuthStore } from '@/store/useAuthStore';
 import type { ExperiencePreferences } from '@/store/useSystemStore';
 import { useAgentConversation, type Bot, type Message } from '@/hooks/useAgentConversation';
+import { CourseSidebarContext } from '@/components/WorkspaceContext';
 import { findAssistantBot } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { AgentReplyContext } from '@/pages/xiaoyu/visuals/agentReplyContext';
 import { InlineVisualCard } from '@/components/InlineVisualCard';
@@ -37,8 +38,8 @@ interface CourseChatPanelProps {
   onSeek: (seconds: number) => void;
   mode: ExperiencePreferences['courseAssistantMode'];
   visible: boolean;
-  onModeChange: (mode: ExperiencePreferences['courseAssistantMode']) => void;
-  onExpandSidebar: () => void;
+  onModeChange?: (mode: ExperiencePreferences['courseAssistantMode']) => void;
+  onExpandSidebar?: () => void;
 }
 
 export const CourseChatPanel = memo(function CourseChatPanel(props: CourseChatPanelProps) {
@@ -198,6 +199,11 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
       setSavingNote(null);
     }
   };
+  const { recordRecent } = useContext(CourseSidebarContext);
+  const recentTitle = sessions.find(session => session.conversationId === conversationId)?.title || messages.find(message => message.role === 'user')?.content;
+  useEffect(() => {
+    if (visible && initialized && recentTitle) recordRecent({ key: `course-chat:${courseId}:${conversationId}`, view: 'chat', title: recentTitle.slice(0, 80), courseId, conversationId });
+  }, [visible, initialized, recentTitle, courseId, conversationId, recordRecent]);
   const lastQuestion = messages.map(message => message.role).lastIndexOf('user');
   const visibleMessages = !floating || expanded ? messages : messages.slice(Math.max(0, lastQuestion));
 
@@ -216,10 +222,10 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
           {sessions.length ? [...sessions].reverse().map(session => <DropdownMenuItem key={session.id} aria-current={session.conversationId === conversationId ? 'true' : undefined} onSelect={() => handleLoadSession(session)}>{session.label}</DropdownMenuItem>) : <DropdownMenuItem disabled>暂无本课历史对话</DropdownMenuItem>}
         </DropdownMenuContent>
       </DropdownMenu>
-      <div className="um-course-chat-modes" role="group" aria-label="小宇显示方式">
+      {onModeChange && <div className="um-course-chat-modes" role="group" aria-label="小宇显示方式">
         <button type="button" aria-pressed={floating} onClick={() => { setOpen(true); onModeChange('floating'); }}>浮动</button>
-        <button type="button" aria-pressed={!floating} onClick={() => { onModeChange('sidebar'); onExpandSidebar(); }}><span className="um-course-mode-desktop">右侧</span><span className="um-course-mode-mobile">页内</span></button>
-      </div>
+        <button type="button" aria-pressed={!floating} onClick={() => { onModeChange('sidebar'); onExpandSidebar?.(); }}><span className="um-course-mode-desktop">右侧</span><span className="um-course-mode-mobile">页内</span></button>
+      </div>}
       {floating && <>
         <button type="button" className="um-course-assistant-icon" onClick={() => setExpanded(value => !value)} aria-label={expanded ? '收起文字与公式' : '展开文字与公式'} aria-expanded={expanded}>{expanded ? <ArrowsIn size={16} /> : <ArrowsOut size={16} />}</button>
         <button type="button" className="um-course-assistant-icon" aria-label="收起小宇" onClick={close}><X size={17} /></button>

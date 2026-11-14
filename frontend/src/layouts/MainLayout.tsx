@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Link, useLocation, Outlet, useNavigate, useNavigationType } from 'react-router-dom';
 
-import { User as UserIcon, SignOut, CreditCard, ChartBar, Trophy, ArrowLeft, ArrowRight, SidebarSimple, TreeStructure } from '@phosphor-icons/react';
+import { User as UserIcon, SignOut, CreditCard, ChartBar, Trophy, ArrowLeft, ArrowRight, SidebarSimple, TreeStructure, ChatCircle, ListBullets, Files, NotePencil, SquaresFour, X } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { queryClient } from '@/lib/queryClient';
@@ -22,10 +22,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import GuidedTour, { type TourStep } from '@/components/GuidedTour';
 import { ExamActivityBar } from '@/components/ExamActivityBar';
 import { WorkspaceTrail } from '@/components/WorkspaceTrail';
-import { NotesSidebarContext, WorkspaceActiveContext, WorkspaceToolbarHostContext } from '@/components/WorkspaceContext';
+import { CourseSidebarContext, type SidebarView, type SidebarRecentItem, NotesSidebarContext, WorkspaceActiveContext, WorkspaceToolbarHostContext } from '@/components/WorkspaceContext';
 import { useExamActivity } from '@/hooks/useExamActivity';
 import '@/styles/app-shell.css';
 import NotesSidebar from '@/pages/notes/NotesSidebar';
+import { SidebarHome } from '@/components/SidebarHome';
+import { SidebarResizeHandle } from '@/components/SidebarResizeHandle';
 import { useDesktopStore } from '@/lib/desktop';
 import { useDesktopRuntime } from '@/hooks/useDesktopRuntime';
 
@@ -63,6 +65,32 @@ export const MainLayout: React.FC = () => {
   const [railHidden, setRailHidden] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [notesMounted, setNotesMounted] = useState(false);
+  const [sidebarView, setSidebarView] = useState<SidebarView>('home');
+  const [openedSidebarTools, setOpenedSidebarTools] = useState<SidebarView[]>([]);
+  const [addedSidebarTools, setAddedSidebarTools] = useState<SidebarView[]>(['chat', 'outline', 'notes']);
+  const [sidebarRecent, setSidebarRecent] = useState<SidebarRecentItem[]>([]);
+  const recordSidebarRecent = useCallback((item: SidebarRecentItem) => {
+    setSidebarRecent(previous => [item, ...previous.filter(entry => entry.key !== item.key)].slice(0, 8));
+  }, []);
+  const [noteOpenRequest, setNoteOpenRequest] = useState<{ id: number; sequence: number } | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try { const saved = Number(localStorage.getItem('unimind-right-sidebar-width')); return saved >= 320 && saved <= 640 ? saved : 400; } catch { return 400; }
+  });
+  const saveSidebarWidth = (value: number) => {
+    setSidebarWidth(value);
+    try { localStorage.setItem('unimind-right-sidebar-width', String(value)); } catch { /* Best effort. */ }
+  };
+  const [courseSidebarHost, setCourseSidebarHost] = useState<HTMLDivElement | null>(null);
+  const [courseSidebarAvailability, setCourseSidebarAvailability] = useState({ key: '', available: false });
+  const setCourseSidebarAvailable = useCallback((available: boolean) => { setCourseSidebarAvailability({ key: location.key, available }); }, [location.key]);
+  const selectSidebarView = useCallback((view: SidebarView) => {
+    setSidebarView(view); setNotesOpen(true);
+    if (view !== 'home') {
+      setOpenedSidebarTools(previous => previous.includes(view) ? previous : [...previous, view]);
+      setAddedSidebarTools(previous => previous.includes(view) ? previous : [...previous, view]);
+    }
+    if (view === 'notes') setNotesMounted(true);
+  }, []);
   const [historyKey, setHistoryKey] = useState(location.key);
   if (historyKey !== location.key) {
     setHistoryKey(location.key);
@@ -71,7 +99,15 @@ export const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
   const [noteSession, setNoteSession] = useState<{ userId?: number; id: number | null }>({ id: null });
-  const rememberNote = useCallback((id: number | null) => { setNoteSession({ userId: user?.id, id }); }, [user?.id]);
+  const rememberNote = useCallback((id: number | null, title?: string) => {
+    setNoteSession({ userId: user?.id, id });
+    if (id) recordSidebarRecent({ key: `note:${id}`, view: 'notes', title: title || '未命名笔记', noteId: id });
+  }, [user?.id, recordSidebarRecent]);
+  const openSidebarRecent = (item: SidebarRecentItem) => {
+    if (item.view === 'notes' && item.noteId) setNoteOpenRequest(previous => ({ id: item.noteId!, sequence: (previous?.sequence || 0) + 1 }));
+    if (item.view === 'chat' && item.courseId && item.conversationId) navigate(`/course/${item.courseId}?conversation=${encodeURIComponent(item.conversationId)}`);
+    selectSidebarView(item.view);
+  };
   const closeNotes = useCallback(() => {
     setNotesOpen(false);
     document.getElementById('um-notes-toggle')?.focus({ preventScroll: true });
@@ -102,7 +138,18 @@ export const MainLayout: React.FC = () => {
   const [notesPageAvailability, setNotesPageAvailability] = useState({ key: '', available: false });
   const setNotesAvailable = useCallback((available: boolean) => { setNotesPageAvailability({ key: location.key, available }); }, [location.key]);
   const notesAvailable = notesPageAvailability.key === location.key && notesPageAvailability.available;
-  const notesVisible = notesOpen && notesAvailable;
+  const courseSidebarAvailable = courseSidebarAvailability.key === location.key && courseSidebarAvailability.available;
+  const sidebarAvailable = notesAvailable || courseSidebarAvailable;
+  const sidebarVisible = notesOpen && sidebarAvailable;
+  const activeSidebarView = courseSidebarAvailable || sidebarView === 'notes' ? sidebarView : 'home';
+  const notesVisible = sidebarVisible && activeSidebarView === 'notes';
+  const sidebarTools = courseSidebarAvailable ? [
+    { id: 'chat' as const, label: '小宇', icon: ChatCircle },
+    { id: 'outline' as const, label: '课程大纲', icon: ListBullets },
+    { id: 'materials' as const, label: '资料', icon: Files },
+    { id: 'notes' as const, label: '笔记', icon: NotePencil },
+  ] : [{ id: 'notes' as const, label: '笔记', icon: NotePencil }];
+  const sidebarTabs = openedSidebarTools.map(id => sidebarTools.find(tool => tool.id === id)).filter(tool => !!tool);
   useExamActivity();
 
   useEffect(() => {
@@ -187,7 +234,7 @@ export const MainLayout: React.FC = () => {
         <div className="um-window-navigation"><button aria-label="返回" title="返回" disabled={historyIndex <= 0} onClick={() => navigate(-1)}><ArrowLeft size={17} /></button><button aria-label="前进" title="前进" disabled={historyIndex >= historyEnd} onClick={() => navigate(1)}><ArrowRight size={17} /></button></div>
         <div className="um-window-workspace" ref={setToolbarHost}>{!hasWorkspaceToolbar && <><button className="um-agent-icon-button" aria-label="切换导航栏" onClick={() => setRailHidden(old => !old)}><SidebarSimple size={18} /></button><WorkspaceTrail title={pageTitle || '学习空间'} crumbs={[]} /></>}</div>
         {workspaceHeader}
-        {notesAvailable && <button id="um-notes-toggle" type="button" className="um-right-sidebar-toggle um-agent-icon-button" aria-label="切换右侧栏" title={notesVisible ? '收起笔记侧栏' : '展开笔记侧栏'} aria-expanded={notesVisible} aria-controls="um-right-panel" onClick={() => { setNotesMounted(true); setNotesOpen(value => !value); }}><SidebarSimple size={19} style={{ transform: 'scaleX(-1)' }} /></button>}
+        {sidebarAvailable && <button id="um-notes-toggle" type="button" className="um-right-sidebar-toggle um-agent-icon-button" aria-label="切换右侧栏" title={sidebarVisible ? '收起右侧栏' : '展开右侧栏'} aria-expanded={sidebarVisible} aria-controls="um-right-panel" onClick={() => { setNotesOpen(value => !value); }}><SidebarSimple size={19} style={{ transform: 'scaleX(-1)' }} /></button>}
       </header>
       <div className="um-window-body flex flex-1 min-h-0 overflow-hidden">
       <aside data-tour="sidebar" aria-label="应用导航" className={cn('um-app-rail relative flex-col p-1.5 z-0 shrink-0 hidden md:flex w-[58px]', railHidden && 'md:hidden')}>
@@ -206,23 +253,44 @@ export const MainLayout: React.FC = () => {
           {navItems.filter(item => item.to !== '/xiaoyu').map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-9 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={routeFor(item.to)} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}>{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true">{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{!canEnter(item) && ' · 暂未开通'}</TooltipContent></TooltipPortal></Tooltip></div>)}
         </nav>
       </aside>
-      <div className="um-window-panes" data-notes-open={notesVisible}>
-      <main inert={isMobile && notesVisible} className={cn('um-app-main flex-1 min-w-0 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background',
+      <div className="um-window-panes" data-notes-open={sidebarVisible} style={{ '--um-notes-width': `${sidebarWidth}px` } as React.CSSProperties}>
+      <main inert={isMobile && sidebarVisible} className={cn('um-app-main flex-1 min-w-0 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background',
         isMobileImmersivePage || isMobileStudyPage ? 'overflow-hidden pb-0' : isIntegratedWorkspace ? hideMobileBottomNav ? 'overflow-hidden pb-0' : 'overflow-hidden pb-[calc(61px+env(safe-area-inset-bottom))] md:pb-0' : 'overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0')}>
         <ExamActivityBar />
         <div className={cn('um-app-page-content flex-1 w-full relative min-h-0', isMobileImmersivePage || isMobileStudyPage ? 'px-0 py-0 h-full overflow-hidden' : isMobileVideoPage ? 'px-0 py-0' : !isIntegratedWorkspace && 'px-4 py-4 md:px-8 md:py-6', isMobile && !hideMobileBottomNav && !isIntegratedWorkspace && 'pb-20')}>
           <WorkspaceToolbarHostContext.Provider value={{ host: toolbarHost, enabled: hasWorkspaceToolbar }}>
             <WorkspaceActiveContext.Provider value={xiaoyuVisible}>
               <NotesSidebarContext.Provider value={{ open: notesVisible, close: closeNotes, setAvailable: setNotesAvailable }}>
-                <Outlet context={{ toolbarHost }} />
+                <CourseSidebarContext.Provider value={{ host: courseSidebarHost, view: activeSidebarView, visible: sidebarVisible, recordRecent: recordSidebarRecent, setAvailable: setCourseSidebarAvailable }}>
+                  <Outlet context={{ toolbarHost }} />
+                </CourseSidebarContext.Provider>
               </NotesSidebarContext.Provider>
             </WorkspaceActiveContext.Provider>
           </WorkspaceToolbarHostContext.Provider>
         </div>
       </main>
-      {notesVisible && <button className="um-notes-mobile-backdrop" aria-label="收起笔记侧栏" onClick={closeNotes} />}
-      <div id="um-right-panel" className="um-notes-sidebar-host" data-open={notesVisible} aria-hidden={!notesVisible} inert={!notesVisible} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); closeNotes(); } }}>
-        {notesMounted && !inNotesPage && user && <NotesSidebar key={user.id} userId={user.id} visible={notesVisible} initialNoteId={noteSession.userId === user.id ? noteSession.id : null} onSelect={rememberNote} onClose={closeNotes} />}
+      {sidebarVisible && <button className="um-notes-mobile-backdrop" aria-label="收起右侧栏" onClick={closeNotes} />}
+      {sidebarVisible && !isMobile && <SidebarResizeHandle width={sidebarWidth} onChange={setSidebarWidth} onCommit={saveSidebarWidth} />}
+      <div id="um-right-panel" className="um-notes-sidebar-host um-unified-sidebar" data-open={sidebarVisible} aria-hidden={!sidebarVisible} inert={!sidebarVisible} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); closeNotes(); } }}>
+        <header className="um-right-panel-header">
+          <button type="button" className="um-agent-icon-button" aria-label="工具入口" aria-pressed={activeSidebarView === 'home'} onClick={() => selectSidebarView('home')}><SquaresFour size={18} /></button>
+          <div role="tablist" aria-label="侧栏功能">{sidebarTabs.map((tab, index) => <div className="um-sidebar-tab" key={tab.id}><button id={`sidebar-tab-${tab.id}`} role="tab" type="button" aria-selected={activeSidebarView === tab.id} aria-controls={`sidebar-panel-${tab.id}`} tabIndex={activeSidebarView === tab.id || (activeSidebarView === 'home' && index === 0) ? 0 : -1} onClick={() => selectSidebarView(tab.id)} onKeyDown={event => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? sidebarTabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + sidebarTabs.length) % sidebarTabs.length;
+            selectSidebarView(sidebarTabs[next].id);
+            document.getElementById(`sidebar-tab-${sidebarTabs[next].id}`)?.focus();
+          }}><tab.icon size={16} /><span>{tab.label}</span></button><button type="button" className="um-sidebar-tab-close" aria-label={`关闭${tab.label}标签`} onClick={() => {
+            setOpenedSidebarTools(previous => previous.filter(id => id !== tab.id));
+            if (activeSidebarView === tab.id) setSidebarView('home');
+          }}><X size={12} /></button></div>)}</div>
+          <button type="button" className="um-agent-icon-button" aria-label="关闭右侧栏" onClick={closeNotes}><X size={17} /></button>
+        </header>
+        {activeSidebarView === 'home' && <SidebarHome tools={sidebarTools} added={addedSidebarTools} recent={sidebarRecent} onSelect={selectSidebarView} onOpenRecent={openSidebarRecent} />}
+        <div ref={setCourseSidebarHost} className="um-course-sidebar-host" hidden={!courseSidebarAvailable || activeSidebarView === 'notes' || activeSidebarView === 'home'} />
+        <div id="sidebar-panel-notes" role="tabpanel" aria-labelledby="sidebar-tab-notes" className="um-right-panel-content" hidden={activeSidebarView !== 'notes'}>
+          {notesMounted && !inNotesPage && user && <NotesSidebar key={user.id} userId={user.id} visible={notesVisible} openRequest={noteOpenRequest} initialNoteId={noteSession.userId === user.id ? noteSession.id : null} onSelect={rememberNote} onClose={closeNotes} />}
+        </div>
       </div>
       </div>
       </div>
