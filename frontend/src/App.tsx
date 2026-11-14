@@ -30,6 +30,7 @@ const TestLadder = lazy(() => import('./pages/TestLadder').then(module => ({ def
 const StudyRoom = lazy(() => import('./pages/StudyRoom').then(module => ({ default: module.StudyRoom })));
 const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })));
 const Login = lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
+const DesktopAuthorize = lazy(() => import('./pages/DesktopAuthorize').then(module => ({ default: module.DesktopAuthorize })));
 const AccountCallback = lazy(() => import('./pages/AccountCallback').then(module => ({ default: module.AccountCallback })));
 const Register = lazy(() => import('./pages/Register').then(module => ({ default: module.Register })));
 const VerifyCode = lazy(() => import('./pages/VerifyCode').then(module => ({ default: module.VerifyCode })));
@@ -251,6 +252,7 @@ const router = createBrowserRouter([
   { path: "/pricing", element: lazyPage(PricingPage) },
   { path: "/promo/plus", element: <Navigate to="/pricing" replace /> },
   { path: "/memorix", element: lazyPage(MemorixPage) },
+  { path: "/desktop-auth", element: lazyPage(DesktopAuthorize) },
   { path: "/login", element: lazyPage(Login) },
   { path: "/account-callback", element: lazyPage(AccountCallback) },
   { path: "/register", element: lazyPage(Register) },

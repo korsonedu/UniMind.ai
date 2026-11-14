@@ -71,26 +71,24 @@ export function DesktopLogin() {
   const status = error || auth.error || (!supported ? '请安装最新客户端，以使用浏览器登录。'
     : auth.status === 'completing' || auth.status === 'authenticated' ? '正在确认账号，即将进入学习空间。'
       : waiting ? '浏览器已打开。登录完成后，会自动回到这里。'
-        : '使用你的科晟账号，在浏览器中安全登录。');
+        : '');
 
   return <main className="um-desktop-login">
     <div className="um-desktop-login-titlebar" aria-hidden="true" />
     <section className="um-desktop-login-content" aria-labelledby="desktop-login-title">
       <div className="um-desktop-login-mark"><img src="/unimind_logo_small.png" alt="" width="68" height="68" /></div>
-      <h1 id="desktop-login-title">欢迎使用 UniMind</h1>
-      <p className="um-desktop-login-subtitle">和小宇一起，把问题弄清楚。</p>
+      <h1 id="desktop-login-title">欢迎使用 UniMind.ai</h1>
       <div className="um-desktop-login-actions">
         <button className="um-desktop-login-primary" disabled={!supported || busy} onClick={() => void start()}>
           {busy ? <><Spinner size={18} className="animate-spin" aria-hidden="true" />{auth.status === 'completing' || auth.status === 'authenticated' ? '正在进入 UniMind' : '正在打开浏览器'}</>
             : <>{waiting ? '重新打开浏览器' : '通过浏览器登录'}<ArrowUpRight size={18} aria-hidden="true" /></>}
         </button>
-        <p className="um-desktop-login-status" role={error || auth.error ? 'alert' : 'status'}>{status}</p>
+        {status && <p className="um-desktop-login-status" role={error || auth.error ? 'alert' : 'status'}>{status}</p>}
         {(waiting || auth.status === 'error') && <button className="um-desktop-login-cancel" disabled={actionPending} onClick={() => void cancel()}>{waiting ? '取消登录' : '返回登录'}</button>}
       </div>
     </section>
     <footer className="um-desktop-login-footer">
       <p><a href="/terms" target="_blank" rel="noreferrer">用户协议</a><span aria-hidden="true"> · </span><a href="/privacy" target="_blank" rel="noreferrer">隐私政策</a></p>
-      <span>UniMind · 科晟智慧</span>
     </footer>
   </main>;
 }

@@ -388,7 +388,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
       {quotaError ? <span>AI 额度暂时无法读取，请稍后查看。</span> : !aiUsage ? <span>正在读取 AI 额度…</span> : aiUsage.unlimited ? <span>AI 问答不限次数</span> : <>
         <span>{aiUsage.configured ? `本周 AI 剩余 ${aiUsage.base_remaining} 次` : '基础周额度待配置'}{aiUsage.addon_remaining > 0 && ` · 加量剩余 ${aiUsage.addon_remaining} 次`}{quotaLow && ' · 额度不多了'}</span>
         {quotaExhausted && aiUsage.configured && <span>{learningReset(aiUsage.resets_at)}（上海时间）恢复基础额度</span>}
-        {(quotaExhausted || !aiUsage.configured) && <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => setContactOpen(true)}>联系科晟</button>}
+        {(quotaExhausted || !aiUsage.configured) && <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => setContactOpen(true)}>联系我们</button>}
         {(quotaExhausted || quotaLow) && <Link to="/pricing" className="underline underline-offset-2 hover:text-foreground">按需 AI 加量</Link>}
       </>}
     </p>

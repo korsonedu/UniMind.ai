@@ -11,16 +11,17 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
 from django.http import JsonResponse, RawPostDataException
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt, csrf_protect
-from django.views.decorators.http import require_POST, require_http_methods
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
 from users.login_sessions import LoginSession
 
 from core.rate_limit import rate_limit
 from users.models import User
 from users.permissions import is_member_or_admin
-from .services import account_is_current, account_website_origin
 from .views import set_platform_cookie
 
 VALUE = re.compile(r'[A-Za-z0-9_-]{43}\Z')
@@ -35,10 +36,8 @@ def error(message='登录请求已失效，请返回 UniMind 重新登录。', s
 def desktop_api(view):
     @wraps(view)
     def wrapped(request):
-        if not settings.ACCOUNT_ENABLED:
-            return error('账号服务暂未启用。', 503)
         origin = f'{request.scheme}://{request.get_host()}'
-        if (origin not in {settings.ACCOUNT_CENTER_ORIGIN, settings.ACCOUNT_UNIMIND_ORIGIN}
+        if (origin != settings.ACCOUNT_UNIMIND_ORIGIN
                 or request.headers.get('Origin', origin) != origin
                 or request.headers.get('Sec-Fetch-Site') == 'cross-site'):
             return error('账号请求来源不正确。', 403)
@@ -81,12 +80,15 @@ def start(request, data):
     return JsonResponse({'request_id': request_id, 'expires_in': REQUEST_TTL})
 
 
-@require_http_methods(['GET', 'POST'])
-@csrf_protect
+def legacy_confirm(request, request_id=None):
+    request_id = request_id or request.POST.get('request') or request.GET.get('request', '')
+    return redirect(settings.ACCOUNT_UNIMIND_ORIGIN + '/desktop-auth?' + urlencode({'request': request_id}))
+
+
+@api_view(['GET', 'POST'])
 @rate_limit('desktop_confirm', 20, 300, methods={'POST'})
-def confirm(request, request_id=None):
-    if request_id is None:
-        request_id = request.POST.get('request') if request.method == 'POST' else request.GET.get('request')
+def confirm(request):
+    request_id = request.data.get('request') if request.method == 'POST' else request.query_params.get('request')
     if not isinstance(request_id, str) or not VALUE.fullmatch(request_id):
         return error()
     try:
@@ -95,18 +97,14 @@ def confirm(request, request_id=None):
         return error('登录服务暂不可用，请稍后重试。', 503)
     if not ticket or ticket['expires_at'] <= time.time():
         return error()
-    if not account_is_current(request, audience='account'):
-        return redirect('/accounts/login/?' + urlencode({'next': '/accounts/desktop/?' + urlencode({'request': request_id})}))
-    context = {'request_id': request_id, 'website': account_website_origin(request), 'title': '登录 UniMind',
-               'next_query': urlencode({'next': '/accounts/desktop/?' + urlencode({'request': request_id})})}
     if request.method == 'GET':
-        return render(request, 'users/accounts/desktop.html', context)
-    if request.POST.get('account_id') and request.POST['account_id'] != str(request.user.pk):
+        return Response({'user': {'id': request.user.pk, 'nickname': request.user.nickname or request.user.username, 'email': request.user.email}})
+    if str(request.data.get('account_id', '')) != str(request.user.pk):
         return error('账号已变化，请刷新页面后重新选择。')
     with transaction.atomic():
         user = User.objects.select_for_update().filter(pk=request.user.pk).first()
         if (ticket['expires_at'] <= time.time() or not is_member_or_admin(user)
-                or user.account_session_version != request.session.get('account_session_version')
+                or user.account_session_version != request.user.account_session_version
                 or (user.locked_until and user.locked_until > timezone.now())):
             return error()
         code = secrets.token_urlsafe(32)
@@ -120,8 +118,8 @@ def confirm(request, request_id=None):
                 return error('登录服务暂不可用，请重新开始。', 503)
         except Exception:
             return error('登录服务暂不可用，请重新开始。', 503)
-    context['callback'] = 'unimind://auth/callback?' + urlencode({'code': code, 'state': ticket['state']})
-    return render(request, 'users/accounts/desktop.html', context)
+    callback = 'unimind://auth/callback?' + urlencode({'code': code, 'state': ticket['state']})
+    return Response({'callback': callback})
 
 
 @csrf_exempt

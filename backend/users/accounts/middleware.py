@@ -48,6 +48,9 @@ class AccountSessionMiddleware(SessionMiddleware):
 
 class AccountBoundaryMiddleware(MiddlewareMixin):
     def process_request(self, request):
+        if request.path == '/accounts/desktop/':
+            from .desktop import legacy_confirm
+            return legacy_confirm(request)
         website = request.path.startswith('/account-api/')
         center = request.path.startswith('/accounts/')
         if not website and not center:

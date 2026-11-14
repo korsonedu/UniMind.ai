@@ -13,7 +13,8 @@ from users.login_sessions import LoginSession
 
 
 @override_settings(
-    ACCOUNT_ENABLED=True,
+    ACCOUNT_ENABLED=False,
+    ACCOUNT_UNIMIND_ORIGIN='http://testserver',
     ACCOUNT_CENTER_ORIGIN='http://testserver',
     ACCOUNT_WEBSITE_ORIGINS=['http://testserver'],
     CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}},
@@ -33,19 +34,15 @@ class DesktopAuthSmokeTests(TestCase):
 
     def login(self, client=None):
         client = client or self.client
-        client.force_login(self.user)
-        session = client.session
-        session.update({'account_user_id': self.user.pk, 'account_session_version': self.user.account_session_version,
-                        'account_audience': 'account'})
-        session.save()
+        client.cookies['auth_token'] = LoginSession.issue(self.user).key
         return client
 
     def authorize(self):
         request_id = self.start().json()['request_id']
         self.login()
-        response = self.client.post('/accounts/desktop/', {'request': request_id})
+        response = self.client.post('/api/users/desktop-auth/confirm/', {'request': request_id, 'account_id': self.user.pk}, content_type='application/json')
         self.assertEqual(response.status_code, 200)
-        query = parse_qs(urlsplit(response.context['callback']).query)
+        query = parse_qs(urlsplit(response.json()['callback']).query)
         self.assertEqual(query['state'], [self.state])
         return request_id, query['code'][0]
 
@@ -67,7 +64,7 @@ class DesktopAuthSmokeTests(TestCase):
         self.assertTrue(response.cookies['auth_token']['httponly'])
         self.assertEqual(response['Cache-Control'], 'no-store')
         self.assertIsNotNone(LoginSession.resolve(token.key))
-        repeated = self.client.post('/accounts/desktop/', {'request': request_id})
+        repeated = self.client.post('/api/users/desktop-auth/confirm/', {'request': request_id, 'account_id': self.user.pk}, content_type='application/json')
         self.assertEqual(repeated.status_code, 400)
         self.assertNotIn('auth_token', repeated.cookies)
         replay = self.exchange(code, client=native)
@@ -95,7 +92,7 @@ class DesktopAuthSmokeTests(TestCase):
         ticket = cache.get('desktop_request:' + request_id)
         ticket['expires_at'] = 0
         cache.set('desktop_request:' + request_id, ticket)
-        self.assertEqual(self.client.get('/accounts/desktop/', {'request': request_id}).status_code, 400)
+        self.assertEqual(self.client.get('/api/users/desktop-auth/confirm/', {'request': request_id}).status_code, 400)
         self.assertFalse(Token.objects.filter(user=self.user).exists())
 
     def test_revocation_inactive_and_current_permission_checked_at_exchange(self):
@@ -114,45 +111,39 @@ class DesktopAuthSmokeTests(TestCase):
             self.assertEqual(self.exchange(code).status_code, 400)
         self.assertFalse(Token.objects.filter(user=self.user).exists())
 
-    def test_login_round_trip_preserves_ticket_and_get_does_not_authorize(self):
+    def test_login_required_and_legacy_link_preserves_ticket_without_account_center(self):
         request_id = self.start().json()['request_id']
         response = self.client.get('/accounts/desktop/', {'request': request_id})
-        target = parse_qs(urlsplit(response['Location']).query)['next'][0]
-        self.assertEqual(target, '/accounts/desktop/?request=' + request_id)
-        login = self.client.get(response['Location'])
-        self.assertEqual(login.context['next_path'], target)
-        self.login()
-        response = self.client.get(target)
-        self.assertContains(response, self.user.email)
-        self.assertFalse(cache.get('desktop_confirmed:' + request_id))
-        self.assertFalse(Token.objects.filter(user=self.user).exists())
+        self.assertEqual(response['Location'], 'http://testserver/desktop-auth?request=' + request_id)
+        self.assertEqual(self.client.get('/api/users/desktop-auth/confirm/', {'request': request_id}).status_code, 401)
+        # A Korson Django session alone cannot authorize UniMind App login.
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get('/api/users/desktop-auth/confirm/', {'request': request_id}).status_code, 401)
 
-    def test_password_or_remembered_card_completes_app_login_without_second_confirmation(self):
+    @patch('ai_assistant.tasks.precompute_user_profile.delay')
+    def test_web_password_login_continues_app_authorization(self, _precompute):
         self.user.set_password('Pass12345')
         self.user.save(update_fields=['password'])
-        for mode in ('password', 'remembered'):
-            browser = Client()
-            request_id = self.start(browser).json()['request_id']
-            data = {'next': '/accounts/desktop/?request=' + request_id}
-            if mode == 'remembered':
-                self.login(browser)
-                data.update({'selection': 'continue', 'account_id': self.user.pk})
-            else:
-                data.update({'identifier': self.user.username, 'password': 'Pass12345'})
-            response = browser.post('/accounts/login/', data)
-            self.assertEqual(response.status_code, 200)
-            self.assertContains(response, '登录已确认')
-            self.assertNotContains(response, 'class="account-card"')
-            code = parse_qs(urlsplit(response.context['callback']).query)['code'][0]
-            self.assertEqual(self.exchange(code, client=Client()).status_code, 200)
+        request_id = self.start().json()['request_id']
+        response = self.client.post('/api/users/login/', {
+            'username': self.user.email, 'password': 'Pass12345',
+        }, content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('_auth_user_id', self.client.session)
+        response = self.client.post('/api/users/desktop-auth/confirm/', {
+            'request': request_id, 'account_id': self.user.pk,
+        }, content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        code = parse_qs(urlsplit(response.json()['callback']).query)['code'][0]
+        self.assertEqual(self.exchange(code, client=Client()).status_code, 200)
 
     def test_confirmation_requires_csrf(self):
         client = self.login(Client(enforce_csrf_checks=True))
         request_id = self.start(client).json()['request_id']
-        url = '/accounts/desktop/?request=' + request_id
-        self.assertEqual(client.get(url)['Referrer-Policy'], 'same-origin')
+        url = '/api/users/desktop-auth/confirm/?request=' + request_id
+        self.assertEqual(client.get(url)['Cache-Control'], 'no-store')
         self.assertEqual(client.post(url, {'request': request_id}).status_code, 403)
-        data = {'request': request_id, 'csrfmiddlewaretoken': client.cookies['csrftoken'].value}
+        data = {'request': request_id, 'account_id': self.user.pk, 'csrfmiddlewaretoken': client.cookies['csrftoken'].value}
         self.assertEqual(client.post(url, data, HTTP_ORIGIN='null').status_code, 403)
         self.assertEqual(client.post(url, data, HTTP_ORIGIN='https://evil.example').status_code, 403)
         response = client.post(url, data, HTTP_ORIGIN='http://testserver')
@@ -163,18 +154,15 @@ class DesktopAuthSmokeTests(TestCase):
         token = LoginSession.issue(self.user)
         self.client.cookies['auth_token'] = token.key
         request_id = self.start().json()['request_id']
-        response = self.client.get('/accounts/desktop/', {'request': request_id})
+        response = self.client.get('/api/users/desktop-auth/confirm/', {'request': request_id})
         self.assertContains(response, self.user.email)
-        self.assertEqual(int(self.client.session['_auth_user_id']), self.user.pk)
+        self.assertNotIn('_auth_user_id', self.client.session)
         self.assertFalse(cache.get('desktop_confirmed:' + request_id))
-        self.assertNotIn('callback', response.context)
+        self.assertNotIn('callback', response.json())
         self.assertIsNotNone(LoginSession.resolve(token.key))
         self.assertNotIn('auth_token', response.cookies)
 
-    def test_disabled_origin_host_json_and_size_boundaries(self):
-        with self.settings(ACCOUNT_ENABLED=False):
-            self.assertEqual(self.start().status_code, 503)
-            self.assertEqual(self.exchange(secrets.token_urlsafe(32)).status_code, 503)
+    def test_origin_host_json_and_size_boundaries(self):
         for headers in ({'HTTP_ORIGIN': 'https://evil.example'}, {'HTTP_ORIGIN': 'null'},
                         {'HTTP_HOST': 'localhost:9999'}, {'HTTP_SEC_FETCH_SITE': 'cross-site'}):
             with self.subTest(headers=headers):
