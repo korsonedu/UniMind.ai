@@ -1,127 +1,34 @@
-import React, { useEffect, useRef, useState } from 'react';
-
+import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowLeft } from '@phosphor-icons/react';
+import '@/styles/auth.css';
 
 interface AuthLayoutProps {
-  children: React.ReactNode;
+  children: ReactNode;
   title: string;
-  subtitle?: React.ReactNode;
-  /** Footer line displayed below the form, e.g. "没有账号？注册" */
-  footer?: React.ReactNode;
+  subtitle?: ReactNode;
+  footer?: ReactNode;
 }
 
-export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitle, footer }) => {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => setVisible(true), 60);
-    return () => clearTimeout(t);
-  }, []);
-
-  return (
-    <div className="um-auth-shell grid min-h-[100dvh] lg:grid-cols-[1.05fr_1fr]">
-      {/* ── Left Brand Panel ── */}
-      <div
-        ref={panelRef}
-        className="
-          relative hidden lg:flex flex-col items-center justify-center overflow-hidden
-          bg-gradient-to-br from-[#e8effb] via-[#f0f4ff] to-[#f5f7ff]
-          dark:bg-gradient-to-br dark:from-[#080c1a] dark:via-[#0d1117] dark:to-[#0a0f1a]
-        "
-      >
-        {/* Dot-grid pattern */}
-        <div
-          className="absolute inset-0 opacity-[0.14] dark:opacity-[0.09]"
-          style={{
-            backgroundImage: `radial-gradient(circle, #0071E3 0.7px, transparent 0.7px)`,
-            backgroundSize: '20px 20px',
-          }}
-        />
-
-        {/* Large ambient glow orbs */}
-        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#0071E3]/[0.05] dark:bg-[#3395ff]/[0.06] blur-[80px]" />
-        <div className="absolute -bottom-40 -right-40 w-[560px] h-[560px] rounded-full bg-[#0071E3]/[0.04] dark:bg-[#3395ff]/[0.05] blur-[100px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full bg-[#0071E3]/[0.03] dark:bg-[#3395ff]/[0.04] blur-[60px]" />
-
-        {/* Content */}
-        <div className="relative z-10 flex flex-col items-center gap-8 px-8 lg:px-12 text-center">
-          <img
-            src="/unimind_logo_small.png"
-            alt="UniMind"
-            className="h-10 w-auto drop-shadow-sm"
-          />
-
-          <div className="space-y-4">
-            <h2 className="text-[64px] font-bold tracking-tight text-[#1D1D1F] dark:text-white leading-snug">
-              AI 驱动的新一代
-              <br />
-              智能学习平台
-            </h2>
-          </div>
-
-          {/* Subtle feature dots */}
-          <div className="flex gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#0071E3]/30 dark:bg-[#3395ff]/30" />
-            <span className="w-1.5 h-1.5 rounded-full bg-[#0071E3]/20 dark:bg-[#3395ff]/20" />
-            <span className="w-1.5 h-1.5 rounded-full bg-[#0071E3]/10 dark:bg-[#3395ff]/10" />
-          </div>
-        </div>
-      </div>
-
-      {/* ── Right Form Panel ── */}
-      <div className="flex flex-col items-center justify-center bg-white dark:bg-[#0b0d10] px-6 py-12 lg:px-16 lg:py-16">
-        <div className="w-full max-w-[400px]">
-          {/* Mobile-only logo */}
-          <div className="lg:hidden flex flex-col items-center gap-4 mb-10">
-            <img
-              src="/unimind_logo_small.png"
-              alt="UniMind"
-              className="h-7 w-auto"
-            />
-          </div>
-
-          {/* Header */}
-          <div
-            className="space-y-1.5 mb-8"
-            style={{
-              opacity: visible ? 1 : 0,
-              transition: 'opacity 180ms ease-out',
-            }}
-          >
-            <h1 className="text-[26px] font-bold tracking-tight text-[#1D1D1F] dark:text-white">
-              {title}
-            </h1>
-            {subtitle && (
-              <p className="text-[14px] text-[#6E6E73] dark:text-white/45 leading-relaxed">
-                {subtitle}
-              </p>
-            )}
-          </div>
-
-          {/* Form content */}
-          <div
-            style={{
-              opacity: visible ? 1 : 0,
-              transition: 'opacity 180ms ease-out',
-            }}
-          >
-            {children}
-          </div>
-
-          {/* Footer */}
-          {footer && (
-            <div
-              className="mt-8 text-center"
-              style={{
-                opacity: visible ? 1 : 0,
-                transition: 'opacity 180ms ease-out',
-              }}
-            >
-              {footer}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
+export const AuthLayout = ({ children, title, subtitle, footer }: AuthLayoutProps) => (
+  <div className={`um-auth-shell${window.unimindDesktop ? ' um-auth-native' : ''}`}>
+    <header className="um-auth-topbar">
+      <Link to="/" className="um-auth-wordmark" aria-label="UniMind.ai 首页">UniMind<span>.ai</span></Link>
+      {!window.unimindDesktop && <Link to="/" className="um-auth-home"><ArrowLeft size={16} aria-hidden="true" />返回首页</Link>}
+    </header>
+    <main className="um-auth-main">
+      <section className="um-auth-panel" aria-labelledby="auth-title">
+        <div className="um-auth-mark"><img src="/unimind_logo_small.png" alt="" width="56" height="56" /></div>
+        <h1 id="auth-title">{title}</h1>
+        {subtitle && <p className="um-auth-subtitle">{subtitle}</p>}
+        <div className="um-auth-fields">{children}</div>
+        {footer && <div className="um-auth-footer">{footer}</div>}
+      </section>
+    </main>
+    <footer className="um-auth-legal">
+      <Link to="/terms" target={window.unimindDesktop ? '_blank' : undefined}>用户协议</Link>
+      <span aria-hidden="true">·</span>
+      <Link to="/privacy" target={window.unimindDesktop ? '_blank' : undefined}>隐私政策</Link>
+    </footer>
+  </div>
+);
