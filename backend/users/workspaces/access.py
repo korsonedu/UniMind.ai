@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 from users.models_workspace import WorkspaceMembership
@@ -5,6 +6,8 @@ from users.models_workspace import WorkspaceMembership
 
 def membership_for(user):
     if not user or not user.is_authenticated or not user.is_active:
+        return None
+    if not isinstance(user, get_user_model()) or not user.pk:
         return None
     return WorkspaceMembership.objects.select_related('workspace__institution').filter(user=user).first()
 
