@@ -29,9 +29,9 @@ export function DesktopSettings() {
     <h3 className="um-settings-group-title">{t('通知')}</h3>
     <section className="um-settings-group">
       <div className="um-settings-row"><div><label htmlFor="desktop-notifications">{t('接收系统通知')}</label></div><Switch id="desktop-notifications" aria-controls="desktop-notification-types" aria-describedby="desktop-notification-help" checked={state.preferences.notifications} disabled={!!busy} onCheckedChange={notifications => void run('notifications', () => desktop.updatePreferences({ notifications }))} /></div>
-      <fieldset id="desktop-notification-types" className="um-desktop-notification-types" disabled={!!busy || !state.preferences.notifications}>
+      <fieldset id="desktop-notification-types" className="um-desktop-notification-types" hidden={!state.preferences.notifications} disabled={!!busy || !state.preferences.notifications}>
         <legend>{t('通知内容')}</legend>
-        <p id="desktop-notification-help" role="status">{state.preferences.notifications ? t('仅控制系统弹窗，消息仍保留在通知中心。') : t('先开启上方「接收系统通知」，再选择通知内容。')}</p>
+        <p id="desktop-notification-help" role="status">{t('仅控制系统弹窗，消息仍保留在通知中心。')}</p>
         {state.preferences.notifyChat !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-notify-chat">{t('小宇回复完成')}</label></div><Switch id="desktop-notify-chat" checked={state.preferences.notifyChat} disabled={!!busy || !state.preferences.notifications} onCheckedChange={notifyChat => void run('notify-chat', () => desktop.updatePreferences({ notifyChat }))} /></div>}
         {state.preferences.notifyQA !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-notify-qa">{t('答疑回复')}</label></div><Switch id="desktop-notify-qa" checked={state.preferences.notifyQA} disabled={!!busy || !state.preferences.notifications} onCheckedChange={notifyQA => void run('notify-qa', () => desktop.updatePreferences({ notifyQA }))} /></div>}
         {state.preferences.notifyLearning !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-notify-learning">{t('学习与系统消息')}</label></div><Switch id="desktop-notify-learning" checked={state.preferences.notifyLearning} disabled={!!busy || !state.preferences.notifications} onCheckedChange={notifyLearning => void run('notify-learning', () => desktop.updatePreferences({ notifyLearning }))} /></div>}
