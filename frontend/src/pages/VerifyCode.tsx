@@ -1,3 +1,5 @@
+import { queryClient } from '@/lib/queryClient';
+import { queryKeys } from '@/lib/queryKeys';
 import { t, useLocale } from '@/i18n';
 import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect } from 'react';
@@ -46,6 +48,8 @@ export const VerifyCode: React.FC = () => {
       const response = await api.post('/users/login-by-code/', { email, code: otp });
       const user = response.data.user;
       const token = response.data.token;
+      await queryClient.cancelQueries({ queryKey: queryKeys.user.me });
+      queryClient.setQueryData(queryKeys.user.me, user);
       setAuth(user, token);
       await fetchFeatures();
       navigate(returnTo, { replace: true });

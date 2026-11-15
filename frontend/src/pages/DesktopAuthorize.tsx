@@ -52,10 +52,10 @@ export function DesktopAuthorize() {
 
   return <AuthLayout title={callback ? t('登录已确认') : t('登录 UniMind.ai App')} subtitle={callback ? t('请返回 App 完成登录。') : undefined}>
     {error && <p role="alert" className="mb-5 text-sm text-red-600">{error}</p>}
-    {callback ? <Button asChild className="w-full h-12 rounded-xl"><a href={callback}>{t('打开 UniMind.ai')}</a></Button> : user ? <div className="space-y-4">
-      <div className="rounded-xl border border-border p-4"><p className="font-medium">{user.nickname}</p><p className="text-sm text-muted-foreground">{user.email}</p></div>
-      <Button className="w-full h-12 rounded-xl" disabled={pending} onClick={() => void confirm()}>{pending ? t('请稍候…') : t('确认登录 App')}</Button>
-      <Button variant="ghost" className="w-full" disabled={pending} onClick={() => void switchAccount()}>{t('使用其他账号')}</Button>
+    {callback ? <Button asChild className="um-auth-submit"><a href={callback}>{t('打开 UniMind.ai')}</a></Button> : user ? <div className="space-y-4">
+      <div className="um-auth-account"><span className="um-auth-avatar" aria-hidden="true">{user.nickname.slice(0, 1)}</span><div><p className="um-auth-account-name">{user.nickname}</p><p className="um-auth-account-email">{user.email}</p></div></div>
+      <Button className="um-auth-submit" disabled={pending} onClick={() => void confirm()}>{pending ? t('请稍候…') : t('确认登录 App')}</Button>
+      <Button variant="ghost" className="um-auth-secondary" disabled={pending} onClick={() => void switchAccount()}>{t('使用其他账号')}</Button>
     </div> : !error && <p role="status" className="text-sm text-muted-foreground">{t('正在确认账号…')}</p>}
   </AuthLayout>;
 }
