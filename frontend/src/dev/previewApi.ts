@@ -1,3 +1,4 @@
+import { workspacePreview } from './workspacePreview';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { FEATURES } from '@/store/useInstitutionStore';
@@ -24,7 +25,9 @@ const heatmapDays = Array.from({ length: 180 }, (_, index) => ({ date: date(inde
 const memorySeries = heatmapDays.filter(day => day.count > 0).map((day, index) => ({ date: day.date, predicted: Number((.61 + index * .0018 + Math.sin(index * .3) * .02).toFixed(3)), actual: Number((.59 + index * .0021 + Math.sin(index * .3 + .4) * .035).toFixed(3)), count: Math.floor(day.count * .62) }));
 const reviewCount = memorySeries.reduce((sum, item) => sum + item.count, 0);
 let guest = new URLSearchParams(location.search).has('guest') || sessionStorage.getItem('unimind-preview-signed-out') === '1';
-const role = sessionStorage.getItem('unimind-preview-role') || 'student';
+const workspaceRole = new URLSearchParams(location.search).get('workspace');
+const role = workspaceRole === 'admin' ? 'teacher' : workspaceRole ? 'student' : sessionStorage.getItem('unimind-preview-role') || 'student';
+if (workspaceRole) sessionStorage.setItem('unimind-preview-role', role);
 if (new URLSearchParams(location.search).has('personal')) sessionStorage.setItem('unimind-preview-personal', new URLSearchParams(location.search).get('personal') === '1' ? '1' : '0');
 const personalPreview = sessionStorage.getItem('unimind-preview-personal') === '1';
 const blockedFeatures = new URLSearchParams(location.search).getAll('blocked');
@@ -137,6 +140,14 @@ api.defaults.adapter = async config => {
   const payload = typeof config.data === 'string' ? JSON.parse(config.data || '{}') : config.data;
   const url = new URL(config.url || '', location.origin);
   const path = url.pathname;
+  if (path.startsWith('/users/workspace/')) {
+    try {
+      const result = workspacePreview(path, config.method, payload);
+      return { data: result, status: 200, statusText: 'OK', headers: {}, config };
+    } catch (error) {
+      throw new AxiosError('Workspace preview', 'WORKSPACE_PREVIEW', config, undefined, { data: { detail: error instanceof Error ? error.message : '操作失败' }, status: 400, statusText: 'Bad Request', headers: {}, config });
+    }
+  }
   const params = new URLSearchParams(url.search);
   Object.entries(config.params || {}).forEach(([key, value]) => params.set(key, String(value)));
   switch (path) {

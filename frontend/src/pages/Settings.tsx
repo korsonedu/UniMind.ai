@@ -1,3 +1,4 @@
+import { InstitutionServices } from '@/components/settings/InstitutionServices';
 import { LanguageSelect } from '@/components/LanguageSelect';
 import { t, useLocale } from '@/i18n';
 import { SelectField, SelectOption } from '@/components/ui/select';
@@ -17,7 +18,7 @@ import { useInstitutionStore, FEATURES } from '@/store/useInstitutionStore';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useSystemStore, DEFAULT_EXPERIENCE, type ExperiencePreferences } from '@/store/useSystemStore';
-import { ArrowCounterClockwise, FloppyDisk, CreditCard, ArrowRight, MagnifyingGlass, UserCircle, Palette, Notebook, Database, DownloadSimple, SlidersHorizontal, Bell, Keyboard, HardDrives, ArrowLeft, X, ChatCircle, GraduationCap } from '@phosphor-icons/react';
+import { ArrowCounterClockwise, FloppyDisk, CreditCard, ArrowRight, MagnifyingGlass, UserCircle, Palette, Notebook, Database, DownloadSimple, SlidersHorizontal, Bell, Keyboard, HardDrives, ArrowLeft, X, ChatCircle, GraduationCap, Buildings } from '@phosphor-icons/react';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import api from '@/lib/api';
 import { queryClient } from '@/lib/queryClient';
@@ -31,6 +32,7 @@ const SECTIONS = [
   { id: 'appearance', label: '外观', icon: Palette, keywords: '主题 浅色 深色 系统 界面 字号 密度 动效 语言' },
   { id: 'learning', label: '学习与播放', icon: GraduationCap, keywords: '练习 题量 新题 复习 课程 倍速 字幕' },
   { id: 'notes', label: '个性化', icon: Notebook, keywords: 'AI 阅读 笔记 了解 小宇 个性化' },
+  { id: 'institution', label: '机构与学习服务', icon: Buildings, keywords: '机构 学习 服务 workspace 邀请码 加入 课程 管理 学生' },
   { id: 'account', label: '账户', icon: UserCircle, keywords: '昵称 简介 头像 风格 账号 邮箱 密码 修改 服务 使用情况 计费 套餐' },
   { id: 'shortcuts', label: '键盘快捷键', icon: Keyboard, keywords: '键盘 快捷键 Enter 发送 全局', desktopOnly: true },
   { id: 'storage', label: '存储', icon: HardDrives, keywords: '下载 离线 缓存 同步 存储', desktopOnly: true },
@@ -159,6 +161,7 @@ export const Settings: React.FC = () => {
       <div className="um-settings-reading">
         <header className="um-settings-heading"><h2 id="settings-section-title">{t(current?.label || t("搜索设置"))}</h2></header>
         {!current && <div className="um-settings-empty"><button type="button" onClick={() => setQuery('')}>{t("清除搜索")}</button></div>}
+        {current?.id === 'institution' && <InstitutionServices />}
         {current?.id === 'notifications' && <>
           <h3 className="um-settings-group-title">{t("练习提醒")}</h3>
           <section className="um-settings-group">

@@ -131,7 +131,7 @@ export const MainLayout: React.FC = () => {
   const [pendingTourDismiss, setPendingTourDismiss] = useState(false);
   const hasWorkspaceToolbar = ['/xiaoyu', '/courses', '/notes'].includes(location.pathname) || location.pathname.startsWith('/notes/') || /^\/course\/\d+/.test(location.pathname);
   const isCommunityWorkspace = ['/community', '/qa', '/study'].includes(location.pathname) || location.pathname.startsWith('/qa/');
-  const isIntegratedWorkspace = isCommunityWorkspace || location.pathname === '/settings' || location.pathname === '/notes' || location.pathname.startsWith('/notes/')
+  const isIntegratedWorkspace = isCommunityWorkspace || location.pathname.startsWith('/settings') || location.pathname === '/notes' || location.pathname.startsWith('/notes/')
     || (location.pathname === '/xiaoyu' && hasFeature('ai.assistant'))
     || ((location.pathname === '/courses' || /^\/course\/\d+/.test(location.pathname)) && hasFeature('course.video'));
   const isMobileStudyPage = isMobile && location.pathname === '/study';
