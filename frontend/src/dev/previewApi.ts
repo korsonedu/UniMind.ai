@@ -25,6 +25,8 @@ const memorySeries = heatmapDays.filter(day => day.count > 0).map((day, index) =
 const reviewCount = memorySeries.reduce((sum, item) => sum + item.count, 0);
 let guest = new URLSearchParams(location.search).has('guest') || sessionStorage.getItem('unimind-preview-signed-out') === '1';
 const role = sessionStorage.getItem('unimind-preview-role') || 'student';
+if (new URLSearchParams(location.search).has('personal')) sessionStorage.setItem('unimind-preview-personal', new URLSearchParams(location.search).get('personal') === '1' ? '1' : '0');
+const personalPreview = sessionStorage.getItem('unimind-preview-personal') === '1';
 const blockedFeatures = new URLSearchParams(location.search).getAll('blocked');
 const user = { ...useAuthStore.getState().user!, email: 'learner_demo@example.com', id: 1, institution_id: 1, institution: { ...useAuthStore.getState().user!.institution!, id: 1 },
   role: (role === 'admin' ? 'admin' : 'student') as 'student' | 'admin', institution_role: role === 'teacher' ? 'owner' : 'student',
@@ -140,7 +142,7 @@ api.defaults.adapter = async config => {
   switch (path) {
     case '/users/logout/': guest = true; sessionStorage.setItem('unimind-preview-signed-out', '1'); data = { status: 'ok' }; break;
     case '/users/me/': if (guest) throw new AxiosError('Guest preview', 'PREVIEW_GUEST', config, undefined, { data: {}, status: 401, statusText: 'Unauthorized', headers: {}, config }); data = user; break;
-    case '/users/learning/access/': data = { is_course_student: true, ai_usage: { used: 12, limit: 100, remaining: 88, base_remaining: 88, addon_remaining: 0, configured: true, unlimited: false, resets_at: `${date(7)}T00:00:00+08:00` }, addons: [] }; break;
+    case '/users/learning/access/': data = { is_course_student: !personalPreview, ai_usage: { used: 12, limit: 100, remaining: 88, base_remaining: 88, addon_remaining: 0, configured: true, unlimited: false, resets_at: `${date(7)}T00:00:00+08:00` }, addons: [] }; break;
     case '/ai/card-interactions/': if (config.method === 'post') cardInteractions.push({ id: Date.now(), ...payload }); data = { interactions: cardInteractions }; break;
     case '/users/me/learning-sessions/': data = { id: payload?.session_id || 'preview-session', ...payload }; break;
     case '/notes/references/': data = { note_ids: [] }; break;
@@ -154,7 +156,7 @@ api.defaults.adapter = async config => {
     case '/ai/reset/': break;
     case '/ai/feedback/': history = history.map(message => message.id === payload.message_id ? { ...message, feedback: payload.feedback } : message); break;
     case '/csrf/': data = { csrf_token: 'local-preview' }; break;
-    case '/users/institution/me/features/': data = { features: Object.values(FEATURES).filter(feature => !blockedFeatures.includes(feature)), is_platform_admin: false, institution: user.institution, usage: null }; break;
+    case '/users/institution/me/features/': data = { features: Object.values(FEATURES).filter(feature => !blockedFeatures.includes(feature)), is_platform_admin: false, has_course_catalog: !personalPreview, institution: personalPreview ? null : user.institution, usage: null }; break;
     case '/notifications/unread-count/': data = { unread_count: notifications.filter(item => !item.is_read).length }; break;
     case '/notifications/': data = notifications; break;
     case '/notifications/read/': notifications.forEach(item => { item.is_read = true; }); break;
@@ -172,7 +174,7 @@ api.defaults.adapter = async config => {
     case '/courses/watch-later/': data = watchLater; break;
     case '/courses/albums/': data = albums; break;
     case '/courses/': {
-      const filtered = courses.filter(course => !params.get('search') || course.title.includes(params.get('search')!));
+      const filtered = courses.filter(course => (!params.get('search') || course.title.includes(params.get('search')!)) && (params.get('saved') !== '1' || watchLater.some(item => item.course === course.id)));
       data = params.has('page_size') ? { items: filtered, total_pages: 1, count: filtered.length } : filtered; break;
     }
     case '/quizzes/knowledge-points/': data = kps; break;

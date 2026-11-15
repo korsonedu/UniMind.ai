@@ -6,6 +6,7 @@ import { createPortal, flushSync } from 'react-dom';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Play, Pause, Star, FileText, Download, ArrowsOut, ArrowsIn, ClosedCaptioning, SpeakerHigh, SpeakerX } from '@phosphor-icons/react';
 import api from '@/lib/api';
+import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { OutlinePanel } from '@/components/course/OutlinePanel';
 import { SubtitlesOverlay } from '@/components/course/SubtitlesOverlay';
@@ -31,6 +32,7 @@ interface VideoLessonProps {
 
 export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, favoritePending = false, onFavoriteChange }) => {
   useLocale();
+  const hasCourseCatalog = useInstitutionStore(state => state.hasCourseCatalog);
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const linkedPosition = searchParams.get('t');
@@ -395,7 +397,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
               catch (error) { toast.error(error instanceof Error ? error.message : t('暂停失败，请重试。')); }
               finally { setOfflinePending(false); }
             }}><Pause size={18} />{t('暂停下载')}</button>}
-            <button className="um-lesson-favorite" disabled={favoritePending || !onFavoriteChange} onClick={onFavoriteChange} aria-pressed={isFavorite}><Star size={18} weight={isFavorite ? 'fill' : 'regular'} />{isFavorite ? t('已收藏') : t('收藏')}</button>
+            <button className="um-lesson-favorite" disabled={favoritePending || !onFavoriteChange} onClick={onFavoriteChange} aria-pressed={isFavorite}><Star size={18} weight={isFavorite ? 'fill' : 'regular'} />{hasCourseCatalog ? (isFavorite ? t('已收藏') : t('收藏')) : (isFavorite ? t('已保存') : t('保存课程'))}</button>
           </div>
         </header>
         <section className="um-lesson-intro" aria-labelledby="lesson-intro-heading">

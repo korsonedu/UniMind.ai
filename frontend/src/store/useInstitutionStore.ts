@@ -63,6 +63,7 @@ export function quotaLabel(key: string): string {
 
 interface InstitutionState {
   isPlatformAdmin: boolean;
+  hasCourseCatalog: boolean;
   institution: InstitutionInfo | null;
   features: string[];
   usage: UsageInfo | null;
@@ -84,6 +85,7 @@ let accessGeneration = 0;
 
 export const useInstitutionStore = create<InstitutionState>((set, get) => ({
   isPlatformAdmin: false,
+  hasCourseCatalog: false,
   institution: null,
   features: [],
   usage: null,
@@ -109,6 +111,7 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
       if (generation !== accessGeneration) return;
       set({
         isPlatformAdmin: data.is_platform_admin,
+        hasCourseCatalog: data.has_course_catalog === true,
         institution: data.institution,
         features: data.features || [],
         usage: data.usage || null,
@@ -130,6 +133,7 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
         previewMode: true,
         previewInstitution: data.institution,
         isPlatformAdmin: false,
+        hasCourseCatalog: data.has_course_catalog === true,
         institution: data.institution,
         features: data.features,
         usage: data.usage || null,
@@ -147,6 +151,7 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
       const { data } = await api.get('/users/institution/me/features/');
       set({
         isPlatformAdmin: data.is_platform_admin,
+        hasCourseCatalog: data.has_course_catalog === true,
         institution: data.institution,
         features: data.features || [],
         usage: data.usage || null,
@@ -171,6 +176,7 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
     setPreviewInstitutionId(null);
     set({
       isPlatformAdmin: false,
+      hasCourseCatalog: false,
       institution: null,
       features: [],
       loading: true,
