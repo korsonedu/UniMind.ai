@@ -478,8 +478,8 @@ function installContextMenu(window: BrowserWindow): void {
 function installMenu(): void {
   const template: MenuItemConstructorOptions[] = [];
   const appName = previewMode() ? 'UniMind Preview' : 'UniMind';
-  const settings: MenuItemConstructorOptions = { label: nt('设置…'), accelerator: 'CommandOrControl+,', click: () => navigate('/settings?section=desktop') };
-  const update: MenuItemConstructorOptions = { label: nt('检查更新…'), click: () => { navigate('/settings?section=desktop'); void updater.check(); } };
+  const settings: MenuItemConstructorOptions = { label: nt('设置…'), accelerator: 'CommandOrControl+,', click: () => navigate('/settings?section=general') };
+  const update: MenuItemConstructorOptions = { label: nt('检查更新…'), click: () => { navigate('/settings?section=about'); void updater.check(); } };
   const quit: MenuItemConstructorOptions = { role: 'quit', label: nt('退出 {0}', { 0: appName }) };
   const offlineLibrary: MenuItemConstructorOptions = { label: nt('离线课程库'), accelerator: 'CommandOrControl+Shift+O', click: () => openOffline() };
   const reconnect: MenuItemConstructorOptions = { label: nt('重新连接'), click: () => { showMain(); void mainWindow?.loadURL(sourceUrl); } };

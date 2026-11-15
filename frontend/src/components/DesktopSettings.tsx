@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useDesktopStore, type DesktopState } from '@/lib/desktop';
 
-export function DesktopSettings() {
+export function DesktopSettings({ section = 'all' }: { section?: 'all' | 'general' | 'notifications' | 'storage' | 'updates' | 'shortcuts' }) {
   useLocale();
   const { state, error } = useDesktopStore();
   const [busy, setBusy] = useState<string | null>(null);
@@ -26,6 +26,7 @@ export function DesktopSettings() {
   const focusLabel = state.focus ? `${Math.floor(state.focus.remaining / 60)}:${String(state.focus.remaining % 60).padStart(2, '0')}` : '';
   return <>
     {(actionError || error) && <p className="um-desktop-error" role="alert">{t(actionError || error || '')}</p>}
+    {(section === 'all' || section === 'notifications') && <>
     <h3 className="um-settings-group-title">{t('通知')}</h3>
     <section className="um-settings-group">
       <div className="um-settings-row"><div><label htmlFor="desktop-notifications">{t('接收系统通知')}</label></div><Switch id="desktop-notifications" aria-controls="desktop-notification-types" checked={state.preferences.notifications} disabled={!!busy} onCheckedChange={notifications => void run('notifications', () => desktop.updatePreferences({ notifications }))} /></div>
@@ -35,22 +36,30 @@ export function DesktopSettings() {
         {state.preferences.notifyLearning !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-notify-learning">{t('学习与系统消息')}</label></div><Switch id="desktop-notify-learning" checked={state.preferences.notifyLearning} disabled={!!busy || !state.preferences.notifications} onCheckedChange={notifyLearning => void run('notify-learning', () => desktop.updatePreferences({ notifyLearning }))} /></div>}
       </fieldset>
     </section>
+    </>}
+    {(section === 'all' || section === 'general') && <>
     <h3 className="um-settings-group-title">{t('启动与后台运行')}</h3>
     <section className="um-settings-group">
       {state.preferences.startupPage !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-startup-page">{t('启动时打开')}</label></div><SelectField id="desktop-startup-page" value={state.preferences.startupPage} disabled={!!busy} onValueChange={value => void run('startup-page', () => desktop.updatePreferences({ startupPage: value as DesktopState['preferences']['startupPage'] }))}><SelectOption value="/xiaoyu">{t('小宇')}</SelectOption><SelectOption value="/courses">{t('课程中心')}</SelectOption><SelectOption value="/notes">{t('笔记')}</SelectOption></SelectField></div>}
       <div className="um-settings-row"><div><label htmlFor="desktop-background">{t('关闭窗口后继续运行')}</label></div><Switch id="desktop-background" checked={state.preferences.keepRunning} disabled={!!busy} onCheckedChange={keepRunning => void run('background', () => desktop.updatePreferences({ keepRunning }))} /></div>
       {state.preferences.launchAtLogin !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-launch-at-login">{t('开机自启')}</label></div><Switch id="desktop-launch-at-login" checked={state.preferences.launchAtLogin} disabled={!!busy} onCheckedChange={launchAtLogin => void run('launch-at-login', () => desktop.updatePreferences({ launchAtLogin }))} /></div>}
     </section>
-    <h3 className="um-settings-group-title">{t('快捷键')}</h3>
-    <section className="um-settings-group">
-      {state.preferences.quickEntry !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-quick-entry">{t('全局快捷键')}</label></div><Switch id="desktop-quick-entry" checked={state.preferences.quickEntry} disabled={!!busy} onCheckedChange={quickEntry => void run('quick-entry', () => desktop.updatePreferences({ quickEntry }))} /></div>}
-      <div className="um-settings-row"><span>{t('键盘快捷键')}</span><span className="um-settings-value">{state.platform === 'darwin' ? '⌘' : 'Ctrl'}{t('+, 打开设置；')}{state.platform === 'darwin' ? '⌘' : 'Ctrl'}{t('+1 小宇；+2 课程；+3 笔记')}</span></div>
-    </section>
     <h3 className="um-settings-group-title">{t('专注计时')}</h3>
     <section className="um-settings-group">
       {state.preferences.focusMinutes !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-focus-minutes">{t('每轮专注时长')}</label></div><SelectField id="desktop-focus-minutes" value={state.preferences.focusMinutes} disabled={!!busy} onValueChange={value => void run('focus-minutes', () => desktop.updatePreferences({ focusMinutes: Number(value) }))}>{[15, 25, 45, 60].map(minutes => <SelectOption key={minutes} value={minutes}>{minutes} {t('分钟')}</SelectOption>)}</SelectField></div>}
       {state.focus && <div className="um-settings-row"><div><span>{t('菜单栏专注')}</span><p>{state.focus.status === 'running' ? t('专注中 {0}', { 0: focusLabel }) : state.focus.status === 'paused' ? t('已暂停 {0}', { 0: focusLabel }) : t('未开始')}</p></div></div>}
     </section>
+    </>}
+    {(section === 'all' || section === 'shortcuts') && <>
+    <h3 className="um-settings-group-title">{t('全局快捷键')}</h3><section className="um-settings-group">
+      {state.preferences.quickEntry !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-quick-entry">{t('全局快捷键')}</label></div><Switch id="desktop-quick-entry" checked={state.preferences.quickEntry} disabled={!!busy} onCheckedChange={quickEntry => void run('quick-entry', () => desktop.updatePreferences({ quickEntry }))} /></div>}
+      <div className="um-settings-row"><span>{t('唤起 UniMind.ai')}</span><kbd>{state.platform === 'darwin' ? '⌘' : 'Ctrl'} ⇧ U</kbd></div>
+      <div className="um-settings-row"><span>{t('快速新建笔记')}</span><kbd>{state.platform === 'darwin' ? '⌘' : 'Ctrl'} ⇧ N</kbd></div>
+    </section>
+    <h3 className="um-settings-group-title">{t('应用内快捷键')}</h3><section className="um-settings-group">
+      {[['打开设置', ','], ['打开课程中心', '2'], ['新聊天', 'T'], ['离线课程库', '⇧ O']].map(([label, key]) => <div className="um-settings-row" key={label}><span>{t(label)}</span><kbd>{state.platform === 'darwin' ? '⌘' : 'Ctrl'} {key}</kbd></div>)}
+    </section></>}
+    {(section === 'all' || section === 'storage') && <>
     <h3 className="um-settings-group-title">{t('离线课程')}</h3>
     <section className="um-settings-group">
       <div className="um-settings-row"><div><span>{t('已下载的课程')}</span></div><Button variant="outline" disabled={!!busy} onClick={() => void run('library', desktop.openOfflineLibrary)}>{t('打开离线课程库')}</Button></div>
@@ -67,7 +76,10 @@ export function DesktopSettings() {
         </div>
       </div>)}
     </section>
+    </>}
+    {(section === 'all' || section === 'updates') && <>
     <h3 className="um-settings-group-title">{t('版本与更新')}</h3>
     <section className="um-settings-group"><div className="um-settings-row"><div><span>{t('客户端版本')} {state.version}</span>{!['unconfigured', 'idle'].includes(state.update.status) && <p>{t(updateLabels[state.update.status])}{state.update.version ? ` · ${state.update.version}` : ''}</p>}{state.update.status === 'error' && state.update.error && <p>{t(state.update.error)}</p>}</div>{state.update.status === 'downloaded' ? <Button disabled={!!busy} onClick={() => void run('install', desktop.installUpdate)}>{t('重启并更新')}</Button> : <Button variant="outline" disabled={!!busy || ['unconfigured', 'checking', 'available', 'downloading'].includes(state.update.status)} onClick={() => void run('update', desktop.checkForUpdates)}>{t('检查更新')}</Button>}</div></section>
+    </>}
   </>;
 }

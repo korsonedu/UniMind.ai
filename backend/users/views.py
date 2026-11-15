@@ -421,6 +421,11 @@ class UserDetailView(generics.RetrieveAPIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def retrieve(self, request, *args, **kwargs):
+        response = super().retrieve(request, *args, **kwargs)
+        response.data['email'] = request.user.email
+        return response
+
     def get_object(self):
 
         user = self.request.user
