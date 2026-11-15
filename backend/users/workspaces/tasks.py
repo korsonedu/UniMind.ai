@@ -92,4 +92,3 @@ def process_course(self, link_id):
         WorkspaceCourse.objects.filter(pk=link_id, updated_at=claim).update(
             processing_status='failed', error_message='ASR 或知识结构构建失败，请重试。', updated_at=timezone.now())
         raise self.retry(exc=exc)
-

@@ -124,6 +124,12 @@ def test_upload_records_jobs_and_processing_publication(setup_workspace, django_
     assert pending.processing_status == 'pending'
     assert not pending.course.is_published
     assert client.patch(BASE+f'courses/{pending.course_id}/', {'status':'published'}, format='json').status_code == 400
+    WorkspaceCourse.objects.filter(pk=pending.pk).update(updated_at=timezone.now()-timedelta(seconds=5600))
+    assert client.get(BASE+f'courses/{pending.course_id}/').data['processing_status'] == 'failed'
+    with patch('users.workspaces.views.dispatch_processing') as retry:
+        with django_capture_on_commit_callbacks(execute=True):
+            assert client.patch(BASE+f'courses/{pending.course_id}/', {'retry':True}, format='json').status_code == 200
+        retry.assert_called_once()
     transcript = pending.course.transcript
     transcript.full_text = 'A course on discounts.'
     transcript.asr_status = 'completed'
