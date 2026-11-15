@@ -19,7 +19,7 @@ const statusLabels = { preparing: '了解目标', active: '学习中', paused: '
 const assistanceLabels: Record<string, string> = { independent: '独立完成', hint: '获得提示', guided: '逐步引导', unknown: '帮助程度待了解' };
 
 export function ProjectLearningContent({ knowledgeOnly = false, onStart }: { knowledgeOnly?: boolean; onStart?: () => void }) {
-  useLocale();
+  const locale = useLocale();
   const { chat, openingProject, activate } = useXiaoYuChat();
   useEffect(activate, [activate]);
   const userId = useAuthStore(s => s.user?.id);
@@ -30,7 +30,7 @@ export function ProjectLearningContent({ knowledgeOnly = false, onStart }: { kno
   const [candidates, setCandidates] = useState<{ title: string; url: string; summary: string }[]>([]);
   const navigate = useNavigate();
   const data = query.data;
-  const key = learningKey(userId, projectId);
+  const key = learningKey(userId, projectId, locale);
   const start = (text: string) => {
     chat.setInput(text);
     onStart?.();
@@ -40,8 +40,9 @@ export function ProjectLearningContent({ knowledgeOnly = false, onStart }: { kno
     if (!data || !projectId || busy) return;
     setBusy(true);
     try {
-      const response = await api.patch<ProjectLearning>(`/ai/projects/${projectId}/learning/`, { action, enabled, revision: data.revision });
+      const response = await api.patch<ProjectLearning>(`/ai/projects/${projectId}/learning/`, { action, enabled, revision: data.revision }, { headers: { 'Accept-Language': locale } });
       queryClient.setQueryData(key, response.data);
+      void queryClient.invalidateQueries({ queryKey: learningKey(userId, projectId) });
     } catch { toast.error(t('安排未更新，请重新查看最新状态后重试。')); void query.refetch(); }
     finally { setBusy(false); }
   };

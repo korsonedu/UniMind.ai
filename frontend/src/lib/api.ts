@@ -27,7 +27,7 @@ export function setPreviewInstitutionId(id: number | null) { _previewInstitution
 export function getPreviewInstitutionId() { return _previewInstitutionId; }
 
 api.interceptors.request.use(async (config) => {
-  config.headers.set('Accept-Language', getLocale());
+  if (!config.headers.has('Accept-Language')) config.headers.set('Accept-Language', getLocale());
   // Auth via httpOnly cookie (CookieTokenAuthentication) — no Authorization header needed
   if (!['get', 'head', 'options'].includes(config.method?.toLowerCase() || 'get')) {
     config.headers.set('X-CSRFToken', await getCsrfToken());

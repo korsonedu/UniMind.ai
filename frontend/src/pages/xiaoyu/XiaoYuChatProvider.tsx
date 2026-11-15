@@ -1,4 +1,4 @@
-import { t, useLocale } from '@/i18n';
+import { getLocale, t, useLocale } from '@/i18n';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -120,11 +120,12 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => { chatRef.current = chat; }, [chat]);
   const openProject = useCallback(async (id: number, explicitConversation?: string, draft?: string) => {
     if (!userId || !Number.isSafeInteger(id) || id < 1) return;
+    const language = getLocale();
     const sequence = ++openSequence.current;
     const selectionVersion = chatRef.current.getSelectionVersion();
     setOpeningProject(true);
     try {
-      const { data } = await api.get<ProjectLearning>(`/ai/projects/${id}/learning/`);
+      const { data } = await api.get<ProjectLearning>(`/ai/projects/${id}/learning/`, { headers: { 'Accept-Language': language } });
       const current = chatRef.current;
       if (!current.bot || sequence !== openSequence.current || chatRef.current.getSelectionVersion() !== selectionVersion || useAuthStore.getState().user?.id !== userId) return;
       const saved = readRecovery(recoveryScope(userId, current.bot.id));
@@ -149,7 +150,7 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
         if (draftEntry?.[1].draft && !messages.length) current.setInput(draftEntry[1].draft);
         if (draft) current.setInput(draft);
       }
-      queryClient.setQueryData(learningKey(userId, id), data);
+      queryClient.setQueryData(learningKey(userId, id, language), data);
     } catch (error) {
       if (sequence === openSequence.current && chatRef.current.getSelectionVersion() === selectionVersion && useAuthStore.getState().user?.id === userId) {
         const status = (error as { response?: { status?: number } })?.response?.status;

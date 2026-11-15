@@ -6,6 +6,7 @@ from users.permissions import IsMember
 from .models import ConversationProject
 from .services.project_learning import change_learning, learning_data
 from .services.learning_resources import find_resources
+from .services.language import request_language
 
 
 class ProjectLearningView(APIView):
@@ -13,13 +14,13 @@ class ProjectLearningView(APIView):
 
     def get(self, request, pk):
         project = get_object_or_404(ConversationProject, pk=pk, user=request.user)
-        return Response(learning_data(project))
+        return Response(learning_data(project, language=request_language(request)))
 
     def patch(self, request, pk):
         project = get_object_or_404(ConversationProject, pk=pk, user=request.user)
         if request.data.get('action') not in ('pause', 'resume', 'complete', 'schedule', 'accept', 'reject', 'reminders'):
             raise serializers.ValidationError('学习进展通过当前项目对话记录。')
-        return Response(change_learning(project, request.data))
+        return Response(change_learning(project, request.data, language=request_language(request)))
 
     def post(self, request, pk):
         project = get_object_or_404(ConversationProject, pk=pk, user=request.user)

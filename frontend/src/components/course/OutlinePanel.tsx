@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import React, { useEffect, useCallback } from 'react';
 import { Spinner } from '@phosphor-icons/react';
 import { useCourseAIStore } from '@/store/useCourseAIStore';
@@ -9,6 +10,7 @@ interface OutlinePanelProps {
 }
 
 export const OutlinePanel: React.FC<OutlinePanelProps> = ({ courseId, videoRef }) => {
+  useLocale();
   const { outlineStatus, outlineItems, fetchOutline, clearCourseTimers } = useCourseAIStore();
 
   useEffect(() => {
@@ -30,18 +32,18 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({ courseId, videoRef }
     return (
       <div className="um-lesson-outline-status" role="status">
         <Spinner size={16} className="animate-spin" />
-        <span>正在整理课程大纲…</span>
+        <span>{t('正在整理课程大纲…')}</span>
       </div>
     );
   }
 
   if (outlineStatus === 'unavailable' || outlineItems.length === 0) {
-    return <p className="um-lesson-empty">暂无课程大纲</p>;
+    return <p className="um-lesson-empty">{t('暂无课程大纲')}</p>;
   }
 
   return (
     <div className="um-lesson-outline">
-      <p className="um-lesson-outline-count">{outlineItems.length} 个章节</p>
+      <p className="um-lesson-outline-count">{outlineItems.length} {t('个章节')}</p>
       <ol className="um-lesson-outline-items">
         {outlineItems.map((item) => (
           <li key={item.index}><button onClick={() => handleSeek(item.timestamp)} aria-label={`${formatDuration(item.timestamp)} ${item.title}`}>

@@ -44,7 +44,7 @@ def send_project_learning_followups():
             text = state.followup_text or state.next_action
             if state.followup_text == state.next_action and state.project.learning_tasks.exists():
                 from .services.project_learning import learning_data
-                text = learning_data(state.project)['followup_text']
+                text = learning_data(state.project, language='en' if english else 'zh-CN')['followup_text']
             if not text:
                 state.followup_at = None
                 state.save(update_fields=['followup_at'])
