@@ -54,7 +54,7 @@ export class DesktopAuth {
       const result = await this.request('/api/users/desktop-auth/start/', attempt, { state: attempt.state, code_challenge: createHash('sha256').update(verifier).digest('base64url') });
       this.ensureCurrent(attempt);
       if (!result || typeof result.request_id !== 'string' || !token.test(result.request_id) || result.expires_in !== 180) throw new Error('登录服务返回了无效请求，请重试');
-      const browser = new URL('/accounts/desktop/', this.source);
+      const browser = new URL('/desktop-auth', this.source);
       browser.searchParams.set('request', result.request_id);
       browser.searchParams.set('ui_language', getNativeLanguage());
       attempt.browserUrl = browser.href;

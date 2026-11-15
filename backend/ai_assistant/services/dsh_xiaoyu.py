@@ -14,7 +14,7 @@ from ai_assistant.models import AIChatMessage, Conversation
 from ai_assistant.services.language import request_language
 from ai_assistant.services.title_generator import sync_generate_title
 from ai_assistant.services.memory_service import extract_memories_async
-from ai_assistant.views_projects import save_new_conversation_project
+from ai_assistant.views_projects import save_new_conversation_project, learning_activity_metadata
 from notes.context import prepare_note_context, conversation_uses_notes
 from notes.awareness import note_message_metadata
 from core.interface_language import ui_text, error_text
@@ -94,8 +94,7 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
             session_id = previous.metadata.get('dsh_session_id') if previous else None
             current = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=conversation_id,
                 role='user', content=message,
-                metadata={**note_message_metadata(notes, sources, request.data.get('note_selection', '')),
-                          'ui_language': request_language(request)})
+                metadata={**note_message_metadata(notes, sources, request.data.get('note_selection', '')), **learning_activity_metadata(request, conversation_id), 'ui_language': request_language(request)})
             if course_context:
                 current.metadata['course_context'] = course_context
                 current.save(update_fields=['metadata'])

@@ -4,12 +4,11 @@ import axios from 'axios';
 import { queryClient } from '@/lib/queryClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
-import { getReturnTo } from '@/lib/routing';
+import { getReturnTo, getLoginPath } from '@/lib/routing';
 
 export function AccountCallback() {
   useLocale();
   const [error, setError] = useState(false);
-  const accountCenter = import.meta.env.VITE_ACCOUNT_CENTER_ORIGIN || (import.meta.env.DEV ? 'http://localhost:8000' : window.location.origin);
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
@@ -35,7 +34,7 @@ export function AccountCallback() {
   }, []);
   return <main className="min-h-dvh flex flex-col items-center justify-center gap-4 px-6 bg-background text-foreground">
     <h1 className="text-xl font-semibold">{error ? t('暂时无法进入 UniMind') : t('正在确认你的账号')}</h1>
-    <p className="text-sm text-muted-foreground">{error ? t('请重试，或重新登录科晟账号。') : t('确认后将进入 UniMind。')}</p>
-    {error && <><button onClick={() => window.location.reload()} className="underline">{t('重试')}</button><a href={`${accountCenter}/accounts/login/?next=%2Faccounts%2Funimind%2F`} className="underline">{t('重新登录')}</a></>}
+    <p className="text-sm text-muted-foreground">{error ? t('请重试，或重新登录 UniMind.ai 账号。') : t('确认后将进入 UniMind。')}</p>
+    {error && <><button onClick={() => window.location.reload()} className="underline">{t('重试')}</button><a href={getLoginPath(getReturnTo(new URLSearchParams(window.location.search).get('next')))} className="underline">{t('重新登录')}</a></>}
   </main>;
 }

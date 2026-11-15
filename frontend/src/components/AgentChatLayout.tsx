@@ -24,7 +24,7 @@ import type { Icon } from '@phosphor-icons/react';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
 import { AgentReplyContext } from '@/pages/xiaoyu/visuals/agentReplyContext';
 import { TaskList } from '@/components/TaskList';
-import { NativeAgentShell } from '@/components/NativeAgentShell';
+import { NativeAgentShell, type AgentWorkspace } from '@/components/NativeAgentShell';
 import { useConversationProjects, type ConversationProjectControls } from '@/hooks/useConversationProjects';
 import { Link } from 'react-router-dom';
 import { useChatUnreadStore } from '@/store/useChatUnreadStore';
@@ -55,6 +55,7 @@ export interface RightPanelProps {
 }
 
 export interface AgentChatLayoutProps {
+  workspace?: AgentWorkspace;
   appearance?: 'native';
   // Skills
   skills: Skill[];
@@ -164,7 +165,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     inputTourClass,
     sidebar,
     onSessionsReady,
-    appearance,
+    appearance, workspace,
   } = props;
 
   const setPageHeader = useSystemStore(state => state.setPageHeader);
@@ -390,7 +391,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
       {quotaError ? <span>{t('AI 额度暂时无法读取，请稍后查看。')}</span> : !aiUsage ? <span>{t('正在读取 AI 额度…')}</span> : aiUsage.unlimited ? <span>{t('AI 问答不限次数')}</span> : <>
         <span>{aiUsage.configured ? t('本周 AI 剩余 {0} 次', { 0: aiUsage.base_remaining }) : t('基础周额度待配置')}{aiUsage.addon_remaining > 0 && t(' · 加量剩余 {0} 次', { 0: aiUsage.addon_remaining })}{quotaLow && t(' · 额度不多了')}</span>
         {quotaExhausted && aiUsage.configured && <span>{learningReset(aiUsage.resets_at)}{t('恢复基础额度')}</span>}
-        {(quotaExhausted || !aiUsage.configured) && <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => setContactOpen(true)}>{t('联系科晟')}</button>}
+        {(quotaExhausted || !aiUsage.configured) && <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => setContactOpen(true)}>{t('联系我们')}</button>}
         {(quotaExhausted || quotaLow) && <Link to="/pricing" className="underline underline-offset-2 hover:text-foreground">{t('按需 AI 加量')}</Link>}
       </>}
     </p>
@@ -406,7 +407,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
   if (!hasConversation && appearance === 'native') {
     return <TooltipProvider delayDuration={300}>
-      <NativeAgentShell native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || t('新对话')}>
+      <NativeAgentShell workspace={workspace} native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || t('新对话')}>
         {contextPanel?.({ bot, conversationId })}
         <div className="um-agent-landing">
           <section className="um-agent-start" aria-label={t('开始对话')}>
@@ -571,7 +572,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (layout === 'inline') {
     return (
       <TooltipProvider delayDuration={300}>
-        <NativeAgentShell native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || t('新对话')}>
+        <NativeAgentShell workspace={workspace} native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || t('新对话')}>
           {contextPanel?.({ bot, conversationId })}
 
           <div className={cn("flex-1 min-w-0 flex flex-col bg-white", appearance === 'native' && 'um-agent-chat-body')}>

@@ -22,7 +22,7 @@ export interface LearningKnowledge {
   excluded_evidence_count?: number;
   repeated_question_count?: number;
   recommendations: { node_id: string; title: string; mode: 'apply' | 'transfer'; reason: string; information_gain: number; target_coverage: number; gap: number; score: number }[];
-  evidence?: { event_id: number; conversation_id: string | null; label_source?: string; exam_id?: number; source: string; question: string; rubric: string; quote: string; reason: string; outcome: 'success' | 'failure' | 'unclear'; assistance: string; node_id: string; mode: 'apply' | 'transfer'; at: string }[];
+  evidence?: { task_id?: string; event_id: number; conversation_id: string | null; label_source?: string; exam_id?: number; source: string; question: string; rubric: string; quote: string; reason: string; outcome: 'success' | 'failure' | 'unclear'; assistance: string; node_id: string; mode: 'apply' | 'transfer'; at: string }[];
 }
 const modes = { apply: '理解与应用', transfer: '迁移应用' };
 const outcomes = { success: '支持观察', failure: '相反观察', unclear: '尚不明确' };

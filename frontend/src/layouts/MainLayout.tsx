@@ -38,7 +38,6 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/notes', icon: '0% 0%', label: '我的笔记', mobileLabel: '笔记' },
   { to: '/xiaoyu', icon: '50% 0%', label: '小宇', mobileLabel: '小宇', feature: 'ai.assistant' },
   { to: '/report-card', icon: '100% 0%', label: '学习记录', mobileLabel: '记录', feature: 'full.report' },
-  { to: '/knowledge-tree', icon: '100% 0%', label: '知识关系', mobileLabel: '知识', feature: 'ai.assistant' },
   { to: '/courses', icon: '0% 100%', label: '课程中心', mobileLabel: '课程', feature: 'course.video' },
   { to: '/tests', icon: '50% 100%', label: '习题训练', mobileLabel: '做题', feature: 'quiz.exam' },
   { to: '/community', icon: '100% 100%', label: '学习社区', mobileLabel: '社区' },

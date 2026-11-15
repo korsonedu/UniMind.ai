@@ -857,5 +857,11 @@
   "讲稿参考：": "Transcript reference: ",
   "问题": "Question",
   "小宇讲解": "XiaoYu explanation",
-  "未命名": "Untitled"
+  "未命名": "Untitled",
+  "内容访问范围不可用，请联系管理员。": "The content scope is unavailable. Contact an administrator.",
+  "内容访问范围尚未配置，请联系管理员。": "The content scope has not been configured. Contact an administrator.",
+  "仅可访问已授权的内容范围。": "You can only access authorized content.",
+  "该入口已停用，请在 UniMind.ai 使用个人账号。": "This entry is retired. Use your personal account at UniMind.ai.",
+  "学习内容引用格式无效。": "Invalid learning content reference format.",
+  "请先恢复当前项目，并选择生效计划中的任务。": "Resume this project and select a task in the active plan first."
 }

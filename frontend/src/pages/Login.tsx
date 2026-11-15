@@ -25,7 +25,6 @@ const WebLogin: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sendingCode, setSendingCode] = useState(false);
-  const [remembered, setRemembered] = useState<{ user: { id: number; nickname: string; email: string }; csrf_token: string } | null>(null);
   const setAuth = useAuthStore(s => s.setAuth);
   const { fetchFeatures } = useInstitutionStore();
   const navigate = useNavigate();
@@ -36,15 +35,6 @@ const WebLogin: React.FC = () => {
     const { user } = useAuthStore.getState();
     if (user) navigate(returnTo, { replace: true });
   }, [navigate, returnTo]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void fetch('/accounts/session/', { credentials: 'same-origin', cache: 'no-store', signal: controller.signal })
-      .then(response => response.ok ? response.json() : null)
-      .then(data => { if (!controller.signal.aborted && data?.user) setRemembered(data); })
-      .catch(() => {});
-    return () => controller.abort();
-  }, []);
 
   const getInstitutionSlug = (): string => {
     const fromParam = searchParams.get('institution');
@@ -112,7 +102,6 @@ const WebLogin: React.FC = () => {
   return (
     <AuthLayout
       title={t('欢迎回来')}
-      subtitle={tab === 'password' ? t('登录你的 UniMind 账号') : t('新用户将自动创建账号')}
       footer={
         tab === 'password' ? (
           <p className="text-sm text-[#6E6E73] dark:text-white/40">
@@ -127,34 +116,9 @@ const WebLogin: React.FC = () => {
         ) : undefined
       }
     >
-      {/* Tab switcher */}
-      <div className="flex rounded-xl bg-[#F5F5F7] dark:bg-white/[0.06] p-1 mb-6">
-        <button
-          type="button"
-          onClick={() => { setTab('password'); setError(''); }}
-          className={`
-            flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-[180ms]
-            ${tab === 'password'
-              ? 'bg-white dark:bg-white/[0.12] text-[#1D1D1F] dark:text-white shadow-sm'
-              : 'text-[#8E8E93] dark:text-white/30 hover:text-[#6E6E73] dark:hover:text-white/50'
-            }
-          `}
-        >
-          {t('密码登录')}
-        </button>
-        <button
-          type="button"
-          onClick={() => { setTab('code'); setError(''); }}
-          className={`
-            flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-[180ms]
-            ${tab === 'code'
-              ? 'bg-white dark:bg-white/[0.12] text-[#1D1D1F] dark:text-white shadow-sm'
-              : 'text-[#8E8E93] dark:text-white/30 hover:text-[#6E6E73] dark:hover:text-white/50'
-            }
-          `}
-        >
-          {t('验证码登录')}
-        </button>
+      <div className="um-auth-tabs" aria-label={t('登录方式')}>
+        <button type="button" aria-pressed={tab === 'password'} onClick={() => { setTab('password'); setError(''); }}>{t('密码登录')}</button>
+        <button type="button" aria-pressed={tab === 'code'} onClick={() => { setTab('code'); setError(''); }}>{t('验证码登录 / 注册')}</button>
       </div>
 
       {/* Error banner */}
@@ -205,7 +169,7 @@ const WebLogin: React.FC = () => {
 
           <Button
             type="submit"
-            className="w-full h-12 rounded-xl font-semibold tracking-tight text-[15px]"
+            className="um-auth-submit"
             disabled={loading}
           >
             {loading ? t('登录中...') : t('登录')}
@@ -218,29 +182,14 @@ const WebLogin: React.FC = () => {
         <div className="space-y-1.5">
           <Button
             type="button"
-            variant="outline"
-            className="w-full h-12 rounded-xl font-medium"
+            className="um-auth-submit"
             disabled={sendingCode || !email.trim()}
             onClick={handleSendCode}
           >
             {sendingCode ? <Spinner className="h-4 w-4 animate-spin" /> : t('发送验证码')}
           </Button>
-          <p className="text-xs text-[#AEAEB2] dark:text-white/25 text-center pt-1">
-            {t('未注册邮箱自动创建账号，验证码 10 分钟内有效')}
-          </p>
         </div>
       )}
-      {remembered && <form action="/accounts/unimind/" method="post" className="mt-6">
-        <input type="hidden" name="csrfmiddlewaretoken" value={remembered.csrf_token} />
-        <input type="hidden" name="next" value={returnTo} />
-        <input type="hidden" name="account_id" value={remembered.user.id} />
-        <p className="text-xs text-muted-foreground mb-3">{t('使用已有账号继续')}</p>
-        <button type="submit" className="flex w-full items-center gap-3 rounded-xl border border-border p-4 text-left hover:bg-muted/50">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-muted text-lg" aria-hidden="true">{remembered.user.nickname.slice(0, 1)}</span>
-          <span className="min-w-0 flex-1"><span className="block text-sm font-medium">{remembered.user.nickname}</span><span className="block truncate text-xs text-muted-foreground">{remembered.user.email}</span></span>
-          <span aria-hidden="true">↗</span>
-        </button>
-      </form>}
     </AuthLayout>
   );
 };

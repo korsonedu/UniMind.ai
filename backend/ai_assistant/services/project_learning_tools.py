@@ -33,7 +33,7 @@ def tool(name, description, schema):
 
 PROJECT_LEARNING_TOOLS = [
     tool('read_learning_project', '读取当前对话所属项目的目标、计划、进展、证据、来源和跟进安排。身份与项目由服务端确定。', obj({})),
-    tool('plan_learning_project', '保存初步阶段路径，或修订原计划。目标改变、范围缩减、长期投入增加和延期会形成待用户确认方案。先准备可开始的一段，来源只能使用实际读取的 id。',
+    tool('plan_learning_project', '保存初步阶段路径，或修订原计划。目标改变、范围缩减、长期投入增加和延期会形成待用户确认方案。用户要求形成调整方案时，必须调用本工具保存，不能只在回复里列方案；提交待确认方案不会采用新计划，用户随后在界面确认，无需在保存方案前再问一次。先准备可开始的一段，来源只能使用实际读取的 id。',
          obj({'revision': revision, 'plan': plan, 'next_action': text(), 'reason': text(),
               'major_change': {'type': 'boolean', 'description': '涉及明显范围缩减等重要取舍时必须为 true'}, **time_fields},
              ('revision', 'plan', 'next_action', 'reason', 'major_change'))),

@@ -1,5 +1,5 @@
 import { getLocale, t, useLocale } from '@/i18n';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -9,9 +9,11 @@ import { formatApiErrorToast } from '@/lib/apiError';
 import { learningKey, learningUrl, type ProjectLearning } from '@/lib/projectLearning';
 import { useAuthStore } from '@/store/useAuthStore';
 import { MarkdownContent } from '@/components/MarkdownContent';
+import { WorkspaceActiveContext } from './WorkspaceContext';
 import { PracticeQuizCard, type PracticePayload } from '@/pages/xiaoyu/visuals/PracticeQuizCard';
 
-interface LearningTask {
+export interface LearningTask {
+  is_current?: boolean; stage_id: string;
   id: string; title: string; instructions: string; node_id: string; version_id: number | null;
   purpose?: 'diagnostic' | 'practice' | 'recheck'; source_task_id?: string | null;
   response_type?: 'explanation' | 'calculation' | 'reasoning' | 'case' | 'code'; criteria?: string[]; sources?: string[];
@@ -66,13 +68,20 @@ export function LearningTasksPanel({ project, onStudy }: { project: ProjectLearn
       {item.version_id !== null && item.version_id !== project.knowledge?.version_id && <p className="um-learning-muted">{t('此前知识版本')}</p>}</div>
       <button className="um-agent-button" aria-expanded={selected === item.id} onClick={() => setSelected(selected === item.id ? null : item.id)}>{selected === item.id ? t('收起任务') : item.exam_id ? t('查看作答与结果') : t('打开任务')}</button>
     </li>)}</ol>
-    {task && <article ref={detailRef} className="um-learning-task-detail" aria-label={t('学习任务：{0}', { 0: task.title })}><h4>{task.title}</h4>{task.status === 'unavailable' ? <p>{t('任务内容当前不可用，请和小宇重新安排。')}</p> : <MarkdownContent content={task.instructions} />}
-      {task.status !== 'unavailable' && !!task.criteria?.length && <div className="um-learning-task-criteria"><h5>{t('评价标准')}{task.response_type && ` · ${t(responseTypes[task.response_type])}`}</h5><ol>{task.criteria.map((criterion, index) => <li key={index}><MarkdownContent content={criterion} /></li>)}</ol></div>}
-      {task.source_task_id && <button className="um-learning-text-button" disabled={!tasks.some(item => item.id === task.source_task_id)} onClick={() => setSelected(task.source_task_id || null)}>{t('回看关联任务')}</button>}
-      {task.status !== 'unavailable' && <PracticeQuizCard key={`${userId}:${task.id}`} payload={{ ...task.payload, learning_task_id: task.id, assistance: task.assistance, project_id: project.project_id, conversation_id: project.conversation_id || undefined, response_type: task.response_type, label_source: task.summary?.label_source }} onResult={refresh} />}
-      <div className="um-learning-controls"><button className="um-agent-button" onClick={() => onStudy(t('请用任务 read 读取本项目学习任务 {0}“{1}”已评价的真实原作答、标准和反馈，对照标准给我一句具体反馈和下一步。有错误时先解释缺口并安排补救；需要再次检验时关联这个任务并准备不同内容。不要替我作答，不把一次分数、有提示完成或模型评价当成已经掌握；代码未运行时明确说明。', { 0: task.id, 1: task.title }))}>{t('和小宇复盘这次任务')}</button>
-        <Link to={learningUrl('/xiaoyu', project.project_id, project.conversation_id || undefined)}>{t('回到项目对话')}</Link>
-      </div>
-    </article>}
+    {task && <LearningTaskDetail project={project} task={task} tasks={tasks} onStudy={onStudy} onSelect={setSelected} refresh={refresh} />}
   </section>;
+}
+
+export function LearningTaskDetail({ project, task, tasks, onStudy, onSelect, refresh, onClose, active = true }: { active?: boolean; onClose?: () => void; project: ProjectLearning; task: LearningTask; tasks: LearningTask[]; onStudy: (text: string) => void; onSelect: (id: string | null) => void; refresh: () => void }) {
+  useLocale();
+  const userId = useAuthStore(state => state.user?.id);
+  const workspaceActive = useContext(WorkspaceActiveContext);
+  return <WorkspaceActiveContext.Provider value={workspaceActive && active}><article className="um-learning-task-detail" aria-label={t('学习任务：{0}', { 0: task.title })}><h4>{task.title}</h4>{task.status === 'unavailable' || (task.is_current === false && !task.exam_id) ? <p>{t('这项任务已停止使用，已有作答继续保留。请从当前学习安排接续。')}</p> : <MarkdownContent content={task.instructions} />}
+      {task.status !== 'unavailable' && (task.is_current !== false || !!task.exam_id) && !!task.criteria?.length && <div className="um-learning-task-criteria"><h5>{t('评价标准')}{task.response_type && ` · ${responseTypes[task.response_type]}`}</h5><ol>{task.criteria.map((criterion, index) => <li key={index}><MarkdownContent content={criterion} /></li>)}</ol></div>}
+      {task.source_task_id && <button className="um-learning-text-button" disabled={!tasks.some(item => item.id === task.source_task_id)} onClick={() => onSelect(task.source_task_id || null)}>{t('回看关联任务')}</button>}
+      {task.status !== 'unavailable' && (task.is_current !== false || !!task.exam_id) && <PracticeQuizCard key={`${userId}:${task.id}`} payload={{ ...task.payload, learning_task_id: task.id, assistance: task.assistance, project_id: project.project_id, conversation_id: project.conversation_id || undefined, response_type: task.response_type, label_source: task.summary?.label_source }} onResult={refresh} />}
+      <div className="um-learning-controls"><button className="um-agent-button" onClick={() => onStudy(t('请用任务 read 读取本项目学习任务 {0}“{1}”已评价的真实原作答、标准和反馈，对照标准给我一句具体反馈和下一步。有错误时先解释缺口并安排补救；需要再次检验时关联这个任务并准备不同内容。不要替我作答，不把一次分数、有提示完成或模型评价当成已经掌握；代码未运行时明确说明。', { 0: task.id, 1: task.title }))}>{t('和小宇复盘这次任务')}</button>
+        {onClose ? <button className="um-agent-button" onClick={onClose}>{t('回到项目对话')}</button> : <Link to={learningUrl('/xiaoyu', project.project_id, project.conversation_id || undefined)}>{t('回到项目对话')}</Link>}
+      </div>
+    </article></WorkspaceActiveContext.Provider>;
 }

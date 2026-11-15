@@ -16,9 +16,19 @@ def _fingerprint(task):
     return tuple(''.join(question['text'].split()).casefold() for question in task.get('payload', {}).get('questions', []))
 
 
-def teaching_guidance(state, tasks, *, progress_at=None, language='zh-CN'):
+def teaching_guidance(state, tasks, *, progress_at=None, focus_task_id=None, language='zh-CN'):
     stage_ids = {stage['id'] for stage in state.plan.get('stages', [])}
     tasks = [task for task in tasks if task['stage_id'] in stage_ids]
+    all_tasks = tasks
+    tasks = [task for task in tasks if task['stage_id'] == state.current_stage]
+    by_id = {task['id']: task for task in all_tasks}
+    def root(task):
+        while task.get('source_task_id') in by_id:
+            task = by_id[task['source_task_id']]
+        return task['id']
+    focus = by_id.get(focus_task_id)
+    if focus and focus['stage_id'] == state.current_stage:
+        tasks = [task for task in tasks if root(task) == root(focus)]
     result = {'status': 'start', 'feedback': '', 'next_action': state.next_action,
               'task_id': None, 'stage_id': state.current_stage, 'reason': '', 'stalled': False}
     if state.status != 'active':
@@ -45,7 +55,7 @@ def teaching_guidance(state, tasks, *, progress_at=None, language='zh-CN'):
                 'next_action': guidance_text('先恢复这次未完成的评价，已成功的部分继续保留。', language),
                 'reason': guidance_text('评价失败或部分完成不代表答错，也不触发重复记分。', language)}
     completed = sorted((task for task in tasks if task['status'] == 'completed'), key=_time)
-    ready = [task for task in tasks if task['status'] == 'ready']
+    ready = sorted((task for task in tasks if task['status'] == 'ready'), key=lambda task: task['created_at'], reverse=True)
     if not completed:
         task = next((task for task in ready if task.get('purpose') == 'diagnostic'), ready[0] if ready else None)
         return {**result, 'task_id': task['id'] if task else None, 'stage_id': task['stage_id'] if task else state.current_stage,
@@ -69,7 +79,7 @@ def teaching_guidance(state, tasks, *, progress_at=None, language='zh-CN'):
     if not _supported(latest):
         stalled = len(recent) == 2 and all(not _supported(task) for task in recent)
         child = next((task for task in ready if task.get('source_task_id') == latest['id']), None)
-        return {**result, 'status': 'remediate', 'task_id': child['id'] if child else None, 'stage_id': child['stage_id'] if child else latest['stage_id'], 'stalled': stalled,
+        return {**result, 'status': 'remediate', 'task_id': child['id'] if child else latest['id'], 'stage_id': child['stage_id'] if child else latest['stage_id'], 'stalled': stalled,
                 'next_action': guidance_text('先询问最具体的卡点，换一种讲解方式并缩小任务，再准备一次检查。', language) if stalled else guidance_text('先对照原作答和评价标准解释缺口，再准备更小的同类任务。', language),
                 'reason': guidance_text('连续两次任务出现缺口，优先改变教学策略。', language) if stalled else guidance_text('当前成果存在缺口，不能用完成题数代替理解。', language)}
     if latest.get('purpose') == 'diagnostic':
@@ -85,7 +95,8 @@ def teaching_guidance(state, tasks, *, progress_at=None, language='zh-CN'):
         return {**result, 'status': 'recheck', 'task_id': child['id'] if child else None,
                 'next_action': guidance_text('回顾必要讲解后，准备不同的任务再检查；如实记录作答时获得的帮助。', language),
                 'reason': guidance_text('有提示、逐步引导、帮助未知或只有一次支持观察，都不足以推断稳定独立表现。', language)}
-    task = next((task for task in ready if task['stage_id'] != latest['stage_id']), ready[0] if ready else None)
+    remaining = [task for task in all_tasks if task['status'] == 'ready']
+    task = next((task for task in remaining if task['stage_id'] != latest['stage_id']), ready[0] if ready else None)
     return {**result, 'status': 'continue' if task else 'review', 'task_id': task['id'] if task else None,
             'stage_id': task['stage_id'] if task else latest['stage_id'],
             'next_action': guidance_text('可以继续“{0}”，保留之后的复习与换情境检查。', language, task['title']) if task else guidance_text('本轮已有不同任务的支持观察，和小宇约定延迟复测或下一阶段；整个目标仍需另行核对。', language),

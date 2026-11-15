@@ -7,7 +7,8 @@ import axios from 'axios';
 import { useAuthStore } from '@/store/useAuthStore';
 import { getReturnTo } from '@/lib/routing';
 import type { DesktopLoginState } from '@/lib/desktop';
-import '@/styles/desktop-login.css';
+import { AuthLayout } from '@/components/AuthLayout';
+import { Button } from '@/components/ui/button';
 
 export function DesktopLogin() {
   useLocale();
@@ -74,27 +75,14 @@ export function DesktopLogin() {
   const status = error || auth.error || (!supported ? t('请安装最新客户端，以使用浏览器登录。')
     : auth.status === 'completing' || auth.status === 'authenticated' ? t('正在确认账号，即将进入学习空间。')
       : waiting ? t('浏览器已打开。登录完成后，会自动回到这里。')
-        : t('使用你的科晟账号，在浏览器中安全登录。'));
+        : '');
 
-  return <main className="um-desktop-login">
-    <div className="um-desktop-login-titlebar" aria-hidden="true" />
-    <section className="um-desktop-login-content" aria-labelledby="desktop-login-title">
-      <div className="um-desktop-login-mark"><img src="/unimind_logo_small.png" alt="" width="68" height="68" /></div>
-      <div className="mb-4"><LanguageSelect /></div>
-      <h1 id="desktop-login-title">{t('欢迎使用 UniMind')}</h1>
-      <p className="um-desktop-login-subtitle">{t('和小宇一起，把问题弄清楚。')}</p>
-      <div className="um-desktop-login-actions">
-        <button className="um-desktop-login-primary" disabled={!supported || busy} onClick={() => void start()}>
-          {busy ? <><Spinner size={18} className="animate-spin" aria-hidden="true" />{auth.status === 'completing' || auth.status === 'authenticated' ? t('正在进入 UniMind') : t('正在打开浏览器')}</>
-            : <>{waiting ? t('重新打开浏览器') : t('通过浏览器登录')}<ArrowUpRight size={18} aria-hidden="true" /></>}
-        </button>
-        <p className="um-desktop-login-status" role={error || auth.error ? 'alert' : 'status'}>{t(status)}</p>
-        {(waiting || auth.status === 'error') && <button className="um-desktop-login-cancel" disabled={actionPending} onClick={() => void cancel()}>{waiting ? t('取消登录') : t('返回登录')}</button>}
-      </div>
-    </section>
-    <footer className="um-desktop-login-footer">
-      <p><a href="/terms" target="_blank" rel="noreferrer">{t('用户协议')}</a><span aria-hidden="true"> · </span><a href="/privacy" target="_blank" rel="noreferrer">{t('隐私政策')}</a></p>
-      <span>{t('UniMind · 科晟智慧')}</span>
-    </footer>
-  </main>;
+  return <AuthLayout title={t('登录 UniMind.ai')}>
+    <Button className="um-auth-submit" disabled={!supported || busy} onClick={() => void start()}>
+      {busy ? <><Spinner size={18} className="animate-spin" aria-hidden="true" />{auth.status === 'completing' || auth.status === 'authenticated' ? t('正在进入 UniMind.ai') : t('正在打开浏览器')}</>
+        : <>{waiting ? t('重新打开浏览器') : t('通过浏览器登录')}<ArrowUpRight size={18} aria-hidden="true" /></>}
+    </Button>
+    {status && <p className="mt-4 text-sm text-center text-muted-foreground" role={error || auth.error ? 'alert' : 'status'}>{status}</p>}
+    {(waiting || auth.status === 'error') && <Button variant="ghost" className="w-full mt-3" disabled={actionPending} onClick={() => void cancel()}>{waiting ? t('取消登录') : t('返回登录')}</Button>}
+  </AuthLayout>;
 }

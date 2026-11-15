@@ -99,7 +99,6 @@ export const Register: React.FC = () => {
   return (
     <AuthLayout
       title={t('创建账号')}
-      subtitle={t('开启你的 UniMind 学习之旅')}
       footer={
         <p className="text-sm text-[#6E6E73] dark:text-white/40">
           {t('已有账号？')}
@@ -149,7 +148,7 @@ export const Register: React.FC = () => {
               onClick={handleSendCode}
               disabled={sendingCode || !email.trim() || countdown > 0}
               variant="outline"
-              className="h-12 rounded-xl font-medium shrink-0"
+              className="um-auth-code-button"
             >
               {sendingCode ? t('发送中') : countdown > 0 ? `${countdown}s` : t('获取验证码')}
             </Button>
@@ -194,7 +193,7 @@ export const Register: React.FC = () => {
           <Input
             id="reg-password"
             type="password"
-            placeholder={t('至少 8 位')}
+            placeholder={t('至少 8 位，含大写字母和数字')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
@@ -222,7 +221,7 @@ export const Register: React.FC = () => {
 
         <Button
           type="submit"
-          className="w-full h-12 rounded-xl font-semibold tracking-tight text-[15px]"
+          className="um-auth-submit"
           disabled={loading || !agreedToTerms}
         >
           {loading ? t('注册中...') : t('注册')}

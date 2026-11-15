@@ -46,8 +46,8 @@ def complete_account_login(request, next_path):
     destination = urlsplit(next_path)
     query = parse_qs(destination.query)
     if destination.path == '/accounts/desktop/':
-        from .desktop import confirm
-        return confirm(request, request_id=query.get('request', [''])[0])
+        from .desktop import legacy_confirm
+        return legacy_confirm(request, request_id=query.get('request', [''])[0])
     if destination.path == '/accounts/unimind/':
         return finish_unimind_login(request, request.user, query.get('next', [None])[0])
     return redirect(next_path)

@@ -106,7 +106,7 @@ def build_context(user, message, recent_messages=None, chat_context=None):
         allowed.extend(executor._permitted_tool_definitions.values())
     # Runtime additions change the registry, not the underlying account authorization.
     authorization = [t for t in allowed if not t['function']['name'].startswith('session_')]
-    from .project_learning import turn_project_context
+    from .project_learning import turn_project_context, current_project
     learning = turn_project_context(user, chat_context)
     planning = planning_for_chat(user, chat_context)
     if not planning:
@@ -142,6 +142,9 @@ def build_context(user, message, recent_messages=None, chat_context=None):
     if learning:
         context['learning_project'] = learning
         context['system_prompt'] += learning
+        if chat_context:
+            _, current_message = current_project(user, chat_context)
+            context['learning_activity'] = current_message.metadata.get('learning_activity')
     if planning:
         context['model_policy'].update(operation='assistant.chat.planner.learning', max_requests=6, max_tokens=4096, max_request_bytes=262144)
         context['system_prompt'] += (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu/project_learning.txt').read_text()

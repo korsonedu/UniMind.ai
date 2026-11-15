@@ -36,6 +36,7 @@ urlpatterns = [
     path('learning/grants/', LearningGrantAdminView.as_view(), name='learning-grant-admin'),
     path('learning/grants/<int:pk>/', LearningGrantDetailView.as_view(), name='learning-grant-detail'),
     # Auth & profile
+    path('desktop-auth/confirm/', desktop.confirm, name='desktop-auth-confirm'),
     path('desktop-auth/start/', desktop.start, name='desktop-auth-start'),
     path('desktop-auth/exchange/', desktop.exchange, name='desktop-auth-exchange'),
     path('register/', RegisterView.as_view(), name='register'),

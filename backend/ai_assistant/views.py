@@ -16,7 +16,7 @@ from .models import AIChatMessage, AgentMemory, Bot, BotVisibility, Conversation
 from .services.language import request_language
 from .serializers import AIChatMessageSerializer, AgentMemorySerializer, BotSerializer, ConversationSerializer
 from .utils import get_student_academic_context
-from .views_projects import add_project_context, save_new_conversation_project
+from .views_projects import add_project_context, save_new_conversation_project, learning_activity_metadata
 from notes.context import prepare_note_context, conversation_uses_notes
 from notes.awareness import note_message_metadata
 from django.db import transaction
@@ -78,6 +78,8 @@ def _reserve_chat_request(user, data, bot):
     }
     if 'course_context' in data:
         request_content['course_context'] = data['course_context']
+    if 'learning_activity' in data:
+        request_content['learning_activity'] = data['learning_activity']
     fingerprint = hashlib.sha256(json.dumps(request_content, sort_keys=True).encode()).hexdigest()
     return reserve_ai_call(user, data.get('request_id'), fingerprint=fingerprint)
 
@@ -460,8 +462,7 @@ class AIChatView(APIView):
             user_msg = AIChatMessage.objects.create(
                 user=request.user, role='user', content=user_message,
                 bot=bot, conversation_id=conversation_id,
-                metadata={**note_message_metadata(note_context, note_sources, request.data.get('note_selection', '')),
-                          'ui_language': request_language(request)},
+                metadata={**note_message_metadata(note_context, note_sources, request.data.get('note_selection', '')), **learning_activity_metadata(request, conversation_id), 'ui_language': request_language(request)},
             )
             record_event('ai_chat_start', user=request.user, properties={'bot_id': bot_id})
 
@@ -658,8 +659,7 @@ class AIChatStreamView(APIView):
             user_msg = AIChatMessage.objects.create(
                 user=request.user, role='user', content=user_message,
                 bot=bot, conversation_id=conversation_id,
-                metadata={**note_message_metadata(note_context, note_sources, request.data.get('note_selection', '')),
-                          'ui_language': request_language(request)},
+                metadata={**note_message_metadata(note_context, note_sources, request.data.get('note_selection', '')), **learning_activity_metadata(request, conversation_id), 'ui_language': request_language(request)},
             )
             if course_context:
                 user_msg.metadata['course_context'] = course_context

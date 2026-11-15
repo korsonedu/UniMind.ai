@@ -5,6 +5,22 @@ from ai_assistant.services.learning_guidance import teaching_guidance
 
 
 class TeachingGuidanceSmoke(SimpleTestCase):
+    def test_new_linked_activity_replaces_earlier_next_task(self):
+        state = SimpleNamespace(status='active', current_stage='s', feedback='', next_action='', plan={'stages': [{'id': 's'}]})
+        completed = {'id': 'answer', 'stage_id': 's', 'node_id': 'n', 'mode': 'apply', 'title': '原作答',
+            'status': 'completed', 'purpose': 'diagnostic', 'assistance': 'independent',
+            'created_at': '2026-11-15T00:00:00+00:00', 'summary': {'total_score': 0, 'max_score': 10},
+            'payload': {'questions': [{'text': '原任务'}]}}
+        earlier = {'id': 'earlier', 'stage_id': 's', 'node_id': 'n', 'mode': 'apply', 'title': '较早准备',
+            'status': 'ready', 'purpose': 'practice', 'source_task_id': 'answer', 'created_at': '2026-11-15T00:01:00+00:00'}
+        latest = {**earlier, 'id': 'latest', 'title': '小宇刚准备的任务', 'created_at': '2026-11-15T00:02:00+00:00'}
+        for score in (0, 10):
+            completed['summary']['total_score'] = score
+            self.assertEqual(teaching_guidance(state, [completed, earlier, latest])['task_id'], 'latest')
+        completed.update(purpose='practice', assistance='hint')
+        earlier['purpose'] = latest['purpose'] = 'recheck'
+        self.assertEqual(teaching_guidance(state, [completed, earlier, latest])['task_id'], 'latest')
+
     def test_same_teaching_episode_across_domains(self):
         for subject in ('函数定义域', '计算机缓存', '备考概念辨析'):
             with self.subTest(subject=subject):
