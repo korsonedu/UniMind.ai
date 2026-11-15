@@ -31,7 +31,7 @@ def test_failed_experiment_keeps_replayable_evidence(user, settings, tmp_path):
     with patch('ai_assistant.services.dsh_xiaoyu.run_site_action', side_effect=runtime), \
             patch('ai_assistant.services.learning_experiments.preview', return_value=report):
         with pytest.raises(DshUnavailable):
-            complete_turn(SimpleNamespace(user=user, data=body), bot, cid, body['message'], lambda event: None)
+            complete_turn(SimpleNamespace(user=user, headers={}, data=body), bot, cid, body['message'], lambda event: None)
     saved = AIUsageReservation.objects.get(user=user)
     assert saved.status == 'released' and saved.response['is_error']
     assert saved.response['learning_failure']['arguments'] == arguments
@@ -50,7 +50,7 @@ def test_official_turn_persists_once_and_uses_auxiliary_tasks(user, settings, tm
     bot = Bot.objects.create(name='小宇', bot_type='planner', system_prompt='合成提示词')
     cid = uuid4()
     body = {'message': '我喜欢先举例', 'request_id': str(uuid4()), 'conversation_id': str(cid), 'bot_id': bot.pk}
-    req = SimpleNamespace(user=user, data=body)
+    req = SimpleNamespace(user=user, headers={}, data=body)
     native = {'finish_reason': 'completed', 'content': '合成回答',
               'session': {'id': 'a'*32, 'messages': [{'role': 'assistant', 'cards': []}]}}
     with patch('ai_assistant.services.dsh_xiaoyu.run_site_action', return_value=native) as runtime, \
@@ -78,7 +78,7 @@ def test_official_turn_failure_releases_and_never_uses_legacy(user, settings, tm
     with patch('ai_assistant.services.dsh_xiaoyu.run_site_action', side_effect=DshUnavailable()), \
             patch('ai_engine.service.AIEngine.call_ai') as legacy:
         with pytest.raises(DshUnavailable):
-            complete_turn(SimpleNamespace(user=user, data=body), bot, cid, body['message'], lambda event: None)
+            complete_turn(SimpleNamespace(user=user, headers={}, data=body), bot, cid, body['message'], lambda event: None)
         legacy.assert_not_called()
     assert not AIChatMessage.objects.filter(conversation_id=cid).exists()
     released = AIUsageReservation.objects.get(user=user)
@@ -86,7 +86,7 @@ def test_official_turn_failure_releases_and_never_uses_legacy(user, settings, tm
     native = {'finish_reason': 'completed', 'content': '同一请求重试完成',
               'session': {'id': 'b' * 32, 'messages': [{'role': 'assistant', 'cards': []}]}}
     with patch('ai_assistant.services.dsh_xiaoyu.run_site_action', return_value=native) as runtime:
-        request = SimpleNamespace(user=user, data=body)
+        request = SimpleNamespace(user=user, headers={}, data=body)
         result = complete_turn(request, bot, cid, body['message'], lambda event: None)
         assert complete_turn(request, bot, cid, body['message'], lambda event: None) == result
         runtime.assert_called_once()

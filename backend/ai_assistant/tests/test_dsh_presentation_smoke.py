@@ -1,6 +1,7 @@
 """Bounded teaching cards and the existing XiaoYu SSE contract, without model calls."""
 import asyncio
 from copy import deepcopy
+from types import SimpleNamespace
 import json
 from unittest.mock import patch
 
@@ -100,7 +101,7 @@ def test_sse_steps_preserve_call_ids_failures_and_final_content(settings):
     async def read(result):
         return [json.loads(chunk[6:]) async for chunk in result.streaming_content]
     with patch('ai_assistant.services.dsh_xiaoyu.stream_events', fixture):
-        events = asyncio.run(read(response(None, None, None, '合成问题')))
+        events = asyncio.run(read(response(SimpleNamespace(headers={}), None, None, '合成问题')))
     steps = [e for e in events if e.get('type') == 'step']
     assert [(s['call_id'], s['status']) for s in steps] == [('ok', 'running'), ('bad', 'running'), ('ok', 'succeeded'), ('bad', 'failed')]
     assert len({s['run_id'] for s in steps}) == 1 and all(s['round'] == 2 for s in steps)
