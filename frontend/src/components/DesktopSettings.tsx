@@ -26,17 +26,30 @@ export function DesktopSettings() {
   const focusLabel = state.focus ? `${Math.floor(state.focus.remaining / 60)}:${String(state.focus.remaining % 60).padStart(2, '0')}` : '';
   return <>
     {(actionError || error) && <p className="um-desktop-error" role="alert">{t(actionError || error || '')}</p>}
-    <h3 className="um-settings-group-title">{t('桌面体验')}</h3>
+    <h3 className="um-settings-group-title">{t('通知')}</h3>
     <section className="um-settings-group">
-      <div className="um-settings-row"><div><label htmlFor="desktop-notifications">{t('系统通知')}</label></div><Switch id="desktop-notifications" checked={state.preferences.notifications} disabled={!!busy} onCheckedChange={notifications => void run('notifications', () => desktop.updatePreferences({ notifications }))} /></div>
-      {state.preferences.notifyChat !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-notify-chat">{t('小宇回复完成')}</label></div><Switch id="desktop-notify-chat" checked={state.preferences.notifyChat} disabled={!!busy || !state.preferences.notifications} onCheckedChange={notifyChat => void run('notify-chat', () => desktop.updatePreferences({ notifyChat }))} /></div>}
-      {state.preferences.notifyQA !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-notify-qa">{t('答疑回复')}</label></div><Switch id="desktop-notify-qa" checked={state.preferences.notifyQA} disabled={!!busy || !state.preferences.notifications} onCheckedChange={notifyQA => void run('notify-qa', () => desktop.updatePreferences({ notifyQA }))} /></div>}
-      {state.preferences.notifyLearning !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-notify-learning">{t('学习与系统消息')}</label></div><Switch id="desktop-notify-learning" checked={state.preferences.notifyLearning} disabled={!!busy || !state.preferences.notifications} onCheckedChange={notifyLearning => void run('notify-learning', () => desktop.updatePreferences({ notifyLearning }))} /></div>}
+      <div className="um-settings-row"><div><label htmlFor="desktop-notifications">{t('接收系统通知')}</label></div><Switch id="desktop-notifications" aria-controls="desktop-notification-types" aria-describedby="desktop-notification-help" checked={state.preferences.notifications} disabled={!!busy} onCheckedChange={notifications => void run('notifications', () => desktop.updatePreferences({ notifications }))} /></div>
+      <fieldset id="desktop-notification-types" className="um-desktop-notification-types" disabled={!!busy || !state.preferences.notifications}>
+        <legend>{t('通知内容')}</legend>
+        <p id="desktop-notification-help" role="status">{state.preferences.notifications ? t('仅控制系统弹窗，消息仍保留在通知中心。') : t('先开启上方「接收系统通知」，再选择通知内容。')}</p>
+        {state.preferences.notifyChat !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-notify-chat">{t('小宇回复完成')}</label></div><Switch id="desktop-notify-chat" checked={state.preferences.notifyChat} disabled={!!busy || !state.preferences.notifications} onCheckedChange={notifyChat => void run('notify-chat', () => desktop.updatePreferences({ notifyChat }))} /></div>}
+        {state.preferences.notifyQA !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-notify-qa">{t('答疑回复')}</label></div><Switch id="desktop-notify-qa" checked={state.preferences.notifyQA} disabled={!!busy || !state.preferences.notifications} onCheckedChange={notifyQA => void run('notify-qa', () => desktop.updatePreferences({ notifyQA }))} /></div>}
+        {state.preferences.notifyLearning !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-notify-learning">{t('学习与系统消息')}</label></div><Switch id="desktop-notify-learning" checked={state.preferences.notifyLearning} disabled={!!busy || !state.preferences.notifications} onCheckedChange={notifyLearning => void run('notify-learning', () => desktop.updatePreferences({ notifyLearning }))} /></div>}
+      </fieldset>
+    </section>
+    <h3 className="um-settings-group-title">{t('启动与后台运行')}</h3>
+    <section className="um-settings-group">
       {state.preferences.startupPage !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-startup-page">{t('启动时打开')}</label></div><SelectField id="desktop-startup-page" value={state.preferences.startupPage} disabled={!!busy} onValueChange={value => void run('startup-page', () => desktop.updatePreferences({ startupPage: value as DesktopState['preferences']['startupPage'] }))}><SelectOption value="/xiaoyu">{t('小宇')}</SelectOption><SelectOption value="/courses">{t('课程中心')}</SelectOption><SelectOption value="/notes">{t('笔记')}</SelectOption></SelectField></div>}
       <div className="um-settings-row"><div><label htmlFor="desktop-background">{t('关闭窗口后继续运行')}</label></div><Switch id="desktop-background" checked={state.preferences.keepRunning} disabled={!!busy} onCheckedChange={keepRunning => void run('background', () => desktop.updatePreferences({ keepRunning }))} /></div>
       {state.preferences.launchAtLogin !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-launch-at-login">{t('开机自启')}</label></div><Switch id="desktop-launch-at-login" checked={state.preferences.launchAtLogin} disabled={!!busy} onCheckedChange={launchAtLogin => void run('launch-at-login', () => desktop.updatePreferences({ launchAtLogin }))} /></div>}
+    </section>
+    <h3 className="um-settings-group-title">{t('快捷键')}</h3>
+    <section className="um-settings-group">
       {state.preferences.quickEntry !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-quick-entry">{t('全局快捷键')}</label></div><Switch id="desktop-quick-entry" checked={state.preferences.quickEntry} disabled={!!busy} onCheckedChange={quickEntry => void run('quick-entry', () => desktop.updatePreferences({ quickEntry }))} /></div>}
       <div className="um-settings-row"><span>{t('键盘快捷键')}</span><span className="um-settings-value">{state.platform === 'darwin' ? '⌘' : 'Ctrl'}{t('+, 打开设置；')}{state.platform === 'darwin' ? '⌘' : 'Ctrl'}{t('+1 小宇；+2 课程；+3 笔记')}</span></div>
+    </section>
+    <h3 className="um-settings-group-title">{t('专注计时')}</h3>
+    <section className="um-settings-group">
       {state.preferences.focusMinutes !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-focus-minutes">{t('每轮专注时长')}</label></div><SelectField id="desktop-focus-minutes" value={state.preferences.focusMinutes} disabled={!!busy} onValueChange={value => void run('focus-minutes', () => desktop.updatePreferences({ focusMinutes: Number(value) }))}>{[15, 25, 45, 60].map(minutes => <SelectOption key={minutes} value={minutes}>{minutes} {t('分钟')}</SelectOption>)}</SelectField></div>}
       {state.focus && <div className="um-settings-row"><div><span>{t('菜单栏专注')}</span><p>{state.focus.status === 'running' ? t('专注中 {0}', { 0: focusLabel }) : state.focus.status === 'paused' ? t('已暂停 {0}', { 0: focusLabel }) : t('未开始')}</p></div></div>}
     </section>

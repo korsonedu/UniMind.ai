@@ -3023,7 +3023,14 @@ const en: Record<string, string> = {
   " · 模型参考评价": " · Model reference assessment",
   "UniMind.ai 智能学习平台，提供 AI 问答、知识管理、学习练习与复习。": "UniMind.ai is an intelligent learning platform for AI conversations, knowledge management, practice, and review.",
   "提供基础 AI 问答额度，可按需购买 AI 加量": "Includes a base AI response allowance, with optional add-ons.",
-  "切换语言：{0}": "Switch language: {0}"
+  "切换语言：{0}": "Switch language: {0}",
+  "接收系统通知": "Receive system notifications",
+  "通知内容": "Notification types",
+  "仅控制系统弹窗，消息仍保留在通知中心。": "These settings only control system alerts. Messages remain in the notification center.",
+  "先开启上方「接收系统通知」，再选择通知内容。": "Turn on “Receive system notifications” above to choose notification types.",
+  "启动与后台运行": "Startup & background",
+  "专注计时": "Focus timer",
+  "快捷键": "Shortcuts"
 };
 
 export default en;
