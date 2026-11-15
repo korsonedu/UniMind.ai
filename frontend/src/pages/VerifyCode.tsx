@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -12,6 +13,7 @@ import api from '@/lib/api';
 import { getReturnTo, getLoginPath } from '@/lib/routing';
 
 export const VerifyCode: React.FC = () => {
+  useLocale();
   const [searchParams] = useSearchParams();
   const email = searchParams.get('email') || '';
   const returnTo = getReturnTo(searchParams.get('next'));
@@ -49,7 +51,7 @@ export const VerifyCode: React.FC = () => {
       navigate(returnTo, { replace: true });
     } catch (err: unknown) {
       setCode('');
-      setError(formatApiErrorToast(err, '验证码错误，请重试'));
+      setError(formatApiErrorToast(err, t('验证码错误，请重试')));
     } finally {
       setLoading(false);
     }
@@ -62,7 +64,7 @@ export const VerifyCode: React.FC = () => {
       await api.post('/users/send-verification-code/', { email, purpose: 'login_by_code' });
       setCountdown(60);
     } catch (err: unknown) {
-      setError(formatApiErrorToast(err, '重发失败'));
+      setError(formatApiErrorToast(err, t('重发失败')));
     } finally {
       setResending(false);
     }
@@ -72,10 +74,10 @@ export const VerifyCode: React.FC = () => {
 
   return (
     <AuthLayout
-      title="验证邮箱"
+      title={t('验证邮箱')}
       subtitle={
         <>
-          验证码已发送至{' '}
+          {t('验证码已发送至')}{' '}
           <span className="text-[#1D1D1F] dark:text-white font-medium">{email}</span>
         </>
       }
@@ -89,7 +91,7 @@ export const VerifyCode: React.FC = () => {
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
           <path d="M10 3L5 8L10 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
-        返回
+        {t('返回')}
       </button>
 
       {/* Error banner */}
@@ -118,7 +120,7 @@ export const VerifyCode: React.FC = () => {
       {loading && (
         <div className="flex items-center justify-center gap-2 text-sm text-[#AEAEB2] dark:text-white/25 mb-4">
           <Spinner className="h-4 w-4 animate-spin" />
-          验证中...
+          {t('验证中...')}
         </div>
       )}
 
@@ -131,7 +133,7 @@ export const VerifyCode: React.FC = () => {
           disabled={countdown > 0 || resending}
           onClick={handleResend}
         >
-          {countdown > 0 ? `${countdown}s 后重新发送` : '重新发送验证码'}
+          {countdown > 0 ? t('{0}s 后重新发送', { 0: countdown }) : t('重新发送验证码')}
         </Button>
       </div>
     </AuthLayout>

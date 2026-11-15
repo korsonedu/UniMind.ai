@@ -1,3 +1,4 @@
+import { useLocale, type Locale } from '@/i18n';
 import type { LearningKnowledge } from '@/components/LearningKnowledgePanel';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
@@ -21,11 +22,13 @@ export interface ProjectLearning {
   pending_plan: { plan?: LearningPlan; reason?: string; knowledge?: { title: string; revision: number; targets: string[]; depth: 'apply' | 'transfer' } }; revision: number; conversation_id: string | null;
   followup_at: string | null; followup_text: string; resume_at: string | null; events: LearningEvent[];
 }
-export const learningKey = (userId: number | undefined, projectId: number | null) => ['project-learning', userId, projectId];
+export const learningKey = (userId: number | undefined, projectId: number | null, locale?: Locale) =>
+  locale ? ['project-learning', userId, projectId, locale] : ['project-learning', userId, projectId];
 export function useProjectLearning(projectId: number | null) {
+  const locale = useLocale();
   const userId = useAuthStore(s => s.user?.id);
-  return useQuery({ queryKey: learningKey(userId, projectId), enabled: !!userId && !!projectId,
-    queryFn: ({ signal }) => api.get<ProjectLearning>(`/ai/projects/${projectId}/learning/`, { signal }).then(r => r.data), staleTime: 5000 });
+  return useQuery({ queryKey: learningKey(userId, projectId, locale), enabled: !!userId && !!projectId,
+    queryFn: ({ signal }) => api.get<ProjectLearning>(`/ai/projects/${projectId}/learning/`, { signal, headers: { 'Accept-Language': locale } }).then(r => r.data), staleTime: 5000 });
 }
 export function learningUrl(path: string, projectId: number | null, conversationId?: string) {
   if (!projectId) return path;

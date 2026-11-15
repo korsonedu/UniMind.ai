@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 import type { ThemeMode } from '@/store/useSystemStore';
@@ -13,6 +14,7 @@ const MODES = [
 export function ThemeSceneSwitch({ value, onChange, reduceMotion }: {
   value: ThemeMode; onChange: (value: ThemeMode) => void; reduceMotion: boolean;
 }) {
+  useLocale();
   const id = useId();
   const canvas = useRef<HTMLCanvasElement>(null);
   const renderer = useRef<ReturnType<typeof createThemeScene> | null>(null);
@@ -70,7 +72,7 @@ export function ThemeSceneSwitch({ value, onChange, reduceMotion }: {
     <div className="um-theme-switch-labels">{MODES.map((mode, index) => <label key={mode.value} data-selected={value === mode.value}>
       <input ref={node => { radios.current[index] = node; }} type="radio" name={id} value={mode.value}
         checked={value === mode.value} onChange={() => onChange(mode.value)} />
-      <span className="um-theme-switch-label-content"><span aria-hidden="true">{mode.icon}</span>{mode.label}</span>
+      <span className="um-theme-switch-label-content"><span aria-hidden="true">{mode.icon}</span>{t(mode.label)}</span>
     </label>)}</div>
   </div>;
 }

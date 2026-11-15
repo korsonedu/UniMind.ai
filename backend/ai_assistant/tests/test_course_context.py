@@ -33,7 +33,7 @@ def lesson(user, settings):
 
 
 def question(user, course, position=120, conversation_id=None):
-    return SimpleNamespace(user=user, query_params={}, data={
+    return SimpleNamespace(user=user, headers={}, query_params={}, data={
         'message': '这里为什么要折现？', 'request_id': str(uuid4()),
         'conversation_id': str(conversation_id or uuid4()),
         'course_context': {'course_id': course.pk, 'video_seconds': position},

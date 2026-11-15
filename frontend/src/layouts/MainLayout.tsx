@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { learningUrl } from '@/lib/projectLearning';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -33,7 +34,7 @@ import { useDesktopRuntime } from '@/hooks/useDesktopRuntime';
 
 type NavItem = { to: string; icon: string; label: string; mobileLabel: string; feature?: string };
 
-const navItems: NavItem[] = [
+const NAV_ITEMS: NavItem[] = [
   { to: '/notes', icon: '0% 0%', label: '我的笔记', mobileLabel: '笔记' },
   { to: '/xiaoyu', icon: '50% 0%', label: '小宇', mobileLabel: '小宇', feature: 'ai.assistant' },
   { to: '/report-card', icon: '100% 0%', label: '学习记录', mobileLabel: '记录', feature: 'full.report' },
@@ -43,16 +44,20 @@ const navItems: NavItem[] = [
 ];
 
 function NavIcon({ position }: { position: string }) {
+  useLocale();
   return <span aria-hidden="true" className="um-nav-icon" style={{ maskPosition: position, WebkitMaskPosition: position }} />;
 }
 
-const tourSteps: TourStep[] = [
+const TOUR_STEPS: TourStep[] = [
   { target: '[data-tour="xiaoyu-input"]', title: '跟小宇对话', content: '问知识点、刷题、看分析。试试「帮我复习一下三角函数」', placement: 'bottom' },
   { target: '[data-tour="sidebar"]', title: '你的学习空间', content: '课程、习题训练、学习记录和学习社区都在这里。', placement: 'right' },
   { target: '[data-tour="header-right"]', title: '账号和消息', content: '修改资料、系统通知、签到', placement: 'bottom' },
 ];
 
 export const MainLayout: React.FC = () => {
+  useLocale();
+  const navItems = NAV_ITEMS.map(item => ({ ...item, label: t(item.label), mobileLabel: t(item.mobileLabel) }));
+  const tourSteps = TOUR_STEPS.map(step => ({ ...step, title: t(step.title), content: t(step.content) }));
   const location = useLocation();
   const { chat: projectChat } = useXiaoYuChat();
   const routeFor = (path: string) => ['/courses', '/notes', '/knowledge-tree', '/xiaoyu'].includes(path)
@@ -100,7 +105,7 @@ export const MainLayout: React.FC = () => {
   const [noteSession, setNoteSession] = useState<{ userId?: number; id: number | null }>({ id: null });
   const rememberNote = useCallback((id: number | null, title?: string) => {
     setNoteSession({ userId: user?.id, id });
-    if (id) recordSidebarRecent({ key: `note:${id}`, view: 'notes', title: title || '未命名笔记', noteId: id });
+    if (id) recordSidebarRecent({ key: `note:${id}`, view: 'notes', title: title || t('未命名笔记'), noteId: id });
   }, [user?.id, recordSidebarRecent]);
   const openSidebarRecent = (item: SidebarRecentItem) => {
     if (item.view === 'notes' && item.noteId) setNoteOpenRequest(previous => ({ id: item.noteId!, sequence: (previous?.sequence || 0) + 1 }));
@@ -143,17 +148,17 @@ export const MainLayout: React.FC = () => {
   const activeSidebarView = courseSidebarAvailable || sidebarView === 'notes' ? sidebarView : 'home';
   const notesVisible = sidebarVisible && activeSidebarView === 'notes';
   const sidebarTools = courseSidebarAvailable ? [
-    { id: 'chat' as const, label: '小宇', icon: ChatCircle },
-    { id: 'outline' as const, label: '课程大纲', icon: ListBullets },
-    { id: 'materials' as const, label: '资料', icon: Files },
-    { id: 'notes' as const, label: '笔记', icon: NotePencil },
-  ] : [{ id: 'notes' as const, label: '笔记', icon: NotePencil }];
+    { id: 'chat' as const, label: t('小宇'), icon: ChatCircle },
+    { id: 'outline' as const, label: t('课程大纲'), icon: ListBullets },
+    { id: 'materials' as const, label: t('资料'), icon: Files },
+    { id: 'notes' as const, label: t('笔记'), icon: NotePencil },
+  ] : [{ id: 'notes' as const, label: t('笔记'), icon: NotePencil }];
   const sidebarTabs = openedSidebarTools.map(id => sidebarTools.find(tool => tool.id === id)).filter(tool => !!tool);
   useExamActivity();
 
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-override', primaryColor);
-    document.title = 'UniMind.ai 学习平台';
+    document.title = t('UniMind.ai 学习平台');
   }, [primaryColor]);
 
   useEffect(() => {
@@ -212,32 +217,32 @@ export const MainLayout: React.FC = () => {
     <EloPopover />
     <NotificationBell />
     <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild><button id="avatar-btn" aria-label="账户菜单" className="um-app-avatar-button"><Avatar className="h-7 w-7"><AvatarImage src={user.avatar_url} /><AvatarFallback className="text-[10px] font-bold">{user.username?.[0]}</AvatarFallback></Avatar></button></DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild><button id="avatar-btn" aria-label={t('账户菜单')} className="um-app-avatar-button"><Avatar className="h-7 w-7"><AvatarImage src={user.avatar_url} /><AvatarFallback className="text-[10px] font-bold">{user.username?.[0]}</AvatarFallback></Avatar></button></DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="bottom" className="um-app-menu w-52 p-1">
         <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-muted-foreground">{user.nickname || user.username}</DropdownMenuLabel>
         {[
-          { to: '/settings', icon: UserIcon, label: '个人设置' },
-          { to: '/billing', icon: CreditCard, label: '我的服务' },
-          { to: '/achievements', icon: Trophy, label: '成就' },
+          { to: '/settings', icon: UserIcon, label: t('个人设置') },
+          { to: '/billing', icon: CreditCard, label: t('我的服务') },
+          { to: '/achievements', icon: Trophy, label: t('成就') },
         ].map(item => <DropdownMenuItem key={item.to} onClick={() => navigate(item.to)} className="rounded-lg px-3 py-2 gap-3 cursor-pointer"><item.icon className="h-3.5 w-3.5" /><span className="font-medium text-[13px]">{item.label}</span></DropdownMenuItem>)}
-        <DropdownMenuItem onClick={() => window.dispatchEvent(new Event('open-weekly-report'))} className="rounded-lg px-3 py-2 gap-3 cursor-pointer"><ChartBar className="h-3.5 w-3.5" /><span className="font-medium text-[13px]">周报</span></DropdownMenuItem>
+        <DropdownMenuItem onClick={() => window.dispatchEvent(new Event('open-weekly-report'))} className="rounded-lg px-3 py-2 gap-3 cursor-pointer"><ChartBar className="h-3.5 w-3.5" /><span className="font-medium text-[13px]">{t('周报')}</span></DropdownMenuItem>
         <DropdownMenuSeparator className="my-2 bg-border" />
-        <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-lg px-3 py-2 gap-3 cursor-pointer text-destructive focus:bg-destructive focus:text-destructive-foreground"><SignOut className="h-3.5 w-3.5" /><span className="font-medium text-[13px]">退出登录</span></DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-lg px-3 py-2 gap-3 cursor-pointer text-destructive focus:bg-destructive focus:text-destructive-foreground"><SignOut className="h-3.5 w-3.5" /><span className="font-medium text-[13px]">{t('退出登录')}</span></DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   </div> : null;
 
   return <TooltipProvider delayDuration={0}>
     <div className="um-app-shell flex flex-col h-dvh bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground" data-nav-history={historyIndex > 0 || historyIndex < historyEnd ? 'true' : undefined}>
-      <header className="um-window-toolbar" aria-label="工作区功能区">
-        <div className="um-window-navigation"><button aria-label="返回" title="返回" disabled={historyIndex <= 0} onClick={() => navigate(-1)}><ArrowLeft size={17} /></button><button aria-label="前进" title="前进" disabled={historyIndex >= historyEnd} onClick={() => navigate(1)}><ArrowRight size={17} /></button></div>
-        <div className="um-window-workspace" ref={setToolbarHost}>{!hasWorkspaceToolbar && <><button className="um-agent-icon-button" aria-label="切换导航栏" onClick={() => setRailHidden(old => !old)}><SidebarSimple size={18} /></button><WorkspaceTrail title={pageTitle || '学习空间'} crumbs={[]} /></>}</div>
+      <header className="um-window-toolbar" aria-label={t('工作区功能区')}>
+        <div className="um-window-navigation"><button aria-label={t('返回')} title={t('返回')} disabled={historyIndex <= 0} onClick={() => navigate(-1)}><ArrowLeft size={17} /></button><button aria-label={t('前进')} title={t('前进')} disabled={historyIndex >= historyEnd} onClick={() => navigate(1)}><ArrowRight size={17} /></button></div>
+        <div className="um-window-workspace" ref={setToolbarHost}>{!hasWorkspaceToolbar && <><button className="um-agent-icon-button" aria-label={t('切换导航栏')} onClick={() => setRailHidden(old => !old)}><SidebarSimple size={18} /></button><WorkspaceTrail title={pageTitle || t('学习空间')} crumbs={[]} /></>}</div>
         {workspaceHeader}
-        {sidebarAvailable && <button id="um-notes-toggle" type="button" className="um-right-sidebar-toggle um-agent-icon-button" aria-label="切换右侧栏" title={sidebarVisible ? '收起右侧栏' : '展开右侧栏'} aria-expanded={sidebarVisible} aria-controls="um-right-panel" onClick={() => { setNotesOpen(value => !value); }}><SidebarSimple size={19} style={{ transform: 'scaleX(-1)' }} /></button>}
+        {sidebarAvailable && <button id="um-notes-toggle" type="button" className="um-right-sidebar-toggle um-agent-icon-button" aria-label={t('切换右侧栏')} title={sidebarVisible ? t('收起右侧栏') : t('展开右侧栏')} aria-expanded={sidebarVisible} aria-controls="um-right-panel" onClick={() => { setNotesOpen(value => !value); }}><SidebarSimple size={19} style={{ transform: 'scaleX(-1)' }} /></button>}
       </header>
       <div className="um-window-body flex flex-1 min-h-0 overflow-hidden">
-      <aside data-tour="sidebar" aria-label="应用导航" className={cn('um-app-rail relative flex-col p-1.5 z-0 shrink-0 hidden md:flex w-[58px]', railHidden && 'md:hidden')}>
-        <div className="um-app-brand flex justify-center"><Link to="/xiaoyu" className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', location.pathname.startsWith('/xiaoyu') && 'bg-primary/10')} aria-label="小宇" title="小宇" aria-current={location.pathname.startsWith('/xiaoyu') ? 'page' : undefined}>
+      <aside data-tour="sidebar" aria-label={t('应用导航')} className={cn('um-app-rail relative flex-col p-1.5 z-0 shrink-0 hidden md:flex w-[58px]', railHidden && 'md:hidden')}>
+        <div className="um-app-brand flex justify-center"><Link to="/xiaoyu" className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', location.pathname.startsWith('/xiaoyu') && 'bg-primary/10')} aria-label={t('小宇')} title={t('小宇')} aria-current={location.pathname.startsWith('/xiaoyu') ? 'page' : undefined}>
           <svg viewBox="0 0 100 100" className="h-8 w-8" aria-hidden="true" focusable="false">
             <defs><linearGradient id="um-sidebar-brand-gradient" gradientUnits="userSpaceOnUse" x1="15" y1="90" x2="90" y2="10"><stop stopColor="#2f6cea" /><stop offset=".5" stopColor="#535fe7" /><stop offset="1" stopColor="#9252d8" /></linearGradient></defs>
             <g fill="url(#um-sidebar-brand-gradient)">
@@ -248,8 +253,8 @@ export const MainLayout: React.FC = () => {
             </g>
           </svg>
         </Link></div>
-        <nav aria-label="功能导航" className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
-          {navItems.filter(item => item.to !== '/xiaoyu').map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-9 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={routeFor(item.to)} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}>{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true">{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{!canEnter(item) && ' · 暂未开通'}</TooltipContent></TooltipPortal></Tooltip></div>)}
+        <nav aria-label={t('功能导航')} className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
+          {navItems.filter(item => item.to !== '/xiaoyu').map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-9 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={routeFor(item.to)} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}>{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true">{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{!canEnter(item) && t(' · 暂未开通')}</TooltipContent></TooltipPortal></Tooltip></div>)}
         </nav>
       </aside>
       <div className="um-window-panes" data-notes-open={sidebarVisible} style={{ '--um-notes-width': `${sidebarWidth}px` } as React.CSSProperties}>
@@ -268,22 +273,22 @@ export const MainLayout: React.FC = () => {
           </WorkspaceToolbarHostContext.Provider>
         </div>
       </main>
-      {sidebarVisible && <button className="um-notes-mobile-backdrop" aria-label="收起右侧栏" onClick={closeNotes} />}
+      {sidebarVisible && <button className="um-notes-mobile-backdrop" aria-label={t('收起右侧栏')} onClick={closeNotes} />}
       {sidebarVisible && !isMobile && <SidebarResizeHandle width={sidebarWidth} onChange={setSidebarWidth} onCommit={saveSidebarWidth} />}
       <div id="um-right-panel" className="um-notes-sidebar-host um-unified-sidebar" data-open={sidebarVisible} aria-hidden={!sidebarVisible} inert={!sidebarVisible} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); closeNotes(); } }}>
         <header className="um-right-panel-header">
-          <button type="button" className="um-agent-icon-button" aria-label="工具入口" aria-pressed={activeSidebarView === 'home'} onClick={() => selectSidebarView('home')}><SquaresFour size={18} /></button>
-          <div role="tablist" aria-label="侧栏功能">{sidebarTabs.map((tab, index) => <div className="um-sidebar-tab" key={tab.id}><button id={`sidebar-tab-${tab.id}`} role="tab" type="button" aria-selected={activeSidebarView === tab.id} aria-controls={`sidebar-panel-${tab.id}`} tabIndex={activeSidebarView === tab.id || (activeSidebarView === 'home' && index === 0) ? 0 : -1} onClick={() => selectSidebarView(tab.id)} onKeyDown={event => {
+          <button type="button" className="um-agent-icon-button" aria-label={t('工具入口')} aria-pressed={activeSidebarView === 'home'} onClick={() => selectSidebarView('home')}><SquaresFour size={18} /></button>
+          <div role="tablist" aria-label={t('侧栏功能')}>{sidebarTabs.map((tab, index) => <div className="um-sidebar-tab" key={tab.id}><button id={`sidebar-tab-${tab.id}`} role="tab" type="button" aria-selected={activeSidebarView === tab.id} aria-controls={`sidebar-panel-${tab.id}`} tabIndex={activeSidebarView === tab.id || (activeSidebarView === 'home' && index === 0) ? 0 : -1} onClick={() => selectSidebarView(tab.id)} onKeyDown={event => {
             if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
             event.preventDefault();
             const next = event.key === 'Home' ? 0 : event.key === 'End' ? sidebarTabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + sidebarTabs.length) % sidebarTabs.length;
             selectSidebarView(sidebarTabs[next].id);
             document.getElementById(`sidebar-tab-${sidebarTabs[next].id}`)?.focus();
-          }}><tab.icon size={16} /><span>{tab.label}</span></button><button type="button" className="um-sidebar-tab-close" aria-label={`关闭${tab.label}标签`} onClick={() => {
+          }}><tab.icon size={16} /><span>{tab.label}</span></button><button type="button" className="um-sidebar-tab-close" aria-label={t('关闭{0}标签', { 0: tab.label })} onClick={() => {
             setOpenedSidebarTools(previous => previous.filter(id => id !== tab.id));
             if (activeSidebarView === tab.id) setSidebarView('home');
           }}><X size={12} /></button></div>)}</div>
-          <button type="button" className="um-agent-icon-button" aria-label="关闭右侧栏" onClick={closeNotes}><X size={17} /></button>
+          <button type="button" className="um-agent-icon-button" aria-label={t('关闭右侧栏')} onClick={closeNotes}><X size={17} /></button>
         </header>
         {activeSidebarView === 'home' && <SidebarHome tools={sidebarTools} added={addedSidebarTools} recent={sidebarRecent} onSelect={selectSidebarView} onOpenRecent={openSidebarRecent} />}
         <div ref={setCourseSidebarHost} className="um-course-sidebar-host" hidden={!courseSidebarAvailable || activeSidebarView === 'notes' || activeSidebarView === 'home'} />
@@ -294,9 +299,9 @@ export const MainLayout: React.FC = () => {
       </div>
       </div>
       <nav className={cn('md:hidden fixed bottom-0 inset-x-0 z-[var(--z-dropdown)] border-t border-border bg-card/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]', hideMobileBottomNav && 'hidden')}>
-        <div className="um-app-mobile-links flex items-center justify-around px-1 py-2">{navItems.map(item => canEnter(item) ? <Link key={item.to} to={routeFor(item.to)} aria-current={isActive(item) ? 'page' : undefined} className={cn('relative flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-lg transition-colors min-h-[44px] min-w-[40px]', isActive(item) ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}>{isActive(item) && <span className="absolute top-0 inset-x-3 h-0.5 bg-primary rounded-full" />}{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></Link> : <span key={item.to} role="link" aria-disabled="true" aria-label={`${item.label}，暂未开通`} className="flex flex-col items-center justify-center gap-0.5 py-1 px-1 min-h-[44px] min-w-[40px] text-muted-foreground opacity-40 cursor-not-allowed">{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></span>)}</div>
+        <div className="um-app-mobile-links flex items-center justify-around px-1 py-2">{navItems.map(item => canEnter(item) ? <Link key={item.to} to={routeFor(item.to)} aria-current={isActive(item) ? 'page' : undefined} className={cn('relative flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-lg transition-colors min-h-[44px] min-w-[40px]', isActive(item) ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}>{isActive(item) && <span className="absolute top-0 inset-x-3 h-0.5 bg-primary rounded-full" />}{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></Link> : <span key={item.to} role="link" aria-disabled="true" aria-label={t('{0}，暂未开通', { 0: item.label })} className="flex flex-col items-center justify-center gap-0.5 py-1 px-1 min-h-[44px] min-w-[40px] text-muted-foreground opacity-40 cursor-not-allowed">{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></span>)}</div>
       </nav>
-      <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}><AlertDialogContent className="rounded-lg border-border bg-card"><AlertDialogHeader><AlertDialogTitle>确认退出登录？</AlertDialogTitle><AlertDialogDescription>退出后需要重新登录才能访问学习记录和课程。{pendingLearningRecords > 0 && ` 当前还有 ${pendingLearningRecords} 条离线学习记录未同步，退出会清除这些记录，建议先返回桌面设置联网同步。`}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>返回</AlertDialogCancel><AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch { /* Local logout remains available. */ } await queryClient.cancelQueries(); queryClient.clear(); logout(); navigate('/login', { replace: true }); }}>确认退出</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}><AlertDialogContent className="rounded-lg border-border bg-card"><AlertDialogHeader><AlertDialogTitle>{t('确认退出登录？')}</AlertDialogTitle><AlertDialogDescription>{t('退出后需要重新登录才能访问学习记录和课程。')}{pendingLearningRecords > 0 && t(' 当前还有 {0} 条离线学习记录未同步，退出会清除这些记录，建议先返回桌面设置联网同步。', { 0: pendingLearningRecords })}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t('返回')}</AlertDialogCancel><AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch { /* Local logout remains available. */ } await queryClient.cancelQueries(); queryClient.clear(); logout(); navigate('/login', { replace: true }); }}>{t('确认退出')}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       {showTour && isTourPage && <GuidedTour steps={tourSteps} onDismiss={handleTourDismiss} />}
     </div>
   </TooltipProvider>;

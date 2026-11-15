@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, DownloadSimple } from '@phosphor-icons/react';
@@ -15,6 +16,7 @@ function detectPlatform(): Platform | null {
 }
 
 export function LandingDownload({ entry }: { entry: string }) {
+  useLocale();
   const [platform, setPlatform] = useState(detectPlatform);
   const [release, setRelease] = useState<Release | null>(null);
   const [error, setError] = useState(false);
@@ -36,21 +38,21 @@ export function LandingDownload({ entry }: { entry: string }) {
 
   return <div className="landing-download" id="download">
     <div className="landing-hero-actions">
-      <Link to={entry} className="landing-button">开始对话<ArrowUpRight size={18} /></Link>
+      <Link to={entry} className="landing-button">{t('开始对话')}<ArrowUpRight size={18} /></Link>
       {url && platform ? <a href={url} className="landing-button landing-button-secondary" download>
-        <DownloadSimple size={18} />下载 {platform === 'mac' ? 'macOS' : 'Windows'} 版
+        <DownloadSimple size={18} />{t('下载')} {platform === 'mac' ? 'macOS' : 'Windows'} {t('版')}
       </a> : <button className="landing-button landing-button-secondary" disabled>
-        <DownloadSimple size={18} />{error ? '下载暂不可用' : !release ? '获取最新版本…' : platform ? '暂无对应安装包' : '选择电脑系统下载'}
+        <DownloadSimple size={18} />{error ? t('下载暂不可用') : !release ? t('获取最新版本…') : platform ? t('暂无对应安装包') : t('选择电脑系统下载')}
       </button>}
     </div>
-    <div className="landing-download-options" aria-label="选择下载系统">
+    <div className="landing-download-options" aria-label={t('选择下载系统')}>
       {(Object.keys(labels) as Platform[]).map(value => <button key={value} type="button" aria-pressed={platform === value}
-        disabled={!release?.packages[value]} onClick={() => setPlatform(value)}>{labels[value]}</button>)}
+        disabled={!release?.packages[value]} onClick={() => setPlatform(value)}>{t(labels[value])}</button>)}
     </div>
     <p className="landing-download-note" aria-live="polite">
-      {error ? <>暂时无法获取最新版本，<button type="button" onClick={() => { setError(false); setAttempt(value => value + 1); }}>重试</button></>
-        : release ? <>v{release.version}{release.prerelease && ' · 预发布版'}{platform === 'mac' && ' · 适用于 M 系列芯片，Intel Mac 暂不支持'}{!platform && ' · 请在电脑上安装'}</>
-          : '正在确认最新桌面版本'}
+      {error ? <>{t('暂时无法获取最新版本，')}<button type="button" onClick={() => { setError(false); setAttempt(value => value + 1); }}>{t('重试')}</button></>
+        : release ? <>v{release.version}{release.prerelease && t(' · 预发布版')}{platform === 'mac' && t(' · 适用于 M 系列芯片，Intel Mac 暂不支持')}{!platform && t(' · 请在电脑上安装')}</>
+          : t('正在确认最新桌面版本')}
     </p>
   </div>;
 }

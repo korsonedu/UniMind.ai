@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowUpRight, Spinner } from '@phosphor-icons/react';
@@ -9,6 +10,7 @@ import { AuthLayout } from '@/components/AuthLayout';
 import { Button } from '@/components/ui/button';
 
 export function DesktopLogin() {
+  useLocale();
   const desktop = window.unimindDesktop;
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -25,7 +27,7 @@ export function DesktopLogin() {
     let active = true;
     const unsubscribe = desktop.onStateChanged(state => { if (active && state.auth) setAuth(state.auth); });
     void desktop.getState().then(state => { if (active && state.auth) setAuth(state.auth); }).catch(() => {
-      if (active) setError('暂时无法连接客户端，请重新打开 UniMind。');
+      if (active) setError(t('暂时无法连接客户端，请重新打开 UniMind。'));
     });
     return () => { active = false; unsubscribe(); };
   }, [desktop]);
@@ -57,7 +59,7 @@ export function DesktopLogin() {
     try {
       const state = await desktop.startLogin();
       if (state.auth) setAuth(state.auth);
-    } catch { setError('暂时无法打开登录页面，请稍后重试。'); }
+    } catch { setError(t('暂时无法打开登录页面，请稍后重试。')); }
     finally { setActionPending(false); }
   };
   const cancel = async () => {
@@ -66,20 +68,20 @@ export function DesktopLogin() {
     try {
       const state = await desktop.cancelLogin();
       setAuth(state.auth || { status: 'idle' });
-    } catch { setError('暂时无法取消，请重新打开 UniMind。'); }
+    } catch { setError(t('暂时无法取消，请重新打开 UniMind。')); }
     finally { setActionPending(false); }
   };
-  const status = error || auth.error || (!supported ? '请安装最新客户端，以使用浏览器登录。'
-    : auth.status === 'completing' || auth.status === 'authenticated' ? '正在确认账号，即将进入学习空间。'
-      : waiting ? '浏览器已打开。登录完成后，会自动回到这里。'
+  const status = error || auth.error || (!supported ? t('请安装最新客户端，以使用浏览器登录。')
+    : auth.status === 'completing' || auth.status === 'authenticated' ? t('正在确认账号，即将进入学习空间。')
+      : waiting ? t('浏览器已打开。登录完成后，会自动回到这里。')
         : '');
 
-  return <AuthLayout title="登录 UniMind.ai">
+  return <AuthLayout title={t('登录 UniMind.ai')}>
     <Button className="um-auth-submit" disabled={!supported || busy} onClick={() => void start()}>
-      {busy ? <><Spinner size={18} className="animate-spin" aria-hidden="true" />{auth.status === 'completing' || auth.status === 'authenticated' ? '正在进入 UniMind.ai' : '正在打开浏览器'}</>
-        : <>{waiting ? '重新打开浏览器' : '通过浏览器登录'}<ArrowUpRight size={18} aria-hidden="true" /></>}
+      {busy ? <><Spinner size={18} className="animate-spin" aria-hidden="true" />{auth.status === 'completing' || auth.status === 'authenticated' ? t('正在进入 UniMind.ai') : t('正在打开浏览器')}</>
+        : <>{waiting ? t('重新打开浏览器') : t('通过浏览器登录')}<ArrowUpRight size={18} aria-hidden="true" /></>}
     </Button>
     {status && <p className="mt-4 text-sm text-center text-muted-foreground" role={error || auth.error ? 'alert' : 'status'}>{status}</p>}
-    {(waiting || auth.status === 'error') && <Button variant="ghost" className="w-full mt-3" disabled={actionPending} onClick={() => void cancel()}>{waiting ? '取消登录' : '返回登录'}</Button>}
+    {(waiting || auth.status === 'error') && <Button variant="ghost" className="w-full mt-3" disabled={actionPending} onClick={() => void cancel()}>{waiting ? t('取消登录') : t('返回登录')}</Button>}
   </AuthLayout>;
 }

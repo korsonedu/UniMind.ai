@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useSystemStore } from '@/store/useSystemStore';
 import { formatApiErrorToast } from '@/lib/apiError';
 import type { QuizQuestion } from '@/types/api';
@@ -30,6 +31,7 @@ const hasAnswer = (val: unknown) => {
 };
 
 export const TestSessionPage: React.FC = () => {
+  useLocale();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { practiceCount, practicePreference } = useSystemStore();
@@ -85,7 +87,7 @@ export const TestSessionPage: React.FC = () => {
         setAnswers({});
         setCurrentIdx(0);
       } catch {
-        if (!controller.signal.aborted) { toast.error('题目加载失败'); navigate(returnPath, { replace: true }); }
+        if (!controller.signal.aborted) { toast.error(t('题目加载失败')); navigate(returnPath, { replace: true }); }
       } finally { if (!controller.signal.aborted) setLoading(false); }
     };
     fetchQuestions();
@@ -111,23 +113,23 @@ export const TestSessionPage: React.FC = () => {
     lastTypeReminderQidRef.current = currentQ.id;
 
     const typeLabel = currentQ.q_type === 'objective'
-      ? '客观选择'
+      ? t('客观选择')
       : currentQ.subjective_type === 'calculate'
-        ? '主观计算'
+        ? t('主观计算')
         : currentQ.subjective_type === 'noun'
-          ? '名词解释'
-          : '主观论述';
+          ? t('名词解释')
+          : t('主观论述');
 
-    sendLearningReminder('题型提醒', `当前题型：${typeLabel}`);
+    sendLearningReminder(t('题型提醒'), t('当前题型：{0}', { 0: typeLabel }));
   }, [currentQ, isMobile, reminderSettings.questionType]);
 
   const toggleFavorite = async (qId: number) => {
     try {
       const res = await api.post('/quizzes/favorite/toggle/', { question_id: qId });
       setQuestions((prev) => prev.map((q) => (q.id === qId ? { ...q, is_favorite: res.data.is_favorite } : q)));
-      toast.success(res.data.is_favorite ? '已加入收藏' : '已取消收藏');
+      toast.success(res.data.is_favorite ? t('已加入收藏') : t('已取消收藏'));
     } catch {
-      toast.error('操作失败');
+      toast.error(t('操作失败'));
     }
   };
 
@@ -142,10 +144,10 @@ export const TestSessionPage: React.FC = () => {
           delete next[qId];
           return next;
         });
-        toast.success('已标记掌握');
+        toast.success(t('已标记掌握'));
       }
     } catch {
-      toast.error('操作失败');
+      toast.error(t('操作失败'));
     }
   };
 
@@ -154,12 +156,12 @@ export const TestSessionPage: React.FC = () => {
     const validAnswers = unmasteredQuestions.filter((q) => hasAnswer(answers[q.id]));
 
     if (unmasteredQuestions.length > 0 && validAnswers.length < unmasteredQuestions.length) {
-      toast.error(`请完成所有题目 (${validAnswers.length}/${unmasteredQuestions.length})`);
+      toast.error(t('请完成所有题目 ({0}/{1})', { 0: validAnswers.length, 1: unmasteredQuestions.length }));
       return;
     }
 
     if (unmasteredQuestions.length === 0) {
-      toast.info('练习已结束');
+      toast.info(t('练习已结束'));
       navigate(returnPath, { replace: true });
       return;
     }
@@ -175,10 +177,10 @@ export const TestSessionPage: React.FC = () => {
           total: Number(response.data?.total_questions) || unmasteredQuestions.length,
         });
       }
-      toast.success('已提交 AI 批改');
+      toast.success(t('已提交 AI 批改'));
       navigate('/tests', { replace: true });
     } catch (e: unknown) {
-      toast.error(formatApiErrorToast(e, '提交失败'));
+      toast.error(formatApiErrorToast(e, t('提交失败')));
     } finally {
       setIsSubmitting(false);
     }
@@ -195,10 +197,10 @@ export const TestSessionPage: React.FC = () => {
   if (empty) {
     return (
       <div className="h-full min-h-0 flex flex-col items-center justify-center bg-background gap-4">
-        <p className="text-sm text-muted-foreground">题库中没有匹配的题目</p>
+        <p className="text-sm text-muted-foreground">{t('题库中没有匹配的题目')}</p>
         <button onClick={() => navigate(returnPath, { replace: true })}
           className="text-sm text-primary hover:underline">
-          {returnPath === '/xiaoyu' ? '回到小宇' : '返回'}
+          {returnPath === '/xiaoyu' ? t('回到小宇') : t('返回')}
         </button>
       </div>
     );
@@ -222,7 +224,7 @@ export const TestSessionPage: React.FC = () => {
         toggleFavorite={toggleFavorite}
         handleSubmit={handleSubmit}
         isSubmitting={isSubmitting}
-        gradingMessage={isSubmitting ? '正在提交…' : ''}
+        gradingMessage={isSubmitting ? t('正在提交…') : ''}
       />
     );
   }
@@ -234,22 +236,22 @@ export const TestSessionPage: React.FC = () => {
         <Link to={returnPath}>
           <Button variant="ghost" size="sm" className="h-8 px-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted">
             <ArrowLeft className="h-4 w-4 mr-1" />
-            返回
+            {t('返回')}
           </Button>
         </Link>
         <div className="flex items-center gap-2">
           {isMobile && (
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="提醒设置" className="h-8 w-8 rounded-lg text-muted-foreground/60 hover:text-muted-foreground">
+                <Button variant="ghost" size="icon" aria-label={t('提醒设置')} className="h-8 w-8 rounded-lg text-muted-foreground/60 hover:text-muted-foreground">
                   <Bell className="h-4 w-4" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent side="bottom" align="end" className="w-64 rounded-2xl p-4 bg-card border-border">
                 <div className="space-y-3 text-left">
-                  <p className="text-[11px] font-semibold text-muted-foreground/60">提醒设置</p>
+                  <p className="text-[11px] font-semibold text-muted-foreground/60">{t('提醒设置')}</p>
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-medium">题型提醒</Label>
+                    <Label className="text-xs font-medium">{t('题型提醒')}</Label>
                     <Switch
                       checked={reminderSettings.questionType}
                       onCheckedChange={(enabled) => {
@@ -258,7 +260,7 @@ export const TestSessionPage: React.FC = () => {
                     />
                   </div>
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-medium">做题结果提醒</Label>
+                    <Label className="text-xs font-medium">{t('做题结果提醒')}</Label>
                     <Switch
                       checked={reminderSettings.testResult}
                       onCheckedChange={(enabled) => {
@@ -284,15 +286,15 @@ export const TestSessionPage: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-muted-foreground">
                 {currentQ.q_type === 'objective'
-                  ? '客观选择'
+                  ? t('客观选择')
                   : currentQ.subjective_type === 'calculate'
-                    ? '主观计算'
+                    ? t('主观计算')
                     : currentQ.subjective_type === 'noun'
-                      ? '名词解释'
-                      : '主观论述'}
+                      ? t('名词解释')
+                      : t('主观论述')}
               </span>
               <span className="text-[10px] font-medium text-muted-foreground">
-                {currentQ.difficulty_level_display || '适当'} · ELO {currentQ.difficulty || 1200}
+                {currentQ.difficulty_level_display || t('适当')} · ELO {currentQ.difficulty || 1200}
               </span>
             </div>
 
@@ -314,12 +316,12 @@ export const TestSessionPage: React.FC = () => {
                 )}
               >
                 <CheckCircle className="h-3.5 w-3.5" />
-                {currentQ.is_mastered ? '已掌握' : '标记掌握'}
+                {currentQ.is_mastered ? t('已掌握') : t('标记掌握')}
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={currentQ.is_favorite ? '取消收藏' : '收藏题目'}
+                aria-label={currentQ.is_favorite ? t('取消收藏') : t('收藏题目')}
                 aria-pressed={!!currentQ.is_favorite}
                 onClick={() => toggleFavorite(currentQ.id)}
                 className={cn(
@@ -334,7 +336,7 @@ export const TestSessionPage: React.FC = () => {
             {/* Mastered banner */}
             {currentQ.is_mastered && (
               <div className="flex items-center gap-2 py-2 text-xs text-primary">
-                <CheckCircle className="w-3.5 h-3.5" /> 已掌握
+                <CheckCircle className="w-3.5 h-3.5" /> {t('已掌握')}
               </div>
             )}
 
@@ -370,7 +372,7 @@ export const TestSessionPage: React.FC = () => {
                 </div>
               ) : (
                 <textarea
-                  aria-label="作答内容"
+                  aria-label={t('作答内容')}
                   value={answers[currentQ.id] || ''}
                   disabled={currentQ.is_mastered || isSubmitting}
                   onChange={(e) => setAnswers((prev) => ({ ...prev, [currentQ.id]: e.target.value }))}
@@ -380,7 +382,7 @@ export const TestSessionPage: React.FC = () => {
                     'placeholder:text-muted-foreground/60 resize-none transition-all text-foreground',
                     currentQ.is_mastered && 'opacity-50'
                   )}
-                  placeholder={currentQ.is_mastered ? '该题已标记掌握，无需填写答案...' : '在此输入你的分析或计算过程...'}
+                  placeholder={currentQ.is_mastered ? t('该题已标记掌握，无需填写答案...') : t('在此输入你的分析或计算过程...')}
                 />
               )}
             </div>
@@ -390,7 +392,7 @@ export const TestSessionPage: React.FC = () => {
         {/* ── Footer ── */}
         <footer className="shrink-0 border-t border-border bg-card px-3 pt-2.5 pb-[calc(0.5rem+env(safe-area-inset-bottom))] space-y-2.5">
           <div className="flex justify-between items-center">
-            <span className="text-[10px] font-medium text-muted-foreground/60">已答进度</span>
+            <span className="text-[10px] font-medium text-muted-foreground/60">{t('已答进度')}</span>
             <span className="text-[11px] font-semibold text-foreground/80 tabular-nums">{answeredCount} / {totalNeedAnswer}</span>
           </div>
           <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
@@ -407,7 +409,7 @@ export const TestSessionPage: React.FC = () => {
               className="h-9 rounded-xl px-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted"
             >
               <CaretLeft className="h-4 w-4 mr-1" />
-              上一题
+              {t('上一题')}
             </Button>
             {currentIdx === questions.length - 1 ? (
               <Button
@@ -415,14 +417,14 @@ export const TestSessionPage: React.FC = () => {
                 disabled={isSubmitting}
                 className="h-9 flex-1 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold"
               >
-                {isSubmitting ? '提交中...' : '提交评分'}
+                {isSubmitting ? t('提交中...') : t('提交评分')}
               </Button>
             ) : (
               <Button
                 onClick={() => setCurrentIdx((prev) => Math.min(questions.length - 1, prev + 1))}
                 className="h-9 flex-1 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold"
               >
-                下一题
+                {t('下一题')}
                 <CaretRight className="h-4 w-4 ml-1" />
               </Button>
             )}

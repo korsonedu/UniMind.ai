@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from ai_assistant.models import AIChatMessage, Conversation
 from core.authentication import CookieTokenAuthentication
+from core.interface_language import ui_text
 from users.permissions import IsMember, has_capability
 from .access import accessible_bot, notebook_ids
 from .awareness import after_note_save, enqueue, xiaoyu_bot
@@ -122,10 +123,10 @@ class CourseReplyNoteView(PrivateNotesView, APIView):
 
         position = context['video_seconds']
         start, end = context['start_seconds'], context['end_seconds']
-        content = (f'课程：{context["course_title"]}\n\n'
-            f'提问位置：[{clock(position)}](/course/{course.pk}?t={position:g})\n\n'
-            f'讲稿参考：[{clock(start)}–{clock(end)}](/course/{course.pk}?t={start:g})\n\n'
-            f'## 问题\n\n{question.content}\n\n## 小宇讲解\n\n{message.content}')
+        content = (f'{ui_text("课程：")}{context["course_title"]}\n\n'
+            f'{ui_text("提问位置：")}[{clock(position)}](/course/{course.pk}?t={position:g})\n\n'
+            f'{ui_text("讲稿参考：")}[{clock(start)}–{clock(end)}](/course/{course.pk}?t={start:g})\n\n'
+            f'## {ui_text("问题")}\n\n{question.content}\n\n## {ui_text("小宇讲解")}\n\n{message.content}')
         serializer = NoteSerializer(data={'title': f'{context["course_title"]} · {clock(position)}',
             'content': content}, context={'request': request})
         serializer.is_valid(raise_exception=True)

@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import React from 'react';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Clock, CheckCircle } from '@phosphor-icons/react';
@@ -17,11 +18,12 @@ interface OnlineUsersPanelProps {
 }
 
 const OnlineUsersPanel: React.FC<OnlineUsersPanelProps> = ({ onlineUsers, currentUsername }) => {
+  useLocale();
   return (
     <Card className="um-study-online border-0 shadow-none rounded-none bg-transparent overflow-hidden p-4 min-h-0 flex flex-col">
       <header className="um-study-section-header mb-3 flex items-center justify-between">
         <CardTitle className="text-[13px] font-semibold text-foreground">
-          在线人数
+          {t('在线人数')}
         </CardTitle>
         <span className="text-xs tabular-nums text-muted-foreground">{onlineUsers.length}</span>
       </header>
@@ -39,10 +41,10 @@ const OnlineUsersPanel: React.FC<OnlineUsersPanelProps> = ({ onlineUsers, curren
                 <div className="flex-1 min-w-0">
                   <p className="text-[13px] font-medium text-foreground truncate">
                     {u.nickname || u.username}{' '}
-                    {u.username === currentUsername && '(你)'}
+                    {u.username === currentUsername && t('(你)')}
                   </p>
                   <p className="text-xs text-muted-foreground truncate mt-0.5">
-                    {u.current_task || '在线中'}
+                    {u.current_task || t('在线中')}
                   </p>
                 </div>
               </div>
@@ -71,13 +73,13 @@ const OnlineUsersPanel: React.FC<OnlineUsersPanelProps> = ({ onlineUsers, curren
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Clock className="h-3.5 w-3.5" />
                       <span className="label-apple">
-                        {`今日专注: ${u.today_focused_minutes} min`}
+                        {t('今日专注: {0} min', { 0: u.today_focused_minutes })}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <CheckCircle className="h-3.5 w-3.5" />
                       <span className="label-apple">
-                        {`今日已完成: ${u.today_completed_tasks?.length || 0} tasks`}
+                        {t('今日已完成: {0} tasks', { 0: u.today_completed_tasks?.length || 0 })}
                       </span>
                     </div>
                   </div>

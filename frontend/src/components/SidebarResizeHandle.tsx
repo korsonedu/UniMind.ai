@@ -1,11 +1,13 @@
+import { t, useLocale } from '@/i18n';
 import { useRef } from 'react';
 
 export function SidebarResizeHandle({ width, onChange, onCommit }: {
   width: number; onChange: (width: number) => void; onCommit: (width: number) => void;
 }) {
+  useLocale();
   const start = useRef({ x: 0, width: 0 });
   const clamp = (value: number) => Math.max(320, Math.min(640, value));
-  return <div className="um-right-panel-resize" role="separator" aria-label="调整右侧栏宽度" aria-orientation="vertical" aria-valuemin={320} aria-valuemax={640} aria-valuenow={width} tabIndex={0}
+  return <div className="um-right-panel-resize" role="separator" aria-label={t('调整右侧栏宽度')} aria-orientation="vertical" aria-valuemin={320} aria-valuemax={640} aria-valuenow={width} tabIndex={0}
     onKeyDown={event => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
       event.preventDefault();

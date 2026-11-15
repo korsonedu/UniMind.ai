@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
@@ -17,6 +18,7 @@ type LoginTab = 'password' | 'code';
 export const Login: React.FC = () => window.unimindDesktop ? <DesktopLogin /> : <WebLogin />;
 
 const WebLogin: React.FC = () => {
+  useLocale();
   const [tab, setTab] = useState<LoginTab>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -69,7 +71,7 @@ const WebLogin: React.FC = () => {
       await fetchFeatures();
       navigate(returnTo, { replace: true });
     } catch (err: unknown) {
-      setError(formatApiErrorToast(err, '登录失败'));
+      setError(formatApiErrorToast(err, t('登录失败')));
     } finally {
       setLoading(false);
     }
@@ -80,7 +82,7 @@ const WebLogin: React.FC = () => {
   const handleSendCode = async () => {
     if (!email.trim()) return;
     if (!isValidEmail(email)) {
-      setError('请输入有效的邮箱地址');
+      setError(t('请输入有效的邮箱地址'));
       return;
     }
     setSendingCode(true);
@@ -92,31 +94,31 @@ const WebLogin: React.FC = () => {
       params.set('purpose', 'login_by_code');
       navigate(`/verify-code?${params}`);
     } catch (err: unknown) {
-      setError(formatApiErrorToast(err, '发送失败，请稍后重试'));
+      setError(formatApiErrorToast(err, t('发送失败，请稍后重试')));
       setSendingCode(false);
     }
   };
 
   return (
     <AuthLayout
-      title="欢迎回来"
+      title={t('欢迎回来')}
       footer={
         tab === 'password' ? (
           <p className="text-sm text-[#6E6E73] dark:text-white/40">
-            没有账号？
+            {t('没有账号？')}
             <Link
               to={`/register?${registerParams}`}
               className="text-[#1D1D1F] dark:text-white font-medium hover:underline ml-1"
             >
-              注册
+              {t('注册')}
             </Link>
           </p>
         ) : undefined
       }
     >
-      <div className="um-auth-tabs" aria-label="登录方式">
-        <button type="button" aria-pressed={tab === 'password'} onClick={() => { setTab('password'); setError(''); }}>密码登录</button>
-        <button type="button" aria-pressed={tab === 'code'} onClick={() => { setTab('code'); setError(''); }}>验证码登录 / 注册</button>
+      <div className="um-auth-tabs" aria-label={t('登录方式')}>
+        <button type="button" aria-pressed={tab === 'password'} onClick={() => { setTab('password'); setError(''); }}>{t('密码登录')}</button>
+        <button type="button" aria-pressed={tab === 'code'} onClick={() => { setTab('code'); setError(''); }}>{t('验证码登录 / 注册')}</button>
       </div>
 
       {/* Error banner */}
@@ -130,7 +132,7 @@ const WebLogin: React.FC = () => {
       {/* Shared email field */}
       <div className="space-y-1.5 mb-4">
         <label htmlFor="login-email" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
-          邮箱
+          {t('邮箱')}
         </label>
         <Input
           id="login-email"
@@ -150,12 +152,12 @@ const WebLogin: React.FC = () => {
         <form onSubmit={handlePasswordLogin} className="space-y-4">
           <div className="space-y-1.5">
             <label htmlFor="login-password" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
-              密码
+              {t('密码')}
             </label>
             <Input
               id="login-password"
               type="password"
-              placeholder="输入密码"
+              placeholder={t('输入密码')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
@@ -170,7 +172,7 @@ const WebLogin: React.FC = () => {
             className="um-auth-submit"
             disabled={loading}
           >
-            {loading ? '登录中...' : '登录'}
+            {loading ? t('登录中...') : t('登录')}
           </Button>
         </form>
       )}
@@ -184,7 +186,7 @@ const WebLogin: React.FC = () => {
             disabled={sendingCode || !email.trim()}
             onClick={handleSendCode}
           >
-            {sendingCode ? <Spinner className="h-4 w-4 animate-spin" /> : '发送验证码'}
+            {sendingCode ? <Spinner className="h-4 w-4 animate-spin" /> : t('发送验证码')}
           </Button>
         </div>
       )}

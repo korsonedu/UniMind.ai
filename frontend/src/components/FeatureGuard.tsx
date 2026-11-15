@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { Spinner, Lock } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ export function FeatureGuard({
   feature: string;
   children: React.ReactNode;
 }) {
+  useLocale();
   const { hasFeature, loading, featuresError, fetchFeatures } = useInstitutionStore();
 
   if (loading) {
@@ -34,8 +36,8 @@ export function FeatureGuard({
     return (
       <div className="min-h-[60vh] flex items-center justify-center p-4">
         <div className="text-center max-w-md">
-          <p className="text-muted-foreground text-sm mb-4">加载功能配置失败</p>
-          <Button variant="outline" onClick={() => fetchFeatures()}>重试</Button>
+          <p className="text-muted-foreground text-sm mb-4">{t('加载功能配置失败')}</p>
+          <Button variant="outline" onClick={() => fetchFeatures()}>{t('重试')}</Button>
         </div>
       </div>
     );
@@ -45,16 +47,16 @@ export function FeatureGuard({
     return <>{children}</>;
   }
 
-  const featureName = FEATURE_LABELS[feature] || feature;
+  const featureName = t(FEATURE_LABELS[feature] || feature);
 
   return (
     <>
       <div className="min-h-[60vh] flex items-center justify-center p-4">
         <div className="text-center max-w-md">
           <Lock className="w-6 h-6 text-muted-foreground mx-auto mb-4" />
-          <h2 className="text-xl font-bold mb-2">{featureName}暂未开放</h2>
+          <h2 className="text-xl font-bold mb-2">{featureName}{t('暂未开放')}</h2>
           <p className="text-muted-foreground text-sm mb-6">
-            该功能尚未向你的账号开放，请联系管理员。
+            {t('该功能尚未向你的账号开放，请联系管理员。')}
           </p>
         </div>
       </div>

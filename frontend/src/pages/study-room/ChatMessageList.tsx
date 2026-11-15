@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -61,6 +62,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   lastMyTaskMessageId, isAtBottom, isMobile,
   scrollContainerRef, onScroll, onScrollToBottom, onUndoMessage,
 }) => {
+  useLocale();
   return (
     <>
       <div
@@ -95,7 +97,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
                         onClick={() => onUndoMessage(msg.id)}
                         className="ml-3 text-[11px] font-bold text-muted-foreground/50 hover:text-red-500 underline decoration-dotted underline-offset-2 transition-colors cursor-pointer"
                       >
-                        撤销
+                        {t('撤销')}
                       </button>
                    )}
                 </div>

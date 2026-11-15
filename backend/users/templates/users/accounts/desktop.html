@@ -1,16 +1,17 @@
 {% extends 'users/accounts/base.html' %}
+{% load interface_language %}
 {% block content %}
 {% if callback %}
-<h1>登录已确认</h1>
-<p class="form-description">请返回 UniMind 完成登录。若没有自动打开，请点击下方按钮。此登录链接将在 60 秒内失效。</p>
-<a class="primary-button" href="{{ callback }}">打开 UniMind</a>
+<h1>{{ "登录已确认"|ui }}</h1>
+<p class="form-description">{{ "请返回 UniMind 完成登录。若没有自动打开，请点击下方按钮。此登录链接将在 60 秒内失效。"|ui }}</p>
+<a class="primary-button" href="{{ callback }}">{{ "打开 UniMind"|ui }}</a>
 <script>window.location.href = "{{ callback|escapejs }}";</script>
 {% else %}
-<h1>登录 UniMind</h1>
-<p class="form-description">选择账号以继续使用 UniMind App。</p>
+<h1>{{ "登录 UniMind"|ui }}</h1>
+<p class="form-description">{{ "选择账号以继续使用 UniMind App。"|ui }}</p>
 <form method="post">{% csrf_token %}<input type="hidden" name="request" value="{{ request_id }}">
 {% include 'users/accounts/account_card.html' %}
 </form>
-<div class="account-links"><a href="/accounts/login/?{{ next_query }}">使用其他账号</a></div>
+<div class="account-links"><a href="/accounts/login/?{{ next_query }}">{{ "使用其他账号"|ui }}</a></div>
 {% endif %}
 {% endblock %}

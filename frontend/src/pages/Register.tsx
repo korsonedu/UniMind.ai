@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
@@ -12,6 +13,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { getReturnTo } from '@/lib/routing';
 
 export const Register: React.FC = () => {
+  useLocale();
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [nickname, setNickname] = useState('');
@@ -73,7 +75,7 @@ export const Register: React.FC = () => {
         });
       }, 1000);
     } catch (err: unknown) {
-      setError(formatApiErrorToast(err, '发送失败'));
+      setError(formatApiErrorToast(err, t('发送失败')));
     } finally {
       setSendingCode(false);
     }
@@ -81,14 +83,14 @@ export const Register: React.FC = () => {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code.trim()) { setError('请输入验证码'); return; }
+    if (!code.trim()) { setError(t('请输入验证码')); return; }
     setLoading(true);
     setError('');
     try {
       await api.post('/users/register/', { email, code, nickname, password, agreed_to_terms: agreedToTerms, referral_code: refCode });
       navigate(`/login?${loginParams}`);
     } catch (err: unknown) {
-      setError(formatApiErrorToast(err, '注册失败'));
+      setError(formatApiErrorToast(err, t('注册失败')));
     } finally {
       setLoading(false);
     }
@@ -96,15 +98,15 @@ export const Register: React.FC = () => {
 
   return (
     <AuthLayout
-      title="创建账号"
+      title={t('创建账号')}
       footer={
         <p className="text-sm text-[#6E6E73] dark:text-white/40">
-          已有账号？
+          {t('已有账号？')}
           <Link
             to={`/login?${loginParams}`}
             className="text-[#1D1D1F] dark:text-white font-medium hover:underline ml-1"
           >
-            登录
+            {t('登录')}
           </Link>
         </p>
       }
@@ -112,7 +114,7 @@ export const Register: React.FC = () => {
       {/* Referral banner */}
       {refCode && (
         <div className="rounded-xl bg-blue-50 dark:bg-blue-950/25 border border-blue-200 dark:border-blue-800/40 px-4 py-3 mb-5 text-sm text-blue-700 dark:text-blue-400">
-          通过推荐链接注册，完成首次购买后你和推荐人都将获得奖励
+          {t('通过推荐链接注册，完成首次购买后你和推荐人都将获得奖励')}
         </div>
       )}
 
@@ -127,7 +129,7 @@ export const Register: React.FC = () => {
       <form onSubmit={handleRegister} className="space-y-4">
         <div className="space-y-1.5">
           <label htmlFor="reg-email" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
-            邮箱
+            {t('邮箱')}
           </label>
           <div className="flex gap-2">
             <Input
@@ -148,18 +150,18 @@ export const Register: React.FC = () => {
               variant="outline"
               className="um-auth-code-button"
             >
-              {sendingCode ? '发送中' : countdown > 0 ? `${countdown}s` : '获取验证码'}
+              {sendingCode ? t('发送中') : countdown > 0 ? `${countdown}s` : t('获取验证码')}
             </Button>
           </div>
         </div>
 
         <div className="space-y-1.5">
           <label htmlFor="reg-code" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
-            验证码
+            {t('验证码')}
           </label>
           <Input
             id="reg-code"
-            placeholder="输入 6 位验证码"
+            placeholder={t('输入 6 位验证码')}
             value={code}
             onChange={(e) => setCode(e.target.value)}
             autoComplete="one-time-code"
@@ -172,11 +174,11 @@ export const Register: React.FC = () => {
 
         <div className="space-y-1.5">
           <label htmlFor="reg-nickname" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
-            昵称
+            {t('昵称')}
           </label>
           <Input
             id="reg-nickname"
-            placeholder="你的称呼"
+            placeholder={t('你的称呼')}
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
             className="h-12 rounded-xl"
@@ -186,12 +188,12 @@ export const Register: React.FC = () => {
 
         <div className="space-y-1.5">
           <label htmlFor="reg-password" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
-            密码
+            {t('密码')}
           </label>
           <Input
             id="reg-password"
             type="password"
-            placeholder="至少 8 位，含大写字母和数字"
+            placeholder={t('至少 8 位，含大写字母和数字')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
@@ -210,10 +212,10 @@ export const Register: React.FC = () => {
             className="mt-0.5"
           />
           <label htmlFor="agree-terms" className="text-xs text-[#6E6E73] dark:text-white/40 leading-relaxed cursor-pointer">
-            我已阅读并同意
-            <Link to="/terms" className="text-[#1D1D1F] dark:text-white font-medium hover:underline mx-0.5">用户协议</Link>
-            和
-            <Link to="/privacy" className="text-[#1D1D1F] dark:text-white font-medium hover:underline ml-0.5">隐私政策</Link>
+            {t('我已阅读并同意')}
+            <Link to="/terms" className="text-[#1D1D1F] dark:text-white font-medium hover:underline mx-0.5">{t('用户协议')}</Link>
+            {t('和')}
+            <Link to="/privacy" className="text-[#1D1D1F] dark:text-white font-medium hover:underline ml-0.5">{t('隐私政策')}</Link>
           </label>
         </div>
 
@@ -222,7 +224,7 @@ export const Register: React.FC = () => {
           className="um-auth-submit"
           disabled={loading || !agreedToTerms}
         >
-          {loading ? '注册中...' : '注册'}
+          {loading ? t('注册中...') : t('注册')}
         </Button>
       </form>
     </AuthLayout>

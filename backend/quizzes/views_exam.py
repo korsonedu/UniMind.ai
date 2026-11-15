@@ -75,7 +75,9 @@ class SubmitExamView(APIView):
                     return Response(prior.response, status=202)
                 if task and task.exam_id:
                     return Response({'error': '学习任务已经提交。'}, status=409)
+            from ai_assistant.services.language import request_language
             exam = QuizExam.objects.create(
+                ui_language=request_language(request),
                 user=request.user,
                 status='pending',
                 total_questions=len(questions_data),

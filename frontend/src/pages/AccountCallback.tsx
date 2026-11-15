@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { queryClient } from '@/lib/queryClient';
@@ -6,6 +7,7 @@ import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { getReturnTo, getLoginPath } from '@/lib/routing';
 
 export function AccountCallback() {
+  useLocale();
   const [error, setError] = useState(false);
   useEffect(() => {
     let cancelled = false;
@@ -31,8 +33,8 @@ export function AccountCallback() {
     return () => { cancelled = true; controller.abort(); };
   }, []);
   return <main className="min-h-dvh flex flex-col items-center justify-center gap-4 px-6 bg-background text-foreground">
-    <h1 className="text-xl font-semibold">{error ? '暂时无法进入 UniMind' : '正在确认你的账号'}</h1>
-    <p className="text-sm text-muted-foreground">{error ? '请重试，或重新登录 UniMind.ai 账号。' : '确认后将进入 UniMind。'}</p>
-    {error && <><button onClick={() => window.location.reload()} className="underline">重试</button><a href={getLoginPath(getReturnTo(new URLSearchParams(window.location.search).get('next')))} className="underline">重新登录</a></>}
+    <h1 className="text-xl font-semibold">{error ? t('暂时无法进入 UniMind') : t('正在确认你的账号')}</h1>
+    <p className="text-sm text-muted-foreground">{error ? t('请重试，或重新登录 UniMind.ai 账号。') : t('确认后将进入 UniMind。')}</p>
+    {error && <><button onClick={() => window.location.reload()} className="underline">{t('重试')}</button><a href={getLoginPath(getReturnTo(new URLSearchParams(window.location.search).get('next')))} className="underline">{t('重新登录')}</a></>}
   </main>;
 }

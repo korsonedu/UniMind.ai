@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useState, useEffect, useId, useRef } from 'react';
 import { Check, Circle, Spinner, X, CaretRight } from '@phosphor-icons/react';
 import { Collapse } from './ui/collapse';
@@ -16,6 +17,7 @@ function formatDuration(ms: number): string {
 }
 
 export function TaskList({ data, onComplete }: TaskListProps) {
+  useLocale();
   const toolDetails = useSystemStore(state => state.toolDetails);
   const [collapsed, setCollapsed] = useState(false);
   const [previousToolDetails, setPreviousToolDetails] = useState(toolDetails);
@@ -77,10 +79,10 @@ export function TaskList({ data, onComplete }: TaskListProps) {
         <CaretRight className="um-disclosure-chevron w-3.5 h-3.5" />
         <span>
           {allSucceeded
-            ? `全部完成 · ${succeededCount} 项`
+            ? t('全部完成 · {0} 项', { 0: succeededCount })
             : data.completed && (data.failed || failedCount > 0)
-              ? `本轮未完成 · ${succeededCount} 成功 · ${failedCount} 失败`
-              : `进行中 · ${terminalCount}/${data.items.length} 项`}
+              ? t('本轮未完成 · {0} 成功 · {1} 失败', { 0: succeededCount, 1: failedCount })
+              : t('进行中 · {0}/{1} 项', { 0: terminalCount, 1: data.items.length })}
         </span>
       </button>
 
@@ -96,7 +98,7 @@ export function TaskList({ data, onComplete }: TaskListProps) {
               {item.status === 'running'
                 ? <Spinner className="w-4 h-4 text-primary animate-spin shrink-0" />
                 : <Circle className="w-4 h-4 text-muted-foreground/50 shrink-0" />}
-              <span className="flex-1 text-foreground">{item.label}</span>
+              <span className="flex-1 text-foreground">{t(item.label)}</span>
               {item.duration_ms != null && (
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {formatDuration(item.duration_ms)}
@@ -118,7 +120,7 @@ export function TaskList({ data, onComplete }: TaskListProps) {
               >
                 <Check className="w-4 h-4 text-emerald-500 shrink-0" />
                 <span className="flex-1 text-muted-foreground line-through decoration-muted-foreground/30">
-                  {item.label}
+                  {t(item.label)}
                 </span>
                 {item.duration_ms != null && (
                   <span className="text-xs text-muted-foreground/70 tabular-nums">
@@ -137,7 +139,7 @@ export function TaskList({ data, onComplete }: TaskListProps) {
             >
               <X className="w-4 h-4 mt-0.5 text-destructive shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="text-foreground">{item.label}</div>
+                <div className="text-foreground">{t(item.label)}</div>
                 {item.error?.message && (
                   <div className="text-xs text-destructive/80 mt-0.5 break-words">
                     {item.error.message}

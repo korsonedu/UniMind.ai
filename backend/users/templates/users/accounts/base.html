@@ -1,19 +1,20 @@
+{% load interface_language %}
 {% load static %}
 <!doctype html>
-<html lang="zh-CN">
+<html lang="{{ request.ui_language }}">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>{{ title|default:'UniMind 账号' }} · UniMind</title>
+  <title>{{ title|default:'UniMind 账号'|ui }} · UniMind</title>
   <link rel="stylesheet" href="{% static 'users/accounts.css' %}?v=20261102-account-card">
 </head>
 <body>
-  <header class="account-header"><a class="account-brand" href="/accounts/profile/">UniMind</a><a href="{{ website }}">返回官网</a></header>
+  <header class="account-header"><a class="account-brand" href="/accounts/profile/">UniMind</a><a href="{{ website }}">{{ "返回官网"|ui }}</a></header>
   <main class="account-layout">
     <div class="account-visual">
       <div class="account-visual-copy">
-        <p class="account-visual-title">复杂自有结构。</p>
-        <p class="account-visual-subtitle">当信息彼此连接，<br>方向逐渐清晰。</p>
+        <p class="account-visual-title">{{ "复杂自有结构。"|ui }}</p>
+        <p class="account-visual-subtitle">{{ "当信息彼此连接，"|ui }}<br>{{ "方向逐渐清晰。"|ui }}</p>
       </div>
     </div>
     <div class="account-form-pane"><section class="account-panel">{% block content %}{% endblock %}</section></div>

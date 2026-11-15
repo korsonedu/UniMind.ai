@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import React, { useMemo } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -98,6 +99,7 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
 };
 
 export const FunctionGraphRenderer: React.FC<{ payload: FunctionGraphPayload }> = ({ payload }) => {
+  useLocale();
   const xMin = payload.xRange?.[0] ?? -5;
   const xMax = payload.xRange?.[1] ?? 5;
 
@@ -131,7 +133,7 @@ export const FunctionGraphRenderer: React.FC<{ payload: FunctionGraphPayload }> 
       )}
 
       {mergedData.length > 0 ? (
-        <div className="um-visual-graph-scroll" tabIndex={0} aria-label="函数图像，可横向滚动"><div className="um-visual-function-graph">
+        <div className="um-visual-graph-scroll" tabIndex={0} aria-label={t('函数图像，可横向滚动')}><div className="um-visual-function-graph">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={mergedData} margin={{ top: 16, right: 20, bottom: 20, left: 20 }}>
               <CartesianGrid strokeDasharray="2 4" stroke="var(--um-color-border)" />
@@ -191,8 +193,7 @@ export const FunctionGraphRenderer: React.FC<{ payload: FunctionGraphPayload }> 
         </div></div>
       ) : (
         <div className="flex items-center justify-center h-48 text-[12px] text-foreground/25">
-          暂无函数数据
-        </div>
+          {t('暂无函数数据')}</div>
       )}
 
       {allData.length > 1 && payload.expressions && (

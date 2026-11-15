@@ -76,7 +76,8 @@ def _focused_task(project, state):
     return focused or tasks.order_by('created_at', 'pk').first()
 
 
-def learning_data(project):
+def learning_data(project, language='zh-CN'):
+    from .guidance_messages import guidance_text
     state, _ = ProjectLearning.objects.get_or_create(project=project)
     from users.feature_access import has_learning_feature
     event_rows = ProjectLearningEvent.objects.filter(project=project).exclude(kind='turn')
@@ -95,18 +96,18 @@ def learning_data(project):
     next_task = next((task for task in tasks if task['status'] in ('ready', 'partial', 'failed', 'processing')), None)
     latest = max(completed_tasks, key=lambda task: str(task['summary'].get('completed_at') or ''), default=None)
     task_progress = {'completed': len(completed_tasks), 'total': len(tasks),
-        'feedback': f"最近完成“{latest['title']}”，得分 {latest['summary']['total_score']}/{latest['summary']['max_score']}。" if latest else '',
-        'next_action': ('先复盘错误与解析，再继续：' if latest and latest['summary']['total_score'] < latest['summary']['max_score'] else '接下来：') + next_task['title'] if next_task else ('本轮任务已完成，按复习时间重新检查，并和小宇核对下一阶段。' if latest else ''),
+        'feedback': guidance_text('最近完成“{0}”，得分 {1}/{2}。', language, latest['title'], latest['summary']['total_score'], latest['summary']['max_score']) if latest else '',
+        'next_action': (guidance_text('先复盘错误与解析，再继续：', language) if latest and latest['summary']['total_score'] < latest['summary']['max_score'] else guidance_text('接下来：', language)) + next_task['title'] if next_task else (guidance_text('本轮任务已完成，按复习时间重新检查，并和小宇核对下一阶段。', language) if latest else ''),
         'next_task_id': next_task['id'] if next_task else None}
     from .learning_guidance import teaching_guidance
     progress_at = next((event.created_at for event in events if event.kind == 'progress' and event.content.get('stage') == state.current_stage and event.content.get('mainline', True)), None)
     focused = _focused_task(project, state)
     focus_task_id = str(focused.pk) if focused else None
-    guidance = teaching_guidance(state, tasks, progress_at=progress_at, focus_task_id=focus_task_id)
+    guidance = teaching_guidance(state, tasks, progress_at=progress_at, focus_task_id=focus_task_id, language=language)
     # All learner surfaces follow the same current episode. Other tasks still keep their results.
     task_progress.update(feedback=guidance['feedback'], next_action=guidance['next_action'], next_task_id=guidance['task_id'])
     if not next_task and len(completed_tasks) < len(tasks):
-        task_progress['next_action'] = '有任务内容当前不可用，请和小宇重新安排，已有成绩继续保留。'
+        task_progress['next_action'] = guidance_text('有任务内容当前不可用，请和小宇重新安排，已有成绩继续保留。', language)
     return {
         'teaching_guidance': guidance, 'focus_task_id': focus_task_id,
         'task_progress': task_progress,
@@ -276,14 +277,14 @@ def assert_learning_turn(project, message):
 
 
 @transaction.atomic
-def change_learning(project, data, *, message=None, model=False):
+def change_learning(project, data, *, message=None, model=False, language='zh-CN'):
     state, _ = ProjectLearning.objects.get_or_create(project=project)
     state = ProjectLearning.objects.select_for_update().get(pk=state.pk)
     request_key = None
     if model:
         request_key = hashlib.sha256(json.dumps([message.pk, data], sort_keys=True, default=str).encode()).hexdigest()
         if ProjectLearningEvent.objects.filter(request_key=request_key).exists():
-            return learning_data(project)
+            return learning_data(project, language=language)
     if model:
         assert_learning_turn(project, message)
     revision = serializers.IntegerField(min_value=0).run_validation(data.get('revision'))
@@ -407,7 +408,7 @@ def change_learning(project, data, *, message=None, model=False):
     state.revision += 1
     state.save()
     ProjectLearningEvent.objects.create(project=project, message=message, kind=action, content=event, request_key=request_key)
-    return learning_data(project)
+    return learning_data(project, language=language)
 
 
 def tool_operation(executor, name, arguments):

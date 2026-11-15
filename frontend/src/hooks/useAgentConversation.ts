@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import api from '@/lib/api';
@@ -100,7 +101,8 @@ interface UseAgentConversationOptions {
 // ── Hook ──
 
 export function useAgentConversation(options: UseAgentConversationOptions) {
-  const { findBot, resetMessage = '已开始新对话' } = options;
+  useLocale();
+  const { findBot, resetMessage = t('已开始新对话') } = options;
 
   // Stabilize callback refs to avoid dependency churn in doSend
   const onDoneRef = useRef(options.onDone);
@@ -237,7 +239,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       const metadata = sessionMetadataRef.current.get(key);
       const title = metadata?.title ?? msgs.find(m => m.conversation_title)?.conversation_title ?? '';
       const firstUser = msgs.find(m => m.role === 'user');
-      const label = title || (firstUser ? firstUser.content.slice(0, 30) + (firstUser.content.length > 30 ? '...' : '') : '对话');
+      const label = title || (firstUser ? firstUser.content.slice(0, 30) + (firstUser.content.length > 30 ? '...' : '') : t('对话'));
       const lastMsg = msgs[msgs.length - 1];
       return { id: sessionIdsRef.current.get(key)!, label, title, messages: msgs, lastTime: lastMsg.timestamp || '', conversationId: lastMsg.conversation_id, projectId: metadata?.project_id !== undefined ? metadata.project_id : lastMsg.conversation_project ?? null, isPinned: metadata?.is_pinned ?? msgs.some(message => message.conversation_pinned) };
     }).sort((a, b) => (Date.parse(a.lastTime) || 0) - (Date.parse(b.lastTime) || 0));
@@ -414,9 +416,9 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
         setConversationId(crypto.randomUUID());
         setProjectId(session.projectId ?? null);
       }
-      toast.success('对话已删除');
+      toast.success(t('对话已删除'));
     } catch {
-      toast.error('删除失败，请重试');
+      toast.error(t('删除失败，请重试'));
     }
   }, [abortStream, setConversationId, setProjectId]);
 
@@ -442,7 +444,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
         setMessages(patched);
       }
       return true;
-    } catch { toast.error('对话保存失败，请重试'); return false; }
+    } catch { toast.error(t('对话保存失败，请重试')); return false; }
   }, [setProjectId]);
 
   // Identity changes invalidate async recovery and every stream before restoring local state.
@@ -566,7 +568,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     } catch (error) {
       if (isRequestActive()) {
         markGenerating(requestConversationId, false);
-        toast.error(error instanceof Error ? error.message : '笔记尚未保存，问题已保留，请重试。');
+        toast.error(error instanceof Error ? error.message : t('笔记尚未保存，问题已保留，请重试。'));
       }
       return;
     }
@@ -762,7 +764,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
           } else if (payload.done) {
             if (payload.is_error) break;
             completed = true;
-            notifyDesktop({ kind: 'chat', title: '小宇已完成回复', body: '打开 UniMind 查看回复。', route: options.courseId ? `/course/${options.courseId}?conversation=${requestConversationId}` : '/xiaoyu' });
+            notifyDesktop({ kind: 'chat', title: t('小宇已完成回复'), body: t('打开 UniMind 查看回复。'), route: options.courseId ? `/course/${options.courseId}?conversation=${requestConversationId}` : '/xiaoyu' });
             pendingSendsRef.current.delete(requestConversationId);
             saveRecovery(requestScope, requestConversationId, { pending: undefined });
             updateTaskList(previous => completeToolRun(previous, payload.run_id));

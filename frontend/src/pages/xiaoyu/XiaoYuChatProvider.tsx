@@ -1,3 +1,4 @@
+import { getLocale, t, useLocale } from '@/i18n';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -16,6 +17,7 @@ import { XiaoYuChatContext, findAssistantBot, type PageChatHooks } from './xiaoY
  * SSE 流、会话快照和输入草稿仍由 useAgentConversation 持有。
  */
 export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
+  useLocale();
   const location = useLocation();
   const navigate = useNavigate();
   const [openingProject, setOpeningProject] = useState(false);
@@ -47,7 +49,7 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
     onStepDoneEffect: step => pageHooksRef.current.onStepDoneEffect?.(step),
     onAllVisuals: visuals => pageHooksRef.current.onAllVisuals?.(visuals),
     onStepQuestions: questions => pageHooksRef.current.onStepQuestions?.(questions),
-    resetMessage: '已开始新对话',
+    resetMessage: t('已开始新对话'),
   });
   const { conversationId, setBot, setInitialized, setSessions, groupIntoSessions } = chat;
   const userId = useAuthStore(state => state.user?.id);
@@ -69,7 +71,7 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
         const bots: Bot[] = Array.isArray(bRes.data) ? bRes.data : (bRes.data?.results || []);
         const found = findAssistantBot(bots);
         if (!found) {
-          toast.error('未找到小宇 bot');
+          toast.error(t('未找到小宇 bot'));
           return;
         }
         const saved = readRecovery(recoveryScope(userId, found.id));
@@ -88,7 +90,7 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
           setSessions(groupIntoSessions(allMsgs));
         }
       } catch {
-        if (!cancelled) toast.error('小宇加载失败');
+        if (!cancelled) toast.error(t('小宇加载失败'));
       } finally {
         if (initializingUserIdRef.current === userId) initializingUserIdRef.current = null;
         if (!cancelled) {
@@ -123,11 +125,12 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => { chatRef.current = chat; }, [chat]);
   const openProject = useCallback(async (id: number, explicitConversation?: string, draft?: string, recoveryInputRevision?: number) => {
     if (!userId || !Number.isSafeInteger(id) || id < 1) return;
+    const language = getLocale();
     const sequence = ++openSequence.current;
     const selectionVersion = chatRef.current.getSelectionVersion();
     setOpeningProject(true);
     try {
-      const { data } = await api.get<ProjectLearning>(`/ai/projects/${id}/learning/`, { params: explicitConversation ? { conversation_id: explicitConversation } : undefined });
+      const { data } = await api.get<ProjectLearning>(`/ai/projects/${id}/learning/`, { headers: { 'Accept-Language': language }, params: explicitConversation ? { conversation_id: explicitConversation } : undefined });
       const current = chatRef.current;
       if (!current.bot || sequence !== openSequence.current || chatRef.current.getSelectionVersion() !== selectionVersion || useAuthStore.getState().user?.id !== userId) return;
       const saved = readRecovery(recoveryScope(userId, current.bot.id));
@@ -142,7 +145,7 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
       const sessions = current.groupIntoSessions(messages);
       const candidates = sessions.filter(session => session.projectId === id);
       const target = selectedId ? candidates.find(session => session.conversationId === selectedId) : candidates.at(-1);
-      if (explicitConversation && !target && messages.length) throw new Error('这段对话不属于当前项目，或已删除。');
+      if (explicitConversation && !target && messages.length) throw new Error(t('这段对话不属于当前项目，或已删除。'));
       if (target) {
         current.setSessions(previous => [...previous.filter(item => item.conversationId !== target.conversationId), target]);
         current.handleLoadSession(target, false, true);
@@ -154,14 +157,14 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
         if (draftEntry?.[1].draft && !messages.length) current.setInput(draftEntry[1].draft);
         if (draft) current.setInput(draft);
       }
-      queryClient.setQueryData(learningKey(userId, id), data);
+      queryClient.setQueryData(learningKey(userId, id, language), data);
     } catch (error) {
       if (sequence === openSequence.current && chatRef.current.getSelectionVersion() === selectionVersion && useAuthStore.getState().user?.id === userId) {
         const status = (error as { response?: { status?: number } })?.response?.status;
         if (status === 404) {
           if (chatRef.current.projectId === id) chatRef.current.handleReset(false);
         }
-        toast.error(status === 404 ? '这个项目或对话已删除，无法恢复旧安排。' : error instanceof Error ? error.message : '项目暂时无法打开，请重试。');
+        toast.error(status === 404 ? t('这个项目或对话已删除，无法恢复旧安排。') : error instanceof Error ? error.message : t('项目暂时无法打开，请重试。'));
       }
     } finally {
       if (sequence === openSequence.current) setOpeningProject(false);
@@ -212,5 +215,6 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
 
 /** 始终挂载，用户变化只在 Provider 内重置，不重挂路由子树。 */
 export function XiaoYuChatHost() {
+  useLocale();
   return <XiaoYuChatProvider><Outlet /></XiaoYuChatProvider>;
 }

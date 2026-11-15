@@ -115,6 +115,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "school_system.middleware.SecurityHeadersMiddleware",
     "users.accounts.middleware.AccountSessionMiddleware",
+    "core.interface_language.InterfaceLanguageMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",

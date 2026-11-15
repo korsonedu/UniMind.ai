@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import React from 'react';
 import { getVisualRenderer, type VisualData } from '@/pages/xiaoyu/visuals';
 import '@/styles/visual-cards.css';
@@ -8,8 +9,9 @@ interface InlineVisualCardProps {
 }
 
 export const InlineVisualCard: React.FC<InlineVisualCardProps> = React.memo(({ visual }) => {
+  useLocale();
   const Renderer = getVisualRenderer(visual.type);
-  if (!Renderer) return <p className="um-visual-unavailable">暂时无法展示此内容。</p>;
+  if (!Renderer) return <p className="um-visual-unavailable">{t('暂时无法展示此内容。')}</p>;
   const payload = visual.payload as Record<string, unknown> | undefined;
   if (visual.type === 'action_cards' && (!payload || !(payload.cards as unknown[])?.length)) return null;
 

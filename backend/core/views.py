@@ -472,6 +472,7 @@ class LegalDocumentView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, doc_type):
+        from .legal_reference import with_reference_translation
         if doc_type not in dict(LegalDocument.DOC_TYPE_CHOICES):
             return Response({'error': '无效的文档类型'}, status=404)
 
@@ -488,16 +489,16 @@ class LegalDocumentView(APIView):
             fallback = _LEGAL_FALLBACK.get(doc_type)
             if not fallback:
                 return Response({'error': '文档不存在'}, status=404)
-            return Response(fallback)
+            return Response(with_reference_translation(fallback))
 
-        return Response({
+        return Response(with_reference_translation({
             'doc_type': doc.doc_type,
             'doc_type_display': doc.get_doc_type_display(),
             'version': doc.version,
             'title': doc.title,
             'content': doc.content,
             'effective_date': str(doc.effective_date),
-        })
+        }))
 
 
 class LegalDocumentListView(APIView):

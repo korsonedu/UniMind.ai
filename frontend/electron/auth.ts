@@ -1,3 +1,4 @@
+import { getNativeLanguage } from './language';
 import { session, shell } from 'electron';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
@@ -24,7 +25,7 @@ export class DesktopAuth {
     const response = await session.defaultSession.fetch(new URL(route, this.source).href, {
       method: body ? 'POST' : 'GET', credentials: 'include', redirect: 'error',
       signal: AbortSignal.any([attempt.controller.signal, AbortSignal.timeout(15000)]),
-      headers: { 'Accept': 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      headers: { 'Accept': 'application/json', 'Accept-Language': getNativeLanguage(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
       ...(body ? { body: JSON.stringify(body) } : {}),
     }).catch(() => { throw new Error('暂时无法连接登录服务，请检查网络后重试'); });
     if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? '登录确认已失效，请重新开始' : '登录服务暂时不可用，请稍后重试');
@@ -55,6 +56,7 @@ export class DesktopAuth {
       if (!result || typeof result.request_id !== 'string' || !token.test(result.request_id) || result.expires_in !== 180) throw new Error('登录服务返回了无效请求，请重试');
       const browser = new URL('/desktop-auth', this.source);
       browser.searchParams.set('request', result.request_id);
+      browser.searchParams.set('ui_language', getNativeLanguage());
       attempt.browserUrl = browser.href;
       this.publish({ status: 'waiting', expiresAt: attempt.expiresAt });
       await shell.openExternal(browser.href).catch(() => { throw new Error('无法打开系统浏览器，请检查默认浏览器设置后重试'); });

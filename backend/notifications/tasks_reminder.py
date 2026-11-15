@@ -1,12 +1,14 @@
 from datetime import timedelta
 from celery import shared_task
 from django.utils import timezone
+from core.interface_language import ui_text
+from .messages import notification_text
 
 
 @shared_task
 def send_due_review_reminders():
     """定期检查学生到期复习题，超过阈值时通知"""
-    from users.models import InstitutionNotificationConfig
+    from users.models_commercial import InstitutionNotificationConfig
     from ai_assistant.services.memory_system import MemorySystem
     from core.email_service import send_email
 
@@ -31,15 +33,12 @@ def send_due_review_reminders():
             kp_names = list(set(
                 r.get('kp_name', '') for r in due.get('reviews', [])[:5] if r.get('kp_name')
             ))
-            kp_hint = '、'.join(kp_names[:3]) if kp_names else '多个知识点'
+            language = student.preferred_language or 'zh-CN'
+            kp_hint = (', ' if language == 'en' else '、').join(kp_names[:3]) if kp_names else ui_text('多个知识点', language)
 
-            subject = f'UniMind 复习提醒：你有 {due_count} 道题到期了'
-            body = (
-                f'Hi {student.get_full_name() or student.username}，\n\n'
-                f'你有 {due_count} 道到期复习题，涉及 {kp_hint}。\n\n'
-                f'打开 UniMind 和小宇对话，他会帮你开始复习。\n\n'
-                f'UniMind.ai'
-            )
+            subject = ui_text('UniMind 复习提醒：你有 {0} 道题到期了', language).format(due_count)
+            body = ui_text('Hi {0}，\n\n你有 {1} 道到期复习题，涉及 {2}。\n\n打开 UniMind 和小宇对话，他会帮你开始复习。\n\nUniMind.ai', language).format(
+                student.get_full_name() or student.username, due_count, kp_hint)
 
             try:
                 if config.channel == 'email':
@@ -155,10 +154,12 @@ def send_notification_email(notification_id: int):
     if not user.email or not getattr(user, 'email_notifications', True):
         return f'User {user.id} email notifications disabled or no email'
 
-    subject = f'UniMind — {notif.title}'
-    body = f'{notif.content}\n\n— UniMind 通知'
+    language = user.preferred_language or 'zh-CN'
+    title, content = notification_text(notif, language)
+    subject = f'UniMind — {title}'
+    body = content + '\n\n' + ui_text('— UniMind 通知', language)
     if notif.link:
-        body += f'\n查看详情：{notif.link}'
+        body += '\n' + ui_text('查看详情：', language) + notif.link
 
     try:
         send_email(user.email, subject, body)

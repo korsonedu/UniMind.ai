@@ -1,3 +1,5 @@
+import { getLocale, t, useLocale } from '@/i18n';
+import { saveLanguagePreference } from '@/lib/languagePreference';
 import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { registerSW } from 'virtual:pwa-register';
@@ -135,6 +137,7 @@ const legacyRoutes = [
 ];
 
 const RootRedirect = () => {
+  useLocale();
 
   const storeUser = useAuthStore(s => s.user);
   const setAuth = useAuthStore(s => s.setAuth);
@@ -152,7 +155,13 @@ const RootRedirect = () => {
 
   // Sync auth store with query result
   useEffect(() => {
-    if (userData && !isError) setAuth(userData, null);
+    if (userData && !isError) {
+      setAuth(userData, null);
+      if (userData.preferred_language === '') {
+        const language = getLocale();
+        void saveLanguagePreference(language, userData.id).catch(() => {});
+      }
+    }
   }, [userData, isError, setAuth]);
 
   // A network failure may keep the desktop offline session; only a 401 logs out.
@@ -177,16 +186,16 @@ const RootRedirect = () => {
   // Anonymous visitors see the landing immediately; /users/me/ keeps validating in the background.
   const anonymousLanding = hasHydrated && !storeUser && location.pathname === '/' && !window.unimindDesktop;
 
-  if (!hasHydrated || (isLoading && !anonymousLanding)) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
+  if (!hasHydrated || (isLoading && !anonymousLanding)) return <Loading message={t('正在验证登录状态…')} fullScreen size="lg" />;
 
   if (userData && !isError) {
-    if (storeUser?.id !== userData.id) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
+    if (storeUser?.id !== userData.id) return <Loading message={t('正在验证登录状态…')} fullScreen size="lg" />;
     return <Outlet />;
   }
 
   if (isError && window.unimindDesktop && storeUser && !(axios.isAxiosError(error) && error.response?.status === 401)) {
     if (offlineAccess?.userId === storeUser.id && offlineAccess.error === error) return <Outlet />;
-    return <Loading message="正在确认离线访问权限…" fullScreen size="lg" />;
+    return <Loading message={t('正在确认离线访问权限…')} fullScreen size="lg" />;
   }
 
   if (location.pathname !== '/') return <Navigate to={getLoginPath(location.pathname + location.search + location.hash)} replace />;

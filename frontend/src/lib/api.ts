@@ -1,3 +1,4 @@
+import { getLocale, t } from '@/i18n';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { getLoginPath } from './routing';
@@ -26,6 +27,7 @@ export function setPreviewInstitutionId(id: number | null) { _previewInstitution
 export function getPreviewInstitutionId() { return _previewInstitutionId; }
 
 api.interceptors.request.use(async (config) => {
+  if (!config.headers.has('Accept-Language')) config.headers.set('Accept-Language', getLocale());
   // Auth via httpOnly cookie (CookieTokenAuthentication) — no Authorization header needed
   if (!['get', 'head', 'options'].includes(config.method?.toLowerCase() || 'get')) {
     config.headers.set('X-CSRFToken', await getCsrfToken());
@@ -66,9 +68,9 @@ api.interceptors.response.use(
       return api(config);
     }
     if (axios.isAxiosError(error) && error.code === 'ERR_NETWORK') {
-      toast.error('网络连接失败', {
+      toast.error(t('网络连接失败'), {
         id: 'network-connection-error',
-        description: '再试一次，反正时间是一种幻觉。——《银河搭车客指南》',
+        description: t('再试一次，反正时间是一种幻觉。——《银河搭车客指南》'),
         classNames: { description: 'italic text-muted-foreground' },
       });
     }
@@ -94,6 +96,7 @@ export async function streamFetch(
 ): Promise<{ url: string; init: RequestInit }> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'Accept-Language': getLocale(),
     'X-CSRFToken': await getCsrfToken(),
     ...extraHeaders,
   };

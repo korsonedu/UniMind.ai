@@ -1,8 +1,9 @@
+{% load interface_language i18n %}{% get_current_language as language %}
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="{{ language }}">
 <head>
 <meta charset="utf-8">
-<title>成绩报告 - {{ data.student.nickname }}</title>
+<title>{{ "成绩报告"|ui }} - {{ data.student.nickname }}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; color: #1a1a2e; line-height: 1.6; padding: 32px; }
@@ -23,46 +24,46 @@
 </head>
 <body>
 
-<h1>📊 学习成绩报告</h1>
-<p class="subtitle">{{ data.student.nickname }} · ELO {{ data.student.elo_score }} · 加入于 {{ data.student.date_joined|slice:":10" }}</p>
+<h1>📊 {{ "学习成绩报告"|ui }}</h1>
+<p class="subtitle">{{ data.student.nickname }} · ELO {{ data.student.elo_score }} · {{ "加入于"|ui }} {{ data.student.date_joined|slice:":10" }}</p>
 
 <!-- 统计卡 -->
 <div class="grid-3">
   <div class="stat">
     <div class="value">{{ data.stats.total_attempted }}</div>
-    <div class="label">累计答题</div>
+    <div class="label">{{ "累计答题"|ui }}</div>
   </div>
   <div class="stat">
     <div class="value">{% if data.stats.has_attempts %}{{ data.stats.last_accuracy }}%{% else %}—{% endif %}</div>
-    <div class="label">最近作答正确率</div>
+    <div class="label">{{ "最近作答正确率"|ui }}</div>
   </div>
   <div class="stat">
-    <div class="value">{{ data.stats.study_streak }} 天</div>
-    <div class="label">连续学习</div>
+    <div class="value">{{ data.stats.study_streak }} {{ "天"|ui }}</div>
+    <div class="label">{{ "连续学习"|ui }}</div>
   </div>
 </div>
 
 <div class="grid-3">
   <div class="stat">
     <div class="value">{{ data.stats.diagnostic_mastered_count }}/{{ data.stats.diagnostic_kp_count }}</div>
-    <div class="label">诊断掌握知识点</div>
+    <div class="label">{{ "诊断掌握知识点"|ui }}</div>
   </div>
   <div class="stat">
     <div class="value">{{ data.stats.checkin_streak }}</div>
-    <div class="label">连续签到</div>
+    <div class="label">{{ "连续签到"|ui }}</div>
   </div>
   <div class="stat">
     <div class="value">{{ data.achievements|length }}</div>
-    <div class="label">已解锁成就</div>
+    <div class="label">{{ "已解锁成就"|ui }}</div>
   </div>
 </div>
 
 <!-- 知识点掌握 -->
 {% if data.radar %}
 <div class="card">
-  <h2>📚 知识点掌握度（基于诊断）</h2>
+  <h2>📚 {{ "知识点掌握度（基于诊断）"|ui }}</h2>
   <table>
-    <tr><th>学科</th><th>平均掌握度</th><th>知识点数</th></tr>
+    <tr><th>{{ "学科"|ui }}</th><th>{{ "平均掌握度"|ui }}</th><th>{{ "知识点数"|ui }}</th></tr>
     {% for r in data.radar %}
     <tr>
       <td>{{ r.subject }}</td>
@@ -77,9 +78,9 @@
 <!-- 考试成绩 -->
 {% if data.exams %}
 <div class="card">
-  <h2>📝 最近考试成绩</h2>
+  <h2>📝 {{ "最近考试成绩"|ui }}</h2>
   <table>
-    <tr><th>日期</th><th>得分</th><th>百分比</th><th>ELO 变化</th></tr>
+    <tr><th>{{ "日期"|ui }}</th><th>{{ "得分"|ui }}</th><th>{{ "百分比"|ui }}</th><th>{{ "ELO 变化"|ui }}</th></tr>
     {% for e in data.exams|slice:":10" %}
     <tr>
       <td>{{ e.created_at|slice:":10" }}</td>
@@ -95,14 +96,14 @@
 <!-- 成就 -->
 {% if data.achievements %}
 <div class="card">
-  <h2>🏆 已解锁成就</h2>
+  <h2>🏆 {{ "已解锁成就"|ui }}</h2>
   {% for a in data.achievements %}
-  <span class="achievement">{{ a.icon }} {{ a.name }}</span>
+  <span class="achievement">{{ a.icon }} {{ a.name|ui }}</span>
   {% endfor %}
 </div>
 {% endif %}
 
-<div class="footer">由 UniMind.ai 自动生成 · {{ data.student.nickname }} · 成绩报告</div>
+<div class="footer">{{ "由 UniMind.ai 自动生成"|ui }} · {{ data.student.nickname }} · {{ "成绩报告"|ui }}</div>
 
 </body>
 </html>

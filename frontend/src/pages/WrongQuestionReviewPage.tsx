@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useCallback } from 'react';
 import '@/styles/practice.css';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -19,6 +20,7 @@ type DrillItem = {
 };
 
 export const WrongQuestionReviewPage: React.FC = () => {
+  useLocale();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -32,7 +34,7 @@ export const WrongQuestionReviewPage: React.FC = () => {
     })
       .catch((e: unknown) => {
         setError(true);
-        toast.error(formatApiErrorToast(e, '错题复盘加载失败'));
+        toast.error(formatApiErrorToast(e, t('错题复盘加载失败')));
       })
       .finally(() => {
         setLoading(false);
@@ -55,7 +57,7 @@ export const WrongQuestionReviewPage: React.FC = () => {
 
   const startDrill = (drill: DrillItem) => {
     if (!drill.question_ids?.length) {
-      toast.info('当前专项暂无可训练题目');
+      toast.info(t('当前专项暂无可训练题目'));
       return;
     }
     const ids = drill.question_ids.join(',');
@@ -63,51 +65,51 @@ export const WrongQuestionReviewPage: React.FC = () => {
   };
 
   return (
-    <PageWrapper title="错题复盘">
+    <PageWrapper title={t('错题复盘')}>
       <div className="um-practice-home um-practice-review">
-        <Link className="um-practice-back" to="/tests"><ArrowLeft size={15} />返回练习</Link>
+        <Link className="um-practice-back" to="/tests"><ArrowLeft size={15} />{t('返回练习')}</Link>
         <header className="um-practice-heading">
-          <h1>错题复盘</h1>
-          <Button variant="ghost" disabled={loading} onClick={refreshFetchInsights}><ArrowClockwise size={16} />刷新</Button>
+          <h1>{t('错题复盘')}</h1>
+          <Button variant="ghost" disabled={loading} onClick={refreshFetchInsights}><ArrowClockwise size={16} />{t('刷新')}</Button>
         </header>
-        {loading ? <p className="um-practice-state" role="status"><Spinner size={18} className="animate-spin" />正在读取错题…</p> : error ? <p className="um-practice-state" role="alert">错题数据加载失败，请点击刷新重试。</p> : <>
+        {loading ? <p className="um-practice-state" role="status"><Spinner size={18} className="animate-spin" />{t('正在读取错题…')}</p> : error ? <p className="um-practice-state" role="alert">{t('错题数据加载失败，请点击刷新重试。')}</p> : <>
           <dl className="um-practice-summary">
-            <div><dt>错题总数</dt><dd>{overview.wrong_questions || 0}<small> 题</small></dd></div>
-            <div><dt>累计错误次数</dt><dd>{overview.wrong_attempts || 0}<small> 次</small></dd></div>
-            <div><dt>可练专项</dt><dd>{drills.length}<small> 项</small></dd></div>
+            <div><dt>{t('错题总数')}</dt><dd>{overview.wrong_questions || 0}<small> {t('题')}</small></dd></div>
+            <div><dt>{t('累计错误次数')}</dt><dd>{overview.wrong_attempts || 0}<small> {t('次')}</small></dd></div>
+            <div><dt>{t('可练专项')}</dt><dd>{drills.length}<small> {t('项')}</small></dd></div>
           </dl>
-          <section className="um-practice-drills" aria-label="专项训练">
-            <h2>专项训练</h2>
-            {!drills.length ? <div className="um-review-empty"><p>暂无可训练专项</p><Link to="/tests">去做题<ArrowRight size={15} /></Link></div> : <div className="um-review-drill-groups">
+          <section className="um-practice-drills" aria-label={t('专项训练')}>
+            <h2>{t('专项训练')}</h2>
+            {!drills.length ? <div className="um-review-empty"><p>{t('暂无可训练专项')}</p><Link to="/tests">{t('去做题')}<ArrowRight size={15} /></Link></div> : <div className="um-review-drill-groups">
               {(['cause', 'knowledge_point'] as const).map(type => {
                 const group = drills.filter(drill => drill.drill_type === type);
                 if (!group.length) return null;
-                return <section key={type} aria-label={type === 'cause' ? '错因专项' : '考点专项'}>
-                  <h3 className="um-review-group-title">{type === 'cause' ? '错因专项' : '考点专项'}</h3>
+                return <section key={type} aria-label={type === 'cause' ? t('错因专项') : t('考点专项')}>
+                  <h3 className="um-review-group-title">{type === 'cause' ? t('错因专项') : t('考点专项')}</h3>
                   <ul>{group.map(drill => <li key={`${type}-${drill.drill_key}`}>
-                    <div><h3>{drill.drill_label}</h3><p>本轮 {drill.question_ids.length} 题</p></div>
-                    <Button variant="ghost" aria-label={`练习${drill.drill_label}`} onClick={() => startDrill(drill)}>去做题<ArrowRight size={15} /></Button>
+                    <div><h3>{drill.drill_label}</h3><p>{t('本轮')} {drill.question_ids.length} {t('题')}</p></div>
+                    <Button variant="ghost" aria-label={t('练习{0}', { 0: drill.drill_label })} onClick={() => startDrill(drill)}>{t('去做题')}<ArrowRight size={15} /></Button>
                   </li>)}</ul>
                 </section>;
               })}
             </div>}
           </section>
           <div className="um-practice-breakdowns">
-            <section aria-label="按错因复盘">
-              <header><h2>错因分布</h2><span>错题占比</span></header>
-              {!causeBreakdown.length && <p className="um-practice-muted">暂无错因数据</p>}
+            <section aria-label={t('按错因复盘')}>
+              <header><h2>{t('错因分布')}</h2><span>{t('错题占比')}</span></header>
+              {!causeBreakdown.length && <p className="um-practice-muted">{t('暂无错因数据')}</p>}
               <ul>{causeBreakdown.map((item) => <li className="um-review-cause" key={item.cause_key}>
                 <div className="um-review-cause-heading"><h3>{item.cause_label}</h3><span>{Math.round((item.ratio || 0) * 100)}%</span></div>
-                <progress value={item.ratio || 0} max={1} aria-label={`${item.cause_label}错题占比`} />
-                <p>{item.question_count} 道错题 · 累计错 {item.wrong_attempts} 次</p>
+                <progress value={item.ratio || 0} max={1} aria-label={t('{0}错题占比', { 0: item.cause_label })} />
+                <p>{item.question_count} {t('道错题 · 累计错')} {item.wrong_attempts} {t('次')}</p>
               </li>)}</ul>
             </section>
-            <section aria-label="按考点复盘">
-              <header><h2>考点分布</h2><span>错题数</span></header>
-              {!kpBreakdown.length && <p className="um-practice-muted">暂无考点数据</p>}
+            <section aria-label={t('按考点复盘')}>
+              <header><h2>{t('考点分布')}</h2><span>{t('错题数')}</span></header>
+              {!kpBreakdown.length && <p className="um-practice-muted">{t('暂无考点数据')}</p>}
               <ul>{kpBreakdown.map((item) => <li key={`${item.knowledge_point_id || 'unknown'}-${item.knowledge_point_name}`}>
-                <div><h3>{item.knowledge_point_name}</h3><p>平均错 {item.avg_wrong_count} 次</p></div>
-                <span className="um-review-kp-count">{item.question_count}<small> 题</small></span>
+                <div><h3>{item.knowledge_point_name}</h3><p>{t('平均错')} {item.avg_wrong_count} {t('次')}</p></div>
+                <span className="um-review-kp-count">{item.question_count}<small> {t('题')}</small></span>
               </li>)}</ul>
             </section>
           </div>

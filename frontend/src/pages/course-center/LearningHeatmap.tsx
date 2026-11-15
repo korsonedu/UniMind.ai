@@ -1,3 +1,4 @@
+import { getLocale, t, useLocale } from '@/i18n';
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
 import { Collapse } from '@/components/ui/collapse';
@@ -7,7 +8,8 @@ import { dateOffset, learningDuration } from './learningDates';
 const activityLevel = (seconds: number) => seconds <= 0 ? 0 : seconds >= 3600 ? 4 : seconds >= 1800 ? 3 : seconds >= 600 ? 2 : 1;
 
 function ActivityLegend() {
-  return <div className="um-activity-legend" aria-label="灰色代表无观看时长，绿色越深代表时长越长"><span>少</span>{[0, 1, 2, 3, 4].map(level => <i key={level} data-level={level} aria-hidden="true" />)}<span>多</span></div>;
+  useLocale();
+  return <div className="um-activity-legend" aria-label={t('灰色代表无观看时长，绿色越深代表时长越长')}><span>{t('少')}</span>{[0, 1, 2, 3, 4].map(level => <i key={level} data-level={level} aria-hidden="true" />)}<span>{t('多')}</span></div>;
 }
 
 interface DayActivity { seconds: number; completions: number; }
@@ -23,6 +25,7 @@ const ActivityCell = memo(function ActivityCell({ date, index, label, level, sel
 });
 
 const CalendarHeatmap = memo(function CalendarHeatmap({ today, days }: { today: string; days: LearningDay[] }) {
+  useLocale();
   const [mode, setMode] = useState<'day' | 'week'>('day');
   const [selected, setSelected] = useState(today);
   const chartId = useId();
@@ -55,12 +58,12 @@ const CalendarHeatmap = memo(function CalendarHeatmap({ today, days }: { today: 
         const value = byDate.get(date);
         return { seconds: sum.seconds + (value?.seconds || 0), completions: sum.completions + (value?.completions || 0) };
       }, { seconds: 0, completions: 0 });
-      const week = `${weekDates[0]} 至 ${weekDates[weekDates.length - 1]} · ${learningDuration(total.seconds)} · 完成 ${total.completions} 门`;
+      const week = t('{0} 至 {1} · {2} · 完成 {3} 门', { 0: weekDates[0], 1: weekDates[weekDates.length - 1], 2: learningDuration(total.seconds), 3: total.completions });
       weekDates.forEach(date => {
         const value = byDate.get(date);
         const level = activityLevel(value?.seconds || 0);
         if (level) activeDays++;
-        summaries.set(date, { day: `${date} · ${learningDuration(value?.seconds || 0)} · 完成 ${value?.completions || 0} 门`, week, level });
+        summaries.set(date, { day: t('{0} · {1} · 完成 {2} 门', { 0: date, 1: learningDuration(value?.seconds || 0), 2: value?.completions || 0 }), week, level });
       });
     }
     return { dates, weeks, yearStart, summaries, activeDays };
@@ -79,13 +82,13 @@ const CalendarHeatmap = memo(function CalendarHeatmap({ today, days }: { today: 
     event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-day-index="${next}"]`)?.focus();
   }, [dates, today, yearStart]);
   return <div className="um-activity-overall" style={{ '--heat-weeks': weeks } as CSSProperties}>
-    <div className="um-course-section-heading"><div><h2>学习活动</h2><p>近一年 · {activeDays} 天有听课记录</p></div><div className="um-segmented" role="group" aria-label="学习活动统计范围"><button type="button" aria-pressed={mode === 'day'} onClick={() => setMode('day')}>按天</button><button type="button" aria-pressed={mode === 'week'} onClick={() => setMode('week')}>按周</button></div></div>
-    <p className="sr-only">每个方格代表一天，共 365 天。颜色表示当天听课时长。按周统计周一至周日的记录，边界周只统计图中日期。可以悬停、点击或用方向键查看。</p>
+    <div className="um-course-section-heading"><div><h2>{t('学习活动')}</h2><p>{t('近一年 ·')} {activeDays} {t('天有听课记录')}</p></div><div className="um-segmented" role="group" aria-label={t('学习活动统计范围')}><button type="button" aria-pressed={mode === 'day'} onClick={() => setMode('day')}>{t('按天')}</button><button type="button" aria-pressed={mode === 'week'} onClick={() => setMode('week')}>{t('按周')}</button></div></div>
+    <p className="sr-only">{t('每个方格代表一天，共 365 天。颜色表示当天听课时长。按周统计周一至周日的记录，边界周只统计图中日期。可以悬停、点击或用方向键查看。')}</p>
     <div className="um-heatmap-scroll" ref={scrollElement}>
       <div className="um-heatmap-layout">
-        <div className="um-heatmap-weekdays" aria-hidden="true"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
-        <div className="um-heatmap-months" aria-hidden="true">{Array.from({ length: weeks }, (_, index) => { const date = dates[index * 7]; return <span key={date}>{index === 0 || date.slice(5, 7) !== dates[(index - 1) * 7].slice(5, 7) ? `${Number(date.slice(5, 7))}月` : ''}</span>; })}</div>
-        <div className="um-heatmap-grid" role="group" aria-label="全年每日学习热力图">{dates.map((date, index) => {
+        <div className="um-heatmap-weekdays" aria-hidden="true"><span>{t('一')}</span><span>{t('二')}</span><span>{t('三')}</span><span>{t('四')}</span><span>{t('五')}</span><span>{t('六')}</span><span>{t('日')}</span></div>
+        <div className="um-heatmap-months" aria-hidden="true">{Array.from({ length: weeks }, (_, index) => { const date = dates[index * 7]; return <span key={date}>{index === 0 || date.slice(5, 7) !== dates[(index - 1) * 7].slice(5, 7) ? t('{0}月', { 0: Number(date.slice(5, 7)) }) : ''}</span>; })}</div>
+        <div className="um-heatmap-grid" role="group" aria-label={t('全年每日学习热力图')}>{dates.map((date, index) => {
           const value = summaries.get(date);
           if (!value) return <span key={date} aria-hidden="true" />;
           const isSelected = mode === 'week' ? Math.floor(index / 7) === selectedWeek : date === selectedDate;
@@ -116,10 +119,10 @@ const ActivityStrip = memo(function ActivityStrip({ row, selectedDate, detailId,
   row: ActivityRow; selectedDate: string | null; detailId: string;
   onSelect: (subject: string, date: string) => void;
 }) {
-  return <div className="um-activity-strip" role="group" aria-label={`${row.name}每日观看时长`}>
+  return <div className="um-activity-strip" role="group" aria-label={t('{0}每日观看时长', { 0: row.name })}>
     {row.values.map(({ date, seconds }, index) => <button
       type="button" key={date} data-day-index={index} data-level={activityLevel(seconds)}
-      aria-label={`${row.name} · ${date} · ${learningDuration(seconds)}`}
+      aria-label={`${t(row.name)} · ${date} · ${learningDuration(seconds)}`}
       title={`${date} · ${learningDuration(seconds)}`} aria-describedby={detailId}
       aria-pressed={date === selectedDate} tabIndex={date === (selectedDate || row.values[row.values.length - 1].date) ? 0 : -1}
       onPointerEnter={() => onSelect(row.subject, date)} onFocus={() => onSelect(row.subject, date)}
@@ -129,6 +132,7 @@ const ActivityStrip = memo(function ActivityStrip({ row, selectedDate, detailId,
 });
 
 export const LearningHeatmap = memo(function LearningHeatmap({ today, days, courses }: { today: string; days: LearningDay[]; courses: Course[] }) {
+  const locale = useLocale();
   const [expanded, setExpanded] = useState(false);
   const [selected, setSelected] = useState({ subject: '', date: today });
   const chartId = useId();
@@ -159,27 +163,27 @@ export const LearningHeatmap = memo(function LearningHeatmap({ today, days, cour
       activeDays: [...values.values()].filter(seconds => seconds > 0).length,
     });
     return {
-      start, count, heatWeeks: Math.ceil((weekday(dateOffset(today, -364)) + 365) / 7), total: row('', '全部学科', totals),
-      subjects: [...bySubject].sort(([a], [b]) => a === '待归类学科' ? 1 : b === '待归类学科' ? -1 : a.localeCompare(b, 'zh-CN')).map(([name, values]) => row(name, name, values)),
+      start, count, heatWeeks: Math.ceil((weekday(dateOffset(today, -364)) + 365) / 7), total: row('', t('全部学科'), totals),
+      subjects: [...bySubject].sort(([a], [b]) => a === '待归类学科' ? 1 : b === '待归类学科' ? -1 : a.localeCompare(b, getLocale())).map(([name, values]) => row(name, name, values)),
     };
-  }, [today, days, courses]);
+  }, [today, days, courses, locale]);
   const rows = model.subjects;
   const selectedRow = rows.find(row => row.subject === selected.subject) || rows[0] || model.total;
   const selectedValue = selectedRow.values.find(value => value.date === selected.date) || selectedRow.values[model.count - 1];
-  return <section className="um-portal-card um-activity-card" aria-label="学习活动" style={{ '--heat-weeks': model.heatWeeks } as CSSProperties}>
+  return <section className="um-portal-card um-activity-card" aria-label={t('学习活动')} style={{ '--heat-weeks': model.heatWeeks } as CSSProperties}>
     <CalendarHeatmap today={today} days={days} />
-    <button type="button" className="um-activity-expand" aria-expanded={expanded} aria-controls={`${chartId}-subjects`} onClick={() => setExpanded(value => !value)}><CaretRight size={14} className="um-disclosure-chevron" /><span>{expanded ? '收起分学科学习情况' : '查看分学科学习情况'}</span></button>
+    <button type="button" className="um-activity-expand" aria-expanded={expanded} aria-controls={`${chartId}-subjects`} onClick={() => setExpanded(value => !value)}><CaretRight size={14} className="um-disclosure-chevron" /><span>{expanded ? t('收起分学科学习情况') : t('查看分学科学习情况')}</span></button>
     <Collapse open={expanded} id={`${chartId}-subjects`}>
     <div className="um-activity-subjects" style={{ '--activity-days': model.count } as CSSProperties}>
     <div className="um-activity-rows">
       {rows.map(row => <div className="um-activity-row" key={row.subject}>
         <div className="um-activity-row-heading">
-          <span className="um-activity-subject">{row.name}</span>
-          <span className="um-activity-summary">{row.activeDays} 天 · {learningDuration(row.seconds)}</span>
+          <span className="um-activity-subject">{t(row.name)}</span>
+          <span className="um-activity-summary">{row.activeDays} {t('天 ·')} {learningDuration(row.seconds)}</span>
         </div>
         <ActivityStrip row={row} selectedDate={row === selectedRow ? selectedValue.date : null} detailId={`${chartId}-detail`} onSelect={select} />
       </div>)}
-      <div className="um-activity-dates" aria-label="统计日期范围"><time dateTime={model.start}>{model.start}</time><time dateTime={today}>{today}</time></div>
+      <div className="um-activity-dates" aria-label={t('统计日期范围')}><time dateTime={model.start}>{model.start}</time><time dateTime={today}>{today}</time></div>
     </div>
     <div className="um-heatmap-footer"><p id={`${chartId}-detail`} aria-live="polite">{selectedRow.name} · {selectedValue.date} · {learningDuration(selectedValue.seconds)}</p><ActivityLegend /></div>
     </div>

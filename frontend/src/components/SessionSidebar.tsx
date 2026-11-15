@@ -1,3 +1,4 @@
+import { getLocale, t, useLocale } from '@/i18n';
 import React, { useState, useRef, useCallback } from 'react';
 import { ChatCircle, Plus, Trash, ClockCounterClockwise } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
@@ -24,10 +25,10 @@ function formatTime(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
   const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000);
-  if (diffDays === 0) return '今天';
-  if (diffDays === 1) return '昨天';
-  if (diffDays < 7) return `${diffDays} 天前`;
-  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+  if (diffDays === 0) return t('今天');
+  if (diffDays === 1) return t('昨天');
+  if (diffDays < 7) return t('{0} 天前', { 0: diffDays });
+  return d.toLocaleDateString(getLocale(), { month: 'short', day: 'numeric' });
 }
 
 export default function SessionSidebar({
@@ -39,6 +40,7 @@ export default function SessionSidebar({
   botDisplayName,
   defaultExpanded = true,
 }: SessionSidebarProps) {
+  useLocale();
   const [width, setWidth] = useState(() => defaultExpanded ? EXPANDED_W : COLLAPSED_W);
   const [dragging, setDragging] = useState(false);
   const dragStartX = useRef(0);
@@ -102,7 +104,7 @@ export default function SessionSidebar({
             'shrink-0 rounded-lg transition-colors text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted/60',
             expanded ? 'p-1.5' : 'p-1',
           )}
-          title="新对话"
+          title={t('新对话')}
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
@@ -114,7 +116,7 @@ export default function SessionSidebar({
           expanded && (
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
               <ChatCircle className="h-5 w-5 text-muted-foreground/15 mb-2" />
-              <p className="text-[11px] text-muted-foreground/35">暂无历史对话</p>
+              <p className="text-[11px] text-muted-foreground/35">{t('暂无历史对话')}</p>
             </div>
           )
         ) : (
@@ -152,8 +154,7 @@ export default function SessionSidebar({
                         {session.title || session.label}
                       </p>
                       <p className="text-[10px] text-muted-foreground/45 mt-0.5 whitespace-nowrap">
-                        {session.messages.length} 条消息
-                        {session.lastTime && (
+                        {session.messages.length} {t('条消息')}{session.lastTime && (
                           <> · {formatTime(session.lastTime)}</>
                         )}
                       </p>
@@ -168,7 +169,7 @@ export default function SessionSidebar({
                         onDelete(session);
                       }}
                       className="shrink-0 p-1 rounded text-muted-foreground/25 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                      title="删除对话"
+                      title={t('删除对话')}
                     >
                       <Trash className="h-3 w-3" />
                     </button>
