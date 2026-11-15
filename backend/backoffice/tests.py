@@ -9,7 +9,7 @@ from unittest import mock
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
-from rest_framework.authtoken.models import Token
+from users.login_sessions import LoginSession
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from core.models import SecurityAuditLog
@@ -50,7 +50,7 @@ class BackofficeTests(TestCase):
     def test_course_publication_smoke(self):
         CourseStudentStatus.objects.create(user=self.student, is_course_student=True)
         client = APIClient()
-        client.credentials(HTTP_AUTHORIZATION='Token ' + Token.objects.create(user=self.student).key)
+        client.credentials(HTTP_AUTHORIZATION='Token ' + LoginSession.issue(self.student).key)
         module = CourseModule.objects.create(subject='金融学', name='发布冒烟模块')
         created = self.call('courses.save', {'title': '发布冒烟课程', 'module': module.pk, 'is_published': True,
             'request_id': str(uuid.uuid4())})[0]
@@ -119,7 +119,7 @@ class BackofficeTests(TestCase):
         CourseStudentStatus.objects.create(user=self.student, is_course_student=True)
         profile = UserAccessProfile.objects.create(user=self.student, blocked_permissions=['unrelated.permission'])
         student_client = APIClient()
-        student_client.credentials(HTTP_AUTHORIZATION='Token ' + Token.objects.create(user=self.student).key)
+        student_client.credentials(HTTP_AUTHORIZATION='Token ' + LoginSession.issue(self.student).key)
         with tempfile.TemporaryDirectory() as directory, override_settings(
             MEDIA_ROOT=directory, OSS_ACCESS_KEY_ID='',
             STORAGES={'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'}},
@@ -304,7 +304,7 @@ class BackofficeTests(TestCase):
     def test_student_cannot_call_transcript_operations(self):
         course, transcript, _ = self.transcript_fixture()
         student_client = APIClient()
-        student_client.credentials(HTTP_AUTHORIZATION='Token ' + Token.objects.create(user=self.student).key)
+        student_client.credentials(HTTP_AUTHORIZATION='Token ' + LoginSession.issue(self.student).key)
         for operation, payload in (
             ('courses.transcript.get', {'id': course.pk}),
             ('courses.transcript.save', {'id': course.pk, 'revision': 0, 'segments': [],

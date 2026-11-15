@@ -18,7 +18,7 @@ class RetiredInstitutionView(APIView):
     permission_classes = [AllowAny]
 
     def _retired(self, request, *args, **kwargs):
-        return Response({'detail': '该入口已停用，请在科晟平台使用个人账号。'}, status=410)
+        return Response({'detail': '该入口已停用，请在 UniMind.ai 使用个人账号。'}, status=410)
 
     get = post = put = patch = delete = _retired
 

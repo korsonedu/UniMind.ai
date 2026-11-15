@@ -10,7 +10,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, Sp
 
 _DEFAULT_META = {
     'title': 'UniMind.ai 智能学习平台',
-    'description': '面向每一位学习者的学习平台，提供练习、错题复习、学习记录和 AI 对话。科晟智慧学员可获得课程配套服务。',
+    'description': 'UniMind.ai 智能学习平台，提供练习、错题复习、学习记录和 AI 对话。',
 }
 
 

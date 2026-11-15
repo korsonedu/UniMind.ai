@@ -2,6 +2,7 @@
 Channels WebSocket 认证中间件 — 从 auth_token cookie 解析独立登录会话，注入 scope["user"]。
 替代 channels.auth.AuthMiddlewareStack（后者读 Django session，但登录流程未写入 session）。
 """
+import asyncio
 import logging
 
 from channels.db import database_sync_to_async
@@ -19,7 +20,7 @@ def get_user_from_token(token_key: str):
     if not token_key:
         return None
 
-    token = LoginSession.resolve(token_key)
+    token = LoginSession.resolve(token_key, touch=False)
     return token.user if token else None
 
 
@@ -36,7 +37,24 @@ class TokenAuthMiddleware(BaseMiddleware):
         token_key = cookies.get("auth_token", "")
         scope = dict(scope)
         scope["user"] = await get_user_from_token(token_key) or AnonymousUser()
-        return await super().__call__(scope, receive, send)
+        if not scope['user'].is_authenticated:
+            return await super().__call__(scope, receive, send)
+
+        async def authenticated_receive():
+            while True:
+                try:
+                    message = await asyncio.wait_for(receive(), timeout=60)
+                except asyncio.TimeoutError:
+                    message = None
+                if message and message['type'] in {'websocket.connect', 'websocket.disconnect'}:
+                    return message
+                if not await get_user_from_token(token_key):
+                    await send({'type': 'websocket.close', 'code': 4001})
+                    return {'type': 'websocket.disconnect', 'code': 4001}
+                if message is not None:
+                    return message
+
+        return await super().__call__(scope, authenticated_receive, send)
 
 
 def TokenAuthMiddlewareStack(inner):

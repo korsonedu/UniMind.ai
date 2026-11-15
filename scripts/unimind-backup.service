@@ -3,6 +3,7 @@ Description=UniMind daily database backup
 Wants=unimind-backup.timer
 
 [Service]
+UMask=0077
 Type=oneshot
 User=root
 WorkingDirectory=/opt/unimind

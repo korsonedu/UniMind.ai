@@ -40,8 +40,8 @@ def complete_account_login(request, next_path):
     destination = urlsplit(next_path)
     query = parse_qs(destination.query)
     if destination.path == '/accounts/desktop/':
-        from .desktop import confirm
-        return confirm(request, request_id=query.get('request', [''])[0])
+        from .desktop import legacy_confirm
+        return legacy_confirm(request, request_id=query.get('request', [''])[0])
     if destination.path == '/accounts/unimind/':
         return finish_unimind_login(request, request.user, query.get('next', [None])[0])
     return redirect(next_path)
@@ -107,7 +107,7 @@ def account_reset_password(request):
     form = ResetPasswordForm(request.POST if request.method == 'POST' else None)
     if request.method == 'POST' and form.is_valid():
         try:
-            reset_account_password(**form.cleaned_data)
+            reset_account_password(request=request, **form.cleaned_data)
             return redirect('/accounts/login/?' + urlencode({'next': next_path, 'reset': '1'}))
         except ValidationError as exc:
             form.add_error(None, exc)

@@ -1,0 +1,14 @@
+.um-theme-switch { width: 192px; flex: 0 0 192px; user-select: none; }
+.um-theme-switch-mould { padding: 7px; border: 1px solid var(--um-color-border); border-radius: 34px; background: var(--um-surface-3); box-shadow: 0 1px 3px #181e3210, inset 0 1px 1px #ffffff30; }
+.um-theme-switch-track { position: relative; width: 176px; height: 50px; overflow: hidden; border-radius: 25px; background: white; box-shadow: 0 0 0 1px #ffffff80, 0 2px 4px #0005 inset; cursor: ew-resize; touch-action: pan-y; }
+.um-theme-switch-mould[data-night='true'] .um-theme-switch-track { background: #252733; box-shadow: 0 0 0 1px #171922, 0 2px 4px #0007 inset; }
+.um-theme-switch-track::after { content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; box-shadow: inset 0 1px 3px #10152d60, inset 0 -1px 1px #ffffff30; }
+.um-theme-switch-track canvas { display: block; width: 176px; height: 50px; pointer-events: none; }
+.um-theme-switch-labels { display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 2px; margin-top: 9px; }
+.um-theme-switch .um-theme-switch-labels label { position: relative; display: flex; align-items: center; justify-content: center; gap: 3px; min-height: 28px; border-radius: 6px; font-size: 11px; font-weight: 400; color: var(--um-color-text-muted); cursor: pointer; white-space: nowrap; }
+.um-theme-switch .um-theme-switch-labels label[data-selected='true'] { color: var(--um-color-text); font-weight: 500; }
+.um-theme-switch .um-theme-switch-labels label:has(input:focus-visible) .um-theme-switch-label-content::after { content: ''; position: absolute; left: 0; right: 0; bottom: -5px; height: 1px; background: currentColor; }
+.um-theme-switch .um-theme-switch-labels input { position: absolute; width: 1px; height: 1px; opacity: 0; clip-path: inset(50%); }
+.um-theme-switch-label-content { position: relative; display: inline-flex; align-items: center; gap: 3px; }
+.um-theme-switch-label-content > span { font-size: 13px; line-height: 1; }
+@media (max-width: 767px) { .um-theme-switch .um-theme-switch-labels label { min-height: 36px; } }

@@ -32,8 +32,7 @@
 }
 
 .um-course-search:focus-within,
-.um-agent-search:focus-within,
-.notes-search:focus-within {
+.um-agent-search:focus-within {
   outline: none;
   box-shadow: var(--um-focus-shadow);
 }
@@ -54,7 +53,8 @@
 }
 
 .um-native-agent :is(.um-agent-search input, .um-agent-composer textarea, .um-agent-chat-input textarea):focus-visible,
-.notes-workspace .notes-search input:focus-visible {
+.notes-workspace :is(input, textarea, .notes-prose):focus,
+.notes-workspace .notes-search:focus-within {
   outline: none;
   box-shadow: none;
 }

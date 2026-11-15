@@ -1,0 +1,11 @@
+/opt/unimind/backend/logs/api_access.log /opt/unimind/backend/logs/security.log {
+    daily
+    rotate 200
+    dateext
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 root www-data
+    su root www-data
+}
