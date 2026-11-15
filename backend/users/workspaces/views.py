@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Max, Sum
@@ -49,17 +50,22 @@ def audit(user, workspace, action, detail=''):
     InstitutionAuditLog.objects.create(institution=workspace.institution, operator=user, action=action, detail=detail)
 
 
+def processing_stalled(link):
+    return link.processing_status in ('pending', 'processing') and link.updated_at < timezone.now() - timedelta(seconds=5500)
+
+
 def course_row(link, include_content=True):
     course = link.course
     transcript = getattr(course, 'transcript', None)
     seconds = transcript.segments.aggregate(end=Max('end_time'))['end'] if transcript else None
+    processing_status = 'failed' if processing_stalled(link) else link.processing_status
     ready = bool(transcript and transcript.asr_status == 'completed' and link.processing_status == 'completed'
                  and link.transcript_revision == transcript.revision)
     result = {'id': course.pk, 'title': course.title, 'module': course.module.name if course.module else '',
               'duration': f'{int(seconds) // 60}:{int(seconds) % 60:02d}' if seconds else '待处理',
               'filename': Path(course.video_file.name).name if course.video_file else '',
-              'status': 'published' if course.is_published else 'draft' if ready else 'failed' if link.processing_status == 'failed' else 'processing',
-              'processing_status': link.processing_status, 'error_message': link.error_message,
+              'status': 'published' if course.is_published else 'draft' if ready else 'failed' if processing_status == 'failed' else 'processing',
+              'processing_status': processing_status, 'error_message': '处理任务超时，请重试。' if processing_stalled(link) else link.error_message,
               'transcript': transcript.full_text if transcript and include_content else '',
               'knowledge': link.knowledge if ready else []}
     return result
@@ -283,7 +289,7 @@ class CourseDetailView(APIView):
         if 'status' not in values and not values.get('retry'):
             raise ValidationError('请选择发布状态或重试操作。')
         if values.get('retry'):
-            if link.processing_status == 'processing':
+            if link.processing_status == 'processing' and not processing_stalled(link):
                 raise ValidationError('课程正在处理中，请稍后再试。')
             course.is_published = False
             course.save(update_fields=['is_published', 'updated_at'])

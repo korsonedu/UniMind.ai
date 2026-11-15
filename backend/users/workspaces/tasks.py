@@ -93,9 +93,3 @@ def process_course(self, link_id):
             processing_status='failed', error_message='ASR 或知识结构构建失败，请重试。', updated_at=timezone.now())
         raise self.retry(exc=exc)
 
-
-@shared_task
-def recover_stalled_courses():
-    WorkspaceCourse.objects.filter(processing_status__in=['pending', 'processing'],
-        updated_at__lt=timezone.now() - timedelta(seconds=5500)).update(
-            processing_status='failed', error_message='处理任务超时，请重试。', updated_at=timezone.now())
