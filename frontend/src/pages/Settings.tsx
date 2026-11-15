@@ -148,7 +148,7 @@ export const Settings: React.FC = () => {
           <footer className="um-settings-footer"><Button type="submit" disabled={!!busy}><FloppyDisk size={16} />{busy === 'profile' ? t('保存中…') : t('保存个人资料')}</Button></footer>
         </form>}
         {current?.id === 'appearance' && <>
-          <section className="um-settings-group"><div className="um-settings-row"><LanguageSelect /></div></section>
+          <section className="um-settings-group"><div className="um-settings-row"><div><label htmlFor="settings-language">{t('语言')}</label></div><LanguageSelect variant="field" id="settings-language" /></div></section>
           <section className="um-settings-appearance" aria-labelledby="settings-appearance">
             <div><h3 id="settings-appearance">{t('界面外观')}</h3></div>
             <ThemeSceneSwitch value={theme} onChange={setTheme} reduceMotion={reduceMotion} />
