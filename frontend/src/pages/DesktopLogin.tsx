@@ -1,3 +1,5 @@
+import { queryClient } from '@/lib/queryClient';
+import { queryKeys } from '@/lib/queryKeys';
 import { t, useLocale } from '@/i18n';
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -38,6 +40,7 @@ export function DesktopLogin() {
       withCredentials: true, signal: controller.signal, timeout: 15000,
     }).then(({ data }) => {
       if (controller.signal.aborted) return;
+      queryClient.setQueryData(queryKeys.user.me, data);
       useAuthStore.getState().setAuth(data, null);
       navigate(returnTo, { replace: true });
     }).catch(async error => {
