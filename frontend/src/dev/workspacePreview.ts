@@ -15,7 +15,7 @@ const initial = (): WorkspaceSnapshot => ({
   invites: [{ id: 1, code: 'LEARN2027', name: '2027 金融基础班', courses: [1, 2], expires_at: '2026-12-31', service_ends_at: '2027-06-30', max_uses: 50, used_count: 5, active: true }],
   usage: [{ label: '课程处理时长', used: 116, limit: 1200, unit: '分钟' }, { label: '学生服务名额', used: 5, limit: 50, unit: '人' }, { label: '学习问答', used: 168, limit: 5000, unit: '次' }, { label: '文件存储', used: 3.2, limit: 50, unit: 'GB' }],
 });
-let state: WorkspaceSnapshot & { grantedCourses?: number[] } = stored && !mode ? JSON.parse(stored) : initial();
+const state: WorkspaceSnapshot & { grantedCourses?: number[] } = stored && !mode ? JSON.parse(stored) : initial();
 const save = () => sessionStorage.setItem('unimind-workspace-fixture', JSON.stringify(state));
 if (mode) save();
 const visible = (): WorkspaceSnapshot => state.role === 'admin' ? structuredClone(state) : { ...structuredClone(state), courses: state.workspace ? state.courses.filter(course => course.status === 'published' && (state.grantedCourses || [1, 2]).includes(course.id)) : [], members: [], invites: [], usage: [] };
