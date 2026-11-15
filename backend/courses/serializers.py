@@ -62,7 +62,8 @@ class AlbumSerializer(serializers.ModelSerializer):
     def get_courses(self, obj):
         if self.context.get('course_list_summary'):
             return []
-        institution_id = get_content_institution_id()
+        from core.utils import get_user_content_institution_id
+        institution_id = get_user_content_institution_id(self.context['request'].user)
         from .access import visible_courses
         visible_ids = set(visible_courses(self.context['request']).values_list('pk', flat=True))
         courses = [course for course in obj.courses.all() if course.institution_id == institution_id and course.pk in visible_ids]
@@ -120,7 +121,7 @@ class CourseSerializer(serializers.ModelSerializer):
     def get_tags(self, obj):
         relations = getattr(obj, 'serialized_tag_relations', None)
         if relations is None:
-            relations = obj.tag_relations.filter(tag__institution_id=get_content_institution_id()).select_related('tag')
+            relations = obj.tag_relations.filter(tag__institution_id=obj.institution_id).select_related('tag')
         tags = []
         for relation in relations:
             if hasattr(relation, 'tag_course_count'):

@@ -127,7 +127,9 @@ def media_serve(request, path):
         bucket = oss2.Bucket(auth, settings.OSS_ENDPOINT, settings.OSS_BUCKET_NAME)
 
         # 生成签名 URL（有效期 1 小时）
-        url = bucket.sign_url('GET', path, 3600)
+        from users.workspaces.access import membership_for
+        ttl = 300 if membership_for(request.user) else 3600
+        url = bucket.sign_url('GET', path, ttl)
         return HttpResponseRedirect(url)
 
     # 本地文件服务（开发环境）
