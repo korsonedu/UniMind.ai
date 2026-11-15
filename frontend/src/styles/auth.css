@@ -45,4 +45,4 @@
 @media (max-width: 360px) { .um-auth-main { padding-inline: 12px; } .um-auth-panel { padding-inline: 18px; } }
 @media (prefers-reduced-motion: reduce) { .um-auth-panel { animation: none; } .um-auth-shell * { transition: none !important; } }
 
-.um-auth-topbar label { -webkit-app-region: no-drag; }
+.um-auth-topbar button { -webkit-app-region: no-drag; }
