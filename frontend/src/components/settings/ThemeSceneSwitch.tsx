@@ -41,11 +41,11 @@ export function ThemeSceneSwitch({ value, onChange, reduceMotion }: {
     const bounds = event.currentTarget.getBoundingClientRect();
     return Math.max(0, Math.min(2, ((event.clientX - bounds.left) / bounds.width * 176 - 24) / 64));
   };
-  const finish = (event: PointerEvent<HTMLDivElement>, commit: boolean) => {
+  const finish = (event: PointerEvent<HTMLDivElement>, released = false) => {
     if (drag.current?.pointer !== event.pointerId) return;
-    const next = Math.round(drag.current.position);
+    const next = Math.round(released ? pointerPosition(event) : drag.current.position);
     drag.current = null; setPreview(null);
-    if (commit) { onChange(MODES[next].value); radios.current[next]?.focus(); }
+    onChange(MODES[next].value); radios.current[next]?.focus();
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
