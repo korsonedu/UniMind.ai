@@ -5,7 +5,8 @@ import axios from 'axios';
 import { useAuthStore } from '@/store/useAuthStore';
 import { getReturnTo } from '@/lib/routing';
 import type { DesktopLoginState } from '@/lib/desktop';
-import '@/styles/desktop-login.css';
+import { AuthLayout } from '@/components/AuthLayout';
+import { Button } from '@/components/ui/button';
 
 export function DesktopLogin() {
   const desktop = window.unimindDesktop;
@@ -73,22 +74,12 @@ export function DesktopLogin() {
       : waiting ? '浏览器已打开。登录完成后，会自动回到这里。'
         : '');
 
-  return <main className="um-desktop-login">
-    <div className="um-desktop-login-titlebar" aria-hidden="true" />
-    <section className="um-desktop-login-content" aria-labelledby="desktop-login-title">
-      <div className="um-desktop-login-mark"><img src="/unimind_logo_small.png" alt="" width="68" height="68" /></div>
-      <h1 id="desktop-login-title">欢迎使用 UniMind.ai</h1>
-      <div className="um-desktop-login-actions">
-        <button className="um-desktop-login-primary" disabled={!supported || busy} onClick={() => void start()}>
-          {busy ? <><Spinner size={18} className="animate-spin" aria-hidden="true" />{auth.status === 'completing' || auth.status === 'authenticated' ? '正在进入 UniMind' : '正在打开浏览器'}</>
-            : <>{waiting ? '重新打开浏览器' : '通过浏览器登录'}<ArrowUpRight size={18} aria-hidden="true" /></>}
-        </button>
-        {status && <p className="um-desktop-login-status" role={error || auth.error ? 'alert' : 'status'}>{status}</p>}
-        {(waiting || auth.status === 'error') && <button className="um-desktop-login-cancel" disabled={actionPending} onClick={() => void cancel()}>{waiting ? '取消登录' : '返回登录'}</button>}
-      </div>
-    </section>
-    <footer className="um-desktop-login-footer">
-      <p><a href="/terms" target="_blank" rel="noreferrer">用户协议</a><span aria-hidden="true"> · </span><a href="/privacy" target="_blank" rel="noreferrer">隐私政策</a></p>
-    </footer>
-  </main>;
+  return <AuthLayout title="登录 UniMind.ai">
+    <Button className="um-auth-submit" disabled={!supported || busy} onClick={() => void start()}>
+      {busy ? <><Spinner size={18} className="animate-spin" aria-hidden="true" />{auth.status === 'completing' || auth.status === 'authenticated' ? '正在进入 UniMind.ai' : '正在打开浏览器'}</>
+        : <>{waiting ? '重新打开浏览器' : '通过浏览器登录'}<ArrowUpRight size={18} aria-hidden="true" /></>}
+    </Button>
+    {status && <p className="mt-4 text-sm text-center text-muted-foreground" role={error || auth.error ? 'alert' : 'status'}>{status}</p>}
+    {(waiting || auth.status === 'error') && <Button variant="ghost" className="w-full mt-3" disabled={actionPending} onClick={() => void cancel()}>{waiting ? '取消登录' : '返回登录'}</Button>}
+  </AuthLayout>;
 }

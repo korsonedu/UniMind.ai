@@ -114,34 +114,9 @@ const WebLogin: React.FC = () => {
         ) : undefined
       }
     >
-      {/* Tab switcher */}
-      <div className="flex rounded-xl bg-[#F5F5F7] dark:bg-white/[0.06] p-1 mb-6">
-        <button
-          type="button"
-          onClick={() => { setTab('password'); setError(''); }}
-          className={`
-            flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-[180ms]
-            ${tab === 'password'
-              ? 'bg-white dark:bg-white/[0.12] text-[#1D1D1F] dark:text-white shadow-sm'
-              : 'text-[#8E8E93] dark:text-white/30 hover:text-[#6E6E73] dark:hover:text-white/50'
-            }
-          `}
-        >
-          密码登录
-        </button>
-        <button
-          type="button"
-          onClick={() => { setTab('code'); setError(''); }}
-          className={`
-            flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-[180ms]
-            ${tab === 'code'
-              ? 'bg-white dark:bg-white/[0.12] text-[#1D1D1F] dark:text-white shadow-sm'
-              : 'text-[#8E8E93] dark:text-white/30 hover:text-[#6E6E73] dark:hover:text-white/50'
-            }
-          `}
-        >
-          验证码登录 / 注册
-        </button>
+      <div className="um-auth-tabs" aria-label="登录方式">
+        <button type="button" aria-pressed={tab === 'password'} onClick={() => { setTab('password'); setError(''); }}>密码登录</button>
+        <button type="button" aria-pressed={tab === 'code'} onClick={() => { setTab('code'); setError(''); }}>验证码登录 / 注册</button>
       </div>
 
       {/* Error banner */}
@@ -192,7 +167,7 @@ const WebLogin: React.FC = () => {
 
           <Button
             type="submit"
-            className="w-full h-12 rounded-xl font-semibold tracking-tight text-[15px]"
+            className="um-auth-submit"
             disabled={loading}
           >
             {loading ? '登录中...' : '登录'}
@@ -205,8 +180,7 @@ const WebLogin: React.FC = () => {
         <div className="space-y-1.5">
           <Button
             type="button"
-            variant="outline"
-            className="w-full h-12 rounded-xl font-medium"
+            className="um-auth-submit"
             disabled={sendingCode || !email.trim()}
             onClick={handleSendCode}
           >
