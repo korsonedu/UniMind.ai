@@ -57,4 +57,4 @@
 .um-auth-shell .um-auth-secondary:hover { color: var(--auth-ink); background: var(--auth-field); }
 .um-auth-status { color: var(--auth-muted); font-size: 14px; text-align: center; }
 
-.um-auth-topbar label { -webkit-app-region: no-drag; }
+.um-auth-topbar button { -webkit-app-region: no-drag; }

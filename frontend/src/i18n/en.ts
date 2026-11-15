@@ -3022,7 +3022,8 @@ const en: Record<string, string> = {
   "约定复习": "Plan a review",
   " · 模型参考评价": " · Model reference assessment",
   "UniMind.ai 智能学习平台，提供 AI 问答、知识管理、学习练习与复习。": "UniMind.ai is an intelligent learning platform for AI conversations, knowledge management, practice, and review.",
-  "提供基础 AI 问答额度，可按需购买 AI 加量": "Includes a base AI response allowance, with optional add-ons."
+  "提供基础 AI 问答额度，可按需购买 AI 加量": "Includes a base AI response allowance, with optional add-ons.",
+  "切换语言：{0}": "Switch language: {0}"
 };
 
 export default en;
