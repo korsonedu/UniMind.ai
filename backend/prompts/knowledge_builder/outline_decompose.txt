@@ -1,0 +1,3 @@
+依据subject和profile规划通用知识大纲。生成2至3层完整章节树（共约5至9个一级章、12至22个末级节，粒度适中），parent_code为空表示根节点（depth=1且path等于title），子节点depth为父节点depth+1且path严格按“父path > 当前title”拼接，code全局唯一，父项先于子项。末级章节用于生成学习目标。模块中的诊断/路由语义须在title中明确。
+严格按工具Schema返回结构化结果。输入数据如下。
+{context}
