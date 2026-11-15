@@ -1,7 +1,8 @@
+import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { getLocale, t, useLocale } from '@/i18n';
 import { saveLanguagePreference } from '@/lib/languagePreference';
 import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation } from 'react-router-dom';
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { registerSW } from 'virtual:pwa-register';
 import axios from 'axios';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -66,7 +67,7 @@ const PricingPage = lazy(() => import('./pages/Pricing'));
 import { Skeleton } from '@/components/ui/skeleton';
 
 const PageLoader = () => (
-  <div className="min-h-dvh w-full flex items-center justify-center bg-background">
+  <div data-workspace-loader className="fixed inset-0 z-50 flex items-center justify-center bg-background">
     <div className="w-full max-w-6xl mx-auto px-6 md:px-8 py-12 space-y-8">
       {/* Header skeleton */}
       <div className="space-y-3 max-w-lg">
@@ -204,6 +205,35 @@ const RootRedirect = () => {
   return <Suspense fallback={<div className="min-h-dvh bg-[#080b0f]" aria-hidden="true" />}><Landing /></Suspense>;
 };
 
+// Keep the initial workspace hidden until its configuration and chat are ready.
+const WorkspaceEntry = () => {
+  const { pathname } = useLocation();
+  const { chat, activate } = useXiaoYuChat();
+  const { loading, hasFeature, fetchFeatures } = useInstitutionStore();
+  const [entered, setEntered] = useState(false);
+  const needsChat = pathname === '/xiaoyu' && hasFeature('ai.assistant');
+  const waiting = loading || (needsChat && !chat.initialized);
+
+  useEffect(() => {
+    if (useInstitutionStore.getState().loading) void fetchFeatures();
+  }, [fetchFeatures]);
+  useEffect(() => {
+    if (!loading && needsChat) activate();
+  }, [loading, needsChat, activate]);
+  const reveal = useCallback((node: HTMLDivElement | null) => {
+    if (node) setEntered(true);
+  }, []);
+
+  return <RequireAuth>
+    {!entered && <PageLoader />}
+    <Suspense fallback={entered ? <PageLoader /> : null}>
+      {(entered || !waiting) && <div className="contents" ref={reveal}><MainLayout /></div>}
+    </Suspense>
+  </RequireAuth>;
+};
+
+const workspacePage = (Component: React.ComponentType) => <ErrorBoundary><Component /></ErrorBoundary>;
+
 const lazyPage = (Component: React.ComponentType) => (
   <ErrorBoundary>
     <Suspense fallback={<PageLoader />}><Component /></Suspense>
@@ -222,36 +252,36 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <HomeRedirect /> },
       {
-        element: <RequireAuth><Suspense fallback={<PageLoader />}><MainLayout /></Suspense></RequireAuth>,
+        element: <WorkspaceEntry />,
         children: [
-          { path: "courses", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{lazyPage(CourseCenter)}</FeatureGuard> },
+          { path: "courses", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{workspacePage(CourseCenter)}</FeatureGuard> },
           {
-            element: lazyPage(CommunityLayout),
+            element: workspacePage(CommunityLayout),
             children: [
-              { path: "community", element: lazyPage(CommunityEntry) },
-              { path: "qa", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{lazyPage(QASystem)}</FeatureGuard> },
-              { path: "qa/:id", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{lazyPage(QuestionDetail)}</FeatureGuard> },
-              { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}>{lazyPage(StudyRoom)}</FeatureGuard> },
+              { path: "community", element: workspacePage(CommunityEntry) },
+              { path: "qa", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{workspacePage(QASystem)}</FeatureGuard> },
+              { path: "qa/:id", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{workspacePage(QuestionDetail)}</FeatureGuard> },
+              { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}>{workspacePage(StudyRoom)}</FeatureGuard> },
             ],
           },
-          { path: "tests", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestLadder)}</FeatureGuard> },
-          { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestSessionPage)}</FeatureGuard> },
-          { path: "tests/results/:examId", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(ExamResultPage)}</FeatureGuard> },
-          { path: "tests/history", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(ExamHistoryPage)}</FeatureGuard> },
-          { path: "notes", element: lazyPage(NotesPage) },
-          { path: "notes/:id", element: lazyPage(NotesPage) },
-          { path: "knowledge-tree", element: <FeatureGuard feature="ai.assistant">{lazyPage(ProjectKnowledge)}</FeatureGuard> },
-          { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant">{lazyPage(XiaoYu)}</FeatureGuard> },
-          { path: "xiaoyu/practice/:sessionId", element: <FeatureGuard feature="ai.assistant">{lazyPage(PracticeSession)}</FeatureGuard> },
-          { path: "settings", element: lazyPage(Settings) },
-          { path: "billing", element: lazyPage(BillingPage) },
-          { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{lazyPage(CourseCenter)}</FeatureGuard> },
-          { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{lazyPage(WrongQuestionReviewPage)}</FeatureGuard> },
-          { path: "achievements", element: lazyPage(Achievements) },
+          { path: "tests", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{workspacePage(TestLadder)}</FeatureGuard> },
+          { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{workspacePage(TestSessionPage)}</FeatureGuard> },
+          { path: "tests/results/:examId", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{workspacePage(ExamResultPage)}</FeatureGuard> },
+          { path: "tests/history", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{workspacePage(ExamHistoryPage)}</FeatureGuard> },
+          { path: "notes", element: workspacePage(NotesPage) },
+          { path: "notes/:id", element: workspacePage(NotesPage) },
+          { path: "knowledge-tree", element: <FeatureGuard feature="ai.assistant">{workspacePage(ProjectKnowledge)}</FeatureGuard> },
+          { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant">{workspacePage(XiaoYu)}</FeatureGuard> },
+          { path: "xiaoyu/practice/:sessionId", element: <FeatureGuard feature="ai.assistant">{workspacePage(PracticeSession)}</FeatureGuard> },
+          { path: "settings", element: workspacePage(Settings) },
+          { path: "billing", element: workspacePage(BillingPage) },
+          { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{workspacePage(CourseCenter)}</FeatureGuard> },
+          { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{workspacePage(WrongQuestionReviewPage)}</FeatureGuard> },
+          { path: "achievements", element: workspacePage(Achievements) },
 
-          { path: "report-card", element: <FeatureGuard feature={FEATURES.FULL_REPORT}>{lazyPage(ReportCard)}</FeatureGuard> },
+          { path: "report-card", element: <FeatureGuard feature={FEATURES.FULL_REPORT}>{workspacePage(ReportCard)}</FeatureGuard> },
 
-          { path: "*", element: lazyPage(NotFound) },
+          { path: "*", element: workspacePage(NotFound) },
         ],
       },
     ],
