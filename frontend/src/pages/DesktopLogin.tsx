@@ -1,7 +1,7 @@
 import { queryClient } from '@/lib/queryClient';
 import { queryKeys } from '@/lib/queryKeys';
 import { t, useLocale } from '@/i18n';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowUpRight, Spinner } from '@phosphor-icons/react';
 import axios from 'axios';
@@ -20,6 +20,7 @@ export function DesktopLogin() {
   const [auth, setAuth] = useState<DesktopLoginState>({ status: 'idle' });
   const [actionPending, setActionPending] = useState(false);
   const [error, setError] = useState('');
+  const sessionCheck = useRef<AbortController | null>(null);
   const supported = !!desktop?.startLogin && !!desktop.cancelLogin;
   const waiting = auth.status === 'waiting';
   const busy = actionPending || ['opening', 'completing', 'authenticated'].includes(auth.status);
@@ -36,6 +37,7 @@ export function DesktopLogin() {
 
   useEffect(() => {
     const controller = new AbortController();
+    sessionCheck.current = controller;
     void axios.get(`${import.meta.env.VITE_API_URL || '/api'}/users/me/`, {
       withCredentials: true, signal: controller.signal, timeout: 15000,
     }).then(({ data }) => {
@@ -58,6 +60,8 @@ export function DesktopLogin() {
 
   const start = async () => {
     if (!desktop?.startLogin || busy) return;
+    // Browser sign-in owns navigation once it starts.
+    sessionCheck.current?.abort();
     setActionPending(true); setError('');
     try {
       const state = await desktop.startLogin();
