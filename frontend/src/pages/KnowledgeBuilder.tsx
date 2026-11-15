@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowClockwise, Plus, Spinner } from '@phosphor-icons/react';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -12,12 +11,15 @@ import {
   listKnowledgeBuilds,
 } from '@/lib/knowledgeBuilderApi';
 import type { BuildArchetype, BuildStatus, BuildSummary } from '@/types/knowledgeBuilder';
+import { KnowledgeIntakeWizard } from '@/components/KnowledgeIntakeWizard';
+import { ProjectLearningContent } from '@/components/ProjectLearningPanel';
+import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
+import { knowledgeBuildPlanningPrompt } from '@/lib/knowledgeBuildPlanning';
 import { KnowledgeBuilderGraph } from '@/components/KnowledgeBuilderGraph';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -57,6 +59,10 @@ function extractApiError(error: unknown): string {
 export default function KnowledgeBuilder() {
   const { buildId: paramBuildId } = useParams<{ buildId?: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const projectTab = searchParams.get('tab') === 'project';
+  const { chat, openingProject } = useXiaoYuChat();
+  const [selectedBlocks, setSelectedBlocks] = useState<Set<number>>(new Set());
   const queryClient = useQueryClient();
   const userId = useAuthStore(s => s.user?.id);
 
@@ -78,12 +84,13 @@ export default function KnowledgeBuilder() {
   }, [builds]);
 
   useEffect(() => {
-    if (!paramBuildId && defaultBuildId) {
-      navigate(`/knowledge-builder/${encodeURIComponent(defaultBuildId)}`, { replace: true });
+    if (!projectTab && !paramBuildId && defaultBuildId) {
+      navigate({ pathname: `/knowledge-builder/${encodeURIComponent(defaultBuildId)}`, search: searchParams.toString() }, { replace: true });
     }
-  }, [paramBuildId, defaultBuildId, navigate]);
+  }, [paramBuildId, defaultBuildId, navigate, projectTab, searchParams]);
 
   const activeBuildId = paramBuildId ?? defaultBuildId;
+  useEffect(() => { setSelectedBlocks(new Set()); }, [activeBuildId]);
 
   const selectedFromList = useMemo(
     () => (activeBuildId ? builds.find(b => b.id === activeBuildId) ?? null : null),
@@ -138,17 +145,6 @@ export default function KnowledgeBuilder() {
     },
   });
 
-  const handleCreateSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    const subject = newSubject.trim();
-    if (!subject) {
-      setFormError('请输入学科或考试科目名称');
-      return;
-    }
-    setFormError(null);
-    createMutation.mutate({ subject, archetype: newArchetype });
-  };
-
   const buildPicker = (
     <div className="kb-subject-picker">
       <select
@@ -157,7 +153,7 @@ export default function KnowledgeBuilder() {
         value={activeBuildId ?? ''}
         onChange={e => {
           const nextId = e.target.value;
-          if (nextId) navigate(`/knowledge-builder/${encodeURIComponent(nextId)}`);
+          if (nextId) navigate({ pathname: `/knowledge-builder/${encodeURIComponent(nextId)}`, search: searchParams.toString() });
         }}
       >
         {builds.length === 0 && effectiveSummary && (
@@ -189,21 +185,22 @@ export default function KnowledgeBuilder() {
 
   const createModal = (
     <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-      <DialogContent className="sm:max-w-[460px]">
+      <DialogContent className="sm:max-w-[900px] max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>新建知识结构图谱</DialogTitle>
           <DialogDescription>
-            输入任意考试科目或课程名称，系统将自动拆解知识原子、编排学习块与跨块接口并生成 431 交互结构图。
+            先明确学习需求与基础，再生成知识原子、学习块与完整前置关系。也可以跳过问答直接构建。
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleCreateSubmit} className="space-y-4">
+        <div className="space-y-4">
           <div className="space-y-1.5">
             <label htmlFor="kb-new-subject" className="text-sm font-medium text-foreground">
               学科 / 科目名称
             </label>
             <Input
               id="kb-new-subject"
+              disabled={createMutation.isPending}
               value={newSubject}
               onChange={e => setNewSubject(e.target.value)}
               placeholder="例如：公司理财 · 资本结构 / 基金从业《私募股权》"
@@ -236,36 +233,58 @@ export default function KnowledgeBuilder() {
             </p>
           )}
 
-          <DialogFooter className="gap-2 pt-2">
-            <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)}>
-              取消
-            </Button>
-            <Button type="submit" disabled={createMutation.isPending || !newSubject.trim()}>
-              {createMutation.isPending ? '提交中…' : '开始构建'}
-            </Button>
-          </DialogFooter>
-        </form>
+          <KnowledgeIntakeWizard key={newSubject.trim()} subject={newSubject} archetype={newArchetype} building={createMutation.isPending}
+            onBuild={requirements => {
+              setFormError(null);
+              createMutation.mutate({ subject: newSubject.trim(), archetype: newArchetype === 'auto' && requirements
+                ? requirements.recommended_archetype : newArchetype, ...(requirements ? { requirements } : {}) });
+            }} />
+        </div>
       </DialogContent>
     </Dialog>
   );
 
+  const workspaceTabs = <nav className="kb-workspace-tabs" aria-label="知识结构视图" role="tablist">
+    <button type="button" role="tab" aria-selected={!projectTab} onClick={() => setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete('tab'); return next; })}>学科知识结构图谱</button>
+    <button type="button" role="tab" aria-selected={projectTab} onClick={() => setSearchParams(previous => { const next = new URLSearchParams(previous); next.set('tab', 'project'); return next; })}>小宇项目知识路径（知识关系）</button>
+  </nav>;
+
+  if (projectTab) return <div className="kb-unified-workspace">{workspaceTabs}<div className="kb-project-view"><ProjectLearningContent knowledgeOnly /></div>{createModal}</div>;
+
   // Render full 431 v3 interactive graph when completed detail data is ready.
   if (effectiveSummary?.status === 'COMPLETED' && detailQuery.data) {
     return (
-      <>
+      <div className="kb-unified-workspace">
+        {workspaceTabs}
+        <div className="kb-plan-toolbar">
+          <span>已选择 {selectedBlocks.size} 个目标学习块</span>
+          <Button type="button" variant="outline" disabled={!selectedBlocks.size || openingProject} onClick={() => {
+            chat.setInput(knowledgeBuildPlanningPrompt(detailQuery.data, selectedBlocks));
+            navigate({ pathname: '/xiaoyu', search: searchParams.toString() });
+          }}>带入小宇学习项目规划路径</Button>
+          {!!detailQuery.data.requirements && Object.keys(detailQuery.data.requirements).length > 0 && <details className="kb-requirements-summary">
+            <summary>本次构建需求 · {String(detailQuery.data.requirements.learning_goal || '自定义学习需求')}</summary>
+            <p>重点模块：{Array.isArray(detailQuery.data.requirements.scope_inclusions) ? detailQuery.data.requirements.scope_inclusions.join('、') : '未指定'}</p>
+            <p>深度：{String(detailQuery.data.requirements.depth_preference || '未指定')}</p>
+            <p>推荐入口：{Array.isArray(detailQuery.data.requirements.suggested_entry_topics) ? detailQuery.data.requirements.suggested_entry_topics.join('、') : '未指定'}</p>
+            <p>{String((detailQuery.data.requirements.baseline_summary as Record<string, unknown> | undefined)?.entry_strategy || '')}</p>
+          </details>}
+        </div>
         <KnowledgeBuilderGraph
           key={detailQuery.data.id}
           tree={detailQuery.data}
           headerLeftSlot={buildPicker}
           headerRightSlot={createButton}
+          selectedBlockIds={selectedBlocks}
+          onToggleBlockSelection={id => setSelectedBlocks(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; })}
         />
         {createModal}
-      </>
+      </div>
     );
   }
 
   return (
-    <div className="kb-workspace">
+    <div className="kb-unified-workspace">{workspaceTabs}<div className="kb-workspace">
       <header className="kb-header">
         <div className="kb-brand">
           {builds.length > 0 || effectiveSummary ? buildPicker : <strong>学科知识结构图谱</strong>}
@@ -358,6 +377,6 @@ export default function KnowledgeBuilder() {
       </div>
 
       {createModal}
-    </div>
+    </div></div>
   );
 }

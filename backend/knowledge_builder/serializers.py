@@ -1,22 +1,62 @@
 """Explicit public representations of the two-layer graph."""
+import json
 from rest_framework import serializers
 
 from . import models
 from .archetypes import PROFILES
 
 
+def validate_json_object(value):
+    if not isinstance(value, dict):
+        raise serializers.ValidationError('请提供 JSON 对象。')
+    try:
+        json.dumps(value, allow_nan=False)
+    except (ValueError, TypeError):
+        raise serializers.ValidationError('JSON 中不能包含非有限数值。')
+    return value
+
+
 class CreateBuildSerializer(serializers.Serializer):
     subject = serializers.CharField(max_length=200, allow_blank=False, trim_whitespace=True)
     archetype = serializers.ChoiceField(choices=('auto', *PROFILES), default='auto')
+    requirements = serializers.JSONField(required=False, default=dict, validators=[validate_json_object])
 
     class Meta:
-        fields = ('subject', 'archetype')
+        fields = ('subject', 'archetype', 'requirements')
+
+
+class IntakeMessageSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=('user', 'assistant'))
+    content = serializers.CharField(max_length=20000)
+
+    class Meta:
+        fields = ('role', 'content')
+
+
+class RequirementIntakeSerializer(serializers.Serializer):
+    subject = serializers.CharField(max_length=200, trim_whitespace=True)
+    mode = serializers.ChoiceField(choices=('card', 'chat'), default='card')
+    messages = IntakeMessageSerializer(many=True, required=False, max_length=40)
+    card_answers = serializers.JSONField(required=False, default=dict, validators=[validate_json_object])
+    self_report = serializers.CharField(required=False, allow_blank=True, max_length=10000)
+    diagnostic_questions = serializers.ListField(child=serializers.DictField(), required=False, max_length=4)
+    diagnostic_answers = serializers.DictField(child=serializers.CharField(max_length=20), required=False)
+
+    def validate(self, attrs):
+        try:
+            json.dumps(attrs, allow_nan=False)
+        except (ValueError, TypeError):
+            raise serializers.ValidationError('JSON 中不能包含非有限数值。')
+        return attrs
+
+    class Meta:
+        fields = ('subject', 'mode', 'messages', 'card_answers', 'self_report', 'diagnostic_questions', 'diagnostic_answers')
 
 
 class BuildSummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = models.KnowledgeTreeBuild
-        fields = ('id', 'subject', 'status', 'current_stage', 'archetype', 'dispatch_profile', 'stats', 'error_message', 'created_at', 'updated_at', 'completed_at')
+        fields = ('id', 'subject', 'requirements', 'status', 'current_stage', 'archetype', 'dispatch_profile', 'stats', 'error_message', 'created_at', 'updated_at', 'completed_at')
 
 
 class ModuleSerializer(serializers.ModelSerializer):

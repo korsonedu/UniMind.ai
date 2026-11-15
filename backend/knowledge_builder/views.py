@@ -8,7 +8,8 @@ from rest_framework.views import APIView
 from core.authentication import CookieTokenAuthentication
 from .models import KnowledgeTreeBuild
 from .pipeline import create_build
-from .serializers import BuildSummarySerializer, CreateBuildSerializer, FullKnowledgeTreeSerializer
+from .serializers import BuildSummarySerializer, CreateBuildSerializer, FullKnowledgeTreeSerializer, RequirementIntakeSerializer
+from . import intake
 from .tasks import build_knowledge_tree
 
 
@@ -40,9 +41,20 @@ class BuildCreateView(APIView):
             serializer.validated_data['subject'],
             archetype_override=serializer.validated_data['archetype'],
             created_by=request.user,
+            requirements=serializer.validated_data.get('requirements') or {},
         )
         enqueue_build(build)
         return Response(BuildSummarySerializer(build).data, status=status.HTTP_202_ACCEPTED)
+
+
+class BuildIntakeView(APIView):
+    authentication_classes = (CookieTokenAuthentication,)
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request):
+        serializer = RequirementIntakeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(intake.inquire_requirements(request.user, serializer.validated_data))
 
 
 def enqueue_build(build):

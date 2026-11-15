@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import api from '@/lib/api';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { useAuthStore } from '@/store/useAuthStore';
 import { learningUrl, type ProjectLearning } from '@/lib/projectLearning';
+import { listKnowledgeBuilds } from '@/lib/knowledgeBuilderApi';
+import { queryKeys } from '@/lib/queryKeys';
 
 interface Belief { mean: number; interval: [number, number]; effective_count: number; independent_count: number; stale_days: number | null; }
 interface KnowledgeNode {
@@ -34,6 +36,8 @@ function Estimate({ title, estimate }: { title: string; estimate: Belief }) {
 
 export function LearningKnowledgePanel({ project, onStudy }: { project: ProjectLearning; onStudy: (text: string) => void }) {
   const userId = useAuthStore(state => state.user?.id);
+  const [searchParams] = useSearchParams();
+  const conversationId = searchParams.get('conversation') || project.conversation_id || undefined;
   const [versionId, setVersionId] = useState('');
   const [targets, setTargets] = useState<string[]>([]);
   const [depth, setDepth] = useState<'apply' | 'transfer'>('apply');
@@ -41,6 +45,9 @@ export function LearningKnowledgePanel({ project, onStudy }: { project: ProjectL
   const active = useRef(true);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const url = `/ai/projects/${project.project_id}/learning/knowledge/`;
+  const builds = useQuery({ queryKey: queryKeys.knowledgeBuilder.list(userId), enabled: !!userId,
+    queryFn: ({ signal }) => listKnowledgeBuilds(signal) });
+  const completedBuilds = builds.data?.filter(build => build.status === 'COMPLETED') ?? [];
   const maps = useQuery({ queryKey: ['learning-knowledge-maps', userId, project.project_id],
     queryFn: ({ signal }) => api.get<{ maps: { id: number; title: string; versions: { id: number; revision: number }[] }[] }>(url, { signal }).then(result => result.data) });
   const version = useQuery({ queryKey: ['learning-knowledge-version', userId, project.project_id, versionId], enabled: !!versionId,
@@ -58,6 +65,13 @@ export function LearningKnowledgePanel({ project, onStudy }: { project: ProjectL
   };
   return <section className="um-learning-knowledge"><h3>知识地图与证据路径</h3><p className="um-learning-muted">按目标选择范围与深度，小宇会补上前置知识，再用实际任务逐步了解你的表现。</p>
     <button className="um-agent-button" onClick={() => onStudy('请结合本项目目标，先从本人资料库的实际版本和原文引用构建知识地图，给出知识单元及前置教学建议，再与我确定学习范围和深度。')}>和小宇构建知识地图</button>
+    {builds.isPending && <p role="status">正在读取学科知识结构图谱…</p>}
+    {builds.isError && <p role="alert">学科知识结构图谱暂时无法读取。<button className="um-learning-text-button" onClick={() => void builds.refetch()}>重试</button></p>}
+    {!!completedBuilds.length && <div className="um-knowledge-picker">
+      <h4>已构建的学科知识结构图谱</h4>
+      <p className="um-learning-muted">进入图谱勾选目标学习块，再带回当前项目与小宇规划学习路径。</p>
+      <ul>{completedBuilds.map(build => <li key={build.id}><Link to={learningUrl(`/knowledge-builder/${encodeURIComponent(build.id)}`, project.project_id, conversationId)}>{build.subject}</Link></li>)}</ul>
+    </div>}
     <details className="um-knowledge-picker"><summary>选择已有地图与学习范围</summary>
       {maps.isPending && <p role="status">正在读取知识地图…</p>}{maps.isError && <p role="alert">地图暂时无法读取。<button className="um-learning-text-button" onClick={() => void maps.refetch()}>重试</button></p>}
       {maps.data && !maps.data.maps.length && <p>还没有知识地图，可以先和小宇从已读资料整理第一张。</p>}

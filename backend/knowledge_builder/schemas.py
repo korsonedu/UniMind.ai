@@ -49,3 +49,15 @@ SCHEMAS = {
     'intrablock_repair': PLAN,
     'interface_bind': obj(dict(interfaces=array(INTERFACE,1))),
 }
+
+INTAKE_OPTION = obj(dict(value=TEXT, label=TEXT, description=STRING))
+INTAKE_CARD = obj(dict(id=TEXT, dimension=enum('goal', 'scope', 'depth', 'prior_knowledge'), title=TEXT,
+    question=TEXT, multi_select=BOOL, options=array(INTAKE_OPTION, 2), allow_custom=BOOL))
+PROBE = obj(dict(topic=TEXT, stem=TEXT, options={**array(obj(dict(key=TEXT, label=TEXT)), 2), 'maxItems': 4},
+    correct_answer=TEXT, explanation=TEXT))
+SCHEMAS['requirement_intake'] = obj(dict(cards={**array(INTAKE_CARD, 4), 'maxItems': 4},
+    diagnostic_questions={**array(PROBE, 3), 'maxItems': 4}, assistant_reply=TEXT,
+    requirements_draft=obj(dict(learning_goal=STRING,
+        recommended_archetype=enum('auto', 'institution_mechanism_theory', 'formula_derivation_chain', 'taskflow_diagnostic_tree', 'case_synthesis_deduction'),
+        scope_inclusions=array(TEXT), scope_exclusions=array(TEXT), depth_preference=STRING,
+        learner_background=STRING, suggested_entry_topics=array(TEXT)))))

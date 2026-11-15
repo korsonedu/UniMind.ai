@@ -1,5 +1,6 @@
-"""Subject-only six-stage knowledge tree construction with atomic publication."""
+"""Requirement-aware six-stage knowledge tree construction with atomic publication."""
 import heapq
+import json
 from itertools import combinations
 
 import numpy as np
@@ -19,13 +20,23 @@ from .prompts import ask
 from .validators import validate_atoms, validate_edges, validate_steps
 
 
-def create_build(subject, archetype_override='auto', created_by=None):
+def create_build(subject: str, archetype_override: str = 'auto', created_by=None, requirements: dict | None = None) -> KnowledgeTreeBuild:
     subject = subject.strip()
     if not subject or len(subject) > 200:
         raise InvariantViolationError('subject must contain 1..200 characters')
     if archetype_override != 'auto':
         get_profile(archetype_override)
-    return KnowledgeTreeBuild.objects.create(subject=subject, archetype=archetype_override, created_by=created_by)
+    if requirements is not None and not isinstance(requirements, dict):
+        raise InvariantViolationError('requirements must be an object')
+    json.dumps(requirements, allow_nan=False)
+    return KnowledgeTreeBuild.objects.create(subject=subject, archetype=archetype_override, created_by=created_by, requirements=requirements or {})
+
+
+def base_context(build):
+    context = {'subject': build.subject}
+    if build.requirements:
+        context['requirements'] = build.requirements
+    return context
 
 
 def repair(value, validator, template, context, key=None):
@@ -172,7 +183,7 @@ def _collect_chunk(items, item_key, row_key, fetch_rows, error_message, max_roun
     raise InvariantViolationError(error_message)
 
 
-def _classify_edge_batch(atoms, batch, profile, atom_catalog=None, subject=None):
+def _classify_edge_batch(atoms, batch, profile, atom_catalog=None, subject=None, requirements=None):
     catalog = atom_catalog if atom_catalog is not None else [_edge_atom_view(atom) for atom in atoms]
     collected = _collect_chunk(
         batch,
@@ -182,6 +193,7 @@ def _classify_edge_batch(atoms, batch, profile, atom_catalog=None, subject=None)
             'edge_classify',
             {
                 **({'subject': subject} if subject else {}),
+                **({'requirements': requirements} if requirements else {}),
                 'profile': profile,
                 'atom_catalog': catalog,
                 'pairs': [[_edge_pair_ref(atoms[i]), _edge_pair_ref(atoms[j])] for i, j in pending],
@@ -193,9 +205,10 @@ def _classify_edge_batch(atoms, batch, profile, atom_catalog=None, subject=None)
     return [e for e in collected.values() if e['edge_strength'] != 'none']
 
 
-def _repair_edges(edges, check_edges, atoms, profile):
+def _repair_edges(edges, check_edges, atoms, profile, requirements=None):
+    extra = {'requirements': requirements} if requirements else {}
     if len(edges) <= 50:
-        return repair(edges, check_edges, 'edge_cycle_resolve', {'atoms': atoms, 'profile': profile}, 'edges')
+        return repair(edges, check_edges, 'edge_cycle_resolve', {**extra, 'atoms': atoms, 'profile': profile}, 'edges')
     for attempt in range(3):
         errors = check_edges(edges)
         if not errors:
@@ -215,13 +228,14 @@ def _repair_edges(edges, check_edges, atoms, profile):
         subset_ids = {id(e) for e in subset}
         subset_pairs = {frozenset((e['from_atom'], e['to_atom'])) for e in subset}
         if not subset or len(subset) >= len(edges):
-            edges = ask('edge_cycle_resolve', {'atoms': [_edge_atom_view(a) for a in atoms], 'profile': profile, 'current': edges, 'errors': errors}, 'knowledge_tree_repair')['edges']
+            edges = ask('edge_cycle_resolve', {**extra, 'atoms': [_edge_atom_view(a) for a in atoms], 'profile': profile, 'current': edges, 'errors': errors}, 'knowledge_tree_repair')['edges']
             continue
         atom_lookup = {a['code']: a for a in atoms}
         involved_atoms = sorted({c for e in subset for c in (e['from_atom'], e['to_atom']) if c in atom_lookup})
         repaired = ask(
             'edge_cycle_resolve',
             {
+                **extra,
                 'atoms': [_edge_atom_view(atom_lookup[c]) for c in involved_atoms],
                 'profile': profile,
                 'current': subset,
@@ -241,12 +255,12 @@ def _repair_edges(edges, check_edges, atoms, profile):
         edges = kept
 
 
-def _atom_edges(atoms, views, profile, subject=None):
+def _atom_edges(atoms, views, profile, subject=None, requirements=None):
     atom_catalog = [_edge_atom_view(atom) for atom in atoms]
     pairs, cosine = _candidates(atoms, views['namegoal'])
     edges = []
     for start in range(0, len(pairs), 20):
-        edges.extend(_classify_edge_batch(atoms, pairs[start:start + 20], profile, atom_catalog=atom_catalog, subject=subject))
+        edges.extend(_classify_edge_batch(atoms, pairs[start:start + 20], profile, atom_catalog=atom_catalog, subject=subject, requirements=requirements))
     # R3 explicitly retains the five highest-confidence contrast edges per endpoint.
     counts = {a['code']: 0 for a in atoms}
     filtered = []
@@ -264,7 +278,7 @@ def _atom_edges(atoms, views, profile, subject=None):
             if edge['from_atom'] in lookup and edge['to_atom'] in lookup:
                 edge['similarity'] = float(cosine[lookup[edge['from_atom']], lookup[edge['to_atom']]])
         return validate_edges(value, atoms, get_profile(profile['archetype']))
-    edges = _repair_edges(filtered, check_edges, atoms, profile)
+    edges = _repair_edges(filtered, check_edges, atoms, profile, requirements=requirements)
     lookup = {a['code']: i for i,a in enumerate(atoms)}
     for edge in edges:
         edge['similarity'] = float(cosine[lookup[edge['from_atom']], lookup[edge['to_atom']]])
@@ -483,7 +497,7 @@ def _suggest_step_buckets(atoms, local_edges):
     return buckets
 
 
-def _review_blocks(blocks, groups, atoms, edges, views, profile, subject=None):
+def _review_blocks(blocks, groups, atoms, edges, views, profile, subject=None, requirements=None):
     membership = {atoms[i]['code']: blocks[b]['code'] for b, g in enumerate(groups) for i in g}
     means = normalize_embeddings(np.array([views['namegoal'][g].mean(axis=0) for g in groups]))
     block_count = len(blocks)
@@ -513,7 +527,11 @@ def _review_blocks(blocks, groups, atoms, edges, views, profile, subject=None):
         blocks[0]['is_entry_block'] = True
         return reduce_and_layer_block_graph(blocks, [], profile.edge_cap, profile.allow_bidirectional_contraction)
     block_summaries = _block_summaries(blocks)
-    prefix = {**({'subject': subject} if subject else {}), 'profile': profile.as_dict(), 'blocks': block_summaries}
+    prefix = {
+        **({'subject': subject} if subject else {}),
+        **({'requirements': requirements} if requirements else {}),
+        'profile': profile.as_dict(), 'blocks': block_summaries,
+    }
     by_pair = {frozenset((e['from_block'], e['to_block'])): e for e in evidence}
     codes = {b['code'] for b in blocks}
     entries = set()
@@ -568,7 +586,7 @@ def _review_blocks(blocks, groups, atoms, edges, views, profile, subject=None):
                     reviewed[pair] = edge
 
 
-def _interfaces(edge, local_from, local_to, atom_edges, cosine, lookup, profile, subject=None, block_summaries=None):
+def _interfaces(edge, local_from, local_to, atom_edges, cosine, lookup, profile, subject=None, block_summaries=None, requirements=None):
     pairs = {(e['from_atom'],e['to_atom']) for e in atom_edges
              if e['from_atom'] in local_from and e['to_atom'] in local_to}
     ranked = sorted(((a,b) for a in local_from for b in local_to),
@@ -577,6 +595,7 @@ def _interfaces(edge, local_from, local_to, atom_edges, cosine, lookup, profile,
     atoms = [_edge_atom_view(atom) for atom in list(local_from.values()) + list(local_to.values())]
     payload = {
         **({'subject': subject} if subject else {}),
+        **({'requirements': requirements} if requirements else {}),
         'profile': profile.as_dict(),
         **({'block_summaries': block_summaries} if block_summaries is not None else {}),
         'block_edge': edge,
@@ -646,12 +665,12 @@ def run_build(build_id, progress=None):
         stage('archetype_dispatch')
         archetype = build.archetype
         if archetype == 'auto':
-            archetype = ask('archetype_classify', {'subject':build.subject}, 'knowledge_tree_dispatch')['archetype']
+            archetype = ask('archetype_classify', base_context(build), 'knowledge_tree_dispatch')['archetype']
         profile = get_profile(archetype)
         build.archetype = archetype
         build.dispatch_profile = profile.as_dict()
         build.save(update_fields=['archetype','dispatch_profile','updated_at'])
-        context = {'subject':build.subject,'profile':profile.as_dict()}
+        context = {**base_context(build), 'profile':profile.as_dict()}
         stage('outline_and_atoms')
         modules = _normalize_outline(ask('outline_decompose', context, 'knowledge_tree_decompose')['modules'])
         outline = [{'code': m['code'], 'parent_code': m['parent_code'], 'title': m['title'], 'path': m['path']} for m in modules]
@@ -663,13 +682,13 @@ def run_build(build_id, progress=None):
         atoms = _repair_atoms(atoms, modules, profile, context)
         stage('atom_edges')
         views = embed_views(atoms)
-        edges,cosine = _atom_edges(atoms, views, profile.as_dict(), subject=build.subject)
+        edges,cosine = _atom_edges(atoms, views, profile.as_dict(), subject=build.subject, requirements=build.requirements)
         stage('kernel_clustering')
         groups,stats = _cluster(atoms,edges,views,profile)
         blocks = [{'code':f'B{i+1:02d}','atoms':[atoms[j] for j in group]} for i,group in enumerate(groups)]
         _name_blocks(blocks, context)
         stage('interblock_graph')
-        graph = _review_blocks(blocks, groups, atoms, edges, views, profile, subject=build.subject)
+        graph = _review_blocks(blocks, groups, atoms, edges, views, profile, subject=build.subject, requirements=build.requirements)
         stage('intrablock_steps_and_interfaces')
         block_summaries = _block_summaries(blocks)
         plans = {}
@@ -695,7 +714,7 @@ def run_build(build_id, progress=None):
         for edge in graph['edges']:
             if edge['is_retained']:
                 a,b = edge['from_block'],edge['to_block']
-                interfaces[a,b] = _interfaces(edge, by_block[a], by_block[b], edges, cosine, lookup, profile, subject=build.subject, block_summaries=block_summaries)
+                interfaces[a,b] = _interfaces(edge, by_block[a], by_block[b], edges, cosine, lookup, profile, subject=build.subject, block_summaries=block_summaries, requirements=build.requirements)
         build.stats = {**stats,'atom_count':len(atoms),'atom_edge_count':len(edges),'block_count':len(blocks),
                        'module_count':len(modules),'layer_count':max(graph['layers'].values()),
                        'step_count':sum(len(p['steps']) for p in plans.values()),

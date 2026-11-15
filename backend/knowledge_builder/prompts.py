@@ -11,13 +11,13 @@ PROMPT_DIR = Path(__file__).resolve().parent.parent / 'prompts' / 'knowledge_bui
 
 # Fields moved into an immutable stage-level system_prompt so repeated calls share KV prefix cache.
 SYSTEM_PREFIX_KEYS = {
-    'atom_generate': ('subject', 'profile', 'outline'),
-    'edge_classify': ('subject', 'profile', 'atom_catalog'),
-    'block_naming': ('subject', 'profile', 'block_outline'),
-    'interblock_review': ('subject', 'profile', 'blocks'),
-    'intrablock_steps': ('subject', 'profile', 'block_summaries'),
-    'intrablock_repair': ('subject', 'profile', 'block_summaries'),
-    'interface_bind': ('subject', 'profile', 'block_summaries'),
+    'atom_generate': ('subject', 'requirements', 'profile', 'outline'),
+    'edge_classify': ('subject', 'requirements', 'profile', 'atom_catalog'),
+    'block_naming': ('subject', 'requirements', 'profile', 'block_outline'),
+    'interblock_review': ('subject', 'requirements', 'profile', 'blocks'),
+    'intrablock_steps': ('subject', 'requirements', 'profile', 'block_summaries'),
+    'intrablock_repair': ('subject', 'requirements', 'profile', 'block_summaries'),
+    'interface_bind': ('subject', 'requirements', 'profile', 'block_summaries'),
 }
 
 
@@ -43,7 +43,7 @@ def render_messages(name, context):
     return system_prompt, user_prompt
 
 
-def ask(name, context, operation):
+def ask(name, context, operation='knowledge_tree_decompose'):
     payload = context
     for attempt in range(2):
         system_prompt, user_prompt = render_messages(name, payload)

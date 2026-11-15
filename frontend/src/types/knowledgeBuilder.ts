@@ -19,6 +19,7 @@ export interface BuildStats {
 }
 
 export interface BuildSummary {
+  requirements?: Record<string, unknown>;
   id: string;
   subject: string;
   status: BuildStatus;
@@ -145,4 +146,45 @@ export interface KnowledgeTreeBuildDetail extends BuildSummary {
   blocks: LearningBlock[];
   block_edges: BlockEdge[];
   interfaces: CrossBlockInterface[];
+}
+
+export type KnowledgeTreeBuildSummary = BuildSummary;
+export type IntakeMode = 'card' | 'chat';
+export interface IntakeCardOption { value: string; label: string; description: string }
+export interface IntakeCard {
+  id: string; dimension: 'goal' | 'scope' | 'depth' | 'prior_knowledge'; title: string; question: string;
+  multi_select: boolean; options: IntakeCardOption[]; allow_custom: boolean;
+}
+export interface DiagnosticProbeQuestion {
+  id: string; question_id: number | null; kp_id: number | null; topic: string; stem: string;
+  options: { key: string; label: string }[]; correct_answer: string; explanation: string;
+  source: 'question_bank' | 'ai_probe'; signed_payload: string;
+}
+export interface CatalogModule { code: string; name: string; level: string }
+export interface CatalogEdge { source: string; target: string; edge_type: string }
+export interface CatalogMatchSummary {
+  matched_subject: string | null; existing_modules: CatalogModule[]; module_count: number; kp_count: number; edge_count: number;
+  existing_edges: CatalogEdge[];
+  assessed_kp_count: number; avg_mastery: number; mastered_topics: string[]; weak_topics: string[]; needs_diagnostic: boolean;
+}
+export interface BaselineSummary {
+  answered_count: number; correct_count: number; accuracy: number; known_topics: string[]; gap_topics: string[];
+  self_report: string; entry_strategy: string; assessed_kp_count: number; avg_mastery: number;
+  mastered_topics: string[]; weak_topics: string[];
+  results: { id: string; selected_answer: string; correct: boolean; correct_answer: string; explanation: string }[];
+}
+export interface RequirementsDraft extends Record<string, unknown> {
+  learning_goal: string; recommended_archetype: BuildArchetype; scope_inclusions: string[]; scope_exclusions: string[];
+  depth_preference: string; learner_background: string; baseline_summary: BaselineSummary;
+  suggested_entry_topics: string[]; seed_modules: CatalogModule[]; seed_edges: CatalogEdge[];
+}
+export interface IntakeRequestPayload {
+  subject: string; mode: IntakeMode; messages?: { role: 'user' | 'assistant'; content: string }[];
+  card_answers?: Record<string, { selected: string[]; custom: string }>; self_report?: string;
+  diagnostic_questions?: DiagnosticProbeQuestion[]; diagnostic_answers?: Record<string, string>;
+}
+export interface IntakeResponsePayload {
+  subject: string; mode: IntakeMode; catalog_match: CatalogMatchSummary; needs_diagnostic: boolean;
+  cards: IntakeCard[]; diagnostic_questions: DiagnosticProbeQuestion[]; assistant_reply: string;
+  requirements_draft: RequirementsDraft; ready_to_build: boolean;
 }

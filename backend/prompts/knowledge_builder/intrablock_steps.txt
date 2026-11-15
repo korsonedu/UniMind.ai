@@ -1,3 +1,5 @@
 按profile.step_roles与suggested_step_buckets为当前block规划块内学习步骤并生成narrative_summary。steps总步数当M>=4时必须严格在2至5步（可直接采用suggested_step_buckets的分组，严禁超过5步或少于2步），M<=3允许1至M步；每步至少一个core_atoms且core_atoms+extension_atoms<=4。所有步骤原子合集必须严格互斥且完整等于atom_codes中的全部原子code（禁止遗漏、重复或新增）。strong_edges为零逆步硬约束：跨步不占intra_lines配额；仅对同一步内仍存在强依赖的原子补kind="progression"线，contrast线非必需，全块总intra_lines<=max_intra_lines（M整除2）。intra_lines仅连本步节点且含kind和reason。串讲须逐一点名所有核心原子name。诊断原型分流步骤必须给明确branch_condition，step_role取profile.step_roles。
 严格按工具Schema返回结构化结果。输入数据如下。
 {context}
+
+若输入包含 requirements，请在模块拆解、原子点认知层级、推荐入口块（is_entry_block / entry_blocks）及块内 core_atoms / extension_atoms 划分时遵循学习目的、范围、基础与深度要求。scope_exclusions 仅控制展开深度。必须保留完整客观前置 DAG，不得因用户已掌握而删除前置节点；基础仅用于推荐起点和讲解侧重。

@@ -15,6 +15,7 @@ class KnowledgeTreeBuild(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subject = models.CharField(max_length=200)
+    requirements = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     current_stage = models.CharField(max_length=64, blank=True)
     archetype = models.CharField(max_length=40, default='auto')

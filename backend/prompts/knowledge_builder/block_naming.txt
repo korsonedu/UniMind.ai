@@ -1,3 +1,5 @@
 为blocks数组中的每个聚类块按其原子学习目标命名，必须且仅针对blocks中的每一个code各返回一次（若有block_outline仅作全局上下文参考，切勿输出未在blocks中的code）。short_title用简洁问题导向标题，is_entry_block判断是否可作为学科入口，并给简明rationale（不超过30字）。
 严格按工具Schema返回结构化结果。输入数据如下。
 {context}
+
+若输入包含 requirements，请在模块拆解、原子点认知层级、推荐入口块（is_entry_block / entry_blocks）及块内 core_atoms / extension_atoms 划分时遵循学习目的、范围、基础与深度要求。scope_exclusions 仅控制展开深度。必须保留完整客观前置 DAG，不得因用户已掌握而删除前置节点；基础仅用于推荐起点和讲解侧重。

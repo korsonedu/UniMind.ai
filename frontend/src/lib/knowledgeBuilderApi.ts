@@ -1,5 +1,5 @@
 import api from '@/lib/api';
-import type { BuildArchetype, BuildSummary, KnowledgeTreeBuildDetail } from '@/types/knowledgeBuilder';
+import type { BuildArchetype, BuildSummary, KnowledgeTreeBuildDetail, IntakeRequestPayload, IntakeResponsePayload } from '@/types/knowledgeBuilder';
 
 export async function listKnowledgeBuilds(signal?: AbortSignal): Promise<BuildSummary[]> {
   const { data } = await api.get<BuildSummary[]>('/knowledge-builder/', { signal });
@@ -16,7 +16,12 @@ export async function getKnowledgeBuildStatus(buildId: string, signal?: AbortSig
   return data;
 }
 
-export async function createKnowledgeBuild(payload: { subject: string; archetype: BuildArchetype }): Promise<BuildSummary> {
+export async function createKnowledgeBuild(payload: { subject: string; archetype?: BuildArchetype; requirements?: Record<string, unknown> }): Promise<BuildSummary> {
   const { data } = await api.post<BuildSummary>('/knowledge-builder/', payload);
+  return data;
+}
+
+export async function inquireKnowledgeRequirements(payload: IntakeRequestPayload): Promise<IntakeResponsePayload> {
+  const { data } = await api.post<IntakeResponsePayload>('/knowledge-builder/intake/', payload);
   return data;
 }

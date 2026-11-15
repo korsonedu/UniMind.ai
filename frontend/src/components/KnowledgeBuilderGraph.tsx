@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
-import type { KnowledgeTreeBuildDetail } from '@/types/knowledgeBuilder';
+import type { BaselineSummary, KnowledgeTreeBuildDetail } from '@/types/knowledgeBuilder';
 import {
   adaptKnowledgeTree,
   computeColumnLayout,
@@ -18,6 +18,8 @@ interface KnowledgeBuilderGraphProps {
   tree: KnowledgeTreeBuildDetail;
   headerLeftSlot?: ReactNode;
   headerRightSlot?: ReactNode;
+  selectedBlockIds?: ReadonlySet<number>;
+  onToggleBlockSelection?: (id: number) => void;
 }
 
 interface TooltipState {
@@ -40,6 +42,10 @@ interface InnerWireResult {
   width: number;
   height: number;
   wires: ComputedInnerWire[];
+}
+
+function normalizeTopicName(name: string): string {
+  return name.replace(/\s+/g, '').toLowerCase();
 }
 
 function readInitialOpenIds(buildId: string, entryBlockId: number | null, validIds: Set<number>): Set<number> {
@@ -233,9 +239,31 @@ export function KnowledgeBuilderGraph({
   tree,
   headerLeftSlot,
   headerRightSlot,
+  selectedBlockIds,
+  onToggleBlockSelection,
 }: KnowledgeBuilderGraphProps) {
   const uid = useId().replace(/:/g, '');
   const adapted = useMemo(() => adaptKnowledgeTree(tree), [tree]);
+  const topicGroups = useMemo(() => {
+    const baseline = tree.requirements?.baseline_summary as Partial<BaselineSummary> | undefined;
+    return [
+      { kind: 'gap', label: '重点强化', topics: baseline?.gap_topics },
+      { kind: 'entry', label: '推荐切入', topics: tree.requirements?.suggested_entry_topics },
+      { kind: 'known', label: '已有基础', topics: baseline?.known_topics },
+    ].map(group => ({ ...group, topics: Array.isArray(group.topics)
+      ? group.topics.filter((topic): topic is string => typeof topic === 'string')
+        .map(name => ({ name, normalized: normalizeTopicName(name) })).filter(topic => topic.normalized)
+      : [] }));
+  }, [tree.requirements]);
+  const renderTopicBadges = (names: string[]) => {
+    const normalizedNames = names.map(normalizeTopicName).filter(Boolean);
+    return topicGroups.map(group => {
+      const matched = group.topics.filter(topic => normalizedNames.some(name =>
+        name.includes(topic.normalized) || topic.normalized.includes(name)));
+      return matched.length ? <span key={group.kind} className={`kb-badge kb-badge--${group.kind}`}
+        title={`匹配主题：${matched.map(topic => topic.name).join('、')}`}>{group.label}</span> : null;
+    });
+  };
 
   const [edgeMode, setEdgeMode] = useState<EdgeFilterMode>('retained');
   const [openByBuild, setOpenByBuild] = useState<Record<string, Set<number>>>({});
@@ -699,6 +727,8 @@ export function KnowledgeBuilderGraph({
                       onMouseEnter={() => setHoveredBlockId(block.id)}
                       onMouseLeave={() => setHoveredBlockId(curr => (curr === block.id ? null : curr))}
                     >
+                      {onToggleBlockSelection && <label className="kb-select-block"><input type="checkbox" checked={selectedBlockIds?.has(block.id) ?? false}
+                        onChange={() => onToggleBlockSelection(block.id)} />加入项目目标</label>}
                       <button
                         type="button"
                         className="kb-toggle"
@@ -713,7 +743,10 @@ export function KnowledgeBuilderGraph({
                           {block.code} · {block.steps.length} 步 · {block.coreCount} 必学
                           {block.extensionCount > 0 ? ` + ${block.extensionCount} 拓展` : ''}
                         </small>
-                        <span className="kb-cardtype">{block.domainTitle}</span>
+                        <span className="kb-badges">
+                          <span className="kb-cardtype">{block.domainTitle}</span>
+                          {renderTopicBadges([block.shortTitle, ...block.steps.flatMap(step => step.atoms.map(item => item.atom.name))])}
+                        </span>
                       </button>
 
                       {isOpen && (
@@ -813,6 +846,7 @@ export function KnowledgeBuilderGraph({
                                       className={item.membership === 'extension' ? 'kb-point ext' : 'kb-point'}
                                     >
                                       <div>{item.atom.name}</div>
+                                      <span className="kb-badges">{renderTopicBadges([item.atom.name])}</span>
                                       {item.isInterfacePoint ? <b>◆ 跨块接口点</b> : null}
                                     </div>
                                   ))}
