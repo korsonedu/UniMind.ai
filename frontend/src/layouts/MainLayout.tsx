@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Link, useLocation, Outlet, useNavigate, useNavigationType } from 'react-router-dom';
 
-import { User as UserIcon, SignOut, CreditCard, ChartBar, Trophy, ArrowLeft, ArrowRight, SidebarSimple, TreeStructure, ChatCircle, ListBullets, Files, NotePencil, SquaresFour, X } from '@phosphor-icons/react';
+import { User as UserIcon, SignOut, CreditCard, ChartBar, Trophy, ArrowLeft, ArrowRight, SidebarSimple, TreeStructure, ChatCircle, ListBullets, Files, NotePencil, BookOpen, SquaresFour, X } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { queryClient } from '@/lib/queryClient';
@@ -27,6 +27,7 @@ import { CourseSidebarContext, type SidebarView, type SidebarRecentItem, NotesSi
 import { useExamActivity } from '@/hooks/useExamActivity';
 import '@/styles/app-shell.css';
 import NotesSidebar from '@/pages/notes/NotesSidebar';
+import { SavedCoursesPanel } from '@/components/course/SavedCoursesPanel';
 import { SidebarHome } from '@/components/SidebarHome';
 import { SidebarResizeHandle } from '@/components/SidebarResizeHandle';
 import { useDesktopStore } from '@/lib/desktop';
@@ -50,7 +51,7 @@ function NavIcon({ position }: { position: string }) {
 
 const TOUR_STEPS: TourStep[] = [
   { target: '[data-tour="xiaoyu-input"]', title: '跟小宇对话', content: '问知识点、刷题、看分析。试试「帮我复习一下三角函数」', placement: 'bottom' },
-  { target: '[data-tour="sidebar"]', title: '你的学习空间', content: '课程、习题训练、学习记录和学习社区都在这里。', placement: 'right' },
+  { target: '[data-tour="sidebar"]', title: '你的学习空间', content: '笔记、习题训练、学习记录和学习社区都在这里。', placement: 'right' },
   { target: '[data-tour="header-right"]', title: '账号和消息', content: '修改资料、系统通知、签到', placement: 'bottom' },
 ];
 
@@ -70,8 +71,9 @@ export const MainLayout: React.FC = () => {
   const [notesOpen, setNotesOpen] = useState(false);
   const [notesMounted, setNotesMounted] = useState(false);
   const [sidebarView, setSidebarView] = useState<SidebarView>('home');
+  const [sidebarLocationKey, setSidebarLocationKey] = useState('');
   const [openedSidebarTools, setOpenedSidebarTools] = useState<SidebarView[]>([]);
-  const [addedSidebarTools, setAddedSidebarTools] = useState<SidebarView[]>(['chat', 'outline', 'notes']);
+  const [addedSidebarTools, setAddedSidebarTools] = useState<SidebarView[]>(['chat', 'outline', 'notes', 'saved-courses']);
   const [sidebarRecent, setSidebarRecent] = useState<SidebarRecentItem[]>([]);
   const recordSidebarRecent = useCallback((item: SidebarRecentItem) => {
     setSidebarRecent(previous => [item, ...previous.filter(entry => entry.key !== item.key)].slice(0, 8));
@@ -122,7 +124,7 @@ export const MainLayout: React.FC = () => {
   const logout = useAuthStore(state => state.logout);
   const updateUser = useAuthStore(state => state.updateUser);
   const { primaryColor, pageTitle } = useSystemStore();
-  const { fetchFeatures, hasFeature, loading: featuresLoading, exitPreview } = useInstitutionStore();
+  const { fetchFeatures, hasFeature, loading: featuresLoading, hasCourseCatalog, exitPreview } = useInstitutionStore();
   const isMobile = useIsMobile();
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
   const [showTour, setShowTour] = useState(false);
@@ -143,17 +145,23 @@ export const MainLayout: React.FC = () => {
   const setNotesAvailable = useCallback((available: boolean) => { setNotesPageAvailability({ key: location.key, available }); }, [location.key]);
   const notesAvailable = notesPageAvailability.key === location.key && notesPageAvailability.available;
   const courseSidebarAvailable = courseSidebarAvailability.key === location.key && courseSidebarAvailability.available;
-  const sidebarAvailable = notesAvailable || courseSidebarAvailable;
+  const savedCoursesAvailable = !hasCourseCatalog && hasFeature('course.video') && (xiaoyuVisible || location.pathname === '/courses' || /^\/course\/\d+/.test(location.pathname));
+  const sidebarAvailable = notesAvailable || courseSidebarAvailable || savedCoursesAvailable;
   const sidebarVisible = notesOpen && sidebarAvailable;
-  const activeSidebarView = courseSidebarAvailable || sidebarView === 'notes' ? sidebarView : 'home';
+  const activeSidebarView = courseSidebarAvailable || sidebarView === 'notes' || (savedCoursesAvailable && sidebarView === 'saved-courses') ? sidebarView : 'home';
   const notesVisible = sidebarVisible && activeSidebarView === 'notes';
-  const sidebarTools = courseSidebarAvailable ? [
+  const sidebarTools = [...(courseSidebarAvailable ? [
     { id: 'chat' as const, label: t('小宇'), icon: ChatCircle },
     { id: 'outline' as const, label: t('课程大纲'), icon: ListBullets },
     { id: 'materials' as const, label: t('资料'), icon: Files },
     { id: 'notes' as const, label: t('笔记'), icon: NotePencil },
-  ] : [{ id: 'notes' as const, label: t('笔记'), icon: NotePencil }];
+  ] : [{ id: 'notes' as const, label: t('笔记'), icon: NotePencil }]), ...(savedCoursesAvailable ? [{ id: 'saved-courses' as const, label: t('已保存课程'), icon: BookOpen }] : [])];
   const sidebarTabs = openedSidebarTools.map(id => sidebarTools.find(tool => tool.id === id)).filter(tool => !!tool);
+  if (!featuresLoading && sidebarLocationKey !== location.key) {
+    setSidebarLocationKey(location.key);
+    if (savedCoursesAvailable && new URLSearchParams(location.search).get('panel') === 'saved-courses') selectSidebarView('saved-courses');
+    else if (sidebarView === 'saved-courses') setSidebarView('home');
+  }
   useExamActivity();
 
   useEffect(() => {
@@ -201,6 +209,7 @@ export const MainLayout: React.FC = () => {
     }).catch(() => {}).finally(() => setPendingTourDismiss(false));
   }, [pendingTourDismiss, updateUser]);
 
+  const visibleNavItems = navItems.filter(item => item.to !== '/courses' || hasCourseCatalog);
   const canEnter = (item: NavItem) => {
     if (item.to === '/community') return !featuresLoading && (hasFeature('faq.system') || hasFeature('study.room'));
     return !item.feature || (!featuresLoading && hasFeature(item.feature));
@@ -254,7 +263,7 @@ export const MainLayout: React.FC = () => {
           </svg>
         </Link></div>
         <nav aria-label={t('功能导航')} className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
-          {navItems.filter(item => item.to !== '/xiaoyu').map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-9 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={routeFor(item.to)} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}>{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true">{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{!canEnter(item) && t(' · 暂未开通')}</TooltipContent></TooltipPortal></Tooltip></div>)}
+          {visibleNavItems.filter(item => item.to !== '/xiaoyu').map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-9 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={routeFor(item.to)} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}>{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true">{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{!canEnter(item) && t(' · 暂未开通')}</TooltipContent></TooltipPortal></Tooltip></div>)}
         </nav>
       </aside>
       <div className="um-window-panes" data-notes-open={sidebarVisible} style={{ '--um-notes-width': `${sidebarWidth}px` } as React.CSSProperties}>
@@ -291,7 +300,10 @@ export const MainLayout: React.FC = () => {
           <button type="button" className="um-agent-icon-button" aria-label={t('关闭右侧栏')} onClick={closeNotes}><X size={17} /></button>
         </header>
         {activeSidebarView === 'home' && <SidebarHome tools={sidebarTools} added={addedSidebarTools} recent={sidebarRecent} onSelect={selectSidebarView} onOpenRecent={openSidebarRecent} />}
-        <div ref={setCourseSidebarHost} className="um-course-sidebar-host" hidden={!courseSidebarAvailable || activeSidebarView === 'notes' || activeSidebarView === 'home'} />
+        <div ref={setCourseSidebarHost} className="um-course-sidebar-host" hidden={!courseSidebarAvailable || activeSidebarView === 'notes' || activeSidebarView === 'home' || activeSidebarView === 'saved-courses'} />
+        <div id="sidebar-panel-saved-courses" role="tabpanel" aria-labelledby="sidebar-tab-saved-courses" className="um-right-panel-content" hidden={activeSidebarView !== 'saved-courses'}>
+          {sidebarVisible && savedCoursesAvailable && activeSidebarView === 'saved-courses' && <SavedCoursesPanel />}
+        </div>
         <div id="sidebar-panel-notes" role="tabpanel" aria-labelledby="sidebar-tab-notes" className="um-right-panel-content" hidden={activeSidebarView !== 'notes'}>
           {notesMounted && !inNotesPage && user && <NotesSidebar key={user.id} userId={user.id} visible={notesVisible} openRequest={noteOpenRequest} initialNoteId={noteSession.userId === user.id ? noteSession.id : null} onSelect={rememberNote} onClose={closeNotes} />}
         </div>
@@ -299,7 +311,7 @@ export const MainLayout: React.FC = () => {
       </div>
       </div>
       <nav className={cn('md:hidden fixed bottom-0 inset-x-0 z-[var(--z-dropdown)] border-t border-border bg-card/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]', hideMobileBottomNav && 'hidden')}>
-        <div className="um-app-mobile-links flex items-center justify-around px-1 py-2">{navItems.map(item => canEnter(item) ? <Link key={item.to} to={routeFor(item.to)} aria-current={isActive(item) ? 'page' : undefined} className={cn('relative flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-lg transition-colors min-h-[44px] min-w-[40px]', isActive(item) ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}>{isActive(item) && <span className="absolute top-0 inset-x-3 h-0.5 bg-primary rounded-full" />}{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></Link> : <span key={item.to} role="link" aria-disabled="true" aria-label={t('{0}，暂未开通', { 0: item.label })} className="flex flex-col items-center justify-center gap-0.5 py-1 px-1 min-h-[44px] min-w-[40px] text-muted-foreground opacity-40 cursor-not-allowed">{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></span>)}</div>
+        <div className="um-app-mobile-links flex items-center justify-around px-1 py-2">{visibleNavItems.map(item => canEnter(item) ? <Link key={item.to} to={routeFor(item.to)} aria-current={isActive(item) ? 'page' : undefined} className={cn('relative flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-lg transition-colors min-h-[44px] min-w-[40px]', isActive(item) ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}>{isActive(item) && <span className="absolute top-0 inset-x-3 h-0.5 bg-primary rounded-full" />}{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></Link> : <span key={item.to} role="link" aria-disabled="true" aria-label={t('{0}，暂未开通', { 0: item.label })} className="flex flex-col items-center justify-center gap-0.5 py-1 px-1 min-h-[44px] min-w-[40px] text-muted-foreground opacity-40 cursor-not-allowed">{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></span>)}</div>
       </nav>
       <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}><AlertDialogContent className="rounded-lg border-border bg-card"><AlertDialogHeader><AlertDialogTitle>{t('确认退出登录？')}</AlertDialogTitle><AlertDialogDescription>{t('退出后需要重新登录才能访问学习记录和课程。')}{pendingLearningRecords > 0 && t(' 当前还有 {0} 条离线学习记录未同步，退出会清除这些记录，建议先返回桌面设置联网同步。', { 0: pendingLearningRecords })}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t('返回')}</AlertDialogCancel><AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch { /* Local logout remains available. */ } await queryClient.cancelQueries(); queryClient.clear(); logout(); navigate('/login', { replace: true }); }}>{t('确认退出')}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       {showTour && isTourPage && <GuidedTour steps={tourSteps} onDismiss={handleTourDismiss} />}

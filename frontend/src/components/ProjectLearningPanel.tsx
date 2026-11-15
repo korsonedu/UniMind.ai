@@ -6,6 +6,7 @@ import { ArrowRight, BookOpen, CalendarBlank, Clock, FolderOpen, TreeStructure, 
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import { queryClient } from '@/lib/queryClient';
+import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { learningKey, learningUrl, useProjectLearning, type ProjectLearning } from '@/lib/projectLearning';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
@@ -22,6 +23,7 @@ export function ProjectLearningContent({ knowledgeOnly = false, onStart }: { kno
   const locale = useLocale();
   const { chat, openingProject, activate } = useXiaoYuChat();
   useEffect(activate, [activate]);
+  const hasCourseCatalog = useInstitutionStore(state => state.hasCourseCatalog);
   const userId = useAuthStore(s => s.user?.id);
   const projectId = chat.projectId;
   const query = useProjectLearning(projectId);
@@ -101,7 +103,7 @@ export function ProjectLearningContent({ knowledgeOnly = false, onStart }: { kno
       </section>
       <div className="um-learning-plan-tools">
         <Link to={learningUrl('/knowledge-tree', projectId, chat.conversationId)}><TreeStructure size={16} />{t('知识关系')}</Link>
-        <Link to={learningUrl('/courses', projectId, chat.conversationId)}><BookOpen size={16} />{t('课程与材料')}</Link>
+        <Link to={learningUrl('/courses', projectId, chat.conversationId)}><BookOpen size={16} />{hasCourseCatalog ? t('课程与材料') : t('已保存课程')}</Link>
         <div className="um-learning-controls">
           <button className="um-agent-button" disabled={busy || data.status === 'preparing'} onClick={() => void act(data.status === 'paused' || data.status === 'completed' ? 'resume' : 'pause')}>{data.status === 'paused' || data.status === 'completed' ? t('恢复学习') : t('暂停学习')}</button>
           {data.status === 'active' && <button className="um-agent-button" disabled={busy} onClick={() => void act('complete')}>{t('结束当前目标')}</button>}

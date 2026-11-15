@@ -3030,7 +3030,19 @@ const en: Record<string, string> = {
   "先开启上方「接收系统通知」，再选择通知内容。": "Turn on “Receive system notifications” above to choose notification types.",
   "启动与后台运行": "Startup & background",
   "专注计时": "Focus timer",
-  "快捷键": "Shortcuts"
+  "快捷键": "Shortcuts",
+  "已保存课程": "Saved courses",
+  "保存课程": "Save course",
+  "重试保存状态": "Retry saved status",
+  "正在加载已保存课程…": "Loading saved courses\u2026",
+  "已保存课程加载失败": "Failed to load saved courses",
+  "在与小宇的对话中保存课程后，可以在这里继续学习。": "Save courses in your conversations with Xiaoyu to continue learning here.",
+  "UniMind.ai 课程": "UniMind.ai course",
+  "移除课程：{0}": "Remove course: {0}",
+  "已移除课程": "Course removed",
+  "课程未更新，请重试": "Could not update the course. Please try again.",
+  "保存状态加载失败，": "Failed to load saved status. ",
+  "笔记、习题训练、学习记录和学习社区都在这里。": "Your notes, practice, learning records, and community are all here."
 };
 
 export default en;

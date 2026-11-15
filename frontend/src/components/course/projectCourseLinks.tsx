@@ -1,6 +1,7 @@
 import type { Components } from 'react-markdown';
 import { Link } from 'react-router-dom';
 import { learningUrl } from '@/lib/projectLearning';
+import { SavableCourseLink } from './SavableCourseLink';
 
 function sameOriginCourseUrl(href?: string) {
   try {
@@ -26,8 +27,11 @@ export function projectCourseLinks(projectId: number | null, conversationId: str
           const Citation = citations?.a;
           if (typeof Citation === 'function') return <Citation {...props} href={coursePath} title={title} target={target} rel={rel}>{children}</Citation>;
         }
-        return <Link to={learningUrl(coursePath, projectId, conversationId)} title={title}>{children}</Link>;
+        const courseId = Number(url.pathname.split('/')[2]);
+        const to = learningUrl(coursePath, projectId, conversationId);
+        return courseId ? <SavableCourseLink to={to} courseId={courseId} title={title}>{children}</SavableCourseLink> : <Link to={to} title={title}>{children}</Link>;
       }
+      if (url && /^\/course\/\d+\/?$/.test(url.pathname) && !citations) return <SavableCourseLink to={url.pathname + url.search + url.hash} courseId={Number(url.pathname.split('/')[2])} title={title}>{children}</SavableCourseLink>;
       const Citation = citations?.a;
       return typeof Citation === 'function' ? <Citation {...props} href={href} title={title} target={target} rel={rel}>{children}</Citation> : <a href={href} title={title} target={target} rel={rel}>{children}</a>;
     },

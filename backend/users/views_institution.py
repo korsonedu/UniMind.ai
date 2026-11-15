@@ -57,6 +57,7 @@ class InstitutionFeatureView(APIView):
     def get(self, request):
         from users.learning import usage_info
         from users.feature_access import learning_features
+        from courses.access import has_full_course_access
         user = request.user
         features = learning_features(user)
         inst_data = None
@@ -64,6 +65,7 @@ class InstitutionFeatureView(APIView):
         usage = {'ai_call_total': personal_usage, 'ai_question': personal_usage,
                  'used': personal_usage['used'], 'limit': personal_usage['limit']}
         return Response({'is_platform_admin': is_platform_admin(user),
+                         'has_course_catalog': has_full_course_access(user),
                          'institution': inst_data, 'features': features, 'usage': usage})
 
 

@@ -131,9 +131,9 @@
 }
 
 .um-right-panel-header [role=tablist] { overflow-x:auto; scrollbar-width:none; }
-.um-sidebar-tab { display:flex; align-items:center; flex:none; }
-.um-right-panel-header .um-sidebar-tab [role=tab] { padding-right:4px; }
-.um-sidebar-tab-close { display:grid; place-items:center; width:22px; height:28px; border-radius:5px; color:var(--um-color-text-muted); cursor:pointer; }
+.um-sidebar-tab { position:relative; display:flex; align-items:center; flex:none; }
+.um-right-panel-header .um-sidebar-tab [role=tab] { padding-right:30px; }
+.um-sidebar-tab-close { position:absolute; right:4px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:22px; height:28px; border-radius:5px; color:var(--um-color-text-muted); cursor:pointer; }
 .um-sidebar-tab-close:hover { background:var(--um-color-hover); color:var(--um-color-text); }
 .um-sidebar-home { flex:1; min-height:0; overflow-y:auto; padding:24px; }
 .um-sidebar-home section+section { margin-top:32px; }
