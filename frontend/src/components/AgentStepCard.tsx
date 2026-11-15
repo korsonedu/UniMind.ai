@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import React, { useState, useEffect, useRef } from 'react';
 import { Check, Spinner, Circle, X, ArrowRight } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
@@ -22,6 +23,7 @@ function useElapsed(status: string) {
 }
 
 export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = React.memo(({ step, compact = false }) => {
+  useLocale();
   const elapsed = useElapsed(step.status);
   const navigate = useNavigate();
 
@@ -52,7 +54,7 @@ export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = R
         compact ? "px-2.5 py-1.5" : "px-3 py-2",
       )}>
         {icon}
-        <span className="flex-1 font-medium text-foreground">{step.label}</span>
+        <span className="flex-1 font-medium text-foreground">{t(step.label)}</span>
         {step.status === 'running' && elapsed >= 3 && (
           <span className="text-[10px] text-muted-foreground/60 font-normal tabular-nums">
             {elapsed >= 60 ? `${Math.floor(elapsed / 60)}m${elapsed % 60}s` : `${elapsed}s`}
@@ -65,7 +67,7 @@ export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = R
         )}
         {step.status === 'failed' && step.error?.message && (
           <span className="text-[10px] text-destructive/80 font-normal truncate max-w-[160px]">
-            {step.error.message}
+            {t(step.error.message)}
           </span>
         )}
       </div>

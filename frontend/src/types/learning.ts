@@ -38,5 +38,5 @@ export interface LearningCatalog {
 }
 
 export const learningPrice = (cents: number) => new Intl.NumberFormat(getLocale(), { style: 'currency', currency: 'CNY' }).format(cents / 100);
-export const learningDate = (value: string) => new Intl.DateTimeFormat(getLocale(), { dateStyle: 'medium' }).format(new Date(value));
+export const learningDate = (value: string) => new Intl.DateTimeFormat(getLocale(), { dateStyle: 'medium', ...(/^\d{4}-\d{2}-\d{2}$/.test(value) ? { timeZone: 'UTC' } : {}) }).format(new Date(value));
 export const learningReset = (value: string) => new Intl.DateTimeFormat(getLocale(), { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));

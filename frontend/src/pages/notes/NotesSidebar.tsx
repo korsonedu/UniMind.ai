@@ -201,10 +201,10 @@ export default function NotesSidebar({ userId, initialNoteId, openRequest, visib
       {listError && <p className="um-notes-list-error" role="status">{listError}<button type="button" onClick={() => setRefresh(value => value + 1)}>{t('刷新')}</button></p>}
       <div className="um-notes-results">{matches.map(item => <button type="button" className="um-notes-result" key={item.id} aria-current={note?.id === item.id ? 'true' : undefined} disabled={disabled} onClick={() => void open(item.id)}>
         <div><strong>{item.title || t('未命名笔记')}</strong>{note?.id === item.id ? <Check size={15} /> : item.is_favorite && <Star size={13} />}</div>
-        <span>{item.content.replace(/[#*`>]/g, '').slice(0, 100) || t('还没有正文')}</span><small>{new Date(item.updated_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}</small>
+        <span>{item.content.replace(/[#*`>]/g, '').slice(0, 100) || t('还没有正文')}</span><small>{new Date(item.updated_at).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric' })}</small>
       </button>)}{!matches.length && <div className="um-notes-picker-empty"><FileText size={28} /><p>{query.trim() ? t('没有找到相关笔记') : favorites ? t('还没有收藏的笔记') : t('还没有笔记')}</p><span>{query.trim() ? t('换个关键词，或新建一篇记录。') : t('点击右上角的 +，开始记录。')}</span></div>}</div>
     </section>}
     {!pickerOpen && listError && <p className="um-notes-list-error">{listError}<button type="button" onClick={() => setRefresh(value => value + 1)}>{t('刷新')}</button></p>}
-    <footer className="um-notes-sidebar-footer"><span role="status" data-error={!!(message || error)}><i />{loading ? t('正在加载…') : creating ? t('正在创建…') : message || error ? t('内容已保留，尚未保存') : note ? status : t('尚未创建笔记')}</span><span>{t('关闭侧栏可继续学习')}</span></footer>
+    <footer className="um-notes-sidebar-footer"><span role="status" data-error={!!(message || error)}><i />{loading ? t('正在加载…') : creating ? t('正在创建…') : message || error ? t('内容已保留，尚未保存') : note ? t(status) : t('尚未创建笔记')}</span><span>{t('关闭侧栏可继续学习')}</span></footer>
   </aside>;
 }

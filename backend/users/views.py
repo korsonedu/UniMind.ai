@@ -20,6 +20,7 @@ from .permissions import IsPlatformAdmin, IsAdmin, HasStudentFeature, is_platfor
 from django.utils import timezone
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
+from django.utils.http import content_disposition_header
 from core.rate_limit import rate_limit, _get_client_ip
 from core.analytics import record_event
 from core.utils import apply_institution_filter
@@ -128,7 +129,12 @@ class UpdateProfileView(generics.UpdateAPIView):
         return self.request.user
     
     def perform_update(self, serializer):
-        serializer.save()
+        if set(serializer.validated_data) == {'preferred_language'}:
+            user = self.request.user
+            user.preferred_language = serializer.validated_data['preferred_language']
+            user.save(update_fields=['preferred_language'])
+        else:
+            serializer.save()
 
 from django.db.models import Q
 from django.db.models.functions import TruncDate
@@ -1521,7 +1527,7 @@ class StudentReportCardPDFView(APIView):
                 pdf_bytes = f.read()
             response = HttpResponse(pdf_bytes, content_type='application/pdf')
             nickname = data['student']['nickname'] or 'student'
-            response['Content-Disposition'] = f'attachment; filename="report_{nickname}.pdf"'
+            response['Content-Disposition'] = content_disposition_header(True, f'report_{nickname}.pdf')
             return response
         finally:
             try:

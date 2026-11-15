@@ -1,3 +1,4 @@
+import { getLocale, t, useLocale } from '@/i18n';
 import { useState, useEffect } from 'react';
 import { Check } from '@phosphor-icons/react';
 import api from '@/lib/api';
@@ -28,6 +29,7 @@ const CATEGORIES = [
 ];
 
 export function Achievements() {
+  useLocale();
   const [data, setData] = useState<AchievementData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -43,14 +45,14 @@ export function Achievements() {
   const unlocked = data.filter(item => item.is_unlocked).length;
   const filtered = category === 'all' ? data : data.filter(item => item.category === category);
   return <LearningRecordLayout>
-    {loading ? <div className="um-record-loading" aria-label="加载成就" aria-busy="true"><Skeleton className="h-16 w-full" /><Skeleton className="h-64 w-full" /></div>
-      : error ? <div className="um-record-empty" role="alert"><p>成就加载失败。</p><button className="um-record-button" onClick={() => { setLoading(true); setError(false); fetchData(); }}>重试</button></div>
-      : !data.length ? <div className="um-record-empty"><p>暂无成就</p><span>开始学习后，在这里查看解锁进度。</span></div>
+    {loading ? <div className="um-record-loading" aria-label={t('加载成就')} aria-busy="true"><Skeleton className="h-16 w-full" /><Skeleton className="h-64 w-full" /></div>
+      : error ? <div className="um-record-empty" role="alert"><p>{t('成就加载失败。')}</p><button className="um-record-button" onClick={() => { setLoading(true); setError(false); fetchData(); }}>{t('重试')}</button></div>
+      : !data.length ? <div className="um-record-empty"><p>{t('暂无成就')}</p><span>{t('开始学习后，在这里查看解锁进度。')}</span></div>
       : <>
-        <div className="um-achievement-summary"><div><strong>{unlocked}<span> / {data.length}</span></strong><p>已解锁成就</p></div><progress value={unlocked} max={data.length} aria-label="成就解锁进度" /></div>
+        <div className="um-achievement-summary"><div><strong>{unlocked}<span> / {data.length}</span></strong><p>{t('已解锁成就')}</p></div><progress value={unlocked} max={data.length} aria-label={t('成就解锁进度')} /></div>
         <Tabs value={category} onValueChange={setCategory}>
-          <TabsList className="um-achievement-filters" aria-label="成就分类">
-            {CATEGORIES.map(item => <TabsTrigger key={item.key} value={item.key}>{item.label}</TabsTrigger>)}
+          <TabsList className="um-achievement-filters" aria-label={t('成就分类')}>
+            {CATEGORIES.map(item => <TabsTrigger key={item.key} value={item.key}>{t(item.label)}</TabsTrigger>)}
           </TabsList>
         </Tabs>
         <ul className="um-achievement-list">
@@ -58,15 +60,15 @@ export function Achievements() {
             const progress = Math.min(item.threshold, Math.max(0, item.progress));
             return <li key={item.key} data-unlocked={item.is_unlocked}>
               <div className="um-achievement-status" aria-hidden="true">{item.is_unlocked ? <Check size={16} /> : <span />}</div>
-              <div className="um-achievement-description"><h2>{item.name}</h2><p>{item.description}</p></div>
+              <div className="um-achievement-description"><h2>{t(item.name)}</h2><p>{t(item.description)}</p></div>
               <div className="um-achievement-progress">
-                {item.is_unlocked ? <><span>已解锁</span>{item.unlocked_at && <time dateTime={item.unlocked_at}>{new Date(item.unlocked_at).toLocaleDateString('zh-CN')}</time>}</>
-                  : <><span>{progress} / {item.threshold}</span><progress value={progress} max={Math.max(1, item.threshold)} aria-label={`${item.name}进度`} /></>}
+                {item.is_unlocked ? <><span>{t('已解锁')}</span>{item.unlocked_at && <time dateTime={item.unlocked_at}>{new Date(item.unlocked_at).toLocaleDateString(getLocale())}</time>}</>
+                  : <><span>{progress} / {item.threshold}</span><progress value={progress} max={Math.max(1, item.threshold)} aria-label={t('{0}进度', { 0: item.name })} /></>}
               </div>
             </li>;
           })}
         </ul>
-        {!filtered.length && <p className="um-record-empty">该分类暂无成就。</p>}
+        {!filtered.length && <p className="um-record-empty">{t('该分类暂无成就。')}</p>}
       </>}
   </LearningRecordLayout>;
 }

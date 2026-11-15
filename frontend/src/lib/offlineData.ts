@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import axios from 'axios';
 import api from './api';
 import type { Note, NoteDraft, Notebook } from './notes';
@@ -224,7 +225,7 @@ async function syncOutbox(userId: number, signal: AbortSignal): Promise<{ synced
       if (status !== 409 && status !== 404) break;
       try {
         const { data } = await api.post<Note>('/notes/items/', {
-          title: `${entry.draft.title || '未命名笔记'}（本地副本）`,
+          title: t('{0}（本地副本）', { 0: entry.draft.title || t('未命名笔记') }),
           content: entry.draft.content,
           notebook: entry.draft.notebook,
           tags: entry.draft.tags,

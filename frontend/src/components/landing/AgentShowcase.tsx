@@ -25,10 +25,10 @@ export function AgentShowcase() {
     <div className="landing-ui-frame landing-agent-frame landing-agent-showcase">
       <div className="landing-agent-images" aria-live="polite">
         {scenes.map((scene, index) => <div key={scene.image} className={`landing-agent-image${index === selected ? ' is-active' : index === previous ? ' is-leaving' : ''}`} aria-hidden={index !== selected}>
-          <img className="landing-capture" src={`/screenshots/${scene.image}`} alt={t('小宇{0}界面，{1}', { 0: scene.label, 1: scene.description })} width="3840" height="2640" />
-          <img className="landing-scan-outline" src={`/screenshots/${scene.image}`} alt="" aria-hidden="true" width="3840" height="2640" />
+          <img className="landing-capture" src={`/screenshots/${scene.image.replace('.webp', locale === 'en' ? '-en.webp' : '.webp')}`} alt={t('小宇{0}界面，{1}', { 0: scene.label, 1: scene.description })} width="3840" height="2640" />
+          <img className="landing-scan-outline" src={`/screenshots/${scene.image.replace('.webp', locale === 'en' ? '-en.webp' : '.webp')}`} alt="" aria-hidden="true" width="3840" height="2640" />
           <span className="landing-scan-beam" aria-hidden="true" />
-          <ScreenshotDissolve active={index === selected} />
+          <ScreenshotDissolve key={locale} active={index === selected} />
         </div>)}
       </div>
       <button type="button" className="landing-agent-launch" onClick={() => select((selected + 1) % scenes.length)} aria-label={t('切换功能展示，当前为{0}', { 0: scenes[selected].label })} />
@@ -39,6 +39,6 @@ export function AgentShowcase() {
       {scenes.map((scene, index) => <button key={scene.image} type="button" aria-label={t('查看{0}', { 0: scene.label })} aria-pressed={index === selected} onClick={() => select(index)}><span /></button>)}
       <button type="button" className="landing-showcase-next" aria-label={t('下一个展示')} onClick={() => select((selected + 1) % scenes.length)}><ArrowRight size={17} /></button>
     </nav>
-    {locale === 'en' && <div className="text-center text-xs text-muted-foreground">{t('图片中的示例界面使用中文。')}</div>}
+    <div className="text-center text-xs text-muted-foreground">{t('本页界面示例使用虚构数据。')}</div>
   </div>;
 }

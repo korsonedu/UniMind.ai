@@ -17,6 +17,7 @@ from ai_assistant.services.memory_service import extract_memories_async
 from ai_assistant.views_projects import save_new_conversation_project
 from notes.context import prepare_note_context, conversation_uses_notes
 from notes.awareness import note_message_metadata
+from core.interface_language import ui_text, error_text
 from users.learning import confirm_ai_call, finish_ai_call, release_ai_call
 from users.models import AIUsageReservation
 from .dsh_runtime import DshUnavailable, run_site_action, site_request_lock, quota_write_lock
@@ -200,9 +201,13 @@ def response(request, bot, conversation_id, message, *, course_context=None):
                 round_number = event.get('step', round_number)
                 event = {'type': 'text_reset'}
             elif event['type'] == 'error':
-                event = {'done': True, 'is_error': True, 'full_content': event['error']}
+                event = {'done': True, 'is_error': True, 'full_content': ui_text(event['error'], request_language(request))}
             elif event['type'] != 'user_message':
                 continue
+            if event.get('type') == 'step':
+                event['label'] = ui_text(event.get('label', ''), request_language(request))
+                if event.get('error'):
+                    event['error'] = error_text(event['error'], request_language(request))
             yield ('data: ' + json.dumps(event, ensure_ascii=False) + '\n\n').encode()
 
     result = StreamingHttpResponse(events(), content_type='text/event-stream')

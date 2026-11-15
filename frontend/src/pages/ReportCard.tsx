@@ -106,7 +106,7 @@ export const ReportCard = () => {
         <section className="um-record-section"><header><h2>{t('考试记录')}</h2><Link to="/tests">{t('进入习题训练')}</Link></header>
           {data.exams.length ? <div className="um-record-table-scroll"><table><thead><tr><th scope="col">{t('日期')}</th><th scope="col">{t('得分')}</th><th scope="col">{t('得分率')}</th><th scope="col">{t('ELO 变化')}</th></tr></thead><tbody>{data.exams.map(item => <tr key={item.id}><td><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleDateString(getLocale())}</time></td><td>{item.total_score} / {item.max_score}</td><td>{item.percentage}%</td><td>{item.elo_change >= 0 ? '+' : ''}{item.elo_change}</td></tr>)}</tbody></table></div> : <p className="um-record-muted">{t('暂无考试记录。')}</p>}
         </section>
-        {!!data.achievements.length && <section className="um-record-section"><header><h2>{t('已解锁成就')}</h2><Link to="/achievements">{t('查看全部成就')}</Link></header><ul className="um-record-unlocked">{data.achievements.map(item => <li key={item.key}><span>{item.name}</span><span>{item.description}</span></li>)}</ul></section>}
+        {!!data.achievements.length && <section className="um-record-section"><header><h2>{t('已解锁成就')}</h2><Link to="/achievements">{t('查看全部成就')}</Link></header><ul className="um-record-unlocked">{data.achievements.map(item => <li key={item.key}><span>{t(item.name)}</span><span>{t(item.description)}</span></li>)}</ul></section>}
       </>}
   </LearningRecordLayout>;
 };

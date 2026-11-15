@@ -102,5 +102,5 @@ export function useNoteSave(onSaved: (note: Note) => void) {
     window.addEventListener('beforeunload', protect);
     return () => window.removeEventListener('beforeunload', protect);
   }, []);
-  return { note, documentKey, dirty, status: t(status), error: t(error), load, change, flush, syncSaved };
+  return { note, documentKey, dirty, status, error: t(error), load, change, flush, syncSaved };
 }

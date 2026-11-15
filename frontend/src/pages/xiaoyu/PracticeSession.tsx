@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -66,6 +67,7 @@ const PracticeSession: React.FC = () => {
 };
 
 const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId }) => {
+  useLocale();
   const navigate = useNavigate();
   const userId = useAuthStore(state => state.user?.id);
   const [offline, setOffline] = useState(false);
@@ -79,7 +81,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
     if (!saved) return {};
     try { return JSON.parse(saved); } catch { return {}; }
   });
-  const [error, setError] = useState(sessionId ? '' : '缺少会话 ID');
+  const [error, setError] = useState(sessionId ? '' : t('缺少会话 ID'));
   const [submitResult, setSubmitResult] = useState<SubmitResponse | null>(null);
   const [startTime] = useState(Date.now);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
@@ -111,8 +113,8 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
           setOffline(true);
           if (cached.result) { setSubmitResult(cached.result as SubmitResponse); setPhase('results'); }
           else if (Array.isArray(cached.questions) && cached.questions.length) { setQuestions(cached.questions as QuestionItem[]); setPhase('answering'); }
-          else setError('没有找到匹配的题目');
-        } else setError('离线，且没有本地缓存。');
+          else setError(t('没有找到匹配的题目'));
+        } else setError(t('离线，且没有本地缓存。'));
       });
       return;
     }
@@ -127,7 +129,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
           setQuestions(questions);
           setPhase('answering');
         } else {
-          setError('没有找到匹配的题目');
+          setError(t('没有找到匹配的题目'));
         }
       })
       .catch(async (err) => {
@@ -136,10 +138,10 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
           setOffline(true);
           if (cached.result) { setSubmitResult(cached.result as SubmitResponse); setPhase('results'); }
           else if (Array.isArray(cached.questions) && cached.questions.length) { setQuestions(cached.questions as QuestionItem[]); setPhase('answering'); }
-          else setError('没有找到匹配的题目');
+          else setError(t('没有找到匹配的题目'));
           return;
         }
-        setError(formatApiErrorToast(err, '加载题目失败'));
+        setError(formatApiErrorToast(err, t('加载题目失败')));
       });
   }, [sessionId, userId]);
 
@@ -222,13 +224,13 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
       // Clean up localStorage
       localStorage.removeItem(`practice:${sessionId}:answers`);
     } catch (err: unknown) {
-      setError(formatApiErrorToast(err, '提交失败'));
+      setError(formatApiErrorToast(err, t('提交失败')));
       setPhase('answering');
     }
   };
 
   const timeSpent = elapsed;
-  const timeStr = `${Math.floor(timeSpent / 60)}分${timeSpent % 60}秒`;
+  const timeStr = t('{0}分{1}秒', { 0: Math.floor(timeSpent / 60), 1: timeSpent % 60 });
 
   // ── Touch swipe ──────────────────────────────────────
   const touchStartRef = React.useRef(0);
@@ -248,10 +250,9 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
       <div className="h-full min-h-0 bg-white flex items-center justify-center">
         {error ? (
           <div className="text-center">
-            <p className="text-red-500 mb-4">{error}</p>
+            <p className="text-red-500 mb-4">{t(error)}</p>
             <button onClick={() => navigate('/xiaoyu')} className="text-stone-500 underline">
-              返回小宇对话
-            </button>
+              {t('返回小宇对话')}</button>
           </div>
         ) : (
           <Spinner className="w-8 h-8 animate-spin text-stone-400" />
@@ -268,22 +269,22 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
         <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 max-w-md mx-auto w-full">
           {/* Hero */}
           <div className="text-6xl mb-4">🎯</div>
-          <h2 className="text-xl font-bold text-stone-800 mb-2">练习完成</h2>
+          <h2 className="text-xl font-bold text-stone-800 mb-2">{t('练习完成')}</h2>
           <div className="text-5xl font-extrabold text-stone-900 mb-1">
             {correct_rate}%
           </div>
           <p className="text-stone-500 mb-2">
-            得分率 · 达标题数（{correct_count}/{total_questions}）
+            {t('得分率 · 达标题数（{0}/{1}）', { 0: correct_count, 1: total_questions })}
           </p>
           <div className="flex items-center gap-2 text-stone-400 text-sm mb-6">
             <Clock className="w-4 h-4" />
-            <span>{questions.length ? `用时 ${timeStr}` : '已恢复已完成的练习'}</span>
+            <span>{questions.length ? t('用时 {0}', { 0: timeStr }) : t('已恢复已完成的练习')}</span>
           </div>
 
           {/* KP breakdown */}
           {kp_breakdown.length > 0 && (
             <div className="w-full bg-stone-50 rounded-xl p-4 mb-6">
-              <h3 className="text-sm font-semibold text-stone-700 mb-3">知识点达标情况</h3>
+              <h3 className="text-sm font-semibold text-stone-700 mb-3">{t('知识点达标情况')}</h3>
               {kp_breakdown.map((kp) => (
                 <div key={kp.kp_id} className="flex items-center justify-between py-1.5 text-sm">
                   <span className="text-stone-600 truncate flex-1 mr-2">{kp.kp_name}</span>
@@ -309,7 +310,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
 
           <div className="mb-6 w-full space-y-4">
             {submitResult.results.map(result => <article key={result.question_id} className="rounded-xl border border-stone-200 p-4">
-              <h3 className="mb-2 text-sm font-medium text-stone-800">{result.kp_name} · {result.score}/{result.max_score} 分</h3>
+              <h3 className="mb-2 text-sm font-medium text-stone-800">{result.kp_name} · {result.score}/{result.max_score} {t('分')}</h3>
               <p className="whitespace-pre-wrap text-sm leading-6 text-stone-600">{result.feedback}</p>
             </article>)}
           </div>
@@ -320,8 +321,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
             className="w-full py-3 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-colors flex items-center justify-center gap-2"
           >
             <Target className="w-4 h-4" />
-            查看小宇分析 →
-          </button>
+            {t('查看小宇分析 →')}</button>
         </div>
       </div>
     );
@@ -333,7 +333,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
       <div className="h-full min-h-0 bg-white flex items-center justify-center">
         <div className="text-center">
           <Spinner className="w-10 h-10 animate-spin text-stone-400 mx-auto mb-4" />
-          <p className="text-stone-500">正在批改...</p>
+          <p className="text-stone-500">{t('正在批改...')}</p>
         </div>
       </div>
     );
@@ -354,11 +354,10 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
           className="flex items-center gap-1 text-stone-400 hover:text-stone-600 text-sm"
         >
           <CaretLeft className="w-4 h-4" />
-          {!isMobile && <span>退出</span>}
+          {!isMobile && <span>{t('退出')}</span>}
         </button>
         <span className="text-sm font-medium text-stone-600">
-          第 {currentIdx + 1} 题 / 共 {questions.length} 题
-        </span>
+          {t('第 {0} 题，共 {1} 题', { 0: currentIdx + 1, 1: questions.length })}</span>
         <div className="w-12" /> {/* spacer */}
       </div>
 
@@ -370,7 +369,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
         />
       </div>
 
-      {offline && <div className="mx-4 mt-3 rounded-xl bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-700" role="status">离线只读：可查看已缓存的题目和结果，暂不能作答或提交。</div>}
+      {offline && <div className="mx-4 mt-3 rounded-xl bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-700" role="status">{t('离线只读：可查看已缓存的题目和结果，暂不能作答或提交。')}</div>}
 
       {/* Question area */}
       <div
@@ -383,7 +382,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
           {current.kp_name && (
             <div className="inline-block bg-stone-100 text-stone-500 text-xs px-2.5 py-1 rounded-full mb-4">
               {current.kp_name}
-              {current.is_review && <span className="ml-1 text-amber-500">· 复习</span>}
+              {current.is_review && <span className="ml-1 text-amber-500">{t('· 复习')}</span>}
             </div>
           )}
 
@@ -421,7 +420,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
               value={answers[current.id] || ''}
               disabled={offline}
               onChange={(e) => setTextAnswer(current.id, e.target.value)}
-              placeholder={offline ? '离线只读' : '输入你的答案...'}
+              placeholder={offline ? t('离线只读') : t('输入你的答案...')}
               rows={5}
               className="w-full border border-stone-200 rounded-xl px-4 py-3 text-stone-800 placeholder-stone-300 focus:outline-none focus:border-stone-400 resize-none disabled:bg-stone-50 disabled:cursor-not-allowed"
             />
@@ -438,7 +437,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
             className="flex items-center gap-1.5 px-3 py-2 text-sm text-stone-500 disabled:text-stone-300 disabled:cursor-not-allowed hover:text-stone-700"
           >
             <ArrowLeft className="w-4 h-4" />
-            {!isMobile && '上一题'}
+            {!isMobile && t('上一题')}
           </button>
 
           <div className="flex gap-1">
@@ -464,14 +463,13 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-stone-900 text-white rounded-lg disabled:bg-stone-300 disabled:cursor-not-allowed hover:bg-stone-800 transition-colors"
             >
               <Check className="w-4 h-4" />
-              提交
-            </button>
+              {t('提交')}</button>
           ) : (
             <button
               onClick={() => setCurrentIdx(currentIdx + 1)}
               className="flex items-center gap-1.5 px-3 py-2 text-sm text-stone-500 hover:text-stone-700"
             >
-              {!isMobile && '下一题'}
+              {!isMobile && t('下一题')}
               <ArrowRight className="w-4 h-4" />
             </button>
           )}

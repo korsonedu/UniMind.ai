@@ -27,6 +27,12 @@ from .services import platform_cookie_user
 from .oidc import website_oauth
 
 def account_form_response(request, *, form, title, subtitle, submit_label, purpose='', next_path='', status=200):
+    from core.interface_language import ui_text
+    for field in form.fields.values():
+        field.label = ui_text(field.label)
+    if form.is_bound:
+        for errors in form.errors.values():
+            errors[:] = [ui_text(error) for error in errors]
     return render(request, 'users/accounts/form.html', {
         'form': form, 'title': title, 'subtitle': subtitle, 'submit_label': submit_label,
         'purpose': purpose, 'next_path': next_path,

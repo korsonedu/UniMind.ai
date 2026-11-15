@@ -4,6 +4,8 @@ import en from './en';
 export type Locale = 'zh-CN' | 'en';
 const STORAGE_KEY = 'unimind-language';
 const listeners = new Set<() => void>();
+const metadata = [...document.querySelectorAll<HTMLMetaElement>('meta[name="description"], meta[name="keywords"], meta[property="og:title"], meta[property="og:description"], meta[name="twitter:title"], meta[name="twitter:description"]')].map(element => ({ element, source: element.content }));
+const structuredData = [...document.querySelectorAll<HTMLScriptElement>('script[type="application/ld+json"]')].map(element => ({ element, source: JSON.parse(element.textContent || '{}') }));
 
 function initialLocale(): Locale {
   try {
@@ -18,7 +20,14 @@ export const getLocale = () => locale;
 
 function applyLocale(value: Locale) {
   locale = value;
+  try { document.cookie = `${STORAGE_KEY}=${value}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`; } catch { /* Cookie access may be restricted. */ }
   document.documentElement.lang = value;
+  document.title = t('UniMind.ai 智能学习平台');
+  metadata.forEach(({ element, source }) => { element.content = t(source); });
+  structuredData.forEach(({ element, source }) => { element.textContent = JSON.stringify({ ...source, description: t(source.description), ...(source.inLanguage ? { inLanguage: value } : {}), ...(source.offers ? { offers: { ...source.offers, description: t(source.offers.description) } } : {}) }); });
+  document.querySelector('meta[property="og:locale"]')?.setAttribute('content', value === 'en' ? 'en_US' : 'zh_CN');
+  const manifest = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+  if (manifest) manifest.href = value === 'en' ? '/manifest-en.webmanifest' : '/manifest.webmanifest';
   void window.unimindDesktop?.updatePreferences({ language: value }).catch(() => { /* Older clients keep their native language. */ });
   listeners.forEach(listener => listener());
 }

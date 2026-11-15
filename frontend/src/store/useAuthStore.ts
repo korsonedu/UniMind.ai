@@ -1,3 +1,4 @@
+import { setLocale, type Locale } from '@/i18n';
 import { create } from 'zustand';
 import { useDesktopStore } from '@/lib/desktop';
 import { clearConversationRecovery } from '@/lib/conversationRecovery';
@@ -17,6 +18,7 @@ interface User {
   avatar_style: string;
   avatar_seed: string;
   bio: string;
+  preferred_language?: Locale | '';
   allow_broadcast: boolean;
   show_others_broadcast: boolean;
   is_member: boolean;
@@ -50,6 +52,8 @@ interface User {
   tour_panel_dismissed_at?: string | null;
 }
 
+let languageUserId: number | null = null;
+
 interface AuthState {
   user: User | null;
   token: string | null;
@@ -65,6 +69,10 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       setAuth: (user, token) => {
         const previousId = get().user?.id;
+        if (languageUserId !== user.id) {
+          languageUserId = user.id;
+          if (user.preferred_language === 'en' || user.preferred_language === 'zh-CN') setLocale(user.preferred_language);
+        }
         set({ user, token });
         if (previousId !== user.id) {
           useChatUnreadStore.getState().reset();
@@ -72,6 +80,7 @@ export const useAuthStore = create<AuthState>()(
         }
       },
       logout: (options) => {
+        languageUserId = null;
         useDesktopStore.setState({ state: null, error: null });
         if (!options?.preserveDesktop) {
           const userId = get().user?.id;

@@ -1,4 +1,4 @@
-import { t, useLocale } from '@/i18n';
+import { getLocale, t, useLocale } from '@/i18n';
 import { useNoteMentions } from '@/pages/notes/useNoteMentions';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useSystemStore } from '@/store/useSystemStore';
@@ -535,7 +535,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                               <span className="text-[12px] font-medium truncate">{session.label}</span>
                               <span className="text-[10px] text-muted-foreground/50">
                                 {session.messages.length} {t('条消息')}
-                                {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                                {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
                               </span>
                             </button>
                             {onDeleteSession && (
@@ -601,7 +601,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                           <span className="text-[11px] font-medium truncate">{session.label}</span>
                           <span className="text-[10px] text-muted-foreground/55">
                             {session.messages.length} {t('条消息')}
-                            {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                            {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
                           </span>
                         </button>
                         {onDeleteSession && session.id !== activeSessionId && (
@@ -810,7 +810,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                           <span className="text-[11px] font-medium truncate">{session.label}</span>
                           <span className="text-[10px] text-muted-foreground/55">
                             {session.messages.length} {t('条消息')}
-                            {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                            {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
                           </span>
                         </button>
                         {onDeleteSession && session.id !== activeSessionId && (

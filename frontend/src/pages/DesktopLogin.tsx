@@ -88,7 +88,7 @@ export function DesktopLogin() {
           {busy ? <><Spinner size={18} className="animate-spin" aria-hidden="true" />{auth.status === 'completing' || auth.status === 'authenticated' ? t('正在进入 UniMind') : t('正在打开浏览器')}</>
             : <>{waiting ? t('重新打开浏览器') : t('通过浏览器登录')}<ArrowUpRight size={18} aria-hidden="true" /></>}
         </button>
-        <p className="um-desktop-login-status" role={error || auth.error ? 'alert' : 'status'}>{status}</p>
+        <p className="um-desktop-login-status" role={error || auth.error ? 'alert' : 'status'}>{t(status)}</p>
         {(waiting || auth.status === 'error') && <button className="um-desktop-login-cancel" disabled={actionPending} onClick={() => void cancel()}>{waiting ? t('取消登录') : t('返回登录')}</button>}
       </div>
     </section>

@@ -1,12 +1,13 @@
 {% extends 'users/accounts/base.html' %}
+{% load interface_language %}
 {% block content %}
-<h1>请选择继续使用的账号</h1>
-<p class="form-description">请选择本次登录使用的 UniMind 账号。</p>
+<h1>{{ "请选择继续使用的账号"|ui }}</h1>
+<p class="form-description">{{ "请选择本次登录使用的 UniMind 账号。"|ui }}</p>
 <form method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ next_path }}">
 <input type="hidden" name="account_id" value="{{ request.user.pk }}"><input type="hidden" name="platform_id" value="{{ platform.pk }}">
-<p class="account-note">本次登录的账号</p>
+<p class="account-note">{{ "本次登录的账号"|ui }}</p>
 <button class="account-card" name="selection" value="account" type="submit"><span class="account-card-details"><strong>{{ request.user.nickname|default:request.user.username }}</strong><span>{{ request.user.email }}</span></span><span aria-hidden="true">↗</span></button>
-<p class="account-note">UniMind 当前已登录</p>
+<p class="account-note">{{ "UniMind 当前已登录"|ui }}</p>
 <button class="account-card" name="selection" value="platform" type="submit"><span class="account-card-details"><strong>{{ platform.nickname|default:platform.username }}</strong><span>{{ platform.email }}</span></span><span aria-hidden="true">↗</span></button>
 </form>
 {% endblock %}

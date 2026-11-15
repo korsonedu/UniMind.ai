@@ -70,17 +70,16 @@ export function LearningInstrument() {
         <p ref={copyRef}><span className="sr-only">{current.description}</span><span aria-hidden="true">{Array.from(current.description).map((character, index) =>
           <span key={index} data-decode-char>{character}</span>)}</span></p>
         <div className="li-capabilities">{current.capabilities.map(capability => <span key={capability}>{capability}</span>)}</div>
-        {locale === 'en' && <div className="mt-3 text-xs text-muted-foreground">{t('图片中的示例界面使用中文。')}</div>}
       </div>
     </div>
     <div className="li-scene" data-landing-depth>
       <div className="li-art" role="img" aria-label={t('{0}的动态线图', { 0: current.label })}><IntelligenceField mode={mode} /></div>
       {modes.map(item => <div key={item.id} className={`li-surfaces li-surfaces-${item.id}${mode === item.id ? ' is-active' : previous === item.id ? ' is-leaving' : ''}`} aria-hidden={mode !== item.id}>
         {item.screens.map(({ image, crop: [x, y, width, height] }, index) => <div key={image} className={`li-surface ${index ? 'li-surface-rear' : 'li-surface-front'}`} style={{ aspectRatio: `${width} / ${height}` }}>
-          <img className="li-capture" src={`/screenshots/${image}`} alt={`${item.label}${index ? t('的相关界面') : t('的功能展示')}`} style={{ width: `${1280 / width * 100}%`, left: `${-x / width * 100}%`, top: `${-y / height * 100}%` }} />
-          <img className="landing-scan-outline" src={`/screenshots/${image}`} alt="" aria-hidden="true" style={{ width: `${1280 / width * 100}%`, left: `${-x / width * 100}%`, top: `${-y / height * 100}%` }} />
+          <img className="li-capture" src={`/screenshots/${image.replace('.webp', locale === 'en' ? '-en.webp' : '.webp')}`} alt={`${item.label}${index ? t('的相关界面') : t('的功能展示')}`} style={{ width: `${1280 / width * 100}%`, left: `${-x / width * 100}%`, top: `${-y / height * 100}%` }} />
+          <img className="landing-scan-outline" src={`/screenshots/${image.replace('.webp', locale === 'en' ? '-en.webp' : '.webp')}`} alt="" aria-hidden="true" style={{ width: `${1280 / width * 100}%`, left: `${-x / width * 100}%`, top: `${-y / height * 100}%` }} />
           <span className="landing-scan-beam" aria-hidden="true" />
-          <ScreenshotDissolve active={mode === item.id} />
+          <ScreenshotDissolve key={locale} active={mode === item.id} />
         </div>)}
         <div className="li-ripple-floor" aria-hidden="true"><span /></div>
       </div>)}

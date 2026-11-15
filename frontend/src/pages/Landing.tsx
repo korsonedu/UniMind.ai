@@ -13,7 +13,7 @@ import { COPYRIGHT_YEAR } from '@/constants/version';
 import '@/styles/landing.css';
 
 export function Landing() {
-  useLocale();
+  const locale = useLocale();
   const user = useAuthStore(state => state.user);
   const entry = user ? '/xiaoyu' : '/register';
   const pageRef = useRef<HTMLDivElement>(null);
@@ -123,10 +123,10 @@ export function Landing() {
       <section className="landing-product landing-wrap" id="workspace" aria-label={t('学习空间界面')}>
         <figure className="landing-product-main">
           <figcaption><div><span>{t('课程与资料')}</span><p>{t('课程、课件与学习进度，放在一起。')}</p></div><Link to="/courses">{t('浏览课程')}<ArrowUpRight size={18} /></Link></figcaption>
-          <div className="landing-product-stage" data-landing-depth><div className="landing-ui-frame"><img src="/screenshots/landing-workspace-desktop-demo.webp" alt={t('虚构学员小林的课程、课件、学习进度与历史活动')} width="4800" height="3000" loading="lazy" /></div></div>
+          <div className="landing-product-stage" data-landing-depth><div className="landing-ui-frame"><img src={`/screenshots/landing-workspace-desktop-demo${locale === 'en' ? '-en' : ''}.webp`} alt={t('虚构学员小林的课程、课件、学习进度与历史活动')} width="4800" height="3000" loading="lazy" /></div></div>
         </figure>
         <figure className="landing-product-secondary">
-          <div className="landing-product-stage" data-landing-depth><div className="landing-ui-frame"><img src="/screenshots/landing-learning-records-demo.webp" alt={t('虚构学员的练习表现、知识掌握和历史考试记录')} width="3840" height="2400" loading="lazy" /></div></div>
+          <div className="landing-product-stage" data-landing-depth><div className="landing-ui-frame"><img src={`/screenshots/landing-learning-records-demo${locale === 'en' ? '-en' : ''}.webp`} alt={t('虚构学员的练习表现、知识掌握和历史考试记录')} width="3840" height="2400" loading="lazy" /></div></div>
           <figcaption><span>{t('学习记录')}</span><p>{t('查看练习表现，')}<br />{t('了解知识掌握情况。')}</p><Link to="/report-card">{t('查看学习记录')}<ArrowUpRight size={18} /></Link></figcaption>
         </figure>
       </section>

@@ -5,6 +5,9 @@ from django.conf import settings
 
 
 def request_language(request):
+    selected = getattr(request, 'ui_language', None)
+    if selected in {'en', 'zh-CN'}:
+        return selected
     language = request.headers.get('Accept-Language', '').split(',')[0].split(';')[0].strip().lower()
     return 'en' if language.startswith('en') else 'zh-CN'
 

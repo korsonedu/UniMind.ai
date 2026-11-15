@@ -25,9 +25,9 @@ export function ContactAdminModal({ open, onOpenChange, planLabel }: ContactAdmi
         setCopied(label);
         if (copyTimer.current) clearTimeout(copyTimer.current);
         copyTimer.current = setTimeout(() => setCopied(null), 2500);
-        toast.success(t('{0} 已复制', { 0: label }));
+        toast.success(t('{0} 已复制', { 0: t(label) }));
       })
-      .catch(() => toast.error(t('复制{0}失败，请手动复制', { 0: label })));
+      .catch(() => toast.error(t('复制{0}失败，请手动复制', { 0: t(label) })));
   };
 
   return (
@@ -57,7 +57,7 @@ export function ContactAdminModal({ open, onOpenChange, planLabel }: ContactAdmi
               size="icon"
               className="h-8 w-8 rounded-lg shrink-0"
               aria-label={copied === '邮箱' ? t('邮箱已复制') : t('复制邮箱')}
-              onClick={() => copyText(CONTACT_EMAIL, t('邮箱'))}
+              onClick={() => copyText(CONTACT_EMAIL, '邮箱')}
             >
               {copied === '邮箱' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
             </Button>
@@ -77,7 +77,7 @@ export function ContactAdminModal({ open, onOpenChange, planLabel }: ContactAdmi
               size="icon"
               className="h-8 w-8 rounded-lg shrink-0"
               aria-label={copied === '微信号' ? t('微信号已复制') : t('复制微信号')}
-              onClick={() => copyText(CONTACT_WECHAT, t('微信号'))}
+              onClick={() => copyText(CONTACT_WECHAT, '微信号')}
             >
               {copied === '微信号' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
             </Button>

@@ -292,10 +292,11 @@ function installIPC() {
     checkForUpdates: async () => { await updater.check(); return state(); },
     installUpdate: () => updater.install(() => { quitting = true; }),
   };
-  for (const [name, handler] of Object.entries(handlers)) ipcMain.handle(`desktop:${name}`, (event, ...args) => {
+  for (const [name, handler] of Object.entries(handlers)) ipcMain.handle(`desktop:${name}`, async (event, ...args) => {
     const window = BrowserWindow.fromWebContents(event.sender);
-    if (!window || !mainWindows.has(window) || event.senderFrame !== window.webContents.mainFrame || !sameOrigin(sourceUrl, event.senderFrame.url)) throw new Error('不受信任的桌面请求');
-    return handler(args[0]);
+    if (!window || !mainWindows.has(window) || event.senderFrame !== window.webContents.mainFrame || !sameOrigin(sourceUrl, event.senderFrame.url)) throw new Error(nt('不受信任的桌面请求'));
+    try { return await handler(args[0]); }
+    catch (error) { if (error instanceof Error) error.message = nt(error.message); throw error; }
   });
 }
 

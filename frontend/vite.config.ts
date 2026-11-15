@@ -32,7 +32,7 @@ export default defineConfig({
       injectManifest: {
         globPatterns: [
           'index.html',
-          'manifest.webmanifest',
+          'manifest*.webmanifest',
           'assets/*.{js,css}',
           'assets/*.woff2',
           'pwa-192x192.png',
@@ -43,6 +43,7 @@ export default defineConfig({
         ],
       },
       manifest: {
+        lang: 'zh-CN',
         name: 'UniMind',
         short_name: 'UniMind',
         description: 'AI 驱动的智能学习助手',

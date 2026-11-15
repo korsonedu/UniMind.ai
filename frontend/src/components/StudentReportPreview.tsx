@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -42,6 +43,7 @@ interface ExamRecord {
 }
 
 export function StudentReportPreview({ payload }: { payload: Record<string, unknown> }) {
+  useLocale();
   const stats = (payload.stats || {}) as ReportStats;
   const radar = (payload.radar || []) as RadarEntry[];
   const achievements = (payload.achievements || []) as Achievement[];
@@ -51,11 +53,11 @@ export function StudentReportPreview({ payload }: { payload: Record<string, unkn
   const dateTo = (payload.date_to as string) || '';
 
   const handleExportPdf = () => {
-    toast.info('PDF 导出即将上线');
+    toast.info(t('PDF 导出即将上线'));
   };
 
   const handleSendToStudent = () => {
-    toast.info('发送给学生功能即将上线');
+    toast.info(t('发送给学生功能即将上线'));
   };
 
   // Backend accuracy is already 0-100 scale
@@ -72,7 +74,7 @@ export function StudentReportPreview({ payload }: { payload: Record<string, unkn
     <div className="um-visual-report space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-bold">{studentName} 的学习报告</h3>
+          <h3 className="text-sm font-bold">{t('{0} 的学习报告', { 0: studentName })}</h3>
           {dateFrom && (
             <p className="text-[10px] text-muted-foreground">
               {dateFrom.slice(0, 10)} ~ {dateTo.slice(0, 10)}
@@ -82,20 +84,20 @@ export function StudentReportPreview({ payload }: { payload: Record<string, unkn
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <StatItem label="累计作答" value={String(stats.total_attempted || 0)} />
-        <StatItem label="最近正确率" value={accuracyPct} />
-        <StatItem label="连续天数" value={String(stats.study_streak || 0)} />
-        <StatItem label="最近答对" value={String(stats.correct_count || 0)} />
-        <StatItem label="曾答错" value={String(stats.wrong_count || 0)} />
+        <StatItem label={t('累计作答')} value={String(stats.total_attempted || 0)} />
+        <StatItem label={t('最近正确率')} value={accuracyPct} />
+        <StatItem label={t('连续天数')} value={String(stats.study_streak || 0)} />
+        <StatItem label={t('最近答对')} value={String(stats.correct_count || 0)} />
+        <StatItem label={t('曾答错')} value={String(stats.wrong_count || 0)} />
         <StatItem
-          label="诊断掌握知识点"
+          label={t('诊断掌握知识点')}
           value={`${stats.diagnostic_mastered_count ?? 0}/${stats.diagnostic_kp_count ?? 0}`}
         />
       </div>
 
       {radar.length > 0 && (
         <div className="space-y-1">
-          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">科目掌握度</h4>
+          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t('科目掌握度')}</h4>
           <div className="space-y-1">
             {radar.slice(0, 5).map((r) => (
               <div key={r.subject} className="flex items-center justify-between text-xs">
@@ -117,11 +119,11 @@ export function StudentReportPreview({ payload }: { payload: Record<string, unkn
 
       {achievements.length > 0 && (
         <div className="space-y-1">
-          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">成就</h4>
+          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t('成就')}</h4>
           <div className="flex flex-wrap gap-1">
             {achievements.map((a) => (
-              <span key={a.name} className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                {a.name}
+              <span key={t(a.name)} className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                {t(a.name)}
               </span>
             ))}
           </div>
@@ -130,11 +132,11 @@ export function StudentReportPreview({ payload }: { payload: Record<string, unkn
 
       {exams.length > 0 && (
         <div className="space-y-1">
-          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">最近考试</h4>
+          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t('最近考试')}</h4>
           <div className="space-y-0.5">
             {exams.slice(0, 5).map((e) => (
               <div key={e.id} className="flex items-center justify-between text-[11px]">
-                <span className="truncate max-w-[140px]">考试 #{e.id}</span>
+                <span className="truncate max-w-[140px]">{t('考试 #')}{e.id}</span>
                 <span className="text-muted-foreground">{e.percentage?.toFixed(0)}%</span>
               </div>
             ))}
@@ -144,11 +146,9 @@ export function StudentReportPreview({ payload }: { payload: Record<string, unkn
 
       <div className="flex items-center gap-2 pt-2">
         <Button size="sm" variant="outline" className="rounded-xl text-xs" onClick={handleExportPdf}>
-          导出 PDF
-        </Button>
+          {t('导出 PDF')}</Button>
         <Button size="sm" className="rounded-xl text-xs" onClick={handleSendToStudent}>
-          发送给学生
-        </Button>
+          {t('发送给学生')}</Button>
       </div>
     </div>
   );

@@ -53,7 +53,7 @@ export function normalizeApiError(error: unknown, fallbackMessage = '请求失�
     // 原生 fetch 错误、OSS 分片上传错误等：保留 error.message
     const nativeMessage = error instanceof Error ? error.message : null;
     return {
-      message: nativeMessage || fallbackMessage,
+      message: t(nativeMessage || fallbackMessage),
       code: 'unknown_error',
       isNetworkError: true,
     };

@@ -122,7 +122,7 @@ const ActivityStrip = memo(function ActivityStrip({ row, selectedDate, detailId,
   return <div className="um-activity-strip" role="group" aria-label={t('{0}每日观看时长', { 0: row.name })}>
     {row.values.map(({ date, seconds }, index) => <button
       type="button" key={date} data-day-index={index} data-level={activityLevel(seconds)}
-      aria-label={`${row.name} · ${date} · ${learningDuration(seconds)}`}
+      aria-label={`${t(row.name)} · ${date} · ${learningDuration(seconds)}`}
       title={`${date} · ${learningDuration(seconds)}`} aria-describedby={detailId}
       aria-pressed={date === selectedDate} tabIndex={date === (selectedDate || row.values[row.values.length - 1].date) ? 0 : -1}
       onPointerEnter={() => onSelect(row.subject, date)} onFocus={() => onSelect(row.subject, date)}
@@ -164,7 +164,7 @@ export const LearningHeatmap = memo(function LearningHeatmap({ today, days, cour
     });
     return {
       start, count, heatWeeks: Math.ceil((weekday(dateOffset(today, -364)) + 365) / 7), total: row('', t('全部学科'), totals),
-      subjects: [...bySubject].sort(([a], [b]) => a === '待归类学科' ? 1 : b === '待归类学科' ? -1 : a.localeCompare(b, 'zh-CN')).map(([name, values]) => row(name, name, values)),
+      subjects: [...bySubject].sort(([a], [b]) => a === '待归类学科' ? 1 : b === '待归类学科' ? -1 : a.localeCompare(b, getLocale())).map(([name, values]) => row(name, name, values)),
     };
   }, [today, days, courses, locale]);
   const rows = model.subjects;
@@ -178,7 +178,7 @@ export const LearningHeatmap = memo(function LearningHeatmap({ today, days, cour
     <div className="um-activity-rows">
       {rows.map(row => <div className="um-activity-row" key={row.subject}>
         <div className="um-activity-row-heading">
-          <span className="um-activity-subject">{row.name}</span>
+          <span className="um-activity-subject">{t(row.name)}</span>
           <span className="um-activity-summary">{row.activeDays} {t('天 ·')} {learningDuration(row.seconds)}</span>
         </div>
         <ActivityStrip row={row} selectedDate={row === selectedRow ? selectedValue.date : null} detailId={`${chartId}-detail`} onSelect={select} />
