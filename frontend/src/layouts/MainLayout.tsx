@@ -71,6 +71,7 @@ export const MainLayout: React.FC = () => {
   const [notesOpen, setNotesOpen] = useState(false);
   const [notesMounted, setNotesMounted] = useState(false);
   const [sidebarView, setSidebarView] = useState<SidebarView>('home');
+  const [sidebarLocationKey, setSidebarLocationKey] = useState('');
   const [openedSidebarTools, setOpenedSidebarTools] = useState<SidebarView[]>([]);
   const [addedSidebarTools, setAddedSidebarTools] = useState<SidebarView[]>(['chat', 'outline', 'notes', 'saved-courses']);
   const [sidebarRecent, setSidebarRecent] = useState<SidebarRecentItem[]>([]);
@@ -156,12 +157,11 @@ export const MainLayout: React.FC = () => {
     { id: 'notes' as const, label: t('笔记'), icon: NotePencil },
   ] : [{ id: 'notes' as const, label: t('笔记'), icon: NotePencil }]), ...(savedCoursesAvailable ? [{ id: 'saved-courses' as const, label: t('已保存课程'), icon: BookOpen }] : [])];
   const sidebarTabs = openedSidebarTools.map(id => sidebarTools.find(tool => tool.id === id)).filter(tool => !!tool);
-  useEffect(() => {
-    setSidebarView(previous => previous === 'saved-courses' ? 'home' : previous);
-  }, [location.pathname]);
-  useEffect(() => {
+  if (!featuresLoading && sidebarLocationKey !== location.key) {
+    setSidebarLocationKey(location.key);
     if (savedCoursesAvailable && new URLSearchParams(location.search).get('panel') === 'saved-courses') selectSidebarView('saved-courses');
-  }, [savedCoursesAvailable, location.key, location.search, selectSidebarView]);
+    else if (sidebarView === 'saved-courses') setSidebarView('home');
+  }
   useExamActivity();
 
   useEffect(() => {
