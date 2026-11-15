@@ -1,6 +1,8 @@
 import json
 import logging
 import math
+from pathlib import Path
+from django.conf import settings
 from typing import Any, Dict, List, Optional
 
 from ai_engine.tools import (
@@ -56,12 +58,12 @@ class QuizAITaskService:
         return grading_points or ai.default_grading_points(normalized_subjective_type)
 
     @classmethod
-    def _analyze_objective(cls, ai, question_text, options, correct_answer, user_answer, is_correct):
+    def _analyze_objective(cls, ai, question_text, options, correct_answer, user_answer, is_correct, language='zh-CN'):
         """客观题 AI 深度解析：为什么对、为什么错、易错点。"""
         options_text = cls._format_options(options)
         template = ai.get_template('quizzes', 'objective_analysis_prompt.txt') or ''
         if not template:
-            return cls._fallback_objective_feedback(ai, correct_answer, is_correct)
+            return cls._fallback_objective_feedback(ai, correct_answer, is_correct, language)
 
         prompt = ai.format_template(
             template,
@@ -72,6 +74,8 @@ class QuizAITaskService:
             is_correct='正确' if is_correct else '错误',
         )
 
+        if language == 'en':
+            prompt += "\n\n" + (Path(settings.BASE_DIR) / 'prompts/quizzes/grading_language.txt').read_text()
         parsed = ai.structured_output(
             system_prompt="",
             user_prompt=prompt,
@@ -85,27 +89,28 @@ class QuizAITaskService:
 
         if not isinstance(parsed, dict):
             logger.warning("Objective analysis structured_output failed, using fallback")
-            return cls._fallback_objective_feedback(ai, correct_answer, is_correct)
+            return cls._fallback_objective_feedback(ai, correct_answer, is_correct, language)
 
         why_correct = parsed.get('why_correct', '')
         why_wrong = parsed.get('why_wrong', '')
         pitfalls = parsed.get('pitfalls', '')
 
         feedback_parts = []
+        english = language == 'en'
         if is_correct:
-            feedback_parts.append('作答与标准答案一致，本题满分。')
+            feedback_parts.append('Your answer matches the reference answer. Full marks.' if english else '作答与标准答案一致，本题满分。')
         else:
             user_choice = ai.normalize_objective_answer(user_answer)
             correct_choice = ai.normalize_objective_answer(correct_answer)
             feedback_parts.append(
-                f'你的作答为 {user_choice or "未作答"}，标准答案为 {correct_choice or "未设置"}，两者不一致，本题不得分。'
+                f'Your answer: {user_choice or "Not answered"}. Reference answer: {correct_choice or "Not set"}. They do not match; no marks awarded.' if english else f'你的作答为 {user_choice or "未作答"}，标准答案为 {correct_choice or "未设置"}，两者不一致，本题不得分。'
             )
         if why_wrong:
             feedback_parts.append(why_wrong)
         if pitfalls:
-            feedback_parts.append(f'易错提醒：{pitfalls}')
+            feedback_parts.append(f'Common pitfalls: {pitfalls}' if english else f'易错提醒：{pitfalls}')
 
-        analysis_parts = [f'标准答案：{correct_answer}']
+        analysis_parts = [f'Reference answer: {correct_answer}' if english else f'标准答案：{correct_answer}']
         if why_correct:
             analysis_parts.append(why_correct)
 
@@ -128,8 +133,11 @@ class QuizAITaskService:
         return str(options)
 
     @staticmethod
-    def _fallback_objective_feedback(ai, correct_answer, is_correct):
+    def _fallback_objective_feedback(ai, correct_answer, is_correct, language='zh-CN'):
         correct_choice = ai.normalize_objective_answer(correct_answer)
+        if language == 'en':
+            feedback = 'Your answer matches the reference answer. Full marks.' if is_correct else f'Your answer does not match the reference answer. No marks awarded. Reference answer: {correct_choice or "Not set"}.'
+            return feedback, f'Reference answer: {correct_choice or "Not set"}. A detailed explanation is unavailable.'
         if is_correct:
             feedback = '作答与标准答案一致，本题满分。'
             analysis = f'标准答案：选择 {correct_choice or "（题库未设置）"}。该选项满足题干条件并与题目设定一致。'
@@ -151,6 +159,7 @@ class QuizAITaskService:
         rubric: Optional[Any] = None,
         options: Optional[Any] = None,
         subjective_type: str = '主观题',
+        language: str = 'zh-CN',
     ) -> Dict[str, Any]:
         max_score = float(max_score or 0)
 
@@ -165,7 +174,7 @@ class QuizAITaskService:
                 options=options,
                 correct_answer=correct_answer,
                 user_answer=user_answer,
-                is_correct=is_correct,
+                is_correct=is_correct, language=language,
             )
 
             return {
@@ -187,6 +196,8 @@ class QuizAITaskService:
             user_answer=user_answer or '（空白）',
         )
 
+        if language == 'en':
+            prompt += "\n\n" + (Path(settings.BASE_DIR) / 'prompts/quizzes/grading_language.txt').read_text()
         parsed = ai.structured_output(
             system_prompt="",
             user_prompt=prompt,

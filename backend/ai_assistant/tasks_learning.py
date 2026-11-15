@@ -38,6 +38,9 @@ def send_project_learning_followups():
                 state.followup_at = None
                 state.save(update_fields=['followup_at'])
                 continue
+            from .services.language import message_language
+            latest_question = AIChatMessage.objects.filter(user=user, conversation_id=conversation.conversation_id, bot_id=conversation.bot_id, role='user').order_by('-id').first()
+            english = bool(latest_question and message_language(latest_question) == 'en')
             text = state.followup_text or state.next_action
             if state.followup_text == state.next_action and state.project.learning_tasks.exists():
                 from .services.project_learning import learning_data
@@ -47,11 +50,11 @@ def send_project_learning_followups():
                 state.save(update_fields=['followup_at'])
                 continue
             event = ProjectLearningEvent.objects.create(project=state.project, kind='followup',
-                content={'text': text, 'revision': state.revision, 'notice': '跟进内容，不代表已完成学习。'})
+                content={'text': text, 'revision': state.revision, 'notice': 'Learning follow-up; does not indicate completed learning.' if english else '跟进内容，不代表已完成学习。'})
             message = AIChatMessage.objects.create(user=user, bot=conversation.bot,
                 conversation_id=conversation.conversation_id, role='assistant', content=text,
                 metadata={'learning_followup': {'project_id': state.project_id, 'event_id': event.pk}})
-            notification = Notification.objects.create(recipient=user, ntype='learning_followup', title=f'小宇 · {state.project.name}',
+            notification = Notification.objects.create(recipient=user, ntype='learning_followup', title=f'XiaoYu · {state.project.name}' if english else f'小宇 · {state.project.name}',
                 content=text[:2000], link=f'/xiaoyu?project={state.project_id}&conversation={conversation.conversation_id}')
             event.content.update(message_id=message.pk, notification_id=notification.pk)
             event.save(update_fields=['content'])

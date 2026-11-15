@@ -1,0 +1,1 @@
+Write all human-readable feedback, explanations, error descriptions, and review suggestions in English. Preserve the original question, answer quotations, code, mathematical notation, JSON keys and enumerated values. Language does not change the reference answer, grading criteria, score calculation, or correctness decision.

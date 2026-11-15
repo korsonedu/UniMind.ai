@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { SelectField, SelectOption } from '@/components/ui/select';
 import { useSystemStore } from '@/store/useSystemStore';
 import type { QuizQuestion, KnowledgePoint } from '@/types/api';
@@ -33,6 +34,7 @@ import { useExamActivityStore } from '@/store/useExamActivityStore';
 import { AssessmentDialog } from './test-ladder/AssessmentDialog';
 
 export const TestLadder: React.FC = () => {
+  useLocale();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [reminderSettings, setReminderSettings] = useState<LearningReminderSettings>(getLearningReminderSettings());
@@ -99,8 +101,8 @@ export const TestLadder: React.FC = () => {
     try {
       const res = await api.post('/quizzes/favorite/toggle/', { question_id: qId });
       setQuestions(questions.map(q => q.id === qId ? { ...q, is_favorite: res.data.is_favorite } : q));
-      toast.success(res.data.is_favorite ? '已加入收藏' : '已取消收藏');
-    } catch (e) { toast.error(formatApiErrorToast(e, '操作失败')); }
+      toast.success(res.data.is_favorite ? t('已加入收藏') : t('已取消收藏'));
+    } catch (e) { toast.error(formatApiErrorToast(e, t('操作失败'))); }
   };
 
   const toggleMastered = async (qId: number) => {
@@ -112,9 +114,9 @@ export const TestLadder: React.FC = () => {
         const newAnswers = { ...answers };
         delete newAnswers[qId];
         setAnswers(newAnswers);
-        toast.success('已标记掌握');
+        toast.success(t('已标记掌握'));
       }
-    } catch (e) { toast.error(formatApiErrorToast(e, '操作失败')); }
+    } catch (e) { toast.error(formatApiErrorToast(e, t('操作失败'))); }
   };
 
   const startTest = async () => {
@@ -136,12 +138,12 @@ export const TestLadder: React.FC = () => {
     params.set('limit', String(normalizedCount));
     try {
       const res = await api.get(`/quizzes/questions/?${params.toString()}`);
-      if (res.data.length === 0) return toast.error('题库暂无可用题目');
+      if (res.data.length === 0) return toast.error(t('题库暂无可用题目'));
       setQuestions(res.data.map((q: QuizQuestion) => ({ ...q, options: normalizeOptions(q.options) })));
       setIsTestOpen(true);
       setAnswers({});
       setCurrentIdx(0);
-    } catch (e) { toast.error(formatApiErrorToast(e, '题目加载失败')); }
+    } catch (e) { toast.error(formatApiErrorToast(e, t('题目加载失败'))); }
     finally { setStarting(false); }
   };
 
@@ -149,11 +151,11 @@ export const TestLadder: React.FC = () => {
     const unmasteredQuestions = questions.filter(q => !q.is_mastered);
     const answeredCount = unmasteredQuestions.filter(q => typeof answers[q.id] === 'string' && answers[q.id].trim()).length;
     if (unmasteredQuestions.length > 0 && answeredCount < unmasteredQuestions.length) {
-      return toast.error(`请完成所有题目 (${answeredCount}/${unmasteredQuestions.length})`);
+      return toast.error(t('请完成所有题目 ({0}/{1})', { 0: answeredCount, 1: unmasteredQuestions.length }));
     }
     if (unmasteredQuestions.length === 0) {
       setIsTestOpen(false);
-      return toast.info('练习已结束');
+      return toast.info(t('练习已结束'));
     }
     setIsSubmitting(true);
     try {
@@ -166,39 +168,39 @@ export const TestLadder: React.FC = () => {
           total: Number(response.data?.total_questions) || unmasteredQuestions.length,
         });
       }
-      toast.success('已提交 AI 批改');
+      toast.success(t('已提交 AI 批改'));
       setIsTestOpen(false);
       fetchGoals();
     } catch (e: unknown) {
-      toast.error(formatApiErrorToast(e, '提交失败'));
+      toast.error(formatApiErrorToast(e, t('提交失败')));
     } finally { setIsSubmitting(false); }
   };
 
   return (
-    <PageWrapper title="习题训练">
+    <PageWrapper title={t('习题训练')}>
       <div className="um-practice-home">
-        <section className="um-memorix-intro" aria-label="Memorix-Field 产品介绍">
+        <section className="um-memorix-intro" aria-label={t('Memorix-Field 产品介绍')}>
           <div className="um-memorix-copy">
-            <h1>由 <span>Memorix-Field</span> <span className="um-memorix-drive">驱动。</span><br />持续进化的调度算法，<br />为强化记忆而打造。</h1>
+            <h1>{t('由')} <span>Memorix-Field</span> <span className="um-memorix-drive">{t('驱动。')}</span><br />{t('持续进化的调度算法，')}<br />{t('为强化记忆而打造。')}</h1>
             <Dialog>
-              <DialogTrigger asChild><Button variant="ghost" className="um-memorix-about"><Info size={16} />了解双引擎</Button></DialogTrigger>
+              <DialogTrigger asChild><Button variant="ghost" className="um-memorix-about"><Info size={16} />{t('了解双引擎')}</Button></DialogTrigger>
               <DialogContent className="um-memorix-explanation">
-                <DialogTitle>Memorix-Field 双引擎</DialogTitle>
-                <DialogDescription>Memorix-Field 在间隔重复的基础上引入了知识图谱全局诊断，从「单题维度的记忆管理」扩展到「知识结构维度的诊断」。</DialogDescription>
+                <DialogTitle>{t('Memorix-Field 双引擎')}</DialogTitle>
+                <DialogDescription>{t('Memorix-Field 在间隔重复的基础上引入了知识图谱全局诊断，从「单题维度的记忆管理」扩展到「知识结构维度的诊断」。')}</DialogDescription>
                 <div className="um-memorix-explanation-body">
-                  <section><h3>记忆引擎：题级遗忘建模</h3><p>持续拟合每道题的记忆衰减曲线，以题为单位做个体化参数估计。在临界遗忘点精准介入，减少无效重复，提高单位时间的记忆留存率。这是 Memorix 第一代的核心能力，在第二代中继续作为调度基础。</p></section>
-                  <section><h3>图诊断引擎：知识图谱全局推断</h3><p>将学科知识建模为高斯马尔可夫随机场（GMRF），利用图结构上相邻知识点的掌握度相似性，从部分观测外推全部知识点的掌握度。一场覆盖 10% 知识点的考试，就能输出全域掌握度热力图。</p></section>
-                  <section><h3>双引擎协同</h3><p>记忆引擎输出「何时复习哪道题」，图诊断引擎输出「哪些知识群存在结构薄弱」。前者优化时间分配，后者优化知识建构。两者共享同一个学生模型，调度结果受诊断结果加权。</p></section>
+                  <section><h3>{t('记忆引擎：题级遗忘建模')}</h3><p>{t('持续拟合每道题的记忆衰减曲线，以题为单位做个体化参数估计。在临界遗忘点精准介入，减少无效重复，提高单位时间的记忆留存率。这是 Memorix 第一代的核心能力，在第二代中继续作为调度基础。')}</p></section>
+                  <section><h3>{t('图诊断引擎：知识图谱全局推断')}</h3><p>{t('将学科知识建模为高斯马尔可夫随机场（GMRF），利用图结构上相邻知识点的掌握度相似性，从部分观测外推全部知识点的掌握度。一场覆盖 10% 知识点的考试，就能输出全域掌握度热力图。')}</p></section>
+                  <section><h3>{t('双引擎协同')}</h3><p>{t('记忆引擎输出「何时复习哪道题」，图诊断引擎输出「哪些知识群存在结构薄弱」。前者优化时间分配，后者优化知识建构。两者共享同一个学生模型，调度结果受诊断结果加权。')}</p></section>
                 </div>
               </DialogContent>
             </Dialog>
           </div>
-          <dl className="um-memorix-stats" aria-label="复习状态"><div><dt>今日待复习</dt><dd>{loadingStates.goals ? '—' : goals.review_goal}<small> 题</small></dd></div><div><dt>接近遗忘</dt><dd>{loadingStates.goals ? '—' : goals.at_risk_count || 0}<small> 题</small></dd></div><div><dt>尚未练习</dt><dd>{loadingStates.goals ? '—' : goals.new_questions}<small> 题</small></dd></div></dl>
+          <dl className="um-memorix-stats" aria-label={t('复习状态')}><div><dt>{t('今日待复习')}</dt><dd>{loadingStates.goals ? '—' : goals.review_goal}<small> {t('题')}</small></dd></div><div><dt>{t('接近遗忘')}</dt><dd>{loadingStates.goals ? '—' : goals.at_risk_count || 0}<small> {t('题')}</small></dd></div><div><dt>{t('尚未练习')}</dt><dd>{loadingStates.goals ? '—' : goals.new_questions}<small> {t('题')}</small></dd></div></dl>
         </section>
-        <section className="um-practice-setup" aria-label="练习设置">
-        <header className="um-practice-heading"><div><h2>本轮训练</h2><p>{loadingStates.goals ? '正在读取练习建议…' : `建议 ${goals.recommended_questions} 题，预计 ${goals.estimated_minutes} 分钟，含 ${goals.weak_focus_count} 题薄弱强化。`}</p></div><div className="um-practice-heading-actions"><Button variant="ghost" onClick={() => navigate('/tests/history')}>最近练习<ArrowRight size={15} /></Button><Button variant="ghost" onClick={() => navigate('/tests/review')}>错题复盘<ArrowRight size={15} /></Button>{isMobile && <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" aria-label="提醒设置"><Bell size={16} /></Button></PopoverTrigger><PopoverContent className="um-practice-popover" align="end"><h2>提醒设置</h2><Label>题型提醒<Switch checked={reminderSettings.questionType} onCheckedChange={enabled => setReminderSettings(updateLearningReminderSetting('questionType', enabled))} /></Label><Label>做题结果提醒<Switch checked={reminderSettings.testResult} onCheckedChange={enabled => setReminderSettings(updateLearningReminderSetting('testResult', enabled))} /></Label></PopoverContent></Popover>}</div></header>
+        <section className="um-practice-setup" aria-label={t('练习设置')}>
+        <header className="um-practice-heading"><div><h2>{t('本轮训练')}</h2><p>{loadingStates.goals ? t('正在读取练习建议…') : t('建议 {0} 题，预计 {1} 分钟，含 {2} 题薄弱强化。', { 0: goals.recommended_questions, 1: goals.estimated_minutes, 2: goals.weak_focus_count })}</p></div><div className="um-practice-heading-actions"><Button variant="ghost" onClick={() => navigate('/tests/history')}>{t('最近练习')}<ArrowRight size={15} /></Button><Button variant="ghost" onClick={() => navigate('/tests/review')}>{t('错题复盘')}<ArrowRight size={15} /></Button>{isMobile && <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" aria-label={t('提醒设置')}><Bell size={16} /></Button></PopoverTrigger><PopoverContent className="um-practice-popover" align="end"><h2>{t('提醒设置')}</h2><Label>{t('题型提醒')}<Switch checked={reminderSettings.questionType} onCheckedChange={enabled => setReminderSettings(updateLearningReminderSetting('questionType', enabled))} /></Label><Label>{t('做题结果提醒')}<Switch checked={reminderSettings.testResult} onCheckedChange={enabled => setReminderSettings(updateLearningReminderSetting('testResult', enabled))} /></Label></PopoverContent></Popover>}</div></header>
           <div className="um-practice-controls">
-            <label className="um-practice-count"><span>题数</span><SelectField aria-label="题数" value={isCustomCount ? 'custom' : qCount} onValueChange={value => {
+            <label className="um-practice-count"><span>{t('题数')}</span><SelectField aria-label={t('题数')} value={isCustomCount ? 'custom' : qCount} onValueChange={value => {
               setQCountEdited(true);
               if (value === 'custom') {
                 setIsCustomCount(true);
@@ -207,13 +209,13 @@ export const TestLadder: React.FC = () => {
               setIsCustomCount(false);
               setQCount(value);
             }}>
-              {[...new Set([String(goals.recommended_questions || 5), '3', '5', '10', '20'])].map(value => <SelectOption key={value} value={value}>{value} 题</SelectOption>)}<SelectOption value="custom">自定义</SelectOption>
-            </SelectField>{isCustomCount && <Input aria-label="自定义题数" type="number" min="1" max="50" value={qCount} onChange={event => { setQCountEdited(true); setQCount(event.target.value); }} />}</label>
-            <label>难度<SelectField aria-label="难度" value={difficulty} onValueChange={value => setDifficulty(value)}><SelectOption value="mixed">混合难度</SelectOption><SelectOption value="entry">入门</SelectOption><SelectOption value="easy">简单</SelectOption><SelectOption value="normal">适当</SelectOption><SelectOption value="hard">困难</SelectOption></SelectField></label>
+              {[...new Set([String(goals.recommended_questions || 5), '3', '5', '10', '20'])].map(value => <SelectOption key={value} value={value}>{value} {t('题')}</SelectOption>)}<SelectOption value="custom">{t('自定义')}</SelectOption>
+            </SelectField>{isCustomCount && <Input aria-label={t('自定义题数')} type="number" min="1" max="50" value={qCount} onChange={event => { setQCountEdited(true); setQCount(event.target.value); }} />}</label>
+            <label>{t('难度')}<SelectField aria-label={t('难度')} value={difficulty} onValueChange={value => setDifficulty(value)}><SelectOption value="mixed">{t('混合难度')}</SelectOption><SelectOption value="entry">{t('入门')}</SelectOption><SelectOption value="easy">{t('简单')}</SelectOption><SelectOption value="normal">{t('适当')}</SelectOption><SelectOption value="hard">{t('困难')}</SelectOption></SelectField></label>
 
-            <div className="um-practice-subject"><span className="um-practice-label">学科范围</span><Popover><PopoverTrigger asChild><Button variant="outline" aria-label="选择学科">{selectedSubIds.length ? `已选 ${selectedSubIds.length} 个学科` : '全部学科'}<CaretDown size={14} /></Button></PopoverTrigger><PopoverContent className="um-practice-popover" align="start"><h2>学科范围</h2>{subjectList.map((subject: { id: number; name: string }) => <Label key={subject.id}><Checkbox checked={selectedSubIds.includes(subject.id)} onCheckedChange={checked => setSelectedSubIds(prev => checked ? [...prev, subject.id] : prev.filter(id => id !== subject.id))} />{subject.name}</Label>)}{!subjectList.length && <p>暂无可选学科</p>}{selectedSubIds.length > 0 && <Button variant="ghost" onClick={() => setSelectedSubIds([])}>清除筛选</Button>}</PopoverContent></Popover></div>
+            <div className="um-practice-subject"><span className="um-practice-label">{t('学科范围')}</span><Popover><PopoverTrigger asChild><Button variant="outline" aria-label={t('选择学科')}>{selectedSubIds.length ? t('已选 {0} 个学科', { 0: selectedSubIds.length }) : t('全部学科')}<CaretDown size={14} /></Button></PopoverTrigger><PopoverContent className="um-practice-popover" align="start"><h2>{t('学科范围')}</h2>{subjectList.map((subject: { id: number; name: string }) => <Label key={subject.id}><Checkbox checked={selectedSubIds.includes(subject.id)} onCheckedChange={checked => setSelectedSubIds(prev => checked ? [...prev, subject.id] : prev.filter(id => id !== subject.id))} />{subject.name}</Label>)}{!subjectList.length && <p>{t('暂无可选学科')}</p>}{selectedSubIds.length > 0 && <Button variant="ghost" onClick={() => setSelectedSubIds([])}>{t('清除筛选')}</Button>}</PopoverContent></Popover></div>
           </div>
-          <div className="um-practice-start"><div><span className="um-practice-label">练习偏好</span><div className="um-practice-preference" role="group" aria-label="练习偏好">{[{ value: 'balanced', label: '均衡' }, { value: 'new_first', label: '偏新题' }, { value: 'review_first', label: '偏复习' }].map(item => <button type="button" key={item.value} aria-pressed={preference === item.value} onClick={() => setExperience({ practicePreference: item.value as typeof preference })}>{item.label}</button>)}</div></div><Button onClick={startTest} disabled={starting || loadingStates.goals} className="um-practice-primary">{starting ? '正在读取题目…' : '开始练习'}<ArrowRight size={15} /></Button></div>
+          <div className="um-practice-start"><div><span className="um-practice-label">{t('练习偏好')}</span><div className="um-practice-preference" role="group" aria-label={t('练习偏好')}>{[{ value: 'balanced', label: t('均衡') }, { value: 'new_first', label: t('偏新题') }, { value: 'review_first', label: t('偏复习') }].map(item => <button type="button" key={item.value} aria-pressed={preference === item.value} onClick={() => setExperience({ practicePreference: item.value as typeof preference })}>{item.label}</button>)}</div></div><Button onClick={startTest} disabled={starting || loadingStates.goals} className="um-practice-primary">{starting ? t('正在读取题目…') : t('开始练习')}<ArrowRight size={15} /></Button></div>
         </section>
         {/* Modularized Assessment Flow */}
         <AssessmentDialog 
