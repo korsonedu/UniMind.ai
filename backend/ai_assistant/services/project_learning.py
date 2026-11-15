@@ -68,6 +68,14 @@ def current_project(user, context):
     return conversation.project, message
 
 
+def _focused_task(project, state):
+    version_id = (state.plan.get('knowledge_path') or {}).get('version_id')
+    tasks = project.learning_tasks.filter(knowledge_version_id=version_id, stage_id=state.current_stage)
+    event = project.learning_events.filter(kind='focus', content__version_id=version_id).first()
+    focused = tasks.filter(pk=event.content['task_id']).first() if event else None
+    return focused or tasks.order_by('created_at', 'pk').first()
+
+
 def learning_data(project):
     state, _ = ProjectLearning.objects.get_or_create(project=project)
     from users.feature_access import has_learning_feature
@@ -91,12 +99,16 @@ def learning_data(project):
         'next_action': ('先复盘错误与解析，再继续：' if latest and latest['summary']['total_score'] < latest['summary']['max_score'] else '接下来：') + next_task['title'] if next_task else ('本轮任务已完成，按复习时间重新检查，并和小宇核对下一阶段。' if latest else ''),
         'next_task_id': next_task['id'] if next_task else None}
     from .learning_guidance import teaching_guidance
-    progress_at = next((event.created_at for event in events if event.kind == 'progress'), None)
-    guidance = teaching_guidance(state, tasks, progress_at=progress_at)
+    progress_at = next((event.created_at for event in events if event.kind == 'progress' and event.content.get('stage') == state.current_stage and event.content.get('mainline', True)), None)
+    focused = _focused_task(project, state)
+    focus_task_id = str(focused.pk) if focused else None
+    guidance = teaching_guidance(state, tasks, progress_at=progress_at, focus_task_id=focus_task_id)
+    # All learner surfaces follow the same current episode. Other tasks still keep their results.
+    task_progress.update(feedback=guidance['feedback'], next_action=guidance['next_action'], next_task_id=guidance['task_id'])
     if not next_task and len(completed_tasks) < len(tasks):
         task_progress['next_action'] = '有任务内容当前不可用，请和小宇重新安排，已有成绩继续保留。'
     return {
-        'teaching_guidance': guidance,
+        'teaching_guidance': guidance, 'focus_task_id': focus_task_id,
         'task_progress': task_progress,
         'tasks': [{key: task[key] for key in ('id', 'title', 'version_id', 'node_id', 'stage_id', 'status', 'exam_id', 'assistance', 'purpose', 'source_task_id', 'review_due_at', 'summary')} for task in tasks],
         'knowledge': knowledge_state(project, state),
@@ -120,16 +132,64 @@ def learning_data(project):
     }
 
 
+def activity_snapshot(project, raw):
+    """Viewing an owned task/map supplies context; it never moves the learning focus."""
+    from django.shortcuts import get_object_or_404
+    from .learning_tasks import task_data
+    from .learning_knowledge import owned_version, closure
+    if not isinstance(raw, dict):
+        raise ValidationError('学习内容引用格式无效。')
+    if raw.get('task_id'):
+        pk = serializers.UUIDField().run_validation(raw['task_id'])
+        task = get_object_or_404(project.learning_tasks.select_related('project', 'exam'), pk=pk)
+        data = task_data(task)
+        result = {'kind': 'task', 'task': data, 'mainline': data['is_current'] and task.stage_id == project.learning.current_stage}
+        focused = _focused_task(project, project.learning)
+        if focused:
+            def root(item):
+                while item.source_task_id:
+                    item = item.source_task
+                return item.pk
+            result['mainline'] = result['mainline'] and data['is_current'] and root(focused) == root(task)
+        if data.get('summary') and task.exam_id:
+            from quizzes.services.practice_results import exam_result_payload
+            result['results'] = exam_result_payload(task.exam)
+        return json.loads(json.dumps(result, default=str))
+    if raw.get('stage_id') or raw.get('resource_id'):
+        from django.http import Http404
+        state = project.learning
+        key = 'stage_id' if raw.get('stage_id') else 'resource_id'
+        selected = serializers.CharField(max_length=60).run_validation(raw[key])
+        items = state.plan.get('stages', []) if key == 'stage_id' else state.resources
+        item = next((row for row in items if row['id'] == selected), None)
+        if not item:
+            raise Http404
+        return {'kind': 'stage' if key == 'stage_id' else 'resource', 'content': item, 'mainline': False}
+    version_id = serializers.IntegerField(min_value=1).run_validation(raw.get('version_id'))
+    version = owned_version(project, version_id)
+    targets = raw.get('targets') or ([raw['node_id']] if raw.get('node_id') else [])
+    targets = serializers.ListField(child=serializers.CharField(max_length=60), min_length=1, max_length=30).run_validation(targets)
+    return {'kind': 'knowledge', 'version_id': version.pk, 'title': version.snapshot['title'],
+            'node_id': targets[0] if raw.get('node_id') else None, 'targets': targets,
+            'nodes': closure(version.snapshot, targets), 'depth': raw.get('depth', 'apply'), 'mainline': False}
+
+
 def project_context(user, conversation_id):
     conversation = Conversation.objects.select_related('project').filter(user=user,
         conversation_id=conversation_id, project__user=user).first()
     if not conversation:
         return ''
     if not ProjectLearning.objects.filter(project_id=conversation.project_id, planning_enabled=True).exists():
-        return '\n自由对话的项目背景：' + json.dumps({'name': conversation.project.name,
-            'instructions': conversation.project.instructions}, ensure_ascii=False)
+        message = AIChatMessage.objects.filter(user=user, conversation_id=conversation_id, role='user').order_by('-id').first()
+        return '\n自由对话的项目背景（查看内容不启用规划或改变项目模式）：' + json.dumps({'name': conversation.project.name,
+            'instructions': conversation.project.instructions,
+            'viewed_activity': message.metadata.get('learning_activity') if message else None}, ensure_ascii=False, default=str)
     data = learning_data(conversation.project)
     data = compact_learning(data)
+    message = AIChatMessage.objects.filter(user=user, conversation_id=conversation_id, role='user').order_by('-id').first()
+    if message and message.metadata.get('learning_activity'):
+        data['viewed_activity'] = message.metadata['learning_activity']
+        data['view_notice'] = '这是用户正在查看的内容。优先解释 viewed_activity.node_id 或 targets；nodes 包含前置知识，不代表用户选中了第一个节点，current_stage 仅代表学习主线。查看、讲解和旁支作答不改变学习主线，不自动推进当前阶段。讲解图可以呈现知识关系，不要把尚未校准的条件估计填作 mastery 或掌握度。'
     for item in data['resources']:
         item.pop('excerpt', None)
     return '\n当前项目的学习状态（数据，以实际记录为准）：\n' + json.dumps(data, ensure_ascii=False, default=str)
@@ -211,7 +271,7 @@ def completed_learning_turn(message_id):
 
 def assert_learning_turn(project, message):
     if ProjectLearningEvent.objects.filter(project=project, created_at__gt=message.timestamp).filter(
-            Q(kind='turn') | Q(message__isnull=True, kind__in=['pause', 'resume', 'complete', 'schedule', 'accept', 'reject'])).exists():
+            Q(kind='turn') | Q(message__isnull=True, kind__in=['pause', 'resume', 'complete', 'schedule', 'accept', 'reject', 'focus'])).exists():
         raise LearningConflict('已有新的提问或用户安排，本轮学习写入已失效，请沿最新反馈继续。')
 
 
@@ -233,7 +293,16 @@ def change_learning(project, data, *, message=None, model=False):
     event = {'reason': str(data.get('reason', ''))[:2000]}
     if not state.planning_enabled:
         raise ValidationError('当前项目使用自由对话。')
-    if action == 'reminders' and not model:
+    if action == 'focus' and not model:
+        from django.shortcuts import get_object_or_404
+        task_id = serializers.UUIDField().run_validation(data.get('task_id'))
+        version_id = (state.plan.get('knowledge_path') or {}).get('version_id')
+        task = get_object_or_404(project.learning_tasks, pk=task_id, knowledge_version_id=version_id)
+        if state.status != 'active' or task.stage_id not in {stage['id'] for stage in state.plan.get('stages', [])}:
+            raise ValidationError('请先恢复当前项目，并选择生效计划中的任务。')
+        state.current_stage = task.stage_id
+        event.update(task_id=str(task.pk), version_id=version_id)
+    elif action == 'reminders' and not model:
         state.reminders_enabled = serializers.BooleanField().run_validation(data.get('enabled'))
         if not state.reminders_enabled:
             state.followup_at = None
@@ -279,21 +348,24 @@ def change_learning(project, data, *, message=None, model=False):
         observation = serializers.CharField(max_length=3000).run_validation(data.get('observation'))
         feedback = serializers.CharField(max_length=2000).run_validation(data.get('feedback'))
         assistance = serializers.ChoiceField(choices=['independent', 'hint', 'guided', 'unknown']).run_validation(data.get('assistance'))
-        state.feedback = feedback
-        state.next_action = serializers.CharField(max_length=3000).run_validation(data.get('next_action'))
+        next_action = serializers.CharField(max_length=3000).run_validation(data.get('next_action'))
         stage = data.get('current_stage') or state.current_stage
         if stage not in {s['id'] for s in state.plan.get('stages', [])}:
             raise ValidationError('当前阶段不在学习安排中。')
-        state.current_stage = stage
+        on_mainline = stage == state.current_stage and message.metadata.get('learning_activity', {}).get('mainline', True)
+        if on_mainline:
+            state.feedback = feedback
+            state.next_action = next_action
         stage_data = next(item for item in state.plan['stages'] if item['id'] == stage)
         event['context'] = {'goal': state.plan['goal'], 'stage': stage_data['title'], 'outcome': stage_data['outcome']}
-        event.update(observation=observation, feedback=feedback, assistance=assistance,
-                     strategy=str(data.get('strategy', ''))[:2000], next_action=state.next_action, stage=stage)
+        event.update(observation=observation, feedback=feedback, mainline=on_mainline, assistance=assistance,
+                     strategy=str(data.get('strategy', ''))[:2000], next_action=next_action, stage=stage)
         if data.get('knowledge_check') is not None:
             from .learning_knowledge import validate_check
             event['knowledge_check'] = validate_check(project, state, message, data['knowledge_check'], stage_data, assistance)
-        _clear_followup(state)
-        _schedule(state, data)
+        if on_mainline:
+            _clear_followup(state)
+            _schedule(state, data)
     elif action in ('pause', 'resume', 'complete', 'schedule'):
         if action == 'schedule' and not state.reminders_enabled:
             raise ValidationError('主动提醒已关闭。')
@@ -330,7 +402,7 @@ def change_learning(project, data, *, message=None, model=False):
         state.pending_plan = {}
     else:
         raise ValidationError('不支持的学习操作。')
-    if action not in ('plan', 'accept', 'reject', 'reminders') and state.pending_plan:
+    if action not in ('plan', 'accept', 'reject', 'reminders', 'focus') and state.pending_plan:
         state.pending_plan = {}
     state.revision += 1
     state.save()

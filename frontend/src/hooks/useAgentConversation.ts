@@ -199,6 +199,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   }, []);
 
   const getSelectionVersion = useCallback(() => selectionVersionRef.current, []);
+  const getInputRevision = useCallback(() => inputRevisionRef.current, []);
 
   const markGenerating = useCallback((id: string, active: boolean) => {
     const set = generatingRef.current;
@@ -882,7 +883,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   }, []);
 
   return {
-    projectId, setProjectId, getSelectionVersion,
+    projectId, setProjectId, getSelectionVersion, getInputRevision,
     // State
     bot,
     messages,
