@@ -31,6 +31,7 @@ const Landing = lazy(() => import('./pages/Landing').then(module => ({ default: 
 const CourseCenter = lazy(() => import('./pages/CourseCenter').then(module => ({ default: module.CourseCenter })));
 const TestLadder = lazy(() => import('./pages/TestLadder').then(module => ({ default: module.TestLadder })));
 const StudyRoom = lazy(() => import('./pages/StudyRoom').then(module => ({ default: module.StudyRoom })));
+const InstitutionManagement = lazy(() => import('./pages/InstitutionManagement'));
 const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })));
 const Login = lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
 const DesktopAuthorize = lazy(() => import('./pages/DesktopAuthorize').then(module => ({ default: module.DesktopAuthorize })));
@@ -274,6 +275,7 @@ const router = createBrowserRouter([
           { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant">{workspacePage(XiaoYu)}</FeatureGuard> },
           { path: "xiaoyu/practice/:sessionId", element: <FeatureGuard feature="ai.assistant">{workspacePage(PracticeSession)}</FeatureGuard> },
           { path: "settings", element: workspacePage(Settings) },
+          { path: "settings/institution", element: workspacePage(InstitutionManagement) },
           { path: "billing", element: workspacePage(BillingPage) },
           { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{workspacePage(CourseCenter)}</FeatureGuard> },
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{workspacePage(WrongQuestionReviewPage)}</FeatureGuard> },
