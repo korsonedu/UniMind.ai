@@ -12,12 +12,14 @@ interface LegalDoc {
   title: string;
   content: string;
   effective_date: string;
+  reference_translation?: { language: string; source_version: string; title: string; content: string };
 }
 
 export default function Legal() {
   const locale = useLocale();
   const location = useLocation();
   const docType = location.pathname.includes('privacy') ? 'privacy' : 'terms';
+  const [showOriginal, setShowOriginal] = useState(false);
   const [doc, setDoc] = useState<LegalDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -54,14 +56,17 @@ export default function Legal() {
     );
   }
 
+  const reference = locale === 'en' ? doc.reference_translation : undefined;
+  const translated = !!reference && !showOriginal;
   return (
-    <PageWrapper title={t(doc.title)}>
+    <PageWrapper title={translated ? reference!.title : t(doc.title)}>
       <article className="prose prose-slate max-w-3xl mx-auto py-8">
-        {locale === 'en' && <p className="text-muted-foreground">{t('正文按发布时的原语言展示。')}</p>}
+        {locale === 'en' && <p className="text-muted-foreground">{translated ? t('英文参考译文，来源于发布版本 {0}，不替换原文。', { 0: reference!.source_version }) : t('正文按发布时的原语言展示。')}</p>}
+        {reference && <button type="button" className="text-primary underline" onClick={() => setShowOriginal(value => !value)}>{translated ? t('查看发布原文') : t('查看英文参考译文')}</button>}
         <p className="text-muted-foreground">
           {t('版本：')}{doc.version} {' | '}{t('生效日期：')}{doc.effective_date}
         </p>
-        <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(doc.content) }} />
+        <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(translated ? reference!.content : doc.content) }} />
         <div className="mt-8 pt-4 border-t text-sm text-muted-foreground">
           <Link to="/privacy" className={docType === 'privacy' ? 'font-bold' : 'underline'}>{t('隐私政策')}</Link>
           {' · '}

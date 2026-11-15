@@ -1,4 +1,4 @@
-import { nt, setNativeLanguage } from './language';
+import { nt, setNativeLanguage, getNativeLanguage } from './language';
 import { app, BrowserWindow, Menu, clipboard, dialog, session, ipcMain, Notification, Tray, nativeImage, protocol, powerMonitor, globalShortcut, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -361,11 +361,11 @@ async function offerRecovery(window: BrowserWindow) {
 function fallbackUrl(): string {
   const target = sourceUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   const html = `<!doctype html>
-<html lang="zh-CN">
+<html lang="${getNativeLanguage()}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>UniMind · 网络不可用</title>
+<title>${nt('UniMind · 网络不可用')}</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:32px;background:#f4f2ed;color:#202226;font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 main{width:min(440px,100%);padding:28px;border:1px solid #e2e5e9;border-radius:16px;background:#fff;box-shadow:0 8px 24px rgb(20 25 30 / 6%)}
@@ -374,10 +374,10 @@ small{display:block;margin-top:16px;color:#8a8f96}
 </style>
 </head>
 <body><main>
-<h1>网络暂时不可用</h1>
-<p>无法连接 UniMind。请检查网络后重试。</p>
-<p>离线课程库已打开，可继续观看已下载的课程。</p>
-<a href="${target}">重新连接</a>
+<h1>${nt('网络暂时不可用')}</h1>
+<p>${nt('无法连接 UniMind。请检查网络后重试。')}</p>
+<p>${nt('离线课程库已打开，可继续观看已下载的课程。')}</p>
+<a href="${target}">${nt('重新连接')}</a>
 <small>UniMind ${app.getVersion()}</small>
 </main></body></html>`;
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
@@ -387,7 +387,7 @@ function createMainWindow(): void {
   const source = entryUrl();
   const development = allowsDevelopment(source);
   if (!validSource(source, development)) {
-    dialog.showErrorBox('UniMind 无法启动', '桌面客户端只允许 HTTPS 站点或本机开发地址。');
+    dialog.showErrorBox(nt('UniMind 无法启动'), nt('桌面客户端只允许 HTTPS 站点或本机开发地址。'));
     app.quit();
     return;
   }

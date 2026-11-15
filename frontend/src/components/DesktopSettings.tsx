@@ -19,13 +19,13 @@ export function DesktopSettings() {
     catch (failure) { setActionError(String(failure instanceof Error ? failure.message : failure)); }
     finally { setBusy(null); }
   };
-  if (!state) return <div className="um-settings-empty"><p role="status">{error || t('正在读取桌面设置…')}</p>{error && <Button variant="outline" disabled={!!busy} onClick={() => void run('sync', desktop.syncIdentity)}>{t('重试')}</Button>}</div>;
+  if (!state) return <div className="um-settings-empty"><p role="status">{error ? t(error) : t('正在读取桌面设置…')}</p>{error && <Button variant="outline" disabled={!!busy} onClick={() => void run('sync', desktop.syncIdentity)}>{t('重试')}</Button>}</div>;
   const updateLabels = { unconfigured: t('发布源未配置'), idle: t('可以检查更新'), checking: t('正在检查更新…'), available: t('发现新版本'), downloading: t('正在下载更新…'), downloaded: t('更新已准备好'), error: t('更新检查失败') };
   const usedBytes = state.storage?.usedBytes ?? 0;
   const storageLabel = usedBytes >= 1024 ** 3 ? `${(usedBytes / 1024 ** 3).toFixed(1)} GB` : `${(usedBytes / 1024 ** 2).toFixed(1)} MB`;
   const focusLabel = state.focus ? `${Math.floor(state.focus.remaining / 60)}:${String(state.focus.remaining % 60).padStart(2, '0')}` : '';
   return <>
-    {(actionError || error) && <p className="um-desktop-error" role="alert">{actionError || error}</p>}
+    {(actionError || error) && <p className="um-desktop-error" role="alert">{t(actionError || error || '')}</p>}
     <h3 className="um-settings-group-title">{t('桌面体验')}</h3>
     <section className="um-settings-group">
       <div className="um-settings-row"><div><label htmlFor="desktop-notifications">{t('系统通知')}</label><p>{t('在后台收到新消息或小宇完成回复时提醒你。需允许系统通知。分类开关只控制系统弹窗，通知中心仍保留全部消息。')}</p></div><Switch id="desktop-notifications" checked={state.preferences.notifications} disabled={!!busy} onCheckedChange={notifications => void run('notifications', () => desktop.updatePreferences({ notifications }))} /></div>
@@ -44,10 +44,10 @@ export function DesktopSettings() {
     <section className="um-settings-group">
       <div className="um-settings-row"><div><span>{t('已下载的课程')}</span><p>{t('离线授权最多保留 24 小时，播放位置保存在本机，联网后同步学习记录。退出账号会清除缓存和未同步记录，请先联网同步。')}</p></div><Button variant="outline" disabled={!!busy} onClick={() => void run('library', desktop.openOfflineLibrary)}>{t('打开离线课程库')}</Button></div>
       {state.storage && <div className="um-settings-row"><div><span>{t('本机课程缓存')}</span><p>{t('已占用')} {storageLabel}{t('，包含已完成的视频和可继续下载的分片。移除课程可释放空间。')}</p></div></div>}
-      {state.learningSync && <div className="um-settings-row"><div><span>{t('学习记录同步')}</span><p role="status">{state.learningSync.pending ? t('{0} 条记录等待同步，联网后会继续。', { 0: state.learningSync.pending }) : t('暂无待同步记录。')}{state.learningSync.rejected > 0 && t(' {0} 条记录因课程权限或授权变化未计入账户。', { 0: state.learningSync.rejected })}</p>{state.learningSync.error && <p>{state.learningSync.error}</p>}</div><Button variant="outline" disabled={!!busy} onClick={() => void run('sync-learning', desktop.syncIdentity)}>{t('重新同步')}</Button></div>}
+      {state.learningSync && <div className="um-settings-row"><div><span>{t('学习记录同步')}</span><p role="status">{state.learningSync.pending ? t('{0} 条记录等待同步，联网后会继续。', { 0: state.learningSync.pending }) : t('暂无待同步记录。')}{state.learningSync.rejected > 0 && t(' {0} 条记录因课程权限或授权变化未计入账户。', { 0: state.learningSync.rejected })}</p>{state.learningSync.error && <p>{t(state.learningSync.error)}</p>}</div><Button variant="outline" disabled={!!busy} onClick={() => void run('sync-learning', desktop.syncIdentity)}>{t('重新同步')}</Button></div>}
       {!state.downloads.length && <div className="um-settings-row"><p>{t('暂无下载。前往课程中心选择要离线观看的课程。')}</p></div>}
       {state.downloads.map(course => <div className="um-settings-row um-desktop-download" key={course.courseId}>
-        <div><strong>{course.title}</strong><p>{course.status === 'downloading' || course.status === 'paused' ? `${course.status === 'paused' ? t('已暂停，可继续下载') : t('正在下载')} · ${Math.min(100, Math.floor(course.receivedBytes / Math.max(1, course.totalBytes) * 100))}%` : course.status === 'failed' ? course.error || t('下载失败，请重试') : t('可离线观看{0}', { 0: course.expiresAt ? t(' · 有效至 {0}', { 0: new Date(course.expiresAt).toLocaleString(getLocale()) }) : '' })}</p>{course.status === 'downloading' && <progress aria-label={t('{0}下载进度', { 0: course.title })} max={course.totalBytes || 1} value={course.receivedBytes} />}</div>
+        <div><strong>{course.title}</strong><p>{course.status === 'downloading' || course.status === 'paused' ? `${course.status === 'paused' ? t('已暂停，可继续下载') : t('正在下载')} · ${Math.min(100, Math.floor(course.receivedBytes / Math.max(1, course.totalBytes) * 100))}%` : course.status === 'failed' ? t(course.error || '下载失败，请重试') : t('可离线观看{0}', { 0: course.expiresAt ? t(' · 有效至 {0}', { 0: new Date(course.expiresAt).toLocaleString(getLocale()) }) : '' })}</p>{course.status === 'downloading' && <progress aria-label={t('{0}下载进度', { 0: course.title })} max={course.totalBytes || 1} value={course.receivedBytes} />}</div>
         <div className="um-desktop-actions">
           {course.status === 'ready' && <Button variant="outline" disabled={!!busy} onClick={() => void run(`play-${course.courseId}`, () => desktop.openOfflineCourse(course.courseId))}>{t('播放')}</Button>}
           {course.status === 'downloading' && desktop.pauseDownload && <Button variant="outline" disabled={!!busy} onClick={() => void run(`pause-${course.courseId}`, () => desktop.pauseDownload!(course.courseId))}>{t('暂停')}</Button>}

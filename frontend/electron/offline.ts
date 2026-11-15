@@ -1,3 +1,4 @@
+import { nt, getNativeLanguage } from './language';
 import { app, session, net, safeStorage } from 'electron';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, type ReadStream } from 'node:fs';
@@ -58,7 +59,7 @@ export class OfflineLibrary {
     return write;
   }
   storage() { return { usedBytes: this.usedBytes }; }
-  learningSync() { return this.learning.state(); }
+  learningSync() { const state = this.learning.state(); return { ...state, ...(state.error ? { error: nt(state.error) } : {}) }; }
   offlineSession() {
     return this.actor && !this.locked && this.leaseExpiresAt > Date.now()
       ? { userId: this.actor, expiresAt: this.leaseExpiresAt }
@@ -414,7 +415,7 @@ export class OfflineLibrary {
         }
         const entry = this.entries.find(e => e.courseId === token.course && e.status === 'ready' && (e.expiresAt || 0) > Date.now());
         if (!entry || entry.version !== token.version) return reject('course_unavailable_or_changed');
-        if (statusRequest) return Response.json({ ...this.learning.state(), ...(!entry.grant ? { error: '本地续播位置会保存，联网确认课程后才能同步学习记录' } : {}) }, { headers: { 'Cache-Control': 'no-store' } });
+        if (statusRequest) return Response.json({ ...this.learningSync(), ...(!entry.grant ? { error: nt('本地续播位置会保存，联网确认课程后才能同步学习记录') } : {}) }, { headers: { 'Cache-Control': 'no-store' } });
         const body = await request.text();
         if (body.length > 4096) return reject('progress_payload_too_large', 413);
         try { this.learning.record(token.course, JSON.parse(body), token.version, token.grant); }
@@ -423,7 +424,7 @@ export class OfflineLibrary {
         catch { return reject('local_checkpoint_write_failed', 500); }
         this.changed();
         void this.flushLearning().catch(() => {});
-        return Response.json(this.learning.state(), { headers: { 'Cache-Control': 'no-store' } });
+        return Response.json(this.learningSync(), { headers: { 'Cache-Control': 'no-store' } });
       }
       await this.authorize();
       if (url.pathname === '/player.js') return new Response(playerScript, { headers: { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' } });
@@ -455,12 +456,17 @@ export class OfflineLibrary {
       if (entry) { this.playerTokens.set(token, { actor: this.actor!, epoch: this.epoch, course: entry.courseId, version: entry.version, grant: entry.grant }); }
       // A single private player window is reused; retain a small allowance for an outgoing pagehide save.
       if (this.playerTokens.size > 20) this.playerTokens.delete(this.playerTokens.keys().next().value!);
-      const sync = this.learning.state();
-      const content = entry ? `<a href="/">← 离线课程库</a><h1>${escape(entry.title)}</h1><video controls src="/video/${entry.courseId}" data-course="${entry.courseId}" data-token="${token}" data-position="${this.learning.position(entry.courseId)}"></video><p id="sync-status">${escape(!entry.grant ? '本地续播位置会保存，联网确认课程后才能同步学习记录' : sync.error || (sync.pending ? `离线记录已保存，待同步（${sync.pending}）` : '播放位置会保存在本机，联网后同步真实观看记录'))}</p><p>离线授权到期：${escape(new Date(entry.expiresAt!).toLocaleString('zh-CN'))}</p><script src="/player.js" defer></script>` : `<h1>离线课程库</h1><p>当前账号已下载的课程。授权最多保留24小时，联网时会重新确认课程权限。</p>${this.list().filter(e => e.status === 'ready').map(e => `<article><a href="/course/${e.courseId}">${escape(e.title)}</a><p>有效至 ${escape(new Date(e.expiresAt!).toLocaleString('zh-CN'))}</p></article>`).join('') || '<p>暂无可用的离线课程，请联网登录并下载。</p>'}`;
+      const sync = this.learningSync();
+      const playerMessages = escape(JSON.stringify({
+        pending: nt('离线记录已保存，待联网同步（{0}）'), complete: nt('学习记录已同步'),
+        login: nt('登录状态已失效，请重新登录后再打开课程。'), changed: nt('课程授权或视频已变更，请联网重新下载后播放。'),
+        disk: nt('本地记录未保存，请检查磁盘剩余空间后重试。'), retry: nt('本地记录未保存，请重新打开课程后重试。'),
+      }));
+      const content = entry ? `<a href="/">← ${nt('离线课程库')}</a><h1>${escape(entry.title)}</h1><video controls src="/video/${entry.courseId}" data-course="${entry.courseId}" data-token="${token}" data-position="${this.learning.position(entry.courseId)}" data-player-messages="${playerMessages}"></video><p id="sync-status">${escape(!entry.grant ? nt('本地续播位置会保存，联网确认课程后才能同步学习记录') : sync.error || (sync.pending ? nt('离线记录已保存，待同步（{0}）', { 0: sync.pending }) : nt('播放位置会保存在本机，联网后同步真实观看记录')))}</p><p>${nt('离线授权到期：')}${escape(new Date(entry.expiresAt!).toLocaleString(getNativeLanguage()))}</p><script src="/player.js" defer></script>` : `<h1>${nt('离线课程库')}</h1><p>${nt('当前账号已下载的课程。授权最多保留24小时，联网时会重新确认课程权限。')}</p>${this.list().filter(e => e.status === 'ready').map(e => `<article><a href="/course/${e.courseId}">${escape(e.title)}</a><p>${nt('有效至 {0}', { 0: escape(new Date(e.expiresAt!).toLocaleString(getNativeLanguage())) })}</p></article>`).join('') || `<p>${nt('暂无可用的离线课程，请联网登录并下载。')}</p>`}`;
       return this.page(content);
-    } catch (error) { return this.page(`<h1>暂时无法播放</h1><p>${escape(error instanceof Error ? error.message : '请联网后重试')}</p><a href="/">返回课程库</a>`, 403); }
+    } catch (error) { return this.page(`<h1>${nt('暂时无法播放')}</h1><p>${escape(nt(error instanceof Error ? error.message : '请联网后重试'))}</p><a href="/">${nt('返回课程库')}</a>`, 403); }
   }
   private page(content: string, status = 200) {
-    return new Response(`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>UniMind · 离线课程</title><style>body{font:16px/1.7 system-ui;background:#f5f4f0;color:#242424;margin:48px auto;padding:0 24px;max-width:1050px}h1{font-size:30px}a{color:#345a46}article{border-top:1px solid #d8d7d0;padding:20px 0}p{color:#666}video{width:100%;max-height:72vh;background:#111}</style>${content}</html>`, { status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; media-src 'self'; frame-ancestors 'none'" } });
+    return new Response(`<!doctype html><html lang="${getNativeLanguage()}"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${nt('UniMind · 离线课程')}</title><style>body{font:16px/1.7 system-ui;background:#f5f4f0;color:#242424;margin:48px auto;padding:0 24px;max-width:1050px}h1{font-size:30px}a{color:#345a46}article{border-top:1px solid #d8d7d0;padding:20px 0}p{color:#666}video{width:100%;max-height:72vh;background:#111}</style>${content}</html>`, { status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; media-src 'self'; frame-ancestors 'none'" } });
   }
 }

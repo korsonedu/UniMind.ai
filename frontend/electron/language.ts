@@ -1,6 +1,7 @@
 import en from '../src/i18n/en';
 
 let language: 'zh-CN' | 'en' = 'zh-CN';
+export const getNativeLanguage = () => language;
 export function setNativeLanguage(value: string) {
   language = value.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en';
 }
