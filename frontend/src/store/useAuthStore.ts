@@ -11,6 +11,7 @@ import { resetOfflineCache } from '@/lib/offlineData';
 interface User {
   id: number;
   username: string;
+  email?: string;
   nickname: string;
   role: 'student' | 'admin';
   elo_score: number;
