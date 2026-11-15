@@ -1,4 +1,3 @@
-import { LanguageSelect } from '@/components/LanguageSelect';
 import { t, useLocale } from '@/i18n';
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';

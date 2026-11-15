@@ -36,7 +36,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () => void }) {
+export function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () => void }) {
   useLocale();
   return (
     <div className="min-h-screen flex items-center justify-center p-4">

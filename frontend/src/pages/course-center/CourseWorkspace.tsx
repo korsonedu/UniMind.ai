@@ -1,4 +1,4 @@
-import { getLocale, t, useLocale } from '@/i18n';
+import { t, useLocale } from '@/i18n';
 import { learningUrl } from '@/lib/projectLearning';
 import { SelectField, SelectOption } from '@/components/ui/select';
 import { WorkspaceToolbar } from '@/components/WorkspaceToolbar';
