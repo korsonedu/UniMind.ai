@@ -202,11 +202,19 @@ export function createThemeScene(canvas: HTMLCanvasElement, reduced: boolean) {
     source.set(frame.data);
     const cx = 24 + position * 64, stretch = reduced ? 0 : clamp(velocity * .065, -.16, .16);
     const rx = 17 + Math.abs(stretch) * 24, ry = 22 - Math.abs(stretch) * 12;
+    // Grow only the side approaching the capsule end, including its full height.
+    const leftAttach = clamp(1 - position), rightAttach = clamp(position - 1);
+    const attachment = Math.max(leftAttach, rightAttach);
+    const left = mix(cx - rx, 0, leftAttach), right = mix(cx + rx, W, rightAttach);
+    const halfHeight = mix(ry, H / 2, attachment);
     const corner = Math.min(rx, ry);
-    for (let y = 1; y < H - 1; y++) for (let x = Math.max(0, Math.floor(cx - rx)); x < Math.min(W, cx + rx); x++) {
-      const nx = (x - cx) / rx, ny = (y - 25) / ry;
-      const edgeX = Math.max(Math.abs(x - cx) - (rx - corner), 0) / corner;
-      const edgeY = Math.max(Math.abs(y - 25) - (ry - corner), 0) / corner;
+    const leftCorner = mix(corner, Math.min(H / 2, right - left - corner), leftAttach);
+    const rightCorner = mix(corner, Math.min(H / 2, right - left - corner), rightAttach);
+    for (let y = 0; y < H; y++) for (let x = Math.max(0, Math.floor(left)); x < Math.min(W, right); x++) {
+      const sideWidth = x < cx ? cx - left : right - cx, sideCorner = x < cx ? leftCorner : rightCorner;
+      const nx = (x - cx) / sideWidth, ny = (y - 25) / halfHeight;
+      const edgeX = Math.max(Math.abs(x - cx) - (sideWidth - sideCorner), 0) / sideCorner;
+      const edgeY = Math.max(Math.abs(y - 25) - (halfHeight - sideCorner), 0) / sideCorner;
       const radius = edgeX * edgeX + edgeY * edgeY;
       if (radius >= 1) continue;
       const bend = .77 + radius * .16, sx = cx + (x - cx) * bend + stretch * ny * 5, sy = 25 + (y - 25) * bend;
@@ -217,16 +225,16 @@ export function createThemeScene(canvas: HTMLCanvasElement, reduced: boolean) {
       }
     }
     composite.putImageData(frame, 0, 0); context.clearRect(0, 0, W, H); context.drawImage(layers[2], 0, 0);
-    context.save(); context.translate(cx, 25); context.rotate(stretch * .45);
-    context.beginPath(); context.roundRect(-rx, -ry, rx * 2, ry * 2, corner);
-    const glass = context.createLinearGradient(-rx, -ry, rx, ry);
+    context.save(); context.translate(cx, 25); context.rotate(stretch * .45 * (1 - attachment));
+    context.beginPath(); context.roundRect(left - cx, -halfHeight, right - left, halfHeight * 2, [leftCorner, rightCorner, rightCorner, leftCorner]);
+    const glass = context.createLinearGradient(left - cx, -halfHeight, right - cx, halfHeight);
     glass.addColorStop(0, '#ffffffa8'); glass.addColorStop(.24, '#ffffff0a'); glass.addColorStop(.72, '#c3d4ff08'); glass.addColorStop(1, '#b0d2ff75');
     context.fillStyle = glass; context.fill(); context.strokeStyle = '#ffffff90'; context.lineWidth = .8; context.stroke();
-    context.beginPath(); context.moveTo(-rx + 2, 1); context.lineTo(-rx + 2, -ry + corner);
-    context.arc(-rx + corner, -ry + corner, corner - 2, Math.PI, Math.PI * 1.68);
+    context.beginPath(); context.moveTo(left - cx + 2, 1); context.lineTo(left - cx + 2, -halfHeight + leftCorner);
+    context.arc(left - cx + leftCorner, -halfHeight + leftCorner, leftCorner - 2, Math.PI, Math.PI * 1.68);
     context.strokeStyle = '#ffffffd0'; context.lineWidth = 1.4; context.stroke();
-    context.beginPath(); context.moveTo(rx - 2, -1); context.lineTo(rx - 2, ry - corner);
-    context.arc(rx - corner, ry - corner, corner - 2, 0, 1.1);
+    context.beginPath(); context.moveTo(right - cx - 2, -1); context.lineTo(right - cx - 2, halfHeight - rightCorner);
+    context.arc(right - cx - rightCorner, halfHeight - rightCorner, rightCorner - 2, 0, 1.1);
     context.strokeStyle = '#a1baffb0'; context.lineWidth = .8; context.stroke(); context.restore();
   }
 
