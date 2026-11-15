@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import DOMPurify from 'dompurify';
@@ -14,6 +15,7 @@ interface LegalDoc {
 }
 
 export default function Legal() {
+  const locale = useLocale();
   const location = useLocation();
   const docType = location.pathname.includes('privacy') ? 'privacy' : 'terms';
   const [doc, setDoc] = useState<LegalDoc | null>(null);
@@ -29,40 +31,41 @@ export default function Legal() {
   useEffect(() => {
     api.get(`/legal/${docType}/`)
       .then(r => { setDoc(r.data); setError(''); })
-      .catch(() => setError('文档加载失败'))
+      .catch(() => setError(t('文档加载失败')))
       .finally(() => setLoading(false));
   }, [docType]);
 
   if (loading) {
     return (
-      <PageWrapper title="加载中...">
-        <div className="max-w-3xl mx-auto py-12 text-center text-muted-foreground">加载中...</div>
+      <PageWrapper title={t('加载中...')}>
+        <div className="max-w-3xl mx-auto py-12 text-center text-muted-foreground">{t('加载中...')}</div>
       </PageWrapper>
     );
   }
 
   if (error || !doc) {
     return (
-      <PageWrapper title="错误">
+      <PageWrapper title={t('错误')}>
         <div className="max-w-3xl mx-auto py-12 text-center text-muted-foreground">
-          {error || '文档不存在'}
-          <div className="mt-4"><Link to="/" className="text-primary underline">返回首页</Link></div>
+          {error || t('文档不存在')}
+          <div className="mt-4"><Link to="/" className="text-primary underline">{t('返回首页')}</Link></div>
         </div>
       </PageWrapper>
     );
   }
 
   return (
-    <PageWrapper title={doc.title}>
+    <PageWrapper title={t(doc.title)}>
       <article className="prose prose-slate max-w-3xl mx-auto py-8">
+        {locale === 'en' && <p className="text-muted-foreground">{t('正文按发布时的原语言展示。')}</p>}
         <p className="text-muted-foreground">
-          版本：{doc.version} &nbsp;|&nbsp; 生效日期：{doc.effective_date}
+          {t('版本：')}{doc.version} {' | '}{t('生效日期：')}{doc.effective_date}
         </p>
         <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(doc.content) }} />
         <div className="mt-8 pt-4 border-t text-sm text-muted-foreground">
-          <Link to="/privacy" className={docType === 'privacy' ? 'font-bold' : 'underline'}>隐私政策</Link>
+          <Link to="/privacy" className={docType === 'privacy' ? 'font-bold' : 'underline'}>{t('隐私政策')}</Link>
           {' · '}
-          <Link to="/terms" className={docType === 'terms' ? 'font-bold' : 'underline'}>用户协议</Link>
+          <Link to="/terms" className={docType === 'terms' ? 'font-bold' : 'underline'}>{t('用户协议')}</Link>
         </div>
       </article>
     </PageWrapper>

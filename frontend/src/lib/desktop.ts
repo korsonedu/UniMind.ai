@@ -9,7 +9,7 @@ export interface DesktopLoginState {
 export interface DesktopState {
   version: string;
   platform: string;
-  preferences: { notifications: boolean; keepRunning: boolean; launchAtLogin?: boolean; quickEntry?: boolean; focusMinutes?: number; startupPage?: '/xiaoyu' | '/courses' | '/notes'; notifyChat?: boolean; notifyQA?: boolean; notifyLearning?: boolean };
+  preferences: { language?: '' | 'zh-CN' | 'en'; notifications: boolean; keepRunning: boolean; launchAtLogin?: boolean; quickEntry?: boolean; focusMinutes?: number; startupPage?: '/xiaoyu' | '/courses' | '/notes'; notifyChat?: boolean; notifyQA?: boolean; notifyLearning?: boolean };
   focus?: { status: 'idle' | 'running' | 'paused'; remaining: number; duration: number };
   downloads: { courseId: number; title: string; status: 'downloading' | 'paused' | 'ready' | 'failed'; receivedBytes: number; totalBytes: number; expiresAt?: number; error?: string }[];
   storage?: { usedBytes: number };

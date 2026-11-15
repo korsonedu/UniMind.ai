@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +36,7 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
   isActive, duration, timeLeft, taskName,
   onDurationChange, onTaskNameChange, onStart, onPause, onAbort,
 }) => {
+  useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const [showStopAlert, setShowStopAlert] = useState(false);
 
@@ -64,7 +66,7 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
               <div className="space-y-2">
                 <div className="flex justify-between items-center mb-1">
                   <label className="text-xs font-medium text-muted-foreground">
-                    时长设定
+                    {t('时长设定')}
                   </label>
                   <div className="flex items-center gap-1">
                     <Input
@@ -73,18 +75,18 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
                       onChange={e => onDurationChange(parseInt(e.target.value) || 0)}
                       className="w-12 h-6 p-0 text-center border-none bg-muted rounded-md text-[11px] font-bold text-foreground"
                     />
-                    <span className="text-xs text-muted-foreground">分钟</span>
+                    <span className="text-xs text-muted-foreground">{t('分钟')}</span>
                   </div>
                 </div>
                 <Slider disabled={isActive} value={[duration]} onValueChange={v => onDurationChange(v[0])} max={120} min={1} step={1} />
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">
-                  任务目标
+                  {t('任务目标')}
                 </label>
                 <Input
                   value={taskName} onChange={e => onTaskNameChange(e.target.value)}
-                  placeholder="你想完成什么？"
+                  placeholder={t('你想完成什么？')}
                   className="h-10 rounded-lg text-sm text-foreground"
                 />
               </div>
@@ -99,7 +101,7 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
                 )}
               >
                 {isActive ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-                {isActive ? '暂停' : '开始学习'}
+                {isActive ? t('暂停') : t('开始学习')}
               </Button>
               {isActive && (
                 <Button
@@ -118,18 +120,18 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
       <AlertDialog open={showStopAlert} onOpenChange={setShowStopAlert}>
         <AlertDialogContent className="um-study-dialog bg-card">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">确定要中止任务吗？</AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">离开当前页面将视为一次未完成的任务，并向讨论区广播。确定离开吗？</AlertDialogDescription>
+            <AlertDialogTitle className="text-foreground">{t('确定要中止任务吗？')}</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">{t('离开当前页面将视为一次未完成的任务，并向讨论区广播。确定离开吗？')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setShowStopAlert(false)} className="rounded-xl border-border text-foreground hover:bg-muted">
-              继续专注
+              {t('继续专注')}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => { onAbort(); setShowStopAlert(false); }}
               className="rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold"
             >
-              中止并离开
+              {t('中止并离开')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -143,6 +145,7 @@ export const MobileFocusTimer: React.FC<{
   onDurationChange: (v: number) => void; onTaskNameChange: (v: string) => void;
   onStart: () => void; onPause: () => void; onAbort: () => void;
 }> = ({ isActive, duration, timeLeft, taskName, onDurationChange, onTaskNameChange, onStart, onPause, onAbort }) => {
+  useLocale();
   const [showSetup, setShowSetup] = useState(false);
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [showStopAlert, setShowStopAlert] = useState(false);
@@ -164,14 +167,14 @@ export const MobileFocusTimer: React.FC<{
         <PopoverContent side="top" align="start" className="w-[82vw] max-w-72 rounded-2xl p-4 border-none shadow-lg bg-card/95 backdrop-blur-xl z-[var(--z-dropdown)]">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-muted-foreground">番茄钟</p>
+              <p className="text-xs font-semibold text-muted-foreground">{t('番茄钟')}</p>
               <span className="font-mono font-black text-lg tabular-nums">{formatTime(timeLeft)}</span>
             </div>
-            <Input value={taskName} onChange={e => onTaskNameChange(e.target.value)} placeholder="任务名称..." className="h-10 rounded-xl bg-muted border-none text-sm font-bold" />
+            <Input value={taskName} onChange={e => onTaskNameChange(e.target.value)} placeholder={t('任务名称...')} className="h-10 rounded-xl bg-muted border-none text-sm font-bold" />
             <div className="space-y-2">
               <div className="flex items-center justify-between text-[11px] font-bold text-muted-foreground uppercase">
-                <span>时长</span>
-                <span>{`${duration} 分钟`}</span>
+                <span>{t('时长')}</span>
+                <span>{t('{0} 分钟', { 0: duration })}</span>
               </div>
               <Slider disabled={isActive} value={[duration]} onValueChange={v => onDurationChange(v[0])} max={120} min={1} step={1} />
             </div>
@@ -179,7 +182,7 @@ export const MobileFocusTimer: React.FC<{
               onClick={() => { onStart(); setShowSetup(false); setShowFullscreen(true); }}
               className="w-full h-10 rounded-xl bg-slate-900 text-white font-black"
             >
-              进入全屏专注
+              {t('进入全屏专注')}
             </Button>
           </div>
         </PopoverContent>
@@ -195,7 +198,7 @@ export const MobileFocusTimer: React.FC<{
         </button>
         <p className="text-xs font-semibold text-white/40">Focus Mode</p>
         <p className="font-mono font-black text-[72px] leading-none tabular-nums">{formatTime(timeLeft)}</p>
-        <p className="text-base font-bold text-white/80 px-8 text-center">{taskName || '深度专注学习'}</p>
+        <p className="text-base font-bold text-white/80 px-8 text-center">{taskName || t('深度专注学习')}</p>
         <div className="flex items-center gap-3">
           <Button
             size="lg"
@@ -206,14 +209,14 @@ export const MobileFocusTimer: React.FC<{
             )}
           >
             {isActive ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-            {isActive ? '暂停' : '开始'}
+            {isActive ? t('暂停') : t('开始')}
           </Button>
           <Button
             size="lg" variant="ghost"
             onClick={() => setShowStopAlert(true)}
             className="rounded-2xl px-6 h-12 font-black text-white border border-background/20 hover:bg-white/10"
           >
-            结束
+            {t('结束')}
           </Button>
         </div>
       </div>
@@ -221,18 +224,18 @@ export const MobileFocusTimer: React.FC<{
       <AlertDialog open={showStopAlert} onOpenChange={setShowStopAlert}>
         <AlertDialogContent className="rounded-[2.5rem] border-none shadow-2xl bg-card">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">确定要中止任务吗？</AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">离开当前页面将视为一次未完成的任务，并向讨论区广播。确定离开吗？</AlertDialogDescription>
+            <AlertDialogTitle className="text-foreground">{t('确定要中止任务吗？')}</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">{t('离开当前页面将视为一次未完成的任务，并向讨论区广播。确定离开吗？')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setShowStopAlert(false)} className="rounded-xl border-border text-foreground hover:bg-muted">
-              继续专注
+              {t('继续专注')}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => { onAbort(); setShowStopAlert(false); setShowFullscreen(false); }}
               className="rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold"
             >
-              中止并离开
+              {t('中止并离开')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

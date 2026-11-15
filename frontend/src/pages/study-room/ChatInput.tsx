@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,6 +48,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onTaskNameChange, onDurationChange, onEnterMobileFocus,
   formatTime,
 }) => {
+  useLocale();
   return (
     <footer className={cn(
       "um-study-input border-t border-border z-20",
@@ -66,7 +68,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onSendMessage();
               }
             }}
-            placeholder="发送消息到学习咖啡厅"
+            placeholder={t('发送消息到学习咖啡厅')}
             className={cn(
               "um-study-composer-textarea block w-full bg-transparent border-none shadow-none focus:outline-none focus-visible:ring-0 text-sm px-3.5 pt-2.5 pb-1 text-foreground placeholder:text-muted-foreground/55 resize-none leading-5",
               isMobile ? "h-9 min-h-9 max-h-9" : "min-h-9 max-h-24"
@@ -85,7 +87,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     "h-8 w-8 rounded-md transition-colors",
                     isActive ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" : "text-muted-foreground hover:text-foreground hover:bg-muted"
                   )}
-                  aria-label="设置专注时钟"
+                  aria-label={t('设置专注时钟')}
                 >
                   <Timer className="h-5 w-5" />
                 </Button>
@@ -93,19 +95,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               <PopoverContent side="top" align="start" className="w-[82vw] max-w-72 rounded-2xl p-4 border-none shadow-lg bg-card/95 backdrop-blur-xl z-[var(--z-dropdown)]">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold text-muted-foreground">番茄钟</p>
+                    <p className="text-xs font-semibold text-muted-foreground">{t('番茄钟')}</p>
                     <span className="font-mono font-black text-lg tabular-nums">{formatTime(timeLeft)}</span>
                   </div>
-                  <Input value={taskName} onChange={e => onTaskNameChange(e.target.value)} placeholder="任务名称..." className="h-10 rounded-xl bg-muted border-none text-sm font-bold" />
+                  <Input value={taskName} onChange={e => onTaskNameChange(e.target.value)} placeholder={t('任务名称...')} className="h-10 rounded-xl bg-muted border-none text-sm font-bold" />
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-[11px] font-bold text-muted-foreground uppercase">
-                      <span>时长</span>
-                      <span>{`${duration} 分钟`}</span>
+                      <span>{t('时长')}</span>
+                      <span>{t('{0} 分钟', { 0: duration })}</span>
                     </div>
                     <Slider disabled={isActive} value={[duration]} onValueChange={v => onDurationChange(v[0])} max={120} min={1} step={1} />
                   </div>
                   <Button onClick={onEnterMobileFocus} className="w-full h-10 rounded-xl bg-slate-900 text-white font-black">
-                    进入全屏专注
+                    {t('进入全屏专注')}
                   </Button>
                 </div>
               </PopoverContent>
@@ -115,7 +117,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           {/* Emoji picker */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="选择表情">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label={t('选择表情')}>
                 <Smiley className="h-5 w-5"/>
               </Button>
             </PopoverTrigger>
@@ -130,11 +132,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
           <GiphyPicker onGifSent={onSendGif} />
 
-          <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="上传图片">
+          <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label={t('上传图片')}>
             <ImageIcon className="h-5 w-5"/>
           </Button>
           {isMobile && (
-            <Button variant="ghost" size="icon" onClick={() => cameraInputRef.current?.click()} className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="拍照">
+            <Button variant="ghost" size="icon" onClick={() => cameraInputRef.current?.click()} className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label={t('拍照')}>
               <Camera className="h-5 w-5" />
             </Button>
           )}
@@ -146,7 +148,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <Button
             onClick={onSendMessage}
             size="icon"
-            aria-label="发送消息"
+            aria-label={t('发送消息')}
             disabled={!chatInput.trim()}
             className="um-study-send absolute right-2 bottom-2 h-8 w-8 bg-primary text-primary-foreground shrink-0 transition-colors"
           >

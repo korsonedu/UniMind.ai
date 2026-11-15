@@ -1,3 +1,4 @@
+import { nt, setNativeLanguage } from './language';
 import { app, BrowserWindow, Menu, clipboard, dialog, session, ipcMain, Notification, Tray, nativeImage, protocol, powerMonitor, globalShortcut, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -30,7 +31,7 @@ let offlineWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let trayMenu: Menu | null = null;
 let quitting = false;
-let preferences = { notifications: false, keepRunning: false, launchAtLogin: false, quickEntry: true, focusMinutes: 25, startupPage: '/xiaoyu', notifyChat: true, notifyQA: true, notifyLearning: true };
+let preferences = { language: '', notifications: false, keepRunning: false, launchAtLogin: false, quickEntry: true, focusMinutes: 25, startupPage: '/xiaoyu', notifyChat: true, notifyQA: true, notifyLearning: true };
 let focusDuration = preferences.focusMinutes * 60;
 let focusStatus: 'idle' | 'running' | 'paused' = 'idle';
 let focusRemaining = focusDuration;
@@ -77,7 +78,7 @@ function updateTrayTitle() {
     }
     tray.setTitle(active ? trayLabel(focusRemaining) : '', { fontType: 'monospacedDigit' });
   }
-  tray.setToolTip(active ? `UniMind · ${paused ? '已暂停' : '专注中'} ${focusText(focusRemaining)}` : 'UniMind');
+  tray.setToolTip(active ? `UniMind · ${paused ? nt('已暂停') : nt('专注中')} ${focusText(focusRemaining)}` : 'UniMind');
 }
 function maybeQuit() {
   if (process.platform !== 'darwin' && !preferences.keepRunning && focusStatus === 'idle' && !mainWindows.size && !offlineWindow) app.quit();
@@ -143,7 +144,7 @@ function finishFocus() {
   updateTray();
   changed();
   if (Notification.isSupported()) {
-    const notice = new Notification({ title: '专注结束', body: `完成了 ${completedMinutes} 分钟专注，休息一下。` });
+    const notice = new Notification({ title: nt('专注结束'), body: nt('完成了 {0} 分钟专注，休息一下。', { 0: completedMinutes }) });
     notice.on('click', showMain);
     notice.show();
   }
@@ -191,7 +192,7 @@ function deepLink(value: string) {
 function openOffline(id?: number) {
   const target = `unimind-offline://library/${id ? `course/${courseId(id)}` : ''}`;
   if (!offlineWindow) {
-    offlineWindow = new BrowserWindow({ width: 1100, height: 760, title: 'UniMind · 离线课程', webPreferences: { ...SECURE_WEB_PREFERENCES, partition: 'unimind-offline' } });
+    offlineWindow = new BrowserWindow({ width: 1100, height: 760, title: nt('UniMind · 离线课程'), webPreferences: { ...SECURE_WEB_PREFERENCES, partition: 'unimind-offline' } });
     installContextMenu(offlineWindow);
     offlineWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     const guard = (event: Electron.Event, url: string) => { if (!url.startsWith('unimind-offline://library/')) event.preventDefault(); };
@@ -204,7 +205,7 @@ function openOffline(id?: number) {
 function updateMenu() {
   const menu = Menu.getApplicationMenu();
   const toggle = menu?.getMenuItemById('focus-toggle');
-  if (toggle) toggle.label = focusStatus === 'running' ? '暂停专注' : focusStatus === 'paused' ? '继续专注' : '开始专注';
+  if (toggle) toggle.label = focusStatus === 'running' ? nt('暂停专注') : focusStatus === 'paused' ? nt('继续专注') : nt('开始专注');
   const reset = menu?.getMenuItemById('focus-reset');
   if (reset) reset.enabled = focusStatus !== 'idle';
 }
@@ -217,19 +218,19 @@ function updateTray() {
     trayPaused = false;
     if (process.platform !== 'darwin') tray.on('click', showMain);
     trayMenu = Menu.buildFromTemplate([
-      { label: '打开 UniMind', icon: trayIcon().resize({ width: 16, height: 16 }), click: showMain },
-      { label: '离线课程库', click: () => openOffline() },
+      { label: nt('打开 UniMind'), icon: trayIcon().resize({ width: 16, height: 16 }), click: showMain },
+      { label: nt('离线课程库'), click: () => openOffline() },
       { type: 'separator' },
       { id: 'focus-time', label: '', enabled: false },
       { id: 'focus-action', label: '', click: toggleFocus },
-      { id: 'focus-reset', label: '重置计时', click: resetFocus },
+      { id: 'focus-reset', label: nt('重置计时'), click: resetFocus },
       { type: 'separator' },
-      { label: '退出 UniMind', click: () => app.quit() },
+      { label: nt('退出 UniMind'), click: () => app.quit() },
     ]);
     tray.setContextMenu(trayMenu);
   }
-  trayMenu!.getMenuItemById('focus-time')!.label = `${focusStatus === 'running' ? '专注中' : focusStatus === 'paused' ? '已暂停' : '专注'} · ${focusText(focusRemaining)}`;
-  trayMenu!.getMenuItemById('focus-action')!.label = focusStatus === 'running' ? '暂停专注' : focusStatus === 'paused' ? '继续专注' : `开始 ${preferences.focusMinutes} 分钟专注`;
+  trayMenu!.getMenuItemById('focus-time')!.label = `${focusStatus === 'running' ? nt('专注中') : focusStatus === 'paused' ? nt('已暂停') : nt('专注')} · ${focusText(focusRemaining)}`;
+  trayMenu!.getMenuItemById('focus-action')!.label = focusStatus === 'running' ? nt('暂停专注') : focusStatus === 'paused' ? nt('继续专注') : nt('开始 {0} 分钟专注', { 0: preferences.focusMinutes });
   trayMenu!.getMenuItemById('focus-reset')!.enabled = focusStatus !== 'idle';
   updateTrayTitle();
 }
@@ -250,6 +251,7 @@ function notify(value: unknown) {
 }
 function validPreference(key: string, value: unknown) {
   if (['notifications', 'keepRunning', 'launchAtLogin', 'quickEntry', 'notifyChat', 'notifyQA', 'notifyLearning'].includes(key)) return typeof value === 'boolean';
+  if (key === 'language') return value === 'zh-CN' || value === 'en';
   if (key === 'focusMinutes') return typeof value === 'number' && [15, 25, 45, 60].includes(value);
   if (key === 'startupPage') return ['/xiaoyu', '/courses', '/notes'].includes(value as string);
   return false;
@@ -266,7 +268,13 @@ function installIPC() {
       if (!Object.entries(value).every(([key, setting]) => validPreference(key, setting))) throw new Error('无效桌面设置');
       const next = { ...preferences, ...value };
       await writeFile(path.join(app.getPath('userData'), 'desktop-preferences.json'), JSON.stringify(next));
+      const languageChanged = next.language !== preferences.language;
       preferences = next;
+      if (languageChanged) {
+        setNativeLanguage(preferences.language);
+        installMenu();
+        tray?.destroy(); tray = null; trayMenu = null;
+      }
       if (focusStatus === 'idle') focusRemaining = focusDuration = preferences.focusMinutes * 60;
       applyLaunchAtLogin();
       registerGlobalShortcuts();
@@ -317,7 +325,7 @@ function openResourceWindow(target: string, development: boolean): void {
     height: 650,
     minWidth: 640,
     minHeight: 480,
-    title: 'UniMind · 课程与附件',
+    title: nt('UniMind · 课程与附件'),
     parent: mainWindow ?? undefined,
     webPreferences: SECURE_WEB_PREFERENCES,
   });
@@ -341,7 +349,7 @@ async function offerRecovery(window: BrowserWindow) {
   if (recovering || quitting || window.isDestroyed()) return;
   recovering = true;
   try {
-    const result = await dialog.showMessageBox(window, { type: 'warning', title: 'UniMind 需要重新连接', message: '页面暂时没有响应。可以重新连接，或先打开离线课程库。', detail: '重新连接后会恢复草稿并查询原任务；执行结果不明时，可先刷新历史，再决定是否手动重试。', buttons: ['重新连接', '离线课程库', '稍后处理'], defaultId: 0, cancelId: 2 });
+    const result = await dialog.showMessageBox(window, { type: 'warning', title: nt('UniMind 需要重新连接'), message: nt('页面暂时没有响应。可以重新连接，或先打开离线课程库。'), detail: nt('重新连接后会恢复草稿并查询原任务；执行结果不明时，可先刷新历史，再决定是否手动重试。'), buttons: [nt('重新连接'), nt('离线课程库'), nt('稍后处理')], defaultId: 0, cancelId: 2 });
     if (result.response === 0 && !window.isDestroyed()) {
       const current = window.webContents.getURL();
       mainWindows.get(window)!.recoveryNotice = 'renderer-recovered';
@@ -393,7 +401,7 @@ function createMainWindow(): void {
     resizable: true,
     fullscreen: false,
     show: false,
-    title: previewMode() ? 'UniMind Preview · 合成数据' : 'UniMind',
+    title: previewMode() ? nt('UniMind Preview · 合成数据') : 'UniMind',
     titleBarStyle: 'hidden',
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 12, y: 18 } } : { titleBarOverlay: true }),
     webPreferences: { ...SECURE_WEB_PREFERENCES, preload: path.join(__dirname, 'preload.cjs') },
@@ -444,22 +452,22 @@ function installContextMenu(window: BrowserWindow): void {
     const items: MenuItemConstructorOptions[] = [];
     if (isEditable) {
       items.push(
-        { label: '撤销', role: 'undo', enabled: flags.canUndo },
-        { label: '重做', role: 'redo', enabled: flags.canRedo },
+        { label: nt('撤销'), role: 'undo', enabled: flags.canUndo },
+        { label: nt('重做'), role: 'redo', enabled: flags.canRedo },
         { type: 'separator' },
-        { label: '剪切', role: 'cut', enabled: flags.canCut },
-        { label: '复制', role: 'copy', enabled: flags.canCopy },
-        { label: '粘贴', role: 'paste', enabled: flags.canPaste },
-        { label: '全选', role: 'selectAll', enabled: flags.canSelectAll },
+        { label: nt('剪切'), role: 'cut', enabled: flags.canCut },
+        { label: nt('复制'), role: 'copy', enabled: flags.canCopy },
+        { label: nt('粘贴'), role: 'paste', enabled: flags.canPaste },
+        { label: nt('全选'), role: 'selectAll', enabled: flags.canSelectAll },
       );
     } else if (selectionText.trim()) {
-      items.push({ label: '复制', role: 'copy', enabled: flags.canCopy });
+      items.push({ label: nt('复制'), role: 'copy', enabled: flags.canCopy });
     }
     if (linkURL && validResource(sourceUrl, linkURL, allowsDevelopment(sourceUrl))) {
       if (items.length) items.push({ type: 'separator' });
       items.push(
-        { label: '打开链接', click: () => openResourceWindow(linkURL, allowsDevelopment(sourceUrl)) },
-        { label: '复制链接地址', click: () => clipboard.writeText(linkURL) },
+        { label: nt('打开链接'), click: () => openResourceWindow(linkURL, allowsDevelopment(sourceUrl)) },
+        { label: nt('复制链接地址'), click: () => clipboard.writeText(linkURL) },
       );
     }
     if (items.length) Menu.buildFromTemplate(items).popup({ window });
@@ -469,55 +477,55 @@ function installContextMenu(window: BrowserWindow): void {
 function installMenu(): void {
   const template: MenuItemConstructorOptions[] = [];
   const appName = previewMode() ? 'UniMind Preview' : 'UniMind';
-  const settings: MenuItemConstructorOptions = { label: '设置…', accelerator: 'CommandOrControl+,', click: () => navigate('/settings?section=desktop') };
-  const update: MenuItemConstructorOptions = { label: '检查更新…', click: () => { navigate('/settings?section=desktop'); void updater.check(); } };
-  const quit: MenuItemConstructorOptions = { role: 'quit', label: `退出 ${appName}` };
-  const offlineLibrary: MenuItemConstructorOptions = { label: '离线课程库', accelerator: 'CommandOrControl+Shift+O', click: () => openOffline() };
-  const reconnect: MenuItemConstructorOptions = { label: '重新连接', click: () => { showMain(); void mainWindow?.loadURL(sourceUrl); } };
+  const settings: MenuItemConstructorOptions = { label: nt('设置…'), accelerator: 'CommandOrControl+,', click: () => navigate('/settings?section=desktop') };
+  const update: MenuItemConstructorOptions = { label: nt('检查更新…'), click: () => { navigate('/settings?section=desktop'); void updater.check(); } };
+  const quit: MenuItemConstructorOptions = { role: 'quit', label: nt('退出 {0}', { 0: appName }) };
+  const offlineLibrary: MenuItemConstructorOptions = { label: nt('离线课程库'), accelerator: 'CommandOrControl+Shift+O', click: () => openOffline() };
+  const reconnect: MenuItemConstructorOptions = { label: nt('重新连接'), click: () => { showMain(); void mainWindow?.loadURL(sourceUrl); } };
   const file: MenuItemConstructorOptions[] = [
-    { label: '新建窗口', accelerator: 'CommandOrControl+N', click: () => createMainWindow() },
-    { label: '新聊天', accelerator: 'CommandOrControl+T', click: () => navigate('/xiaoyu?new=chat') },
-    { label: '新项目…', click: () => navigate('/xiaoyu?new=project') },
+    { label: nt('新建窗口'), accelerator: 'CommandOrControl+N', click: () => createMainWindow() },
+    { label: nt('新聊天'), accelerator: 'CommandOrControl+T', click: () => navigate('/xiaoyu?new=chat') },
+    { label: nt('新项目…'), click: () => navigate('/xiaoyu?new=project') },
     { type: 'separator' },
     offlineLibrary,
     reconnect,
     { type: 'separator' },
-    { role: 'close', label: '关闭窗口' },
+    { role: 'close', label: nt('关闭窗口') },
   ];
   const study: MenuItemConstructorOptions[] = [
-    { label: '课程', accelerator: 'CommandOrControl+2', click: () => navigate('/courses') },
+    { label: nt('课程'), accelerator: 'CommandOrControl+2', click: () => navigate('/courses') },
     { type: 'separator' },
-    { id: 'focus-toggle', label: '开始专注', click: toggleFocus },
-    { id: 'focus-reset', label: '重置专注', click: resetFocus },
+    { id: 'focus-toggle', label: nt('开始专注'), click: toggleFocus },
+    { id: 'focus-reset', label: nt('重置专注'), click: resetFocus },
   ];
   if (process.platform === 'darwin') {
     template.push({ label: appName, submenu: [
-      { role: 'about', label: `关于 ${appName}` },
+      { role: 'about', label: nt('关于 {0}', { 0: appName }) },
       { type: 'separator' },
       settings,
       update,
       { type: 'separator' },
-      { role: 'services', label: '服务' },
+      { role: 'services', label: nt('服务') },
       { type: 'separator' },
-      { role: 'hide', label: `隐藏 ${appName}` },
-      { role: 'hideOthers', label: '隐藏其他' },
-      { role: 'unhide', label: '全部显示' },
+      { role: 'hide', label: nt('隐藏 {0}', { 0: appName }) },
+      { role: 'hideOthers', label: nt('隐藏其他') },
+      { role: 'unhide', label: nt('全部显示') },
       { type: 'separator' },
       quit,
     ] });
   } else {
     file.push({ type: 'separator' }, settings, update, quit);
   }
-  template.push({ label: '文件', submenu: file }, { label: '学习', submenu: study }, { role: 'editMenu', label: '编辑' });
-  if (process.platform === 'darwin') template.push({ label: '显示', submenu: [
-    ...(!app.isPackaged ? [{ role: 'forceReload' as const, label: '强制重新载入' }, { role: 'toggleDevTools' as const, label: '切换开发者工具' }, { type: 'separator' as const }] : []),
-    { role: 'resetZoom', label: '实际大小' },
-    { role: 'zoomIn', label: '放大' },
-    { role: 'zoomOut', label: '缩小' },
+  template.push({ label: nt('文件'), submenu: file }, { label: nt('学习'), submenu: study }, { role: 'editMenu', label: nt('编辑') });
+  if (process.platform === 'darwin') template.push({ label: nt('显示'), submenu: [
+    ...(!app.isPackaged ? [{ role: 'forceReload' as const, label: nt('强制重新载入') }, { role: 'toggleDevTools' as const, label: nt('切换开发者工具') }, { type: 'separator' as const }] : []),
+    { role: 'resetZoom', label: nt('实际大小') },
+    { role: 'zoomIn', label: nt('放大') },
+    { role: 'zoomOut', label: nt('缩小') },
     { type: 'separator' },
-    { role: 'togglefullscreen', label: '切换全屏' },
+    { role: 'togglefullscreen', label: nt('切换全屏') },
   ] });
-  template.push({ role: 'windowMenu', label: '窗口' });
+  template.push({ role: 'windowMenu', label: nt('窗口') });
   if (process.platform !== 'darwin' && !app.isPackaged) template.push({ role: 'viewMenu' });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   updateMenu();
@@ -557,6 +565,7 @@ if (!gotLock) {
         preferences = { ...preferences, ...Object.fromEntries(Object.entries(saved).filter(([key, value]) => validPreference(key, value))) };
       }
     } catch { /* Defaults require explicit opt-in. */ }
+    setNativeLanguage(preferences.language || app.getLocale());
     focusRemaining = focusDuration = preferences.focusMinutes * 60;
     sourceUrl = entryUrl();
     offline = new OfflineLibrary(sourceUrl, changed, () => { offlineWindow?.close(); });

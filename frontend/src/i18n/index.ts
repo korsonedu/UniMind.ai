@@ -19,6 +19,7 @@ export const getLocale = () => locale;
 function applyLocale(value: Locale) {
   locale = value;
   document.documentElement.lang = value;
+  void window.unimindDesktop?.updatePreferences({ language: value }).catch(() => { /* Older clients keep their native language. */ });
   listeners.forEach(listener => listener());
 }
 

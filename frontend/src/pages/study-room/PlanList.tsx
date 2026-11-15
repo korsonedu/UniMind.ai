@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import React, { useState } from 'react';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ interface PlanListProps {
 }
 
 const PlanList: React.FC<PlanListProps> = (props) => {
+  useLocale();
   const { plans, allowBroadcast, onRefresh, onStartPlan, onPlanCompleted, onPlanDeleted } = props;
   const [newPlan, setNewPlan] = useState('');
   const [isAdding, setIsAdding] = useState(false);
@@ -37,26 +39,26 @@ const PlanList: React.FC<PlanListProps> = (props) => {
       setEditorOpen(false);
       if (allowBroadcast) {
         try {
-          await api.post('/study/messages/', { content: `📅 制定了计划：${content}`, related_plan_id: data.id });
-        } catch { toast.error('计划已保存，但共学动态发送失败'); }
+          await api.post('/study/messages/', { content: t('📅 制定了计划：{0}', { 0: content }), related_plan_id: data.id });
+        } catch { toast.error(t('计划已保存，但共学动态发送失败')); }
       }
-    } catch (e) { toast.error(formatApiErrorToast(e, '添加计划失败')); }
+    } catch (e) { toast.error(formatApiErrorToast(e, t('添加计划失败'))); }
     finally { setIsAdding(false); }
   };
 
   return (
     <Card className="um-study-plans border-0 shadow-none rounded-none bg-transparent overflow-hidden p-4 md:flex-1 min-h-0 flex flex-col">
       <header className="um-study-section-header mb-3 flex items-center justify-between">
-        <CardTitle className="text-[13px] font-semibold text-foreground">计划清单</CardTitle>
+        <CardTitle className="text-[13px] font-semibold text-foreground">{t('计划清单')}</CardTitle>
         <Popover open={editorOpen} onOpenChange={setEditorOpen}>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground" aria-label="添加学习计划"><Plus className="h-[18px] w-[18px]" /></Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground" aria-label={t('添加学习计划')}><Plus className="h-[18px] w-[18px]" /></Button>
           </PopoverTrigger>
-          <PopoverContent align="end" sideOffset={8} collisionPadding={16} className="um-study-plan-editor w-[300px] max-w-[calc(100vw-32px)] rounded-2xl p-4" aria-label="新建学习计划">
+          <PopoverContent align="end" sideOffset={8} collisionPadding={16} className="um-study-plan-editor w-[300px] max-w-[calc(100vw-32px)] rounded-2xl p-4" aria-label={t('新建学习计划')}>
             <form onSubmit={e => { e.preventDefault(); void addPlan(); }} className="space-y-3">
-              <label htmlFor="study-new-plan" className="block text-sm font-medium">新建学习计划</label>
-              <Input id="study-new-plan" value={newPlan} onChange={e => setNewPlan(e.target.value)} placeholder="今天准备完成什么？" autoComplete="off" disabled={isAdding} onKeyDown={e => { if (e.key === 'Enter' && e.nativeEvent.isComposing) e.preventDefault(); }} className="h-10 rounded-lg text-base md:text-sm" />
-              <div className="flex justify-end"><Button type="submit" disabled={isAdding || !newPlan.trim()} size="sm" className="rounded-full px-4">{isAdding ? '保存中…' : '添加计划'}</Button></div>
+              <label htmlFor="study-new-plan" className="block text-sm font-medium">{t('新建学习计划')}</label>
+              <Input id="study-new-plan" value={newPlan} onChange={e => setNewPlan(e.target.value)} placeholder={t('今天准备完成什么？')} autoComplete="off" disabled={isAdding} onKeyDown={e => { if (e.key === 'Enter' && e.nativeEvent.isComposing) e.preventDefault(); }} className="h-10 rounded-lg text-base md:text-sm" />
+              <div className="flex justify-end"><Button type="submit" disabled={isAdding || !newPlan.trim()} size="sm" className="rounded-full px-4">{isAdding ? t('保存中…') : t('添加计划')}</Button></div>
             </form>
           </PopoverContent>
         </Popover>
@@ -74,12 +76,12 @@ const PlanList: React.FC<PlanListProps> = (props) => {
                   onRefresh();
                   if (allowBroadcast) {
                     await api.post('/study/messages/', {
-                      content: `✅ 完成了计划：${p.content}`,
+                      content: t('✅ 完成了计划：{0}', { 0: p.content }),
                       related_plan_id: p.id
                     });
                   }
                   onPlanCompleted(p.id);
-                } catch { toast.error('标记完成失败，请稍后重试'); }
+                } catch { toast.error(t('标记完成失败，请稍后重试')); }
               }}
             >
               {p.is_completed ? <CheckCircle className="h-4 w-4 text-emerald-500" /> : <Circle className="h-4 w-4 text-muted-foreground/20 group-hover:text-emerald-500" />}
@@ -89,16 +91,16 @@ const PlanList: React.FC<PlanListProps> = (props) => {
             <button
               onClick={async (e) => {
                 e.stopPropagation();
-                if (!(await confirm('确定删除此计划？'))) return;
+                if (!(await confirm(t('确定删除此计划？')))) return;
                 try {
                   await api.delete(`/users/plans/${p.id}/`);
                   onRefresh();
-                  toast.success('计划已删除');
+                  toast.success(t('计划已删除'));
                   onPlanDeleted(p.id);
-                } catch (e) { toast.error(formatApiErrorToast(e, '删除失败')); }
+                } catch (e) { toast.error(formatApiErrorToast(e, t('删除失败'))); }
               }}
               className="opacity-100 transition-all p-1.5 hover:bg-red-100 rounded-lg text-muted-foreground/50 hover:text-red-500 cursor-pointer"
-              title="删除计划"
+              title={t('删除计划')}
             >
               <Trash className="h-3.5 w-3.5" />
             </button>
