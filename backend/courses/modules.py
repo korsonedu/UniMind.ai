@@ -38,6 +38,10 @@ class ModuleDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         modules = apply_institution_filter(CourseModule.objects.annotate(course_count=Count('courses')), self.request.user, self.request)
         if self.request.method == 'GET':
+            from users.workspaces.access import membership_for
+            if membership_for(self.request.user):
+                from .access import visible_courses
+                modules = modules.filter(pk__in=visible_courses(self.request).values_list('module_id', flat=True))
             from .access import has_full_course_access
             if not has_full_course_access(self.request.user):
                 modules = modules.filter(is_public=True)

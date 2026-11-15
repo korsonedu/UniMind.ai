@@ -64,6 +64,11 @@ class InstitutionFeatureView(APIView):
         personal_usage = usage_info(user)
         usage = {'ai_call_total': personal_usage, 'ai_question': personal_usage,
                  'used': personal_usage['used'], 'limit': personal_usage['limit']}
+        from users.workspaces.access import membership_for
+        member = membership_for(user)
+        if member:
+            inst_data = {'id': member.workspace.institution_id, 'name': member.workspace.institution.name,
+                         'slug': member.workspace.institution.slug}
         return Response({'is_platform_admin': is_platform_admin(user),
                          'has_course_catalog': has_full_course_access(user),
                          'institution': inst_data, 'features': features, 'usage': usage})

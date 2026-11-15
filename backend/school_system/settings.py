@@ -388,7 +388,7 @@ CHANNEL_LAYERS = {
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
 CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_IMPORTS = ('notifications.tasks_reminder', 'ai_assistant.tasks_learning')
+CELERY_IMPORTS = ('notifications.tasks_reminder', 'ai_assistant.tasks_learning', 'users.workspaces.tasks')
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
@@ -649,4 +649,8 @@ if SENTRY_DSN:
 CELERY_BEAT_SCHEDULE['project-learning-followups'] = {
     'task': 'ai_assistant.tasks_learning.send_project_learning_followups',
     'schedule': 60.0,
+}
+
+CELERY_BEAT_SCHEDULE['workspace-stalled-courses'] = {
+    'task': 'users.workspaces.tasks.recover_stalled_courses', 'schedule': 300.0,
 }

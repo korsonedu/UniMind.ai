@@ -36,6 +36,11 @@ export function workspacePreview(path: string, method = 'get', payload?: Record<
     }
     return visible();
   }
+  if (/\/courses\/\d+\/$/.test(path) && method === 'get') {
+    const course = visible().courses.find(item => item.id === Number(path.split('/').at(-2)));
+    if (!course) reject('课程不存在或无权访问。');
+    return course;
+  }
   if (state.role !== 'admin') reject('你没有管理此机构的权限。');
   if (path === '/users/workspace/courses/' && method === 'post' && payload instanceof FormData) {
     const videos = payload.getAll('videos').filter((file): file is File => file instanceof File);

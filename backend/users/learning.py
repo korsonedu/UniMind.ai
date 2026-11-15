@@ -28,6 +28,10 @@ def has_legacy_membership(user):
 
 
 def is_course_student(user):
+    from users.workspaces.access import membership_for, workspace_active, active_course_ids
+    member = membership_for(user)
+    if member:
+        return workspace_active(member) and (member.role == 'admin' or active_course_ids(member).exists())
     status = CourseStudentStatus.objects.select_related('cohort').filter(user=user).first()
     if status is not None:
         return status.is_course_student and (status.cohort_id is None or status.cohort.state == 'active')
@@ -155,8 +159,10 @@ def reserve_ai_call(user, request_id=None, *, fingerprint=''):
         if addon is None:
             message = 'AI 周额度尚未配置，请联系我们。' if limit is None else '本周 AI 问答额度已用完，请等待下周恢复或联系我们，也可在我的服务查看 AI 加量。'
             raise PermissionDenied(message)
+    from users.workspaces.access import membership_for, workspace_active, active_course_ids
+    member = membership_for(user)
     values = {'attempt_id': uuid4(), 'week': week, 'status': 'pending', 'addon': addon,
-              'unlimited': unlimited, 'response': {}, 'fingerprint': fingerprint}
+              'unlimited': unlimited, 'response': {}, 'fingerprint': fingerprint, 'workspace_id': member.workspace_id if workspace_active(member) and (member.role == 'admin' or active_course_ids(member).exists()) else None}
     if existing:
         for key, value in values.items():
             setattr(existing, key, value)

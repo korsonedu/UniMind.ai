@@ -37,6 +37,9 @@ class VideoUnavailable(APIException):
 
 
 def offline_expiry(user):
+    from users.workspaces.access import membership_for
+    if membership_for(user):
+        return None
     now = timezone.now()
     expiry = now + timedelta(hours=24)
     status = CourseStudentStatus.objects.select_related('cohort').filter(user=user).first()
@@ -49,6 +52,9 @@ def offline_expiry(user):
 
 
 def offline_manifest(course, user, expires_at):
+    from users.workspaces.access import membership_for
+    if membership_for(user):
+        raise NotFound('机构课程暂不支持离线下载。')
     video = course.video_file
     if course.module_id and course.module.is_public:
         expires_at = int((timezone.now() + timedelta(hours=24)).timestamp())

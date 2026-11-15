@@ -150,6 +150,7 @@ class WeeklyAIUsage(models.Model):
 
 
 class AIUsageReservation(models.Model):
+    workspace = models.ForeignKey('users.Workspace', null=True, blank=True, on_delete=models.SET_NULL, related_name='ai_reservations')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='ai_reservations')
     request_id = models.UUIDField()
     attempt_id = models.UUIDField()
