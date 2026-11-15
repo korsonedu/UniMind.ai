@@ -53,6 +53,8 @@ def test_join_is_explicit_idempotent_and_course_scoped(setup_workspace, user, au
     assert auth_client.post(BASE+'join/', data).status_code == 200
     invite.refresh_from_db()
     assert invite.used_count == 1
+    features = auth_client.get('/api/users/institution/me/features/').data['features']
+    assert 'video.outline' in features and 'quiz.exam' not in features
     result = auth_client.get('/api/courses/').data
     items = result.get('items', result.get('results', [])) if isinstance(result, dict) else result
     assert {item['id'] for item in items} == {course.pk}
