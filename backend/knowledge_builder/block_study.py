@@ -239,7 +239,7 @@ def _clean_question(raw, q_type):
     return item
 
 
-def _generate_question(row, block, q_type, seen):
+def _generate_question(row, block, q_type, seen, source_context=''):
     atom = row.atom
     if config._get_api_key():
         description = (f'所属学习块：{block.short_title}；掌握目标：{atom.goal_statement}；认知层级：{atom.cognitive_level}；'
@@ -247,6 +247,8 @@ def _generate_question(row, block, q_type, seen):
                        f'本轮出题标识：{uuid4().hex}。请创作新的情境和题干。')
         if q_type == 'subjective':
             description += '请生成进阶简答或计算题，围绕核心机制或公式推导，必须包含 grading_points 和 rubric。'
+        if source_context:
+            description += f'\n当前项目实际保存的参考摘录（摘要不代表完整原文，不能虚构字幕或出处）：\n{source_context}'
         try:
             generated = QuestionGenerator(AIService)._request_bulk_generate_once(
                 [{'id': atom.pk, 'code': atom.code, 'name': atom.name, 'description': description}],

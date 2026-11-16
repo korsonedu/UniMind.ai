@@ -68,7 +68,9 @@ def generate_assessment(user, block, project_id, *, mode='objective', retest=Fal
     existing = ProjectLearningTask.objects.filter(project=project, knowledge_version=version, node_id=node['id'])
     seen = {_hash(snapshot['text']) for task in existing for snapshot in task.question_snapshot.values()}
     urls = {f'/course/{row.course_id}' if row.source_kind == 'course' else row.url for row in visible_block_resources(user, block)}
-    sources = [item['id'] for item in state.resources if item['url'] in urls][:10]
+    resources = [item for item in state.resources if item['url'] in urls][:5]
+    sources = [item['id'] for item in resources]
+    source_context = '\n'.join(f"{item['title']}（{'摘要或元数据' if item.get('not_web_read') else '已保存摘录'}）：{item['excerpt'][:1000]}" for item in resources)
     prepared = []
     for row, q_type in [(row, 'objective') for row in selected] + ([(selected[0], 'subjective')] if mode == 'challenge' else []):
         item = None
@@ -83,7 +85,7 @@ def generate_assessment(user, block, project_id, *, mode='objective', retest=Fal
                         item = candidate
                         item['question_id'] = question.pk
                         break
-        item = item or _generate_question(row, block, q_type, seen)
+        item = item or _generate_question(row, block, q_type, seen, source_context)
         prepared.append((row, item))
         seen.add(_hash(item['stem']))
     with transaction.atomic():

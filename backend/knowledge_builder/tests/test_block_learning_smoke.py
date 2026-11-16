@@ -47,7 +47,7 @@ class BlockLearningSmoke(APITestCase):
         self.addCleanup(queue.stop)
         self.counter = 0
 
-    def generate(self, row, block, q_type, seen):
+    def generate(self, row, block, q_type, seen, source_context=''):
         self.counter += 1
         return dict(stem=f'{row.atom.name}情境{self.counter}：解释现值变化的正确方向？', q_type=q_type,
             options={'A': '折为现值', 'B': '忽略时间'}, correct_answer='A', grading_points='解释现值与未来值',
