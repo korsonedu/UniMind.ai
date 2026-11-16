@@ -1,4 +1,5 @@
 import { t, useLocale } from '@/i18n';
+import { MagnifyingGlass, X } from '@phosphor-icons/react';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import type { BaselineSummary, KnowledgeTreeBuildDetail } from '@/types/knowledgeBuilder';
@@ -272,6 +273,11 @@ export function KnowledgeBuilderGraph({
     });
   };
 
+  const [search, setSearch] = useState('');
+  const searchTerm = normalizeTopicName(search);
+  const searchResults = searchTerm ? adapted.blocks.filter(block =>
+    [block.shortTitle, block.code, block.narrativeSummary, ...block.steps.flatMap(step => step.atoms.map(item => item.atom.name))]
+      .some(value => normalizeTopicName(value).includes(searchTerm))) : [];
   const [edgeMode, setEdgeMode] = useState<EdgeFilterMode>('retained');
   const [openByBuild, setOpenByBuild] = useState<Record<string, Set<number>>>({});
   const openIds = useMemo(() => {
@@ -457,10 +463,6 @@ export function KnowledgeBuilderGraph({
     });
   }, [updateOpenIds]);
 
-  const openEntryOnly = useCallback(() => {
-    updateOpenIds(() => (adapted.entryBlockId !== null ? new Set([adapted.entryBlockId]) : new Set()));
-  }, [adapted.entryBlockId, updateOpenIds]);
-
   const collapseAll = useCallback(() => {
     updateOpenIds(() => new Set());
   }, [updateOpenIds]);
@@ -482,6 +484,7 @@ export function KnowledgeBuilderGraph({
         const vp = viewportRef.current;
         const targetEl = cardRefs.current.get(targetBlockId);
         if (!vp || !targetEl) return;
+        targetEl.querySelector<HTMLButtonElement>('.kb-toggle')?.focus({ preventScroll: true });
         const vpRect = vp.getBoundingClientRect();
         const elRect = targetEl.getBoundingClientRect();
         const left = vp.scrollLeft + (elRect.left - vpRect.left) - (vp.clientWidth - elRect.width) / 2;
@@ -573,10 +576,29 @@ export function KnowledgeBuilderGraph({
           </p>
         </div>
 
+      <div className="kb-find-bar">
+        <form className="kb-find-field" onSubmit={event => {
+          event.preventDefault();
+          if (searchResults[0]) { jumpToBlock(searchResults[0].id); setSearch(''); }
+        }}>
+          <MagnifyingGlass size={17} aria-hidden="true" />
+          <input aria-label={t('查找知识块或知识点')} placeholder={t('查找知识块或知识点')} value={search}
+            onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setSearch(''); }} />
+          {search && <button type="button" aria-label={t('清除搜索')} onClick={() => setSearch('')}><X size={16} /></button>}
+        </form>
+        {searchTerm && <div className="kb-find-results" aria-label={t('搜索结果')}>
+          <p role="status">{searchResults.length ? t('找到 {0} 个知识块', { 0: searchResults.length }) : t('没有找到匹配的知识块')}</p>
+          {searchResults.map(block => <button type="button" key={block.id} onClick={() => { jumpToBlock(block.id); setSearch(''); }}>
+            <span>{block.shortTitle}</span><small>{block.domainTitle}</small>
+          </button>)}
+        </div>}
+      </div>
+
         <div className="kb-nav">
           <button
             type="button"
             className={edgeMode === 'retained' ? 'active' : undefined}
+            aria-pressed={edgeMode === 'retained'}
             onClick={() => setEdgeMode('retained')}
           >
             {t('主干精选 ({0})', { 0: adapted.retainedCount })}
@@ -584,12 +606,13 @@ export function KnowledgeBuilderGraph({
           <button
             type="button"
             className={edgeMode === 'all' ? 'active' : undefined}
+            aria-pressed={edgeMode === 'all'}
             onClick={() => setEdgeMode('all')}
           >
             {t('全量候选 ({0})', { 0: adapted.totalEdgeCount })}
           </button>
-          <button type="button" onClick={openEntryOnly} disabled={adapted.entryBlockId === null}>
-            {t('展开入口块')}
+          <button type="button" onClick={() => { if (adapted.entryBlockId !== null) jumpToBlock(adapted.entryBlockId); }} disabled={adapted.entryBlockId === null}>
+            {t('定位入口块')}
           </button>
           <button type="button" onClick={collapseAll} disabled={openIds.size === 0}>
             {t('收起全部')}
@@ -614,6 +637,9 @@ export function KnowledgeBuilderGraph({
         ref={viewportRef}
         className={`kb-viewport${isDragging ? ' dragging' : ''}`}
         onMouseDown={handleViewportMouseDown}
+        tabIndex={0}
+        role="region"
+        aria-label={t('知识结构画布')}
       >
         <div ref={mapRef} className="kb-map">
           <svg
@@ -624,22 +650,22 @@ export function KnowledgeBuilderGraph({
           >
             <defs>
               <marker id={markerUni} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                <path d="M 1 1 L 9 5 L 1 9 z" fill="#8fa89b" />
+                <path d="M 1 1 L 9 5 L 1 9 z" fill="var(--kb-muted)" />
               </marker>
               <marker id={markerBi} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                <path d="M 1 1 L 9 5 L 1 9 z" fill="#6c87a8" />
+                <path d="M 1 1 L 9 5 L 1 9 z" fill="var(--kb-accent)" />
               </marker>
               <marker id={markerEx} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-                <path d="M 1 1 L 9 5 L 1 9 z" fill="#b5c3bc" />
+                <path d="M 1 1 L 9 5 L 1 9 z" fill="var(--kb-muted)" />
               </marker>
               <marker id={markerAct} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
-                <path d="M 1 1 L 9 5 L 1 9 z" fill="#c47d2b" />
+                <path d="M 1 1 L 9 5 L 1 9 z" fill="var(--kb-accent)" />
               </marker>
               <marker id={markerInner} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
-                <path d="M 1 1 L 9 5 L 1 9 z" fill="#64967f" />
+                <path d="M 1 1 L 9 5 L 1 9 z" fill="var(--kb-muted)" />
               </marker>
               <marker id={markerInnerBi} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
-                <path d="M 1 1 L 9 5 L 1 9 z" fill="#6c87a8" />
+                <path d="M 1 1 L 9 5 L 1 9 z" fill="var(--kb-accent)" />
               </marker>
             </defs>
 
@@ -757,10 +783,10 @@ export function KnowledgeBuilderGraph({
                         </small>
                         <span className="kb-badges">
                           <span className="kb-cardtype">{block.domainTitle}</span>
-                          <span className="kb-badge">📚 {resources.length}</span>
-                          {spine && <span className="kb-badge kb-asset-badge--spine" title={`主线配套课${spine.locator ? ` · ${spine.locator}` : ''}`}>🎬 {spine.locator || '主线'}</span>}
-                          {hasSpotlight && <span className="kb-badge kb-asset-badge--spotlight" title="单点神作">🌟 神作</span>}
-                          {hasWiki && <span className="kb-badge kb-asset-badge--wiki" title={tree.region_pref === 'intl' ? 'Wikipedia 概念词条' : 'OI-Wiki / 开源学科词条'}>{tree.region_pref === 'intl' ? '📖 Wikipedia 词条' : '📖 专业开源 Wiki 词条'}</span>}
+                          <span className="kb-badge">{t('{0} 个资源', { 0: resources.length })}</span>
+                          {spine && <span className="kb-badge kb-asset-badge--spine" title={`主线配套课${spine.locator ? ` · ${spine.locator}` : ''}`}>{spine.locator || '主线'}</span>}
+                          {hasSpotlight && <span className="kb-badge kb-asset-badge--spotlight" title="单点神作">神作</span>}
+                          {hasWiki && <span className="kb-badge kb-asset-badge--wiki" title={tree.region_pref === 'intl' ? 'Wikipedia 概念词条' : 'OI-Wiki / 开源学科词条'}>{tree.region_pref === 'intl' ? 'Wikipedia 词条' : '专业开源 Wiki 词条'}</span>}
                           {renderTopicBadges([block.shortTitle, ...block.steps.flatMap(step => step.atoms.map(item => item.atom.name))])}
                         </span>
                       </button>
@@ -780,7 +806,7 @@ export function KnowledgeBuilderGraph({
                             {resources.map(resource => {
                               const href = resource.source_kind === 'course' && resource.course_id ? `/course/${resource.course_id}` : resolvePublicAssetLink(resource.url, resource.locator);
                               if (!href) return null;
-                              const trackLabel = resource.asset_track === 'spine' ? '🎬 主线' : resource.asset_track === 'spotlight' ? '🌟 神作' : resource.asset_track === 'wiki' ? (tree.region_pref === 'intl' ? '📖 Wikipedia 词条' : '📖 专业开源 Wiki 词条') : '📚 资源';
+                              const trackLabel = resource.asset_track === 'spine' ? '主线' : resource.asset_track === 'spotlight' ? '神作' : resource.asset_track === 'wiki' ? (tree.region_pref === 'intl' ? 'Wikipedia 词条' : '专业开源 Wiki 词条') : '资源';
                               return <a key={resource.id} className="kb-card-resource-link" href={href} target="_blank" rel="noopener noreferrer"
                                 onClick={event => event.stopPropagation()} title={`直接打开：${resource.title}${resource.locator ? ` · ${resource.locator}` : ''}`}>
                                 {trackLabel} · {resource.title}{resource.locator ? ` · ${resource.locator}` : ''} ↗
@@ -788,7 +814,7 @@ export function KnowledgeBuilderGraph({
                             })}
                           </nav>}
                           <div className="kb-hint">
-                            {t('悬停知识点可查看学习目标与易错点；实线框为必学原子，虚线框为拓展延伸；点击黄色先修接口可跳转定位')}
+                            {t('悬停知识点可查看学习目标与易错点；实线框为必学原子，虚线框为拓展延伸；点击先修接口可跳转定位')}
                           </div>
 
                           <div
@@ -807,10 +833,10 @@ export function KnowledgeBuilderGraph({
                               >
                                 <defs>
                                   <marker id={`${markerInner}-${block.id}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
-                                    <path d="M 1 1 L 9 5 L 1 9 z" fill="#64967f" />
+                                    <path d="M 1 1 L 9 5 L 1 9 z" fill="var(--kb-muted)" />
                                   </marker>
                                   <marker id={`${markerInnerBi}-${block.id}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
-                                    <path d="M 1 1 L 9 5 L 1 9 z" fill="#6c87a8" />
+                                    <path d="M 1 1 L 9 5 L 1 9 z" fill="var(--kb-accent)" />
                                   </marker>
                                 </defs>
                                 {innerResult.wires.map(wire => {
