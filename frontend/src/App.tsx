@@ -1,3 +1,4 @@
+import { activeWorkspace } from '@/lib/activeWorkspace';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { OfflineTrialPage } from '@/components/OfflineTrialPage';
 import { getLocale, t, useLocale } from '@/i18n';
@@ -247,6 +248,7 @@ const WorkspaceEntry = () => {
 };
 
 const workspacePage = (Component: React.ComponentType) => <ErrorBoundary><Component /></ErrorBoundary>;
+const InstitutionCourses = () => activeWorkspace() === 'personal' ? <Navigate to="/xiaoyu" replace /> : <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{workspacePage(CourseCenter)}</FeatureGuard>;
 
 const lazyPage = (Component: React.ComponentType) => (
   <ErrorBoundary>
@@ -268,7 +270,7 @@ const router = createBrowserRouter([
       {
         element: <WorkspaceEntry />,
         children: [
-          { path: "courses", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{workspacePage(CourseCenter)}</FeatureGuard> },
+          { path: "courses", element: <InstitutionCourses /> },
           {
             element: workspacePage(CommunityLayout),
             children: [
@@ -294,7 +296,7 @@ const router = createBrowserRouter([
           { path: "settings", element: workspacePage(Settings) },
           { path: "settings/institution", element: workspacePage(InstitutionManagement) },
           { path: "billing", element: workspacePage(BillingPage) },
-          { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{workspacePage(CourseCenter)}</FeatureGuard> },
+          { path: "course/:id", element: <InstitutionCourses /> },
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{workspacePage(WrongQuestionReviewPage)}</FeatureGuard> },
           { path: "achievements", element: workspacePage(Achievements) },
 

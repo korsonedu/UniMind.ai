@@ -9,6 +9,7 @@ def get_content_institution_id(user=None):
         member = membership_for(user)
         if member:
             return member.workspace.institution_id
+        return None
 
     value = getattr(settings, 'UNIMIND_CONTENT_INSTITUTION_ID', None)
     if value == 'global':
@@ -43,7 +44,7 @@ def apply_institution_filter(qs, user, request=None, institution_field='institut
         if qs.model._meta.label_lower == 'courses.course':
             qs = qs.filter(pk__in=active_course_ids(member), is_published=True)
     else:
-        institution_id = get_content_institution_id()
+        institution_id = None
     if request:
         params = getattr(request, 'query_params', None)
         if params is None:
@@ -59,4 +60,4 @@ def apply_institution_filter(qs, user, request=None, institution_field='institut
 def get_user_content_institution_id(user):
     from users.workspaces.access import membership_for
     member = membership_for(user)
-    return member.workspace.institution_id if member else get_content_institution_id()
+    return member.workspace.institution_id if member else None

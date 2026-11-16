@@ -59,4 +59,4 @@ export function useWorkspace() {
     },
   });
 }
-export const serviceDate = (date: string) => date ? new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(date)) : '未设置';
+export const serviceDate = (date: string) => date?.startsWith('9999-12-31') ? '长期有效' : date ? new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(date)) : '未设置';
