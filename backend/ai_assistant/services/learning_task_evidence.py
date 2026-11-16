@@ -84,4 +84,25 @@ def formal_observations(project, version_id):
             'quote': result.user_answer, 'reason': result.feedback or '参照冻结标准给出的本次评价。',
             'rubric': '单选题按标准答案确定性判分。' if objective else snapshot.get('grading_points') or '模型按任务标准评价，未独立复核。',
             'source': result.user_answer, 'conversation_id': None, 'message_id': None, 'exam_id': result.exam_id})
+    # Multiple atom questions from one block assessment are one observation.
+    # Incomplete, unverified or repeated questions cannot complete its coverage.
+    for group in ProjectLearningEvent.objects.filter(project=project, kind='block_assessment', content__version_id=version_id):
+        manifest = group.content['items']
+        ids = {item['task_id'] for item in manifest}
+        members = [row for row in rows if row['task_id'] in ids]
+        rows = [row for row in rows if row['task_id'] not in ids]
+        if len(members) != len(ids) or not members:
+            continue
+        by_task = {row['task_id']: row for row in members}
+        ratios = [row['score'] / row['max_score'] for row in members]
+        core = [by_task[item['task_id']] for item in manifest if item['membership_type'] == 'core']
+        passed = bool(core) and all(row['score'] / row['max_score'] >= .75 for row in core) and sum(ratios) / len(ratios) >= .75
+        rows.append({**members[0], 'event_id': group.pk, 'builder_block_id': group.content['block_id'],
+            'task_ids': sorted(ids), 'score': sum(row['score'] for row in members), 'max_score': sum(row['max_score'] for row in members), 'task_at': min(row['task_at'] for row in members), 'at': max(row['at'] for row in members),
+            'outcome': 'success' if passed else 'failure',
+            'assistance': 'independent' if all(row['assistance'] == 'independent' for row in members) else 'unknown',
+            'question_hash': _hash(sorted(row['question_hash'] for row in members)),
+            'question': '\n'.join(row['question'] for row in members), 'quote': '\n'.join(row['quote'] for row in members),
+            'reason': '本轮核心点均达到 75%，且平均得分率达到 75%。' if passed else '本轮核心点或总得分率尚未达到检测标准。',
+            'label_source': 'model_rubric_grade' if any(row['label_source'] == 'model_rubric_grade' for row in members) else 'objective_answer_key'})
     return rows, verified

@@ -210,29 +210,3 @@ class BlockResource(models.Model):
 
     class Meta:
         ordering = ('id',)
-
-
-class UserBlockProgress(models.Model):
-    class Status(models.TextChoices):
-        UNSTARTED = 'UNSTARTED', 'UNSTARTED'
-        LEARNING = 'LEARNING', 'LEARNING'
-        NEEDS_REVIEW = 'NEEDS_REVIEW', 'NEEDS_REVIEW'
-        COMPLETED = 'COMPLETED', 'COMPLETED'
-
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='knowledge_block_progress')
-    build = models.ForeignKey(KnowledgeTreeBuild, on_delete=models.CASCADE, related_name='user_block_progress')
-    block = models.ForeignKey(LearningBlock, on_delete=models.CASCADE, related_name='user_progress')
-    status = models.CharField(max_length=24, choices=Status.choices, default=Status.UNSTARTED)
-    best_accuracy = models.FloatField(default=0.0)
-    last_accuracy = models.FloatField(default=0.0)
-    core_passed = models.BooleanField(default=False)
-    attempt_count = models.PositiveIntegerField(default=0)
-    mastered_atom_ids = models.JSONField(default=list)
-    weak_atom_ids = models.JSONField(default=list)
-    seen_question_hashes = models.JSONField(default=list)
-    last_quiz_result = models.JSONField(default=dict)
-    completed_at = models.DateTimeField(null=True, blank=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        constraints = [models.UniqueConstraint(fields=['user', 'block'], name='kb_user_block_progress_unique')]

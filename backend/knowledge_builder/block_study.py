@@ -1,15 +1,12 @@
-"""Block resources and signed assessments using UniMind's quiz services."""
+"""Block resources and question generation for owned project tasks."""
 import hashlib
 import http.client
 import logging
-import math
-import random
 import re
 from urllib.parse import quote, urlsplit
 from uuid import uuid4
 from xml.etree import ElementTree
 
-from django.core import signing
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -21,19 +18,15 @@ from ai_assistant.models import LearningResource, LearningResourceVersion
 from ai_assistant.services import learning_resources
 from ai_assistant.services.learning_library import resource_data
 from core.utils import get_content_institution_id
-from courses.access import has_full_course_access
-from courses.models import Course
-from quizzes.models import KnowledgePoint, Question, UserKnowledgeState
+from quizzes.models import KnowledgePoint
 from quizzes.services.question_generator import QuestionGenerator
 from quizzes.services.question_normalizer import normalize_options, normalize_objective_answer
 from quizzes.services.single_generate_pipeline import _check_latex_integrity, _check_objective_integrity
-from quizzes.ai_workflow import _grade_answer
 from .intake import _bank_question
-from .models import BlockResource, BlockStepAtom, UserBlockProgress
+from .models import BlockResource, BlockStepAtom
 from .serializers import BlockResourceSerializer
 
 logger = logging.getLogger(__name__)
-SIGNING_SALT = 'knowledge-builder-block-quiz'
 
 
 def _assignments(block):
@@ -42,15 +35,10 @@ def _assignments(block):
 
 
 def _courses(user):
-    scope = get_content_institution_id(required=False)
-    scoped = Q(institution_id=scope)
-    if scope is not None:
-        scoped |= Q(institution__isnull=True, module__is_public=True, module__institution__isnull=True)
-    rows = Course.objects.filter(scoped, is_published=True).select_related('knowledge_point')
-    if not has_full_course_access(user):
-        rows = rows.filter(module__is_public=True).filter(
-            Q(module__institution_id=scope) | Q(institution__isnull=True, module__institution__isnull=True))
-    return rows.order_by('pk')
+    from types import SimpleNamespace
+    from courses.access import visible_courses
+    # Use the same workspace grants as the course page.
+    return visible_courses(SimpleNamespace(user=user, query_params={})).select_related('knowledge_point').order_by('pk')
 
 
 def _normalized(text):
@@ -92,6 +80,8 @@ def visible_block_resources(user, block, request=None, explicit_region=''):
     from .public_asset_service import filter_resources_for_region, get_region_preference
 
     resources = block.resources.filter(~Q(source_kind='library') | Q(created_by=user))
+    if resources.filter(source_kind='course').exists():
+        resources = resources.filter(~Q(source_kind='course') | Q(course_id__in=_courses(user).values('pk')))
     region = get_region_preference(user, request, explicit_region)
     return filter_resources_for_region(resources, region).order_by('id')
 
@@ -210,9 +200,9 @@ def _hash(stem):
     return hashlib.sha256(_normalized(stem).encode()).hexdigest()
 
 
-def _knowledge_points(assignments):
+def _knowledge_points(user, assignments):
     return {kp.name: kp for kp in KnowledgePoint.objects.filter(
-        institution_id=get_content_institution_id(required=False), name__in=[row.atom.name for row in assignments]).order_by('-pk')}
+        institution_id=get_content_institution_id(user), name__in=[row.atom.name for row in assignments]).order_by('-pk')}
 
 
 def _clean_question(raw, q_type):
@@ -249,36 +239,6 @@ def _clean_question(raw, q_type):
     return item
 
 
-def _offline_question(row, q_type, variant):
-    atom = row.atom
-    elements = [str(value).strip() for value in atom.key_elements if str(value).strip()]
-    goal = atom.goal_statement.strip()
-    if q_type == 'subjective':
-        points = elements or [goal]
-        rubric = [{'point': point, 'score': 10 / len(points)} for point in points]
-        return dict(q_type=q_type, subjective_type='short',
-            stem=f'围绕“{atom.name}”完成进阶挑战：{goal}。请说明适用条件、核心机制或公式推导，并举例解释结论。复测情境 {variant + 1}：分析条件改变后结论是否仍成立。',
-            options={}, correct_answer='；'.join(points), grading_points='；'.join(points), rubric=rubric,
-            explanation=f'应围绕掌握目标“{goal}”逐项说明，推理须连接条件与结论。', question_id=None)
-    # Alternate the assessed element and truth judgement, rather than inventing subject facts.
-    correct = elements[variant % len(elements)] if elements else goal
-    mistakes = list(dict.fromkeys(str(value).strip() for value in atom.common_misconceptions if str(value).strip() and str(value).strip() != correct))
-    if len(mistakes) >= 3:
-        choices = [correct, *mistakes[:3]]
-        random.Random(f'{atom.pk}:{variant}').shuffle(choices)
-        options = dict(zip('ABCD', choices))
-        answer = next(key for key, value in options.items() if value == correct)
-        prompt = ('依据掌握目标，以下哪项表述正确？', '学习者需要纠正常见误区，以下哪项可作为正确依据？', '复核本知识点的核心要素时，应保留以下哪项表述？')[variant % 3]
-        stem = f'“{atom.name}”应用情境 {variant + 1}：{prompt}'
-    else:
-        statement = mistakes[(variant // 2) % len(mistakes)] if mistakes and variant % 2 else correct
-        options, answer = {'A': '正确', 'B': '错误'}, 'B' if statement in mistakes else 'A'
-        stem = f'“{atom.name}”辨析 {variant + 1}：请判断下列表述是否正确：{statement}'
-    return dict(q_type=q_type, subjective_type='', stem=stem, options=options, correct_answer=answer,
-                explanation=f'掌握目标：{goal}。核心要素：{"；".join(elements)}。常见误区：{"；".join(mistakes)}。',
-                grading_points='', rubric={}, question_id=None)
-
-
 def _generate_question(row, block, q_type, seen):
     atom = row.atom
     if config._get_api_key():
@@ -296,172 +256,30 @@ def _generate_question(row, block, q_type, seen):
                 if item and _hash(item['stem']) not in seen:
                     return item
         except Exception:
-            # Explicit offline/API-failure contract: issue a targeted deterministic question.
-            logger.exception('Block quiz AI generation failed; using atom-based questions')
-    variant = 0
-    while True:
-        item = _offline_question(row, q_type, variant)
-        if _hash(item['stem']) not in seen:
-            return item
-        variant += 1
+            logger.exception('Block task generation failed')
+    raise ValidationError('暂时未能生成有效的新题，未创建检测或学习证据。请稍后重试。')
 
 
-def generate_block_quiz(user, block, mode='objective', retest=False):
-    if mode not in ('objective', 'challenge'):
-        raise ValidationError('请选择客观题快测或进阶挑战。')
-    assignments = _assignments(block)
-    if not assignments:
-        raise ValidationError('当前知识块尚无原子点，无法生成检测。')
-    progress, _ = UserBlockProgress.objects.get_or_create(user=user, block=block, defaults={'build': block.build})
-    seen = set(progress.seen_question_hashes)
-    weak = set(progress.weak_atom_ids) if retest else set()
-    ordered = sorted(assignments, key=lambda row: (row.membership_type != 'core', row.atom_id not in weak))
-    required = [row for row in ordered if row.membership_type == 'core' or row.atom_id in weak]
-    target_count = max(3, len(required))
-    selected = (required + [row for row in ordered if row not in required])[:max(4, target_count)]
-    while len(selected) < target_count:
-        selected.append(ordered[len(selected) % len(ordered)])
-    kps = _knowledge_points(assignments)
-    questions = []
-    for row in selected:
-        kp = kps.get(row.atom.name)
-        item = None
-        if kp and not retest:
-            for question in Question.objects.filter(knowledge_point=kp, institution_id=kp.institution_id, q_type='objective').select_related('knowledge_point').order_by('pk'):
-                bank = _bank_question(question)
-                if bank:
-                    bank['options'] = {o['key']: o['label'] for o in bank['options']}
-                    item = _clean_question(bank, 'objective')
-                    if item and _hash(item['stem']) not in seen:
-                        break
-                    item = None
-        item = item or _generate_question(row, block, 'objective', seen)
-        if not item['explanation']:
-            item['explanation'] = f'掌握目标：{row.atom.goal_statement}。核心要素：{"；".join(row.atom.key_elements)}。'
-        item.update(atom_id=row.atom_id, atom_code=row.atom.code, atom_name=row.atom.name,
-                    membership_type=row.membership_type, kp_id=kp.pk if kp else None)
-        questions.append(item)
-        seen.add(_hash(item['stem']))
-    if mode == 'challenge':
-        row = ordered[0]
-        item = _generate_question(row, block, 'subjective', seen)
-        if not item['explanation']:
-            item['explanation'] = f'评分要点：{item["grading_points"]}'
-        kp = kps.get(row.atom.name)
-        item.update(atom_id=row.atom_id, atom_code=row.atom.code, atom_name=row.atom.name,
-                    membership_type=row.membership_type, kp_id=kp.pk if kp else None)
-        questions.append(item)
-        seen.add(_hash(item['stem']))
-    manifest = [_hash(item['stem']) for item in questions]
-    quiz_id = uuid4().hex
-    public = []
-    for index, item in enumerate(questions):
-        item.update(id=f'{quiz_id}:{index}', block_id=block.pk, user_id=user.pk, quiz_id=quiz_id, manifest=manifest)
-        signed = signing.dumps(item, salt=SIGNING_SALT, compress=True)
-        public.append({key: value for key, value in item.items() if key in (
-            'id', 'atom_id', 'atom_code', 'atom_name', 'membership_type', 'q_type', 'stem', 'options', 'subjective_type')})
-        public[-1].update(signed_payload=signed, assessment_hint='说明适用条件、关键步骤及结论。' if item['q_type'] == 'subjective' else '')
-    with transaction.atomic():
-        progress = UserBlockProgress.objects.select_for_update().get(pk=progress.pk)
-        progress.seen_question_hashes = sorted(set(progress.seen_question_hashes) | seen)
-        if progress.status == 'UNSTARTED':
-            progress.status = 'LEARNING'
-        progress.save()
-    return {'block_id': block.pk, 'mode': mode, 'questions': public}
-
-
-def _grade_subjective(item, answer, atom):
-    if config._get_api_key():
-        try:
-            question = Question(text=item['stem'], correct_answer=item['correct_answer'], q_type='subjective',
-                                grading_points=item['grading_points'], rubric=item['rubric'], subjective_type=item['subjective_type'])
-            grade = _grade_answer(question, answer)
-            ratio = float(grade['normalized_score'])
-            if not math.isfinite(ratio):
-                raise ValueError('Invalid grading score')
-            return max(0.0, min(1.0, ratio)), grade.get('feedback', '')
-        except Exception:
-            logger.exception('Block subjective grading failed; using keyword coverage')
-    points = list(dict.fromkeys([str(value) for value in atom.key_elements if str(value).strip()]
-                               + [part.strip() for part in re.split(r'[；;\n]', str(item['grading_points'])) if part.strip()]))
-    normalized = _normalized(answer)
-    covered = sum(_normalized(point) in normalized for point in points)
-    coverage = covered / len(points) if points else 0.0
-    # Require substantive text as well as the expected keywords; empty answers score zero.
-    completeness = min(1.0, len(normalized) / max(1, sum(len(_normalized(point)) for point in points)))
-    ratio = min(coverage, completeness)
-    return ratio, f'关键词评分：覆盖 {covered}/{len(points)} 个要点。请结合适用条件说明推理过程。'
-
-
-def submit_block_quiz(user, block, questions, answers):
-    if not questions or not isinstance(questions, list) or not isinstance(answers, dict):
-        raise ValidationError('请提交完整检测题目和答案。')
-    assignments = {row.atom_id: row for row in _assignments(block)}
-    items = []
-    try:
-        for question in questions:
-            item = signing.loads(question['signed_payload'], salt=SIGNING_SALT)
-            row = assignments.get(item['atom_id'])
-            if item['block_id'] != block.pk or item['user_id'] != user.pk or not row or item['membership_type'] != row.membership_type:
-                raise ValidationError('题目不属于当前用户或知识块，请重新出题。')
-            items.append(item)
-    except (signing.BadSignature, KeyError, TypeError, ValueError) as exc:
-        raise ValidationError('题目签名无效，请重新出题。') from exc
-    manifest = items[0]['manifest']
-    if (len(set(item['id'] for item in items)) != len(items)
-            or [_hash(item['stem']) for item in items] != manifest
-            or any(item['quiz_id'] != items[0]['quiz_id'] or item['manifest'] != manifest for item in items)):
-        raise ValidationError('请提交同一轮的全部题目，不可删题或重复提交单题。')
-    results = []
-    for item in items:
-        answer = answers.get(item['id'], '')
-        if not isinstance(answer, str) or len(answer) > 20000:
-            raise ValidationError('答案必须是最多 20000 字的文本。')
-        if item['q_type'] == 'objective':
-            ratio = float(normalize_objective_answer(answer, item['options']) == item['correct_answer'])
-            feedback = '回答正确。' if ratio else '请结合解析回看对应知识点。'
-        else:
-            ratio, feedback = _grade_subjective(item, answer, assignments[item['atom_id']].atom)
-        results.append({key: item[key] for key in ('id', 'atom_id', 'atom_code', 'atom_name', 'membership_type', 'q_type', 'correct_answer', 'explanation')}
-                       | {'user_answer': answer, 'passed': ratio >= .75, 'score_ratio': ratio, 'feedback': feedback})
-    core_ids = {row.atom_id for row in assignments.values() if row.membership_type == 'core'}
-    core_results = [result for result in results if result['membership_type'] == 'core']
-    core_passed = (core_ids <= {result['atom_id'] for result in core_results} and all(result['passed'] for result in core_results)) if core_ids else all(result['passed'] for result in results)
-    raw_accuracy = sum(result['score_ratio'] for result in results) / len(results)
-    accuracy = round(raw_accuracy, 2)
-    completed = core_passed and raw_accuracy >= .75
-    failed = {result['atom_id'] for result in results if not result['passed']}
-    mastered = {result['atom_id'] for result in results if result['passed']} - failed
-    resources = list(visible_block_resources(user, block))
-    recommended = [resource for resource in resources if resource.atom_id in failed or resource.atom_id is None]
-    if failed and not recommended:
-        recommended = resources
-    with transaction.atomic():
-        progress, _ = UserBlockProgress.objects.get_or_create(user=user, block=block, defaults={'build': block.build})
-        progress = UserBlockProgress.objects.select_for_update().get(pk=progress.pk)
-        progress.status = 'COMPLETED' if completed else 'NEEDS_REVIEW'
-        progress.last_accuracy, progress.best_accuracy = accuracy, max(progress.best_accuracy, accuracy)
-        progress.core_passed = core_passed
-        progress.attempt_count += 1
-        progress.mastered_atom_ids = sorted((set(progress.mastered_atom_ids) | mastered) - failed)
-        progress.weak_atom_ids = sorted((set(progress.weak_atom_ids) - mastered) | failed)
-        progress.completed_at = timezone.now() if completed else None
-        kps = _knowledge_points(list(assignments.values()))
-        if completed:
-            for atom_id in mastered:
-                kp = kps.get(assignments[atom_id].atom.name)
-                if kp:
-                    state, _ = UserKnowledgeState.objects.select_for_update().get_or_create(user=user, knowledge_point=kp)
-                    state.mastery_score = max(state.mastery_score, .8)
-                    state.save(update_fields=('mastery_score', 'updated_at'))
-        result = dict(block_id=block.pk, status=progress.status, block_completed=completed, core_passed=core_passed,
-            accuracy=accuracy, best_accuracy=progress.best_accuracy, attempt_count=progress.attempt_count,
-            mastered_atom_ids=progress.mastered_atom_ids, weak_atom_ids=progress.weak_atom_ids,
-            weak_atoms=[{'id': assignments[pk].atom_id, 'code': assignments[pk].atom.code, 'name': assignments[pk].atom.name}
-                        for pk in progress.weak_atom_ids if pk in assignments], results=results,
-            recommended_resources=BlockResourceSerializer(recommended, many=True).data,
-            summary_message='当前知识块已完成！核心点全部通过，总得分率达到 75%。' if completed else
-                f'本次总得分率 {accuracy:.0%}，核心点{"已全部通过" if core_passed else "尚未全部通过"}。请回看待强化点的资料，再针对薄弱点换题复测。')
-        progress.last_quiz_result = result
-        progress.save()
-    return result
+@transaction.atomic
+def attach_project_resource(user, block, project_id, resource_id, request):
+    from django.shortcuts import get_object_or_404
+    from ai_assistant.models import ConversationProject, ProjectLearning
+    from ai_assistant.services.learning_library import resource_operation
+    project = get_object_or_404(ConversationProject, pk=project_id, user=user)
+    resource = get_object_or_404(visible_block_resources(user, block, request=request), pk=resource_id)
+    if resource.source_kind == 'library':
+        return resource_operation(project, {'action': 'attach', 'resource_id': resource.library_resource_id})
+    if resource.source_kind == 'course' and not _courses(user).filter(pk=resource.course_id).exists():
+        raise ValidationError('当前空间无权使用这门课程。')
+    state, _ = ProjectLearning.objects.get_or_create(project=project)
+    url = f'/course/{resource.course_id}' if resource.source_kind == 'course' else resource.url
+    existing = next((item for item in state.resources if item['url'] == url), None)
+    if existing:
+        return {'resource': existing, 'notice': '项目已保留这份资料，沿用原快照。'}
+    # A mounted video or catalog entry only supplies metadata/excerpts, never its unseen transcript.
+    source = dict(id=uuid4().hex, url=url, title=resource.title, excerpt=resource.excerpt,
+        read_at=timezone.now().isoformat(), source_kind='block_resource_excerpt', not_web_read=True,
+        content_version=hashlib.sha256(f'{resource.pk}:{resource.excerpt}'.encode()).hexdigest(),
+        references=[{'build_id': str(block.build_id), 'block_id': block.pk, 'resource_id': resource.pk, 'locator': resource.locator}],
+        notice='仅保存挂载条目的摘要或元数据，未读取视频字幕或核验完整原文。')
+    return learning_resources.store_resource(project, source) | {'notice': source['notice']}

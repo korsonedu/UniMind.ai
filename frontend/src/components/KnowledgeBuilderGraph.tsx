@@ -707,7 +707,6 @@ export function KnowledgeBuilderGraph({
                 <div className="kb-level">{t('第 {0} 层', { 0: col.layer })}</div>
 
                 {col.blocks.map(block => {
-                  const progress = tree.block_progress?.find(item => item.block === block.id);
                   const resources = tree.blocks.find(item => item.id === block.id)?.resources ?? [];
                   const spine = resources.find(resource => resource.asset_track === 'spine');
                   const hasSpotlight = resources.some(resource => resource.asset_track === 'spotlight');
@@ -758,8 +757,6 @@ export function KnowledgeBuilderGraph({
                         </small>
                         <span className="kb-badges">
                           <span className="kb-cardtype">{block.domainTitle}</span>
-                          {progress?.status === 'COMPLETED' && <span className="kb-badge kb-badge--mastered">已完成 ✓</span>}
-                          {progress?.status === 'NEEDS_REVIEW' && <span className="kb-badge kb-badge--weak">待强化 · {Math.round(progress.last_accuracy * 100)}%</span>}
                           <span className="kb-badge">📚 {resources.length}</span>
                           {spine && <span className="kb-badge kb-asset-badge--spine" title={`主线配套课${spine.locator ? ` · ${spine.locator}` : ''}`}>🎬 {spine.locator || '主线'}</span>}
                           {hasSpotlight && <span className="kb-badge kb-asset-badge--spotlight" title="单点神作">🌟 神作</span>}
@@ -767,7 +764,7 @@ export function KnowledgeBuilderGraph({
                           {renderTopicBadges([block.shortTitle, ...block.steps.flatMap(step => step.atoms.map(item => item.atom.name))])}
                         </span>
                       </button>
-                      {onStudyBlock && <button type="button" className="kb-study-open" aria-label={`${block.shortTitle}：学习资源 & 闯关检测`} onClick={() => onStudyBlock(block.id)}>资源 & 闯关</button>}
+                      {onStudyBlock && <button type="button" className="kb-study-open" aria-label={`${block.shortTitle}：学习资源与任务检测`} onClick={() => onStudyBlock(block.id)}>资源与任务</button>}
 
                       {isOpen && (
                         <div className="kb-panel">
@@ -781,7 +778,7 @@ export function KnowledgeBuilderGraph({
                           </div>
                           {resources.length > 0 && <nav className="kb-card-resources" aria-label={`${block.shortTitle}的学习资源`}>
                             {resources.map(resource => {
-                              const href = resolvePublicAssetLink(resource.url, resource.locator);
+                              const href = resource.source_kind === 'course' && resource.course_id ? `/course/${resource.course_id}` : resolvePublicAssetLink(resource.url, resource.locator);
                               if (!href) return null;
                               const trackLabel = resource.asset_track === 'spine' ? '🎬 主线' : resource.asset_track === 'spotlight' ? '🌟 神作' : resource.asset_track === 'wiki' ? (tree.region_pref === 'intl' ? '📖 Wikipedia 词条' : '📖 专业开源 Wiki 词条') : '📚 资源';
                               return <a key={resource.id} className="kb-card-resource-link" href={href} target="_blank" rel="noopener noreferrer"
@@ -874,11 +871,10 @@ export function KnowledgeBuilderGraph({
                                       key={item.atom.id}
                                       data-point={item.atom.code}
                                       title={item.tooltip}
-                                      className={`kb-point${item.membership === 'extension' ? ' ext' : ''}${progress?.weak_atom_ids.includes(item.atom.id) ? ' kb-point--weak' : ''}`}
+                                      className={`kb-point${item.membership === 'extension' ? ' ext' : ''}`}
                                     >
                                       <div>{item.atom.name}</div>
                                       <span className="kb-badges">{renderTopicBadges([item.atom.name])}</span>
-                                      {progress?.weak_atom_ids.includes(item.atom.id) ? <span className="kb-badge kb-badge--weak">{t('待强化')}</span> : progress?.mastered_atom_ids.includes(item.atom.id) ? <span className="kb-badge kb-badge--mastered">{t('已掌握')}</span> : null}
                                       {item.isInterfacePoint ? <b>{t('◆ 跨块接口点')}</b> : null}
                                     </div>
                                   ))}

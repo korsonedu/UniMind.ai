@@ -3,14 +3,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { MarkdownContent } from '@/components/MarkdownContent';
-import { attachBlockResource, deleteBlockResource, generateBlockQuiz, getBlockResources, resolvePublicAssetLink, submitBlockQuiz, updateBlockResource } from '@/lib/knowledgeBuilderApi';
-import type { AssetSourceKind, AssetTrack, BlockResourcesResponse, BlockResourceUpdatePayload, BlockQuizMode, BlockQuizQuestion, BlockQuizSubmitResult, BlockResourceItem, BlockResourcePayload, KnowledgeTreeBuildDetail, LearningBlock, UserBlockProgressItem } from '@/types/knowledgeBuilder';
+import { attachBlockResource, deleteBlockResource, blockAssessment, attachBlockResourceToProject, getBlockResources, resolvePublicAssetLink, updateBlockResource } from '@/lib/knowledgeBuilderApi';
+import type { AssetSourceKind, AssetTrack, BlockResourcesResponse, BlockResourceUpdatePayload, BlockQuizMode, BlockResourceItem, BlockResourcePayload, KnowledgeTreeBuildDetail, LearningBlock } from '@/types/knowledgeBuilder';
+import { learningKey, type ProjectLearning } from '@/lib/projectLearning';
+import { PracticeQuizCard } from '@/pages/xiaoyu/visuals/PracticeQuizCard';
+import { Link } from 'react-router-dom';
+import { learningUrl } from '@/lib/projectLearning';
 import { useAuthStore } from '@/store/useAuthStore';
 
 interface Props {
-  tree: KnowledgeTreeBuildDetail; block: LearningBlock; progress?: UserBlockProgressItem;
+  tree: KnowledgeTreeBuildDetail; block: LearningBlock; project?: ProjectLearning;
   onClose: () => void; onChanged: () => void;
 }
 const roleLabels: Record<string, string> = {
@@ -29,7 +31,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '请求失败，请稍后重试。';
 }
 
-export function BlockStudyDialog({ tree, block, progress, onClose, onChanged }: Props) {
+export function BlockStudyDialog({ tree, block, project, onClose, onChanged }: Props) {
   const userId = useAuthStore(state => state.user?.id);
   const queryClient = useQueryClient();
   const resourceKey = ['knowledge-block-resources', userId, tree.id, block.id];
@@ -44,9 +46,6 @@ export function BlockStudyDialog({ tree, block, progress, onClose, onChanged }: 
   const [searchResults, setSearchResults] = useState<BlockResourcesResponse | null>(null);
   const [searched, setSearched] = useState(false);
   const [mode, setMode] = useState<BlockQuizMode>('objective');
-  const [questions, setQuestions] = useState<BlockQuizQuestion[]>([]);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [result, setResult] = useState<BlockQuizSubmitResult | null>(progress?.last_quiz_result && 'block_id' in progress.last_quiz_result ? progress.last_quiz_result as BlockQuizSubmitResult : null);
   const [error, setError] = useState('');
   const atoms = tree.atoms.filter(atom => block.steps.some(step => step.step_atoms.some(item => item.atom === atom.id)));
   const onError = (err: unknown) => setError(errorMessage(err));
@@ -61,19 +60,32 @@ export function BlockStudyDialog({ tree, block, progress, onClose, onChanged }: 
     mutationFn: () => getBlockResources(tree.id, block.id, query),
     onSuccess: data => { setSearchResults(data); setSearched(true); }, onError,
   });
+  const assessmentKey = ['block-assessment', userId, project?.project_id, tree.id, block.id];
+  const canAssess = project?.status === 'active' && project.knowledge?.builder?.build_id === tree.id
+    && project.knowledge.nodes.some(node => node.builder_block_ids?.includes(block.id));
+  const assessmentQuery = useQuery({ queryKey: assessmentKey, enabled: !!canAssess,
+    queryFn: () => blockAssessment(tree.id, block.id, { project_id: project!.project_id, action: 'read' }),
+    refetchInterval: query => query.state.data?.preparation?.status === 'pending' || query.state.data?.assessment?.items.some(item => item.task.status === 'processing') ? 2500 : false,
+  });
+  const assessment = assessmentQuery.data?.assessment;
+  const preparing = assessmentQuery.data?.preparation?.status === 'pending';
+  const refreshTasks = () => {
+    void queryClient.invalidateQueries({ queryKey: assessmentKey });
+    void queryClient.invalidateQueries({ queryKey: ['learning-tasks', userId, project?.project_id] });
+    void queryClient.invalidateQueries({ queryKey: learningKey(userId, project?.project_id ?? null) });
+    onChanged();
+  };
   const generate = useMutation({
-    mutationFn: (retest: boolean) => generateBlockQuiz(tree.id, block.id, { mode, retest }),
-    onSuccess: data => { setQuestions(data.questions); setAnswers({}); setResult(null); onChanged(); }, onError,
+    mutationFn: () => blockAssessment(tree.id, block.id, { project_id: project!.project_id, action: 'generate', mode, retest: !!assessment }),
+    onSuccess: data => { queryClient.setQueryData(assessmentKey, data); refreshTasks(); }, onError,
   });
-  const submit = useMutation({
-    mutationFn: () => submitBlockQuiz(tree.id, block.id, { questions, answers }),
-    onSuccess: data => { setResult(data); onChanged(); }, onError,
+  const [notice, setNotice] = useState('');
+  const useResource = useMutation({
+    mutationFn: (id: number) => attachBlockResourceToProject(tree.id, block.id, project!.project_id, id),
+    onSuccess: data => { setNotice(data.notice); refreshTasks(); }, onError,
   });
-  const busy = attach.isPending || update.isPending || remove.isPending || search.isPending || generate.isPending || submit.isPending;
+  const busy = attach.isPending || update.isPending || remove.isPending || search.isPending || generate.isPending || useResource.isPending;
   const mountWeb = (link: string) => { setError(''); attach.mutate({ url: link.trim(), asset_track: assetTrack, locator: locator.trim(), save_to_library: saveToLibrary, ...(atomId ? { atom_id: Number(atomId) } : {}) }); };
-  const status = result?.status ?? progress?.status ?? 'UNSTARTED';
-  const best = result?.best_accuracy ?? progress?.best_accuracy ?? 0;
-  const statusText = status === 'COMPLETED' ? `已完成 ✓ · 最高正确率 ${Math.round(best * 100)}%` : status === 'NEEDS_REVIEW' ? '待强化 · 需核心点全对且正确率 ≥ 75%' : status === 'LEARNING' ? '学习中 · 需核心点全对且正确率 ≥ 75%' : '未开始';
   const resources = resourcesQuery.data?.resources ?? block.resources ?? [];
   const candidateData = searchResults ?? resourcesQuery.data;
   const isIntl = (candidateData?.region_pref ?? tree.region_pref ?? 'cn') === 'intl';
@@ -84,7 +96,7 @@ export function BlockStudyDialog({ tree, block, progress, onClose, onChanged }: 
   const trackLabels: Record<AssetTrack, string> = { spine: '🎬 主线配套课', spotlight: '🌟 单点神作', wiki: isIntl ? '📖 Wikipedia 词条' : '📖 专业开源 Wiki 词条' };
   const renderResource = (resource: BlockResourceItem, allowEdit = true) => {
     const track = resourceTrack(resource);
-    const href = resolvePublicAssetLink(resource.url, resource.locator);
+    const href = resource.source_kind === 'course' && resource.course_id ? `/course/${resource.course_id}` : resolvePublicAssetLink(resource.url, resource.locator);
     return <article key={resource.id} className={`kb-study-resource kb-study-track-resource is-${track}`}>
       <div className="flex flex-wrap items-center gap-2">
         <a href={href} target="_blank" rel="noopener noreferrer" className="font-semibold underline">{resource.title}</a>
@@ -97,6 +109,7 @@ export function BlockStudyDialog({ tree, block, progress, onClose, onChanged }: 
       {track === 'wiki' ? <p className="whitespace-pre-wrap text-sm">{resource.excerpt || '暂无词条摘要。'}</p>
         : <details><summary>查看正文摘要</summary><p className="whitespace-pre-wrap text-sm">{resource.excerpt || '暂无正文摘要。'}</p></details>}
       <a href={href} target="_blank" rel="noopener noreferrer" className="kb-resource-direct-link underline">直接打开{resource.locator ? `（${resource.locator}）` : ''}</a>
+      {project && <Button size="sm" variant="outline" disabled={busy} onClick={() => { setError(''); useResource.mutate(resource.id); }}>用于当前小宇项目</Button>}
       {allowEdit && <div className="kb-resource-adjustments flex flex-wrap items-center gap-2">
         <label className="text-sm">轨道<select className="kb-study-select" aria-label={`${resource.title}的资源轨道`} value={track} disabled={busy} onChange={event => {
           setError(''); update.mutate({ resource_id: resource.id, asset_track: event.target.value as AssetTrack });
@@ -111,16 +124,16 @@ export function BlockStudyDialog({ tree, block, progress, onClose, onChanged }: 
   return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
     <DialogContent className="sm:max-w-[900px] max-h-[90dvh] overflow-y-auto kb-study-dialog">
       <DialogHeader><DialogTitle>{block.code} · {block.short_title}</DialogTitle>
-        <DialogDescription>第 {block.layer} 层 · 学习资源与块级闯关检测</DialogDescription></DialogHeader>
-      <p className={`kb-study-status ${status === 'COMPLETED' ? 'is-complete' : status === 'NEEDS_REVIEW' ? 'is-review' : ''}`}>{statusText}</p>
+        <DialogDescription>第 {block.layer} 层 · 学习资源与项目检测</DialogDescription></DialogHeader>
+      <p className="text-sm text-muted-foreground">检测与小宇共用项目任务、原始作答和后续建议。本次通过后仍需换题检验。</p>
       <div className="flex gap-2" role="tablist" aria-label="知识块学习">
         <Button id="kb-study-resources-tab" role="tab" aria-selected={tab === 'resources'} aria-controls="kb-study-resources" variant={tab === 'resources' ? 'default' : 'outline'} onClick={() => setTab('resources')}>学习资源</Button>
-        <Button id="kb-study-quiz-tab" role="tab" aria-selected={tab === 'quiz'} aria-controls="kb-study-quiz" variant={tab === 'quiz' ? 'default' : 'outline'} onClick={() => setTab('quiz')}>闯关检测</Button>
+        <Button id="kb-study-quiz-tab" role="tab" aria-selected={tab === 'quiz'} aria-controls="kb-study-quiz" variant={tab === 'quiz' ? 'default' : 'outline'} onClick={() => setTab('quiz')}>项目检测</Button>
       </div>
+      {notice && <p role="status">{notice}</p>}
       {error && <p role="alert" className="text-red-600">{error}</p>}
       {tab === 'resources' ? <section id="kb-study-resources" role="tabpanel" aria-labelledby="kb-study-resources-tab" className="space-y-4">
         <h3 className="font-semibold">已挂载资源 · {resourcesQuery.data?.resources.length ?? block.resources?.length ?? 0}</h3>
-        {result && result.weak_atoms.length > 0 && <p className="kb-study-status is-review">优先回看：{result.weak_atoms.map(atom => atom.name).join('、')}</p>}
         {resourcesQuery.isLoading && <p>正在读取资源…</p>}
         {resourcesQuery.error && <p role="alert">{errorMessage(resourcesQuery.error)} <Button variant="ghost" onClick={() => void resourcesQuery.refetch()}>重试</Button></p>}
         {tracks.map(track => {
@@ -185,31 +198,24 @@ export function BlockStudyDialog({ tree, block, progress, onClose, onChanged }: 
           </form>
         </div>
       </section> : <section id="kb-study-quiz" role="tabpanel" aria-labelledby="kb-study-quiz-tab" className="space-y-4">
-        <label className="block text-sm">题型模式<select className="kb-study-select" value={mode} disabled={busy || questions.length > 0 && !result} onChange={event => setMode(event.target.value as BlockQuizMode)}>
-          <option value="objective">客观题快测（默认 3～4 题）</option><option value="challenge">进阶主观/计算题挑战（客观题 + 1 道开放题）</option>
-        </select></label>
-        <p className="text-sm text-muted-foreground">完成标准：所有核心点关联题通过，且总得分率 ≥ 75%。主观题得分率 ≥ 75% 视为通过。核心点较多时会增加题量以逐个覆盖。</p>
-        <Button disabled={busy} onClick={() => { setError(''); generate.mutate(false); }}>{generate.isPending ? '正在出题…' : questions.length ? '重新出题' : '开始闯关检测'}</Button>
-        {questions.map((question, index) => {
-          const graded = result?.results.find(item => item.id === question.id);
-          return <article key={question.id} className={`kb-study-resource space-y-3 ${graded ? graded.passed ? 'is-complete' : 'is-review' : ''}`}>
-            <p className="text-sm">第 {index + 1} 题 · {question.atom_name} <span className="kb-badge">{question.membership_type === 'core' ? 'CORE 核心' : 'EXT 拓展'}</span></p>
-            <MarkdownContent content={question.stem} />
-            {question.q_type === 'objective' ? <fieldset disabled={busy || !!result} className="grid gap-2"><legend className="sr-only">选择第 {index + 1} 题答案</legend>
-              {Object.entries(question.options).map(([key, label]) => <label key={key} className={`kb-study-option ${answers[question.id] === key ? 'selected' : ''}`}>
-                <input type="radio" name={question.id} value={key} checked={answers[question.id] === key} onChange={() => setAnswers(current => ({ ...current, [question.id]: key }))} /><span>{key}.</span><MarkdownContent content={label} />
-              </label>)}
-            </fieldset> : <><p className="text-sm text-muted-foreground">考察维度：{question.assessment_hint}</p><Textarea aria-label={`${question.atom_name}的作答`} rows={6} maxLength={20000} value={answers[question.id] ?? ''} disabled={busy || !!result} onChange={event => setAnswers(current => ({ ...current, [question.id]: event.target.value }))} placeholder="写出推导、计算过程或机制分析…" /></>}
-            {graded && <div className="space-y-2 text-sm"><strong>{graded.passed ? '已通过' : '待强化'} · 得分 {Math.round(graded.score_ratio * 100)}%</strong><MarkdownContent content={`标准答案：${graded.correct_answer}`} /><MarkdownContent content={graded.explanation} /><p>{graded.feedback}</p></div>}
-          </article>;
-        })}
-        {questions.length > 0 && !result && <Button disabled={busy || questions.some(question => !answers[question.id]?.trim())} onClick={() => { setError(''); submit.mutate(); }}>{submit.isPending ? '正在判分…' : '提交并查看结果'}</Button>}
-        {result && <div className="space-y-3" aria-live="polite">
-          <div className={`kb-study-status ${result.block_completed ? 'is-complete' : 'is-review'}`}><strong>{result.block_completed ? '当前知识块已完成！' : '当前知识块待强化'}</strong><p>总得分率 {Math.round(result.accuracy * 100)}% · 核心点{result.core_passed ? '全部通过' : '尚未全部通过'}</p><p>{result.summary_message}</p></div>
-          {questions.length === 0 && result.results.map(item => <article key={item.id} className="kb-study-resource text-sm"><strong>{item.atom_name} · {item.passed ? '已通过' : '待强化'} · {Math.round(item.score_ratio * 100)}%</strong><MarkdownContent content={`标准答案：${item.correct_answer}`} /><MarkdownContent content={item.explanation} /><p>{item.feedback}</p></article>)}
-          {result.weak_atoms.length > 0 && <><p className="font-semibold text-red-600">待强化原子知识点：{result.weak_atoms.map(atom => atom.name).join('、')}</p><Button variant="outline" onClick={() => setTab('resources')}>回看对应学习资源</Button>{result.recommended_resources.map(resource => renderResource(resource, false))}</>}
-          {!result.block_completed && <Button disabled={busy} onClick={() => { setError(''); generate.mutate(true); }}>针对薄弱点换题复测</Button>}
-        </div>}
+        {!canAssess ? <p>请先把这个知识块加入当前项目目标，在小宇确认学习安排后开始检测。</p> : <>
+          <label className="block text-sm">题型模式<select className="kb-study-select" value={mode} disabled={busy || !!assessment && !assessment.complete} onChange={event => setMode(event.target.value as BlockQuizMode)}>
+            <option value="objective">客观题快测</option><option value="challenge">进阶挑战（加一道开放题）</option>
+          </select></label>
+          <p className="text-sm text-muted-foreground">逐个覆盖本块核心点，核心题均达到 75%，且平均得分率达到 75%，视为本次检测通过。开放题为模型参考评价。</p>
+          {assessmentQuery.isLoading && <p>正在恢复项目任务…</p>}
+          {assessmentQuery.error && <p role="alert">{errorMessage(assessmentQuery.error)} <Button variant="ghost" onClick={() => void assessmentQuery.refetch()}>重试</Button></p>}
+          {!assessmentQuery.isError && <Button disabled={busy || preparing || assessmentQuery.isLoading || !!assessment && !assessment.complete} onClick={() => { setError(''); generate.mutate(); }}>{generate.isPending || preparing ? '正在准备项目任务…' : assessment ? '换题再检验' : '开始本块检测'}</Button>}
+          {assessmentQuery.data?.preparation?.error && <p role="alert">{assessmentQuery.data.preparation.error}</p>}
+          {preparing && <p role="status">正在后台逐点准备题目，关闭后可以从本块或小宇恢复。</p>}
+          {assessment?.items.map(item => <article key={item.task.id} className="kb-study-resource space-y-2">
+            <p>{item.atom_name} · {item.membership_type === 'core' ? '核心点' : '拓展点'}</p>
+            {item.task.status === 'unavailable' || item.task.is_current === false && !item.task.exam_id ? <p>当前任务已停止使用，请回小宇确认新的学习安排。</p> : <PracticeQuizCard payload={{ ...item.task.payload, learning_task_id: item.task.id, project_id: project!.project_id, conversation_id: project!.conversation_id || undefined, assistance: item.task.assistance, response_type: item.task.response_type, label_source: item.task.summary?.label_source }} onResult={refreshTasks} />}
+          </article>)}
+          {assessment?.complete && <p className={`kb-study-status ${assessment.passed ? 'is-complete' : 'is-review'}`} role="status">{assessment.passed ? '本次检测通过' : '本次检测待强化'} · {Math.round((assessment.accuracy ?? 0) * 100)}%。长期状态与下一步建议请在小宇查看。</p>}
+        </>}
+        <Link className="underline" to={learningUrl('/xiaoyu?learning_view=knowledge', project?.project_id ?? null, project?.conversation_id || undefined)} onClick={onClose}>回小宇查看学习安排与下一步</Link>
+
       </section>}
     </DialogContent>
   </Dialog>;

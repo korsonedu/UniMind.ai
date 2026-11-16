@@ -328,7 +328,7 @@ export default function KnowledgeBuilder() {
         />
         {detailQuery.data.blocks.filter(block => block.id === studyBlockId).map(block => <BlockStudyDialog
           key={`${detailQuery.data.id}:${block.id}`} tree={detailQuery.data} block={block}
-          progress={detailQuery.data.block_progress?.find(progress => progress.block === block.id)}
+          project={projectQuery.data}
           onClose={() => setStudyBlockId(null)}
           onChanged={() => {
             void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBuilder.detail(detailQuery.data.id) });

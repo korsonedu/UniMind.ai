@@ -32,7 +32,7 @@ export interface PracticePayload {
   assistance?: string;
   project_id?: number;
   conversation_id?: string;
-  response_type?: 'explanation' | 'calculation' | 'reasoning' | 'case' | 'code';
+  response_type?: 'objective' | 'explanation' | 'calculation' | 'reasoning' | 'case' | 'code';
   label_source?: string;
 }
 
@@ -176,7 +176,7 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
       if (!(event.target as HTMLElement).closest('[data-practice-toggle]')) activate();
     }}>
     <header className="um-inline-practice-header">
-      <div><span className="um-inline-practice-caption">{payload.response_type ? t('开放成果') : t('随堂练习')} · {questions.length} {t('项')}</span><h3>{payload.title || t('随堂练习')}</h3></div>
+      <div><span className="um-inline-practice-caption">{payload.response_type && payload.response_type !== 'objective' ? t('开放成果') : t('随堂练习')} · {questions.length} {t('项')}</span><h3>{payload.title || t('随堂练习')}</h3></div>
       {!locked && <button type="button" data-practice-toggle className="um-inline-practice-text-button" onClick={() => {
         if (active) setActive(false); else activate();
       }}>{active ? t('暂停练习') : t('开始／继续')}</button>}

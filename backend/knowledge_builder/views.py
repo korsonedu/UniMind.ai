@@ -1,6 +1,6 @@
 from django.db.models import F, Q
 from django.shortcuts import get_object_or_404
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -115,6 +115,10 @@ class BlockResourceView(BuildStatusView):
 
     def post(self, request, build_id, block_id):
         block = self.get_block(request, build_id, block_id)
+        if request.data.get('action') == 'attach_project':
+            project_id = serializers.IntegerField(min_value=1).run_validation(request.data.get('project_id'))
+            resource_id = serializers.IntegerField(min_value=1).run_validation(request.data.get('resource_id'))
+            return Response(block_study.attach_project_resource(request.user, block, project_id, resource_id, request))
         serializer = AttachBlockResourceSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         resource = block_study.attach_block_resource(request.user, block, serializer.validated_data, request=request)
@@ -229,6 +233,5 @@ class BlockQuizView(BlockResourceView):
         serializer = BlockQuizRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         payload = serializer.validated_data
-        if payload['action'] == 'submit':
-            return Response(block_study.submit_block_quiz(request.user, block, payload['questions'], payload['answers']))
-        return Response(block_study.generate_block_quiz(request.user, block, payload['mode'], payload['retest']))
+        from .block_assessments import block_assessment
+        return Response(block_assessment(request.user, block, **payload))

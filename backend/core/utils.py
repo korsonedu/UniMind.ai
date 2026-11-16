@@ -2,7 +2,7 @@ from django.conf import settings
 from rest_framework.exceptions import PermissionDenied
 
 
-def get_content_institution_id(user=None, *, required=True):
+def get_content_institution_id(user=None):
     """Resolve the selected learning identity, otherwise the public partition."""
     if user is not None:
         from users.workspaces.access import membership_for
@@ -11,8 +11,6 @@ def get_content_institution_id(user=None, *, required=True):
             return member.workspace.institution_id
 
     value = getattr(settings, 'UNIMIND_CONTENT_INSTITUTION_ID', None)
-    if value in (None, '') and not required:
-        return None
     if value == 'global':
         return None
     try:

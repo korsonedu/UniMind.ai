@@ -1,5 +1,5 @@
 import api from '@/lib/api';
-import type { BlockResourceItem, BlockResourcePayload, BlockResourcesResponse, BlockQuizMode, BlockQuizQuestion, BlockQuizSubmitResult } from '@/types/knowledgeBuilder';
+import type { BlockResourceItem, BlockResourcePayload, BlockResourcesResponse, BlockQuizMode, BlockAssessment } from '@/types/knowledgeBuilder';
 import type { BuildArchetype, BuildSummary, KnowledgeTreeBuildDetail, IntakeRequestPayload, IntakeResponsePayload } from '@/types/knowledgeBuilder';
 import type { AssetTrack, BlockResourceUpdatePayload, TreePublicAssetImportPayload, TreePublicAssetsResponse } from '@/types/knowledgeBuilder';
 
@@ -80,11 +80,11 @@ export async function attachBlockResource(buildId: string, blockId: number, payl
 export async function deleteBlockResource(buildId: string, blockId: number, resourceId: number): Promise<void> {
   await api.delete(`${blockPath(buildId, blockId)}/resources/`, { data: { resource_id: resourceId } });
 }
-export async function generateBlockQuiz(buildId: string, blockId: number, payload: { mode?: BlockQuizMode; retest?: boolean }): Promise<{ block_id: number; mode: BlockQuizMode; questions: BlockQuizQuestion[] }> {
-  const { data } = await api.post(`${blockPath(buildId, blockId)}/quiz/`, { action: 'generate', ...payload });
+export async function blockAssessment(buildId: string, blockId: number, payload: { project_id: number; action: 'read' | 'generate'; mode?: BlockQuizMode; retest?: boolean }): Promise<{ assessment: BlockAssessment | null; preparation: { status: 'pending' | 'completed' | 'failed'; error: string } | null }> {
+  const { data } = await api.post(`${blockPath(buildId, blockId)}/quiz/`, payload);
   return data;
 }
-export async function submitBlockQuiz(buildId: string, blockId: number, payload: { questions: BlockQuizQuestion[]; answers: Record<string, string> }): Promise<BlockQuizSubmitResult> {
-  const { data } = await api.post<BlockQuizSubmitResult>(`${blockPath(buildId, blockId)}/quiz/`, { action: 'submit', ...payload });
+export async function attachBlockResourceToProject(buildId: string, blockId: number, projectId: number, resourceId: number): Promise<{ notice: string }> {
+  const { data } = await api.post(`${blockPath(buildId, blockId)}/resources/`, { action: 'attach_project', project_id: projectId, resource_id: resourceId });
   return data;
 }

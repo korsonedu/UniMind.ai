@@ -25,7 +25,7 @@ def test_serializers_explicit_fields():
         serializers.StepAtomSerializer, serializers.StepSerializer, serializers.BlockSerializer,
         serializers.BlockEdgeSerializer, serializers.InterfaceSerializer,
         serializers.FullKnowledgeTreeSerializer,
-        serializers.BlockResourceSerializer, serializers.UserBlockProgressSerializer,
+        serializers.BlockResourceSerializer,
         serializers.AttachBlockResourceSerializer, serializers.BlockQuizRequestSerializer,
         serializers.BlockResourceInputSerializer, serializers.BlockResourceUpdateSerializer,
         serializers.PublicAssetCatalogSerializer, serializers.TreePublicAssetImportSerializer,
@@ -505,14 +505,8 @@ def study_block(user, monkeypatch):
     return block
 
 
-def _quiz_answers(questions):
-    from django.core import signing
-    from knowledge_builder.block_study import SIGNING_SALT
-    return {question['id']: signing.loads(question['signed_payload'], salt=SIGNING_SALT)['correct_answer'] for question in questions}
-
-
-@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID=None)
-def test_block_auto_mount_internal_and_optional_scope(study_block, user):
+@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
+def test_block_auto_mount_internal_with_content_scope(study_block, user):
     from django.utils import timezone
     from ai_assistant.models import LearningResource
     from courses.models import Course, CourseModule
@@ -534,8 +528,8 @@ def test_block_auto_mount_internal_and_optional_scope(study_block, user):
     assert resources.get(source_kind='course').course_id == course.pk
     assert resources.get(source_kind='library').library_resource_id == library.pk
     assert all(resource.atom_id and resource.step_id for resource in resources)
-    assert get_content_institution_id(required=False) is None
-    with pytest.raises(PermissionDenied):
+    assert get_content_institution_id() is None
+    with override_settings(UNIMIND_CONTENT_INSTITUTION_ID=None), pytest.raises(PermissionDenied):
         get_content_institution_id()
 
 
@@ -605,134 +599,7 @@ def test_block_resource_visibility(client, study_block, user, monkeypatch):
     assert client.get(path).status_code == 404
 
 
-@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
-@pytest.mark.parametrize('mode,count', [('objective', 4), ('challenge', 5)])
-def test_block_quiz_modes_and_offline_grading(client, study_block, mode, count):
-    path = f'/{study_block.build_id}/blocks/{study_block.pk}/quiz/'
-    response = client.post(path, {'mode': mode}, format='json')
-    assert response.status_code == 200
-    questions = response.data['questions']
-    assert len(questions) == count
-    assert not any('correct_answer' in question or 'explanation' in question for question in questions)
-    assert all(question['signed_payload'] for question in questions)
-    if mode == 'challenge':
-        assert questions[-1]['q_type'] == 'subjective'
-        from django.core import signing
-        from knowledge_builder.block_study import SIGNING_SALT
-        item = signing.loads(questions[-1]['signed_payload'], salt=SIGNING_SALT)
-        assert item['grading_points'] and item['rubric']
-    result = client.post(path, {'action': 'submit', 'questions': questions, 'answers': _quiz_answers(questions)}, format='json')
-    assert result.status_code == 200
-    assert result.data['block_completed'] and result.data['accuracy'] == 1
-    assert result.data['core_passed'] and result.data['status'] == 'COMPLETED'
-    detail = client.get(f'/{study_block.build_id}/').data
-    assert detail['block_progress'][0]['status'] == 'COMPLETED'
-    assert serializers.FullKnowledgeTreeSerializer(study_block.build).data['block_progress'] == []
-
-
-@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
-def test_block_quiz_review_retest_completion_and_mastery(client, study_block, user):
-    from quizzes.models import KnowledgePoint, Question, UserKnowledgeState
-    from users.models import Institution
-    kp = KnowledgePoint.objects.create(name='现金流')
-    Question.objects.create(knowledge_point=kp, text='银行题：现金流如何计算？', options=['正确概念', '常见误区', '其他误区', '明显误区'], correct_answer='A')
-    foreign = Institution.objects.create(name='隔离机构')
-    foreign_kp = KnowledgePoint.objects.create(name='折现率', institution=foreign)
-    Question.objects.create(knowledge_point=foreign_kp, institution=foreign, text='不得抽取此题', options=['甲', '乙', '丙', '丁'], correct_answer='A')
-    path = f'/{study_block.build_id}/blocks/{study_block.pk}/quiz/'
-    questions = client.post(path, {}, format='json').data['questions']
-    assert questions[0]['stem'] == '银行题：现金流如何计算？'
-    assert all(question['stem'] != '不得抽取此题' for question in questions)
-    answers = _quiz_answers(questions)
-    weak_atom_id = questions[0]['atom_id']
-    answers[questions[0]['id']] = 'B'
-    resource = models.BlockResource.objects.create(build=study_block.build, block=study_block, atom_id=weak_atom_id, title='回看现金流', url='https://example.org/review')
-    data = client.post(path, {'action': 'submit', 'questions': questions, 'answers': answers}, format='json').data
-    assert data['accuracy'] == .75 and not data['core_passed']
-    assert data['status'] == 'NEEDS_REVIEW' and data['weak_atom_ids'] == [weak_atom_id]
-    assert data['recommended_resources'][0]['id'] == resource.pk
-    assert not UserKnowledgeState.objects.filter(user=user).exists()
-    retest = client.post(path, {'retest': True}, format='json').data['questions']
-    assert {question['stem'] for question in questions}.isdisjoint(question['stem'] for question in retest)
-    assert retest[0]['atom_id'] == weak_atom_id
-    data = client.post(path, {'action': 'submit', 'questions': retest, 'answers': _quiz_answers(retest)}, format='json').data
-    assert data['status'] == 'COMPLETED' and data['weak_atom_ids'] == [] and data['attempt_count'] == 2
-    assert UserKnowledgeState.objects.get(user=user, knowledge_point=kp).mastery_score == .8
-    assert not UserKnowledgeState.objects.filter(knowledge_point=foreign_kp).exists()
-
-
-@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
-def test_block_quiz_low_accuracy_with_core_correct(client, study_block):
-    path = f'/{study_block.build_id}/blocks/{study_block.pk}/quiz/'
-    questions = client.post(path, {}, format='json').data['questions']
-    answers = _quiz_answers(questions)
-    for question in questions:
-        if question['membership_type'] == 'extension':
-            answers[question['id']] = 'not-a-choice'
-    data = client.post(path, {'action': 'submit', 'questions': questions, 'answers': answers}, format='json').data
-    assert data['core_passed'] and data['accuracy'] == .5 and data['status'] == 'NEEDS_REVIEW'
-    assert set(data['weak_atom_ids']) == {question['atom_id'] for question in questions if question['membership_type'] == 'extension'}
-
-
-@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
-def test_block_quiz_rejects_tampering_omissions_and_wrong_block(client, study_block, user):
-    path = f'/{study_block.build_id}/blocks/{study_block.pk}/quiz/'
-    questions = client.post(path, {}, format='json').data['questions']
-    answers = _quiz_answers(questions)
-    def submit(items, target=path):
-        return client.post(target, {'action': 'submit', 'questions': items, 'answers': answers}, format='json')
-    assert submit(questions[:1]).status_code == 400
-    assert submit([questions[0]] * len(questions)).status_code == 400
-    assert submit([{**questions[0], 'signed_payload': 'tampered'}, *questions[1:]]).status_code == 400
-    other_block = models.LearningBlock.objects.create(build=study_block.build, code='B2', short_title='其他')
-    assert submit(questions, f'/{study_block.build_id}/blocks/{other_block.pk}/quiz/').status_code == 400
-    other = get_user_model().objects.create_user(username='quiz_other')
-    study_block.build.created_by = None
-    study_block.build.save()
-    client.force_authenticate(user=other)
-    assert submit(questions).status_code == 400
-    assert client.post(path, {'mode': 'invalid'}, format='json').status_code == 400
-    assert client.post(path, {'retest': 'invalid'}, format='json').status_code == 400
-    assert models.UserBlockProgress.objects.get(user=user, block=study_block).attempt_count == 0
-
-
-@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
-def test_block_ai_generation_and_grading_reuse(client, study_block, monkeypatch):
-    from django.core import signing
-    from knowledge_builder.block_study import SIGNING_SALT
-    from quizzes.services.question_generator import QuestionGenerator
-    from quizzes.services.ai_task_service import QuizAITaskService
-    monkeypatch.setattr('knowledge_builder.block_study.config._get_api_key', lambda: 'test-key')
-    calls = []
-    def generate(self, kps_data, count, types, difficulty, ratio):
-        calls.append(kps_data)
-        if types == ['objective']:
-            return [{'q_type': 'objective', 'question': f'{kps_data[0]["name"]}的全新选择题', 'options': ['A.正确', 'B.误区一', 'C.误区二', 'D.误区三'], 'answer': 'A'}]
-        return [{'q_type': 'subjective', 'subjective_type': 'calculate', 'question': '请推导现值公式', 'answer': '现值定义；适用条件', 'grading_points': ['现值定义', '适用条件']}]
-    monkeypatch.setattr(QuestionGenerator, '_request_bulk_generate_once', generate)
-    grading_calls = []
-    def grade(cls, ai, **kwargs):
-        grading_calls.append(kwargs)
-        return {'score': 7.5, 'feedback': '推导完整，达到要求', 'memorix_rating': 4}
-    monkeypatch.setattr(QuizAITaskService, 'grade_question', classmethod(grade))
-    path = f'/{study_block.build_id}/blocks/{study_block.pk}/quiz/'
-    questions = client.post(path, {'mode': 'challenge'}, format='json').data['questions']
-    assert all('常见误区' in call[0]['description'] for call in calls)
-    signed = signing.loads(questions[-1]['signed_payload'], salt=SIGNING_SALT)
-    assert signed['rubric'] and signed['subjective_type'] == 'calculate'
-    data = client.post(path, {'action': 'submit', 'questions': questions, 'answers': _quiz_answers(questions)}, format='json').data
-    assert len(grading_calls) == 1 and grading_calls[0]['rubric']
-    assert data['results'][-1]['score_ratio'] == .75 and data['block_completed']
-    def fail(*args, **kwargs):
-        raise RuntimeError('API unavailable')
-    monkeypatch.setattr(QuestionGenerator, '_request_bulk_generate_once', fail)
-    monkeypatch.setattr(QuizAITaskService, 'grade_question', fail)
-    fallback = client.post(path, {'mode': 'challenge', 'retest': True}, format='json').data['questions']
-    data = client.post(path, {'action': 'submit', 'questions': fallback, 'answers': _quiz_answers(fallback)}, format='json').data
-    assert data['block_completed'] and data['results'][-1]['score_ratio'] == 1
-
-
-@override_settings(UNIMIND_CONTENT_INSTITUTION_ID=None)
+@override_settings(UNIMIND_CONTENT_INSTITUTION_ID='global')
 def test_run_build_mounts_resources_after_publication(user, monkeypatch):
     monkeypatch.setattr('knowledge_builder.public_asset_resolvers.load_seed_public_assets', lambda *args, **kwargs: [])
     from django.utils import timezone
@@ -758,44 +625,3 @@ def test_run_build_mounts_resources_after_publication(user, monkeypatch):
     build = run_build(create_build('微积分', created_by=user).pk)
     assert build.status == 'COMPLETED' and build.blocks.exists()
     assert not build.block_resources.exists()
-
-
-@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
-def test_block_all_core_coverage_and_no_core_rule(client, study_block):
-    step = study_block.steps.first()
-    for index in range(4, 7):
-        atom = models.TreeAtomPoint.objects.create(build=study_block.build, module=study_block.build.modules.first(),
-            code=f'A{index}', name=f'核心点{index}', goal_statement=f'解释核心点{index}', cognitive_level='理解', goal_type='概念', granularity_minutes=4)
-        models.BlockStepAtom.objects.create(step=step, atom=atom, membership_type='core', position=index)
-    path = f'/{study_block.build_id}/blocks/{study_block.pk}/quiz/'
-    questions = client.post(path, {}, format='json').data['questions']
-    core_ids = set(models.BlockStepAtom.objects.filter(step__block=study_block, membership_type='core').values_list('atom_id', flat=True))
-    assert core_ids <= {question['atom_id'] for question in questions}
-    result = client.post(path, {'action': 'submit', 'questions': questions, 'answers': _quiz_answers(questions)}, format='json').data
-    assert result['block_completed']
-    models.BlockStepAtom.objects.filter(step__block=study_block).update(membership_type='extension')
-    questions = client.post(path, {}, format='json').data['questions']
-    answers = _quiz_answers(questions)
-    answers[questions[0]['id']] = 'invalid'
-    result = client.post(path, {'action': 'submit', 'questions': questions, 'answers': answers}, format='json').data
-    assert result['accuracy'] == .75 and not result['block_completed'] and not result['core_passed']
-
-
-@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
-def test_challenge_threshold_and_ai_format_validation(client, study_block, monkeypatch):
-    from quizzes.services.question_generator import QuestionGenerator
-    from quizzes.services.ai_task_service import QuizAITaskService
-    monkeypatch.setattr('knowledge_builder.block_study.config._get_api_key', lambda: 'test-key')
-    # A malformed LaTeX answer must be replaced through the explicit offline path.
-    def malformed(*args):
-        return [{'q_type': 'objective', 'question': '断裂公式 $x', 'options': ['甲', '乙', '丙', '丁'], 'answer': 'A'}]
-    monkeypatch.setattr(QuestionGenerator, '_request_bulk_generate_once', malformed)
-    path = f'/{study_block.build_id}/blocks/{study_block.pk}/quiz/'
-    questions = client.post(path, {'mode': 'challenge'}, format='json').data['questions']
-    assert all('断裂公式' not in question['stem'] for question in questions)
-    def grade(cls, ai, **kwargs):
-        return {'score': 7.49, 'feedback': '尚需补充推理', 'memorix_rating': 3}
-    monkeypatch.setattr(QuizAITaskService, 'grade_question', classmethod(grade))
-    data = client.post(path, {'action': 'submit', 'questions': questions, 'answers': _quiz_answers(questions)}, format='json').data
-    assert data['accuracy'] >= .75 and not data['core_passed'] and not data['block_completed']
-    assert data['weak_atom_ids'] == [questions[-1]['atom_id']]

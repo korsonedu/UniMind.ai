@@ -97,12 +97,6 @@ class BlockResourceSerializer(serializers.ModelSerializer):
         fields = ('id', 'block', 'step', 'atom', 'public_asset', 'source_kind', 'asset_track', 'pedagogical_role', 'locator', 'region_scope', 'title', 'url', 'excerpt', 'course_id', 'library_resource_id', 'marketplace_listing_id', 'created_at')
 
 
-class UserBlockProgressSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = models.UserBlockProgress
-        fields = ('block', 'status', 'best_accuracy', 'last_accuracy', 'core_passed', 'attempt_count', 'mastered_atom_ids', 'weak_atom_ids', 'last_quiz_result', 'completed_at', 'updated_at')
-
-
 class BlockResourceInputSerializer(serializers.Serializer):
     url = serializers.URLField(required=False, max_length=1000)
     course_id = serializers.IntegerField(required=False, min_value=1)
@@ -177,19 +171,13 @@ class BlockResourceUpdateSerializer(serializers.Serializer):
 
 
 class BlockQuizRequestSerializer(serializers.Serializer):
-    action = serializers.ChoiceField(choices=('generate', 'submit'), default='generate')
+    action = serializers.ChoiceField(choices=('generate', 'read'), default='generate')
+    project_id = serializers.IntegerField(min_value=1)
     mode = serializers.ChoiceField(choices=('objective', 'challenge'), default='objective')
     retest = serializers.BooleanField(default=False)
-    questions = serializers.ListField(child=serializers.DictField(), required=False, allow_empty=False)
-    answers = serializers.DictField(child=serializers.CharField(allow_blank=True, max_length=20000), required=False)
-
-    def validate(self, attrs):
-        if attrs['action'] == 'submit' and not {'questions', 'answers'} <= attrs.keys():
-            raise serializers.ValidationError('请提交完整检测题目和答案。')
-        return attrs
 
     class Meta:
-        fields = ('action', 'mode', 'retest', 'questions', 'answers')
+        fields = ('action', 'project_id', 'mode', 'retest')
 
 
 class BlockSerializer(serializers.ModelSerializer):
@@ -199,12 +187,8 @@ class BlockSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get('request')
-        user_id = request.user.pk if request and request.user.is_authenticated else None
-        from .public_asset_service import get_region_preference, public_asset_allowed
-        region = get_region_preference(request.user if request else None, request)
-        visible_ids = {row.pk for row in instance.resources.all()
-                       if (row.source_kind != 'library' or user_id is not None and row.created_by_id == user_id)
-                       and public_asset_allowed({'url': row.url, 'region_scope': row.region_scope}, region)}
+        from .block_study import visible_block_resources
+        visible_ids = set(visible_block_resources(request.user if request else None, instance, request=request).values_list('pk', flat=True))
         data['resources'] = [row for row in data['resources'] if row['id'] in visible_ids]
         return data
 
@@ -232,7 +216,6 @@ class FullKnowledgeTreeSerializer(BuildSummarySerializer):
     blocks = BlockSerializer(many=True, read_only=True)
     block_edges = BlockEdgeSerializer(many=True, read_only=True)
     interfaces = InterfaceSerializer(source='cross_block_interfaces', many=True, read_only=True)
-    block_progress = serializers.SerializerMethodField()
     region_pref = serializers.SerializerMethodField()
 
     def get_region_pref(self, instance):
@@ -240,11 +223,5 @@ class FullKnowledgeTreeSerializer(BuildSummarySerializer):
         request = self.context.get('request')
         return get_region_preference(request.user if request else None, request)
 
-    def get_block_progress(self, instance):
-        request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
-            return []
-        return UserBlockProgressSerializer(instance.user_block_progress.filter(user=request.user), many=True).data
-
     class Meta(BuildSummarySerializer.Meta):
-        fields = (*BuildSummarySerializer.Meta.fields, 'modules', 'atoms', 'atom_edges', 'blocks', 'block_edges', 'interfaces', 'block_progress', 'region_pref')
+        fields = (*BuildSummarySerializer.Meta.fields, 'modules', 'atoms', 'atom_edges', 'blocks', 'block_edges', 'interfaces', 'region_pref')
