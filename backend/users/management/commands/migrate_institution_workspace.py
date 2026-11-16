@@ -40,7 +40,7 @@ class Command(BaseCommand):
         User = get_user_model()
         inst = Institution.objects.select_for_update().get(pk=options['institution'])
         names = set(options['members']) | {options['owner']}
-        users = list(User.objects.select_for_update().filter(username__in=names, is_active=True, institution=inst,
+        users = list(User.objects.select_for_update(of=('self',)).filter(username__in=names, is_active=True, institution=inst,
             workspace_learner__isnull=True).order_by('pk'))
         if {user.username for user in users} != names:
             raise CommandError('成员须为该机构下已存在且有效的登录账号。')
