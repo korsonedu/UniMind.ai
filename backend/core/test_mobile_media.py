@@ -183,9 +183,24 @@ def test_media_ticket_other_user_and_institution_stay_restricted(media_setup, us
 @pytest.mark.parametrize('method', ['GET', 'HEAD'])
 @pytest.mark.parametrize('workspace_member, expected_ttl', [(False, 3600), (True, 300)])
 def test_media_ticket_oss_uses_request_method(media_setup, user, settings, method, workspace_member, expected_ttl):
+    from datetime import timedelta
     from types import SimpleNamespace
     from unittest.mock import MagicMock
+    from django.utils import timezone
+    from users.models import Institution
+    from users.models_workspace import Workspace, WorkspaceCourse, WorkspaceMembership
     course, _ = media_setup
+    if workspace_member:
+        institution = Institution.objects.create(name='Mobile workspace inst')
+        course.institution = institution
+        course.save(update_fields=['institution'])
+        workspace = Workspace.objects.create(
+            institution=institution,
+            service_ends_on=timezone.localdate() + timedelta(days=30),
+            max_students=10,
+        )
+        WorkspaceMembership.objects.create(user=user, workspace=workspace, role='admin')
+        WorkspaceCourse.objects.create(workspace=workspace, course=course)
     ticket, path = issue_media_ticket(user, course.video_file.name)
     settings.OSS_ACCESS_KEY_ID = 'test-only'
     settings.OSS_ACCESS_KEY_SECRET = 'test-only'
@@ -196,8 +211,7 @@ def test_media_ticket_oss_uses_request_method(media_setup, user, settings, metho
     bucket = MagicMock()
     bucket.sign_url.return_value = 'https://example.invalid/signed'
     oss = SimpleNamespace(Auth=MagicMock(), Bucket=MagicMock(return_value=bucket))
-    with patch.dict('sys.modules', {'oss2': oss}), \
-            patch('users.workspaces.access.membership_for', return_value=object() if workspace_member else None):
+    with patch.dict('sys.modules', {'oss2': oss}):
         response = media_serve(request, path)
     assert response.status_code == 302
     bucket.sign_url.assert_called_once_with(method, path, expected_ttl)
