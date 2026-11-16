@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('users', '0080_workspace_aiusagereservation_workspace_and_more'),
+        ('users', '0081_workspace_membership_selection'),
     ]
 
     operations = [

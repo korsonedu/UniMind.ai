@@ -39,6 +39,10 @@ class CodeInput(serializers.Serializer):
     code = serializers.CharField(max_length=80)
 
 
+class WorkspaceInput(serializers.Serializer):
+    workspace_id = serializers.IntegerField(min_value=1)
+
+
 class InviteInput(serializers.Serializer):
     name = serializers.CharField(max_length=100)
     courses = serializers.ListField(child=serializers.IntegerField(min_value=1), min_length=1, max_length=500)
@@ -82,11 +86,7 @@ def course_row(link, include_content=True):
     return result
 
 
-def snapshot(user):
-    member = membership_for(user)
-    result = {'available': True, 'role': None, 'workspace': None, 'courses': [], 'members': [], 'invites': [], 'usage': []}
-    if not member:
-        return result
+def membership_summary(member):
     workspace = member.workspace
     today = timezone.localdate()
     ends = workspace.service_ends_on
@@ -94,8 +94,25 @@ def snapshot(user):
         grant_end = member.enrollments.aggregate(end=Max('service_ends_on'))['end']
         ends = min(ends, grant_end) if grant_end else ends
     active = workspace_active(member) and (member.role == 'admin' or ends >= today)
-    result.update(role=member.role, workspace={'id': workspace.pk, 'name': workspace.institution.name, 'description': workspace.description,
-        'joined_at': member.joined_at, 'service_ends_at': ends, 'service_active': active})
+    return {'id': workspace.pk, 'name': workspace.institution.name, 'description': workspace.description,
+        'role': member.role, 'is_current': member.is_current, 'joined_at': member.joined_at,
+        'service_ends_at': ends, 'service_active': active}
+
+
+def snapshot(user):
+    member = membership_for(user)
+    result = {'available': True, 'role': None, 'workspace': None, 'courses': [], 'members': [], 'invites': [], 'usage': [],
+        'workspaces': [membership_summary(item) for item in WorkspaceMembership.objects.filter(user=user)
+            .select_related('workspace__institution').order_by('joined_at', 'id')]}
+    for item in result['workspaces']:
+        item['is_current'] = bool(member and item['id'] == member.workspace_id)
+    if not member:
+        return result
+    workspace = member.workspace
+    today = timezone.localdate()
+    summary = membership_summary(member)
+    active = summary['service_active']
+    result.update(role=member.role, workspace=summary)
     links = workspace.course_links.select_related('course__module', 'course__transcript').order_by('course__sort_order', 'id')
     if member.role != 'admin':
         links = links.filter(course_id__in=active_course_ids(member), course__is_published=True)
@@ -138,15 +155,15 @@ def find_invite(request, lock=False):
     if lock:
         queryset = queryset.select_for_update(of=('self',))
     invite = queryset.filter(code=payload.validated_data['code'].strip().upper()).first()
+    if not invite:
+        raise ValidationError('未找到对应的机构，请核对邀请码，或联系机构管理员获取有效邀请码。')
     today = timezone.localdate()
-    member = membership_for(request.user)
+    member = WorkspaceMembership.objects.filter(user=request.user, workspace=invite.workspace).first() if invite else None
     existing = bool(invite and member and member.enrollments.filter(invite=invite).exists())
     if (not invite or not invite.workspace.is_active or not invite.workspace.institution.is_active
             or invite.workspace.service_ends_on < today or invite.service_ends_on < today
             or (not existing and (not invite.is_active or invite.expires_on < today or invite.used_count >= invite.max_uses))):
         raise ValidationError('邀请码无效、已停用、过期或已领完，请联系机构。')
-    if member and member.workspace_id != invite.workspace_id:
-        raise ValidationError('当前账号已加入其他机构，请先联系平台处理机构变更。')
     if member and not member.is_active:
         raise PermissionDenied('机构学习服务已暂停，请联系机构管理员。')
     return invite
@@ -179,11 +196,11 @@ class JoinView(APIView):
         get_user_model().objects.select_for_update().get(pk=request.user.pk)
         invite = find_invite(request, lock=True)
         workspace = Workspace.objects.select_for_update().get(pk=invite.workspace_id)
-        member = membership_for(request.user)
+        member = WorkspaceMembership.objects.filter(user=request.user, workspace=workspace).first()
         if not member:
             if workspace.memberships.filter(role='student').count() >= workspace.max_students:
                 raise ValidationError('机构学生名额已用完，请联系机构。')
-            member = WorkspaceMembership.objects.create(user=request.user, workspace=workspace)
+            member = WorkspaceMembership.objects.create(user=request.user, workspace=workspace, is_current=False)
         grant, created = WorkspaceEnrollment.objects.get_or_create(membership=member, invite=invite,
             defaults={'service_ends_on': invite.service_ends_on})
         if created:
@@ -191,6 +208,52 @@ class JoinView(APIView):
             invite.used_count += 1
             invite.save(update_fields=['used_count'])
             audit(request.user, workspace, 'workspace.join', str(invite.pk))
+        WorkspaceMembership.objects.filter(user=request.user, is_current=True).update(is_current=False)
+        WorkspaceMembership.objects.filter(pk=member.pk).update(is_current=True)
+        request.user._selected_workspace_id = member.workspace_id
+        return Response(snapshot(request.user))
+
+
+class SwitchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        get_user_model().objects.select_for_update().get(pk=request.user.pk)
+        payload = WorkspaceInput(data=request.data)
+        payload.is_valid(raise_exception=True)
+        member = WorkspaceMembership.objects.filter(user=request.user, workspace_id=payload.validated_data['workspace_id']).first()
+        if not member:
+            raise ValidationError('你尚未加入这家机构，请先使用机构邀请码加入。')
+        WorkspaceMembership.objects.filter(user=request.user, is_current=True).update(is_current=False)
+        WorkspaceMembership.objects.filter(pk=member.pk).update(is_current=True)
+        request.user._selected_workspace_id = member.workspace_id
+        return Response(snapshot(request.user))
+
+
+class LeaveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        get_user_model().objects.select_for_update().get(pk=request.user.pk)
+        payload = WorkspaceInput(data=request.data)
+        payload.is_valid(raise_exception=True)
+        member = WorkspaceMembership.objects.filter(user=request.user, workspace_id=payload.validated_data['workspace_id']).first()
+        if not member:
+            raise ValidationError('你已不在这家机构中，请刷新机构列表。')
+        workspace = Workspace.objects.select_for_update().get(pk=member.workspace_id)
+        if member.role == 'admin' and not workspace.memberships.filter(role='admin', is_active=True).exclude(pk=member.pk).exists():
+            raise ValidationError('请先联系平台移交管理员身份，再退出机构。')
+        was_current = member.is_current
+        audit(request.user, workspace, 'workspace.leave')
+        member.delete()
+        if getattr(request.user, '_selected_workspace_id', None) == workspace.pk:
+            request.user._selected_workspace_id = None
+        if was_current:
+            next_member = WorkspaceMembership.objects.filter(user=request.user).order_by('joined_at', 'id').first()
+            if next_member:
+                WorkspaceMembership.objects.filter(pk=next_member.pk).update(is_current=True)
         return Response(snapshot(request.user))
 
 

@@ -49,9 +49,11 @@ export function SpaceSwitcher() {
       <DropdownMenuItem disabled={switching} onSelect={() => void switchSpace(null)}>
         <User size={19} /><div><strong>{t('个人空间')}</strong><span>{t('独立的个人学习、笔记与记录')}</span></div>{!inWorkspace && <Check size={16} aria-label={t('当前空间')} />}
       </DropdownMenuItem>
-      <DropdownMenuItem disabled={switching || isPending || workspaceError || workspace?.workspace?.service_active === false} onSelect={() => workspace?.workspace ? void switchSpace(workspace.workspace.id) : navigate('/settings?section=institution')}>
-        <Buildings size={19} /><div><strong>{workspaceName}</strong><span>{workspaceError ? t('暂时无法读取机构信息。') : workspace?.workspace ? t('独立的机构学习、笔记与记录') : t('查看或加入机构学习服务')}</span></div>{inWorkspace && <Check size={16} aria-label={t('当前空间')} />}
-      </DropdownMenuItem>
+      {workspace?.workspaces?.length ? workspace.workspaces.map(item => <DropdownMenuItem key={item.id} disabled={switching || isPending || !item.service_active} onSelect={() => void switchSpace(item.id)}>
+        <Buildings size={19} /><div><strong>{item.name}</strong><span>{item.service_active ? t('独立的机构学习、笔记与记录') : t('服务已暂停或到期')}</span></div>{activeWorkspace() === String(item.id) && <Check size={16} aria-label={t('当前空间')} />}
+      </DropdownMenuItem>) : <DropdownMenuItem disabled={isPending || workspaceError} onSelect={() => navigate('/settings?section=institution')}>
+        <Buildings size={19} /><div><strong>{workspaceName}</strong><span>{workspaceError ? t('暂时无法读取机构信息。') : t('查看或加入机构学习服务')}</span></div>
+      </DropdownMenuItem>}
       <DropdownMenuItem disabled={isPending || switching} onSelect={() => navigate('/settings?section=institution')}>
         {workspace?.workspace ? <Buildings size={19} /> : <Key size={19} />}<div><strong>{workspaceError || workspace?.workspace ? t('机构与学习服务') : t('加入机构')}</strong><span>{workspace?.workspace ? t('查看机构信息、课程授权与服务期限') : t('输入机构邀请码，加入机构 Workspace')}</span></div>
       </DropdownMenuItem>

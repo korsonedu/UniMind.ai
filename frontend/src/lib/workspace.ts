@@ -1,3 +1,4 @@
+import { setActiveWorkspace } from '@/lib/activeWorkspace';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import api from '@/lib/api';
@@ -17,15 +18,26 @@ export interface WorkspaceMember {
   id: number; name: string; joined_at: string; service_ends_at: string;
   courses: number[]; active: boolean;
 }
+export interface JoinedWorkspace {
+  id: number; name: string; description: string; role: 'admin' | 'student'; is_current: boolean;
+  joined_at: string; service_ends_at: string; service_active: boolean;
+}
 export interface WorkspaceSnapshot {
   available: boolean; demo?: boolean; role: 'admin' | 'student' | null;
-  workspace: { id: number; name: string; description: string; joined_at: string; service_ends_at: string; service_active?: boolean } | null;
+  workspace: { id?: number; name: string; description: string; joined_at: string; service_ends_at: string; service_active?: boolean } | null;
+  workspaces?: JoinedWorkspace[];
   courses: WorkspaceCourse[]; members: WorkspaceMember[]; invites: WorkspaceInvite[];
   usage: { label: string; used: number; limit: number | null; unit: string }[];
 }
 export interface InvitePreview { name: string; service: string; courses: string[]; service_ends_at: string }
 export const workspacePath = '/users/workspace/';
 export const emptyWorkspace: WorkspaceSnapshot = { available: false, role: null, workspace: null, courses: [], members: [], invites: [], usage: [] };
+export async function syncWorkspace(data: WorkspaceSnapshot) {
+  const id = data.workspace?.id ?? null;
+  await api.post(`${workspacePath}select/`, { workspace_id: id });
+  setActiveWorkspace(id);
+  window.location.assign('/xiaoyu');
+}
 export function useWorkspace() {
   const userId = useAuthStore(state => state.user?.id);
   return useQuery({ queryKey: ['workspace', userId], enabled: userId !== undefined, retry: false,

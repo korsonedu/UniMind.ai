@@ -23,8 +23,12 @@ def account_learner_ids(user):
     return get_user_model().objects.filter(Q(pk=account.pk) | Q(workspace_learner__account=account)).values_list('pk', flat=True)
 
 
-def account_membership_for(user):
-    return WorkspaceMembership.objects.select_related('workspace__institution').filter(user=account_user(user)).first()
+def account_membership_for(user, workspace_id=None):
+    identity = learner_identity(user)
+    account = identity.account if identity else user
+    selected = workspace_id or (identity.workspace_id if identity else getattr(user, '_selected_workspace_id', None))
+    members = WorkspaceMembership.objects.select_related('workspace__institution').filter(user=account)
+    return members.filter(workspace_id=selected).first() if selected else members.filter(is_current=True).first()
 
 
 def selected_institution(user):
@@ -39,7 +43,9 @@ def select_learner(user, space):
     if space in ('', 'personal', None):
         return account
     from .access import workspace_active
-    member = account_membership_for(account)
+    from rest_framework import serializers
+    space = serializers.IntegerField(min_value=1).run_validation(space)
+    member = account_membership_for(account, space)
     if not member or str(member.workspace_id) != str(space) or not workspace_active(member):
         raise PermissionDenied({'detail': '你没有访问此空间的权限，或机构服务已暂停。', 'code': 'workspace_unavailable'})
     # Serialize first-time provisioning across tabs. Never issue a login session
@@ -64,6 +70,10 @@ def request_learner(request, account):
     # Account security, service administration and payment endpoints always act
     # on the login account, even while the learning UI is inside a workspace.
     path = request.path
+    space = request.headers.get('X-UniMind-Workspace', request.GET.get('space', 'personal'))
+    if space not in ('', 'personal', None):
+        from rest_framework import serializers
+        account._selected_workspace_id = serializers.IntegerField(min_value=1).run_validation(space)
     if ((not path.startswith('/api/') and not path.startswith('/media/')) or path.startswith((
         '/api/payments/', '/api/backoffice/', '/api/users/workspace/',
         '/api/users/learning/', '/api/users/admin/', '/api/users/desktop-auth/',
@@ -72,4 +82,4 @@ def request_learner(request, account):
         '/api/users/me/delete/',
     }):
         return account
-    return select_learner(account, request.headers.get('X-UniMind-Workspace', request.GET.get('space', 'personal')))
+    return select_learner(account, space)
