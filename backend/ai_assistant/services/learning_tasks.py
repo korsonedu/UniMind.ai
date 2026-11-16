@@ -286,7 +286,7 @@ def task_data(task):
         'instructions': task.instructions, 'mode': task.mode, 'assistance': task.assistance,
         'purpose': task.purpose, 'source_task_id': str(task.source_task_id) if task.source_task_id else None,
         **({'strategy_use_id': task.strategy_use_id} if task.strategy_use_id else {}),
-        'response_type': task.definition.get('response_type'), 'criteria': task.definition.get('criteria', []),
+        'response_type': task.definition.get('response_type'), 'criteria': task.definition.get('criteria', []) if exam else [],
         'label_source': label_source, 'sources': task.definition.get('sources', []),
         'status': status if available else 'unavailable',
         'unavailable_reason': '' if available else ('任务题目已删除或不在当前内容范围，请重新安排任务。' if authorized else '当前账号尚未开放习题训练。'),

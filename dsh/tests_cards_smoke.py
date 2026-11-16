@@ -2,7 +2,7 @@
 import json
 import unittest
 
-from cards import tool_cards
+from cards import tool_cards, safe_links
 
 
 class CardsSmoke(unittest.TestCase):
@@ -33,6 +33,15 @@ class CardsSmoke(unittest.TestCase):
             self.assertEqual(tool_cards(events(), context), [])
         visual['type'] = 'practice_quiz'
         self.assertEqual(tool_cards(events(), context), [])
+
+    def test_knowledge_navigation_is_scoped(self):
+        for href in ('/knowledge-builder?project=7&create=1',
+                     '/knowledge-builder/12345678-1234-1234-1234-123456789abc?project=7',
+                     '/xiaoyu?project=7&learning_view=proposal'):
+            visual = {'type': 'data_card', 'payload': {'cta': {'link': href}}}
+            self.assertFalse(safe_links(visual))
+            self.assertTrue(safe_links(visual, knowledge_navigation=True))
+        self.assertFalse(safe_links({'link': '/xiaoyu?project=7&learning_view=proposal&redirect=//outside'}, knowledge_navigation=True))
 
     def test_task_navigation_requires_task_tool_result(self):
         href = '/xiaoyu?project=7&learning_task=12345678-1234-1234-1234-123456789abc'

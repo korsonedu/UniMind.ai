@@ -16,6 +16,7 @@ import {
 } from '@/lib/knowledgeBuilderLayout';
 
 interface KnowledgeBuilderGraphProps {
+  blockProgress?: Record<number, string>;
   tree: KnowledgeTreeBuildDetail;
   headerLeftSlot?: ReactNode;
   headerRightSlot?: ReactNode;
@@ -241,6 +242,7 @@ export function KnowledgeBuilderGraph({
   headerLeftSlot,
   headerRightSlot,
   selectedBlockIds,
+  blockProgress,
   onToggleBlockSelection,
 }: KnowledgeBuilderGraphProps) {
   const locale = useLocale();
@@ -741,6 +743,7 @@ export function KnowledgeBuilderGraph({
                           {isOpen ? '−' : '+'}
                         </span>
                         <strong>{block.shortTitle}</strong>
+                        {blockProgress?.[block.id] && <span className="kb-badge">{t(({ unassessed: '尚待了解', recheck: '建议再检查', review: '建议回补', supported: '已有独立支持' } as Record<string, string>)[blockProgress[block.id]])}</span>}
                         <small>
                           {t('{0} · {1} 步 · {2} 必学', { 0: block.code, 1: block.steps.length, 2: block.coreCount })}
                           {block.extensionCount > 0 ? t(' + {0} 拓展', { 0: block.extensionCount }) : ''}
