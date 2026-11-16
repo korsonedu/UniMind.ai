@@ -19,7 +19,7 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def spaces(settings):
     settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
-    root = User.objects.create_user(username='space-account', password='SmokePass123!', email='spaces@example.com')
+    root = User.objects.create_user(username='space-account', is_member=True, password='SmokePass123!', email='spaces@example.com')
     inst = Institution.objects.create(name='Space school', slug='space-school')
     workspace = Workspace.objects.create(institution=inst, service_ends_on=timezone.localdate() + timedelta(days=30), max_students=3)
     member = WorkspaceMembership.objects.create(workspace=workspace, user=root)
@@ -69,11 +69,15 @@ def test_learning_features_follow_the_selected_identity(spaces):
     AIChatMessage.objects.create(user=learner, bot=bot, role='user', content='School chat')
     assert [row['content'] for row in personal.get('/api/ai/history/').data] == ['Private chat']
     assert [row['content'] for row in school.get('/api/ai/history/').data] == ['School chat']
+    root.is_member = False
+    root.save(update_fields=['is_member'])
+    assert 'quiz.exam' not in personal.get('/api/users/institution/me/features/').data['features']
+    assert 'quiz.exam' in school.get('/api/users/institution/me/features/').data['features']
 
 
 def test_ai_pending_capacity_and_usage_are_shared(spaces):
     root, workspace, member, learner, personal, school = spaces
-    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'experience_calls': 2, 'course_calls': 3})
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'experience_calls': 1, 'course_calls': 2})
     a = reserve_ai_call(root, uuid4())
     b = reserve_ai_call(learner, uuid4())
     assert b.user_id == learner.pk and b.workspace_id == workspace.pk
