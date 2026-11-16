@@ -46,6 +46,8 @@ def test_join_is_explicit_idempotent_and_course_scoped(setup_workspace, user, au
     user.institution_role = 'owner'
     user.save()
     assert auth_client.get(BASE).data['workspace'] is None
+    invalid = auth_client.post(BASE+'invite-preview/', {'code': 'NOT-AN-INVITE'})
+    assert invalid.status_code == 400 and '未找到对应的机构' in str(invalid.data)
     assert auth_client.post(BASE+'invites/', {}).status_code == 403
     data = {'code': invite.code}
     assert auth_client.post(BASE+'invite-preview/', data).status_code == 200
@@ -115,7 +117,45 @@ def test_cross_workspace_admin_and_invite_validation(setup_workspace):
     student = User.objects.create_user(username='foreign-student')
     WorkspaceMembership.objects.create(user=student, workspace=other_ws)
     client.force_authenticate(student)
-    assert client.post(BASE+'join/', {'code':invite.code}).status_code == 400
+    assert client.post(BASE+'join/', {'code':invite.code}).status_code == 200
+    assert WorkspaceMembership.objects.filter(user=student).count() == 2
+
+
+def test_multiple_workspaces_switch_and_leave_keep_scopes(setup_workspace, user, auth_client):
+    workspace, owner, course, link, invite, client = setup_workspace
+    other_inst = Institution.objects.create(name='Second institution', slug='second-workspace')
+    other = Workspace.objects.create(institution=other_inst, service_ends_on=workspace.service_ends_on, max_students=2)
+    other_course = Course.objects.create(title='Second course', institution=other_inst, is_published=True)
+    WorkspaceCourse.objects.create(workspace=other, course=other_course, processing_status='completed')
+    other_invite = WorkspaceInvite.objects.create(workspace=other, created_by=owner, name='Second service',
+        expires_on=other.service_ends_on, service_ends_on=other.service_ends_on, max_uses=2)
+    other_invite.courses.add(other_course)
+    assert auth_client.post(BASE+'join/', {'code': invite.code}).status_code == 200
+    joined = auth_client.post(BASE+'join/', {'code': other_invite.code}).data
+    assert len(joined['workspaces']) == 2 and joined['workspace']['id'] == other.pk
+    auth_client.force_authenticate(user=None)
+    auth_client.cookies['auth_token'] = LoginSession.issue(user).key
+    auth_client.credentials(HTTP_X_UNIMIND_WORKSPACE=str(other.pk))
+    assert auth_client.get(f'/api/courses/{course.pk}/').status_code == 404
+    assert auth_client.get(f'/api/courses/{other_course.pk}/').status_code == 200
+    switched = auth_client.post(BASE+'switch/', {'workspace_id': workspace.pk}).data
+    assert switched['workspace']['id'] == workspace.pk
+    auth_client.credentials(HTTP_X_UNIMIND_WORKSPACE=str(workspace.pk))
+    assert auth_client.get(f'/api/courses/{course.pk}/').status_code == 200
+    assert auth_client.get(f'/api/courses/{other_course.pk}/').status_code == 404
+    assert auth_client.post(BASE+'switch/', {'workspace_id': other.pk+100}).status_code == 400
+    assert auth_client.get(BASE).data['workspace']['id'] == workspace.pk
+    assert auth_client.post(BASE+'leave/', {'workspace_id': other.pk}).status_code == 200
+    assert auth_client.get(BASE).data['workspace']['id'] == workspace.pk
+    assert not WorkspaceEnrollment.objects.filter(membership__user=user, membership__workspace=other).exists()
+    assert auth_client.post(BASE+'join/', {'code': other_invite.code}).status_code == 200
+    left = auth_client.post(BASE+'leave/', {'workspace_id': other.pk}).data
+    assert len(left['workspaces']) == 1 and left['workspace']['id'] == workspace.pk
+    left = auth_client.post(BASE+'leave/', {'workspace_id': workspace.pk}).data
+    assert left['workspace'] is None and left['workspaces'] == []
+    assert User.objects.filter(pk=user.pk).exists()
+    assert client.post(BASE+'leave/', {'workspace_id': workspace.pk}).status_code == 400
+    assert WorkspaceMembership.objects.filter(user=owner, workspace=workspace).exists()
 
 
 def test_upload_records_jobs_and_processing_publication(setup_workspace, django_capture_on_commit_callbacks):

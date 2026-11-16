@@ -26,9 +26,8 @@ class Command(BaseCommand):
         user = get_user_model().objects.select_for_update().filter(username=options['admin'], is_active=True).first()
         if not user:
             raise CommandError('管理员账号不存在或已停用。')
-        if WorkspaceMembership.objects.filter(user=user).exists():
-            raise CommandError('该账号已加入 workspace，请勿重复开通。')
         institution = Institution.objects.create(name=name, slug=f"{slugify(name)[:60] or 'workspace'}-{secrets.token_hex(4)}", created_by=user)
         workspace = Workspace.objects.create(institution=institution, service_ends_on=options['ends_on'], max_students=options['max_students'])
+        WorkspaceMembership.objects.filter(user=user, is_current=True).update(is_current=False)
         WorkspaceMembership.objects.create(user=user, workspace=workspace, role='admin')
         self.stdout.write(self.style.SUCCESS(f'已开通 workspace {workspace.pk}：{name}，管理员 {user.username}'))

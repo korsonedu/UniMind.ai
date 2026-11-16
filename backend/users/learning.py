@@ -80,15 +80,17 @@ def set_weekly_quota_config(*, experience_calls, course_calls, actor=None):
 
 
 def ai_limit(user):
-    from .workspaces.identity import account_user, account_membership_for
+    from .workspaces.identity import account_user
+    from .models_workspace import WorkspaceMembership
     from .workspaces.access import workspace_active, active_course_ids
     user = account_user(user)
-    member = account_membership_for(user)
+    members = WorkspaceMembership.objects.select_related('workspace__institution').filter(user=user)
     from .permissions import is_platform_admin
     if is_platform_admin(user):
         return None
     config = get_weekly_quota_config()
-    return config.course_calls if (is_course_student(user) or (workspace_active(member) and (member.role == 'admin' or active_course_ids(member).exists()))) else config.experience_calls
+    course_service = is_course_student(user) or any(workspace_active(member) and (member.role == 'admin' or active_course_ids(member).exists()) for member in members)
+    return config.course_calls if course_service else config.experience_calls
 
 
 def week_bounds(now=None):

@@ -117,3 +117,27 @@ def test_courses_community_and_revocation_stay_in_their_space(spaces):
     assert personal.post('/api/users/me/delete/', {'password': 'SmokePass123!'}, format='json').status_code == 200
     learner.refresh_from_db()
     assert not learner.is_active
+
+
+def test_institution_selection_is_per_tab_not_account_current(spaces):
+    root, workspace, member, learner, personal, first = spaces
+    from users.workspaces.identity import select_learner
+    other_inst = Institution.objects.create(name='Second school', slug='second-school')
+    other = Workspace.objects.create(institution=other_inst, service_ends_on=workspace.service_ends_on, max_students=3)
+    WorkspaceMembership.objects.create(user=root, workspace=other, is_current=False)
+    other_learner = select_learner(root, str(other.pk))
+    Note.objects.create(user=learner, title='First school')
+    Note.objects.create(user=other_learner, title='Second school')
+    second = APIClient()
+    second.cookies['auth_token'] = LoginSession.issue(root).key
+    second.credentials(HTTP_X_UNIMIND_WORKSPACE=str(other.pk))
+    assert second.post('/api/users/workspace/switch/', {'workspace_id': other.pk}, format='json').status_code == 200
+    assert [row['title'] for row in rows(first.get('/api/notes/items/'))] == ['First school']
+    assert [row['title'] for row in rows(second.get('/api/notes/items/'))] == ['Second school']
+    assert first.get('/api/users/workspace/').data['workspace']['id'] == workspace.pk
+    assert second.get('/api/users/workspace/').data['workspace']['id'] == other.pk
+    assert rows(personal.get('/api/notes/items/')) == []
+    assert first.post('/api/users/workspace/leave/', {'workspace_id': workspace.pk}, format='json').status_code == 200
+    assert first.get('/api/notes/items/').status_code == 403
+    assert second.get('/api/notes/items/').status_code == 200
+    assert personal.get('/api/notes/items/').status_code == 200

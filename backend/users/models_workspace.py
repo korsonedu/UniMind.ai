@@ -20,11 +20,18 @@ class Workspace(models.Model):
 
 
 class WorkspaceMembership(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='workspace_membership')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='workspace_memberships')
     workspace = models.ForeignKey(Workspace, on_delete=models.PROTECT, related_name='memberships')
     role = models.CharField(max_length=10, choices=[('admin', '管理员'), ('student', '学生')], default='student')
     is_active = models.BooleanField(default=True)
+    is_current = models.BooleanField(default=True)
     joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'workspace'], name='workspace_member_once'),
+            models.UniqueConstraint(fields=['user'], condition=models.Q(is_current=True), name='workspace_member_current'),
+        ]
 
 
 class WorkspaceLearner(models.Model):

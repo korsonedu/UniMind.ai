@@ -1,5 +1,12 @@
 // English messages keyed by their Chinese source text.
 const en: Record<string, string> = {
+  "已加入的机构": "Joined institutions",
+  "加入其他机构": "Join another institution",
+  "切换到此机构": "Switch to this institution",
+  "退出机构": "Leave institution",
+  "暂时无法切换机构，请稍后重试。": "Could not switch institutions. Please try again later.",
+  "已切换机构，课程与学习服务已更新。": "Institution switched. Your courses and learning services have been updated.",
+  "已退出机构，个人笔记和聊天记录已保留。": "You have left the institution. Your personal notes and chat history have been kept.",
   "机构与学习服务": "Institution & learning services",
   "加入机构": "Join an institution",
   "查看机构信息、课程授权与服务期限": "View your institution, course access and service period",
