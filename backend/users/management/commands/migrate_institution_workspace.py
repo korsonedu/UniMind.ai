@@ -9,7 +9,7 @@ from users.models_workspace import Workspace, WorkspaceMembership, WorkspaceCour
 from users.workspaces.identity import select_learner
 from courses.models import Course
 
-LEARNING_APPS = {'notes', 'ai_assistant', 'courses', 'quizzes', 'study_room'}
+LEARNING_APPS = {'notes', 'ai_assistant', 'courses', 'quizzes', 'study_room', 'faq_system'}
 USER_LEARNING_MODELS = {'DailyPlan', 'DailyCheckIn', 'UserAchievement', 'LearningSession', 'UserProfile'}
 PROFILE_FIELDS = ('elo_score', 'has_completed_initial_assessment', 'current_task', 'current_timer_end',
                   'today_focused_minutes', 'today_completed_tasks')
@@ -17,7 +17,7 @@ PROFILE_FIELDS = ('elo_score', 'has_completed_initial_assessment', 'current_task
 
 def ownership_fields():
     User = get_user_model()
-    for model in apps.get_models():
+    for model in apps.get_models(include_auto_created=True):
         if model._meta.app_label in LEARNING_APPS or (model._meta.app_label == 'users' and model.__name__ in USER_LEARNING_MODELS):
             for field in model._meta.fields:
                 if field.name == 'user' and getattr(field, 'related_model', None) == User:
@@ -99,8 +99,9 @@ class Command(BaseCommand):
                     setattr(user, field, User._meta.get_field(field).get_default())
                 learner.save(update_fields=PROFILE_FIELDS)
                 user.save(update_fields=PROFILE_FIELDS)
-            from users.models_learning import AIUsageReservation
-            AIUsageReservation.objects.filter(user=user, workspace__isnull=True).update(workspace=workspace)
+            if moved or not existing_identity:
+                from users.models_learning import AIUsageReservation
+                AIUsageReservation.objects.filter(user=user, workspace__isnull=True).update(workspace=workspace)
             next(item for item in report['members'] if item['id'] == user.pk)['moved'] = moved
         invite.used_count = invite.enrollments.count()
         invite.save(update_fields=['used_count'])

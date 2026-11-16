@@ -84,8 +84,6 @@ def get_user_capabilities(user) -> list[str]:
         caps = [CAP_MEMBER_ACCESS, 'ai.assistant', 'course.video']
         if workspace_active(member):
             caps = [CAP_LEARNING_ACCESS, CAP_MEMBER_ACCESS, *LEARNING_FEATURES]
-    if not member:
-        caps = [cap for cap in caps if cap not in ('course.video', 'video.outline')]
     allowed_caps = set(caps)
 
     # Superuser 人员管理扩展：读取用户访问档案中的权限组与自定义权限。
