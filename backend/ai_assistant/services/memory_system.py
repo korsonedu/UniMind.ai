@@ -429,7 +429,7 @@ class MemorySystem:
         from quizzes.models import Question
 
         qs = Question.objects.select_related('knowledge_point')
-        qs = qs.filter(institution_id=get_content_institution_id())
+        qs = qs.filter(institution_id=getattr(institution, 'pk', None))
         try:
             q = qs.get(id=question_id)
         except Question.DoesNotExist:
@@ -606,7 +606,7 @@ class MemorySystem:
             knowledge_point_id=kp_id,
             difficulty_level__in=adjacent,
         ).exclude(id=exclude_id)
-        qs = qs.filter(institution_id=get_content_institution_id())
+        qs = qs.filter(institution_id=getattr(institution, 'pk', None))
 
         questions = list(qs.select_related('knowledge_point').order_by('?')[:limit])
         return {
