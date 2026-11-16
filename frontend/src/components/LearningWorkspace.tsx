@@ -1,5 +1,5 @@
 import { getLocale, t, useLocale } from '@/i18n';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, BookOpen, ChatCircle, TreeStructure, ListBullets, Files, ClockCounterClockwise } from '@phosphor-icons/react';
@@ -10,6 +10,7 @@ import { learningKey, useProjectLearning, type ProjectLearning } from '@/lib/pro
 import { queryClient } from '@/lib/queryClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
+import { ProjectChatSidebarContext } from './WorkspaceContext';
 import type { AgentWorkspace } from './NativeAgentShell';
 import { LearningTaskDetail, type LearningTask } from './LearningTasksPanel';
 import { LearningKnowledgeView } from './LearningKnowledgeView';
@@ -34,6 +35,7 @@ const guidanceLabels = { inactive: '当前安排', start: '了解起点', awaiti
 export function useLearningWorkspace() {
   useLocale();
   const { chat, openingProject, openProject } = useXiaoYuChat();
+  const { open: openProjectChat } = useContext(ProjectChatSidebarContext);
   const userId = useAuthStore(state => state.user?.id);
   const [params, setParams] = useSearchParams();
   const storageKey = `unimind:learning-view:${userId}:${chat.projectId}`;
@@ -109,7 +111,7 @@ export function useLearningWorkspace() {
     setDiscussion({ scope, title, payload: payload || null });
   };
   const clearDiscussion = () => { discussionRef.current = undefined; setDiscussion(null); };
-  const show = (view: View) => { clearDiscussion(); setSelection(previous => ({ ...previous, view })); };
+  const show = (view: View) => { if (view !== 'chat') openProjectChat(); clearDiscussion(); setSelection(previous => ({ ...previous, view })); };
   const openTask = (id: string, returnView: View = selection.view) => {
     clearDiscussion();
     setSelection(previous => ({ ...previous, view: 'task', task: id, returnView: returnView === 'task' ? previous.returnView : returnView }));
@@ -169,5 +171,5 @@ export function useLearningWorkspace() {
       <div className="um-work-view" hidden={selection.view !== 'proposal'}><h2>{t(stages.length ? '学习安排调整' : '确认学习路径')}</h2>{project.pending_plan.plan ? <><p>{project.pending_plan.reason}</p><dl className="um-work-change-summary"><dt>{t('目标')}</dt><dd>{project.pending_plan.plan.goal}</dd><dt>{t('学习范围')}</dt><dd>{project.pending_plan.knowledge?.targets.join('、') || t('按阶段安排')}</dd><dt>{t('学习深度')}</dt><dd>{project.pending_plan.knowledge?.depth === 'transfer' ? t('迁移应用') : t('理解与应用')}</dd></dl><h3>{t('阶段变化')}</h3><p>{project.pending_plan.plan.stages.filter(item => !stages.some(old => old.id === item.id && old.title === item.title && old.outcome === item.outcome)).map(item => item.title).join('、') || t('阶段内容保持不变')}{stages.some(old => !project.pending_plan.plan!.stages.some(item => item.id === old.id)) && t('；部分原阶段将移出当前安排')}</p>{!!stages.length && <><h3>{t('对当前任务的影响')}</h3><p>{project.pending_plan.plan.knowledge_path?.version_id !== project.knowledge?.version_id || (mainTask && !project.pending_plan.plan.stages.some(item => item.id === mainTask.stage_id)) ? t('原任务进入历史，未提交任务停止作答；草稿保留用于回看。需要为新安排准备任务。') : t('当前任务与作答记录保留，调整不会自动完成任务。')}</p>{project.pending_plan.plan.knowledge_path?.version_id !== project.knowledge?.version_id && <p>{t('已有作答保留在原版本，新版本暂不继承这些观察。旧版未提交任务将停止作答，草稿保留用于回看。')}</p>}</>}<details><summary>{t('查看调整后的阶段')}</summary>{project.pending_plan.plan.stages.map(item => <p key={item.id}>{item.title}：{item.outcome}</p>)}</details><div className="um-work-actions"><button className="um-agent-button um-agent-button-primary" disabled={busy} onClick={async () => { if (await act('accept')) show('path'); }}>{t(stages.length ? '采用调整' : '采用这条路径')}</button><button className="um-agent-button" disabled={busy} onClick={async () => { if (await act('reject')) show('chat'); }}>{t('保留原安排')}</button></div></> : <p>{t('当前没有待确认的调整。')}</p>}</div>
     </>}
   </div>;
-  return { workspace: { active: activityOpen, header, activity, chatContext: currentDiscussion?.payload ? <div className="um-work-chat-context"><span>{t('正在讨论：')}{currentDiscussion.title}</span><button aria-label={t('取消当前内容引用')} onClick={() => context('')}>{t('取消引用')}</button></div> : activityOpen ? <div className="um-work-chat-context">{t('小宇 · 当前项目对话')}</div> : null } satisfies AgentWorkspace, getExtraPayload, openLearning: () => show(project?.planning_enabled ? 'path' : 'knowledge') };
+  return { workspace: { active: activityOpen, activityKey: selection.view, header, activity, chatContext: currentDiscussion?.payload ? <div className="um-work-chat-context"><span>{t('正在讨论：')}{currentDiscussion.title}</span><button aria-label={t('取消当前内容引用')} onClick={() => context('')}>{t('取消引用')}</button></div> : activityOpen ? <div className="um-work-chat-context">{t('小宇 · 当前项目对话')}</div> : null } satisfies AgentWorkspace, getExtraPayload, openLearning: () => show(project?.planning_enabled ? 'path' : 'knowledge') };
 }

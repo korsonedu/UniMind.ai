@@ -6,9 +6,10 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useDirectoryWidth } from '@/hooks/useDirectoryWidth';
 import { DirectoryResizeHandle } from './DirectoryResizeHandle';
 import { WorkspaceTrail } from './WorkspaceTrail';
-import { WorkspaceActiveContext } from './WorkspaceContext';
+import { createPortal } from 'react-dom';
+import { ProjectChatSidebarContext, WorkspaceActiveContext } from './WorkspaceContext';
 
-export interface AgentWorkspace { active: boolean; header: ReactNode; activity: ReactNode; chatContext?: ReactNode; }
+export interface AgentWorkspace { active: boolean; activityKey?: string; header: ReactNode; activity: ReactNode; chatContext?: ReactNode; }
 
 interface Props { workspace?: AgentWorkspace; native?: boolean; sidebar?: ReactNode; onNew: () => void; children: ReactNode; title?: string; label?: string; action?: ReactNode; }
 
@@ -16,15 +17,15 @@ interface Props { workspace?: AgentWorkspace; native?: boolean; sidebar?: ReactN
 export function NativeAgentShell({ native, sidebar, onNew, children, title = t('新对话'), label = t('小宇'), action, workspace }: Props) {
   useLocale();
   const [open, setOpen] = useState(false);
-  const [mobileChat, setMobileChat] = useState(false);
   const workspaceActive = useContext(WorkspaceActiveContext);
-  const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width:1100px)').matches);
+  const { host: chatHost, visible: chatVisible, open: openChat, close: closeChat, setAvailable } = useContext(ProjectChatSidebarContext);
+  const activityOpen = !!workspace?.active;
   useEffect(() => {
-    const media = window.matchMedia('(max-width:1100px)');
-    const update = () => setNarrow(media.matches);
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
+    setAvailable(workspaceActive && activityOpen);
+    if (workspaceActive && activityOpen) openChat();
+    return () => setAvailable(false);
+  }, [workspaceActive, activityOpen, workspace?.activityKey, setAvailable, openChat]);
+  const conversation = <div className="um-agent-conversation" aria-label={t('小宇对话')} onKeyDown={event => { if (activityOpen && event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); closeChat(); } }}><WorkspaceActiveContext.Provider value={workspaceActive && (!activityOpen || chatVisible)}>{workspace?.chatContext}{children}</WorkspaceActiveContext.Provider></div>;
   const directory = useDirectoryWidth();
   if (!native) return <div className="h-full flex um-motion-surface animate-in fade-in duration-[180ms] ease-out">{sidebar}{children}</div>;
   return <div className="um-native-agent um-agent-workspace" data-directory-hidden={directory.collapsed} data-directory-animated={directory.animated || undefined}>
@@ -50,11 +51,10 @@ export function NativeAgentShell({ native, sidebar, onNew, children, title = t('
         <div className="um-agent-toolbar-actions">{action}<button className="um-agent-icon-button um-agent-toolbar-new" onClick={onNew} aria-label={t('新对话')} title={t('新对话')}><Plus size={17} /></button></div>
       </WorkspaceToolbar>
       {workspace?.header}
-      <div className="um-agent-work-panels" data-activity={!!workspace?.active} data-mobile-chat={mobileChat}>
-        <section className="um-agent-activity" aria-label={t('当前学习活动')} hidden={!workspace?.active}><WorkspaceActiveContext.Provider value={workspaceActive && !!workspace?.active && (!narrow || !mobileChat)}>{workspace?.activity}</WorkspaceActiveContext.Provider></section>
-        <div className="um-agent-conversation" aria-label={t('小宇对话')}><WorkspaceActiveContext.Provider value={workspaceActive && (!workspace?.active || !narrow || mobileChat)}>{workspace?.chatContext}{children}</WorkspaceActiveContext.Provider></div>
+      <div className="um-agent-work-panels">
+        <section className="um-agent-activity" aria-label={t('当前学习活动')} hidden={!activityOpen}><WorkspaceActiveContext.Provider value={workspaceActive && activityOpen}>{workspace?.activity}</WorkspaceActiveContext.Provider></section>
+        {activityOpen && chatHost ? createPortal(conversation, chatHost) : conversation}
       </div>
-      {workspace?.active && <button className="um-work-mobile-chat um-agent-button" onClick={() => setMobileChat(value => !value)}>{mobileChat ? t('回到学习活动') : t('与小宇对话')}</button>}
     </section>
   </div>;
 }
