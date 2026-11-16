@@ -5,11 +5,19 @@ from users.models_workspace import WorkspaceMembership
 
 
 def membership_for(user):
-    if not user or not user.is_authenticated or not user.is_active:
+    if not user or not user.is_authenticated:
         return None
     if not isinstance(user, get_user_model()) or not user.pk:
         return None
-    return WorkspaceMembership.objects.select_related('workspace__institution').filter(user=user, is_current=True).first()
+    from .identity import learner_identity
+    identity = learner_identity(user)
+    if not identity:
+        return None
+    member = WorkspaceMembership.objects.select_related('workspace__institution').filter(
+        user=identity.account, workspace=identity.workspace).first()
+    if not user.is_active or not identity.account.is_active or not workspace_active(member):
+        raise PermissionDenied({'detail': '机构空间已暂停或不可访问。', 'code': 'workspace_unavailable'})
+    return member
 
 
 def workspace_active(member):
@@ -30,7 +38,8 @@ def active_course_ids(member):
 
 
 def require_admin(user):
-    member = membership_for(user)
+    from .identity import account_membership_for
+    member = account_membership_for(user)
     if not workspace_active(member) or member.role != 'admin':
         raise PermissionDenied('仅机构 workspace 管理员可以执行此操作。')
     return member

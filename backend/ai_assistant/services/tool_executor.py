@@ -217,9 +217,10 @@ class BaseToolExecutor:
         self._permitted_tool_names = None
         self._permitted_tool_definitions = {}
         from core.utils import get_content_institution
+        from users.workspaces.access import membership_for
         from users.learning import is_course_student
         from users.permissions import is_platform_admin
-        self.institution = get_content_institution() if (is_platform_admin(user) or is_course_student(user)) else None
+        self.institution = get_content_institution(user) if (membership_for(user) or is_platform_admin(user) or is_course_student(user)) else None
         self.on_step = None  # 由 views 注入，用于工具内部发进度事件
         self._current_call_id: str | None = None  # 由 service.py 注入，用于进度事件携带正确 call_id
         self.tool_call_log: list = []     # MUTAR 轨迹：工具调用序列
@@ -1021,7 +1022,7 @@ class PlannerToolExecutor(BaseToolExecutor):
             from quizzes.services.diagnostic_service import (
                 generate_diagnostic_questions, DIAGNOSTIC_TIME_LIMIT_SECONDS,
             )
-            questions = generate_diagnostic_questions(get_content_institution_id())
+            questions = generate_diagnostic_questions(get_content_institution_id(self.user))
             if not questions:
                 return {"error": "暂无可用题目，请联系管理员"}
             return {
@@ -1066,7 +1067,7 @@ class PlannerToolExecutor(BaseToolExecutor):
                 return {"error": "未找到有效题目"}
 
             with transaction.atomic():
-                results, kp_scores = grade_diagnostic_answers(formatted_answers)
+                results, kp_scores = grade_diagnostic_answers(formatted_answers, user=self.user)
                 initialize_memorix_from_diagnostic(self.user, kp_scores)
 
                 self.user.has_completed_initial_assessment = True

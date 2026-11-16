@@ -1,3 +1,4 @@
+import { spaceStorageKey } from '@/lib/activeWorkspace';
 import { t, useLocale } from '@/i18n';
 import { useCallback, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -5,9 +6,9 @@ import { SidebarSimple } from '@phosphor-icons/react';
 import { NotesSidebarContext } from '@/components/WorkspaceContext';
 import { clampLessonWidth, isLessonSidebarNarrow, lessonDragBounds, lessonSplitBounds } from './lessonSplitBounds';
 
-const STORAGE_KEY = 'unimind-lesson-sidebar-width';
-const COLLAPSED_KEY = 'unimind-lesson-sidebar-collapsed';
-const WIDE_KEY = 'unimind-lesson-wide-layout';
+const STORAGE_KEY = spaceStorageKey('unimind-lesson-sidebar-width');
+const COLLAPSED_KEY = spaceStorageKey('unimind-lesson-sidebar-collapsed');
+const WIDE_KEY = spaceStorageKey('unimind-lesson-wide-layout');
 
 export function LessonLayout({ aspectRatio, toolbarHost, revealKey, children }: { aspectRatio: number; toolbarHost?: HTMLElement | null; revealKey?: string | null; children: (controls: { sidebarCollapsed: boolean; expandSidebar: () => void }) => ReactNode }) {
   useLocale();

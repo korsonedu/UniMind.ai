@@ -1,8 +1,9 @@
+import { spaceStorageKey } from '@/lib/activeWorkspace';
 import { useSyncExternalStore } from 'react';
 import en from './en';
 
 export type Locale = 'zh-CN' | 'en';
-const STORAGE_KEY = 'unimind-language';
+const STORAGE_KEY = spaceStorageKey('unimind-language');
 const listeners = new Set<() => void>();
 const metadata = [...document.querySelectorAll<HTMLMetaElement>('meta[name="description"], meta[name="keywords"], meta[property="og:title"], meta[property="og:description"], meta[name="twitter:title"], meta[name="twitter:description"]')].map(element => ({ element, source: element.content }));
 const structuredData = [...document.querySelectorAll<HTMLScriptElement>('script[type="application/ld+json"]')].map(element => ({ element, source: JSON.parse(element.textContent || '{}') }));

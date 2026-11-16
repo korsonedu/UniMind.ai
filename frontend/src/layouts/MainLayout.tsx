@@ -1,4 +1,5 @@
 import { isNativeOffline, subscribeOffline, setNativeOffline } from '@/lib/offlineSession';
+import { spaceStorageKey } from '@/lib/activeWorkspace';
 import { t, useLocale } from '@/i18n';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { learningUrl } from '@/lib/projectLearning';
@@ -83,11 +84,11 @@ export const MainLayout: React.FC = () => {
   }, []);
   const [noteOpenRequest, setNoteOpenRequest] = useState<{ id: number; sequence: number } | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
-    try { const saved = Number(localStorage.getItem('unimind-right-sidebar-width')); return saved >= 320 && saved <= 640 ? saved : 400; } catch { return 400; }
+    try { const saved = Number(localStorage.getItem(spaceStorageKey('unimind-right-sidebar-width'))); return saved >= 320 && saved <= 640 ? saved : 400; } catch { return 400; }
   });
   const saveSidebarWidth = (value: number) => {
     setSidebarWidth(value);
-    try { localStorage.setItem('unimind-right-sidebar-width', String(value)); } catch { /* Best effort. */ }
+    try { localStorage.setItem(spaceStorageKey('unimind-right-sidebar-width'), String(value)); } catch { /* Best effort. */ }
   };
   const [courseSidebarHost, setCourseSidebarHost] = useState<HTMLDivElement | null>(null);
   const [courseSidebarAvailability, setCourseSidebarAvailability] = useState({ key: '', available: false });
@@ -237,7 +238,7 @@ export const MainLayout: React.FC = () => {
     }).catch(() => {}).finally(() => setPendingTourDismiss(false));
   }, [pendingTourDismiss, updateUser]);
 
-  const visibleNavItems = navItems.filter(item => item.to !== '/courses' || hasCourseCatalog);
+  const visibleNavItems = navItems;
   const canEnter = (item: NavItem) => {
     if (item.to === '/community') return !featuresLoading && (hasFeature('faq.system') || hasFeature('study.room'));
     return !item.feature || (!featuresLoading && hasFeature(item.feature));
@@ -275,7 +276,7 @@ export const MainLayout: React.FC = () => {
   return <TooltipProvider delayDuration={0}>
     <div ref={shellRef} data-mobile-nav-hidden={hideMobileBottomNav} className="um-app-shell flex flex-col h-dvh bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground" data-nav-history={historyIndex > 0 || historyIndex < historyEnd ? 'true' : undefined}>
       <header className="um-window-toolbar" aria-label={t('工作区功能区')}>
-        <SpaceSwitcher personalPath={routeFor('/xiaoyu')} />
+        <SpaceSwitcher />
         <div className="um-window-navigation"><button aria-label={t('返回')} title={t('返回')} disabled={historyIndex <= 0} onClick={() => navigate(-1)}><ArrowLeft size={17} /></button><button aria-label={t('前进')} title={t('前进')} disabled={historyIndex >= historyEnd} onClick={() => navigate(1)}><ArrowRight size={17} /></button></div>
         <div className="um-window-workspace" ref={setToolbarHost}>{!hasWorkspaceToolbar && <><button className="um-agent-icon-button hidden md:inline-flex" aria-label={t('切换导航栏')} onClick={() => setRailHidden(old => !old)}><SidebarSimple size={18} /></button><WorkspaceTrail title={pageTitle || t('学习空间')} crumbs={[]} /></>}</div>
         {workspaceHeader}

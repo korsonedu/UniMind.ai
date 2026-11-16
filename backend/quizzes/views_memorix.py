@@ -27,7 +27,7 @@ def _resolve_scoped_question(request):
     except (TypeError, ValueError):
         return None, Response({'detail': 'question_id 无效'}, status=status.HTTP_400_BAD_REQUEST)
     question = Question.objects.filter(
-        pk=question_id, institution_id=get_content_institution_id(),
+        pk=question_id, institution_id=get_content_institution_id(request.user),
     ).first()
     if question is None:
         return None, Response({'detail': '题目不存在'}, status=status.HTTP_404_NOT_FOUND)
@@ -77,7 +77,7 @@ class QuizStatsView(APIView):
     def get(self, request):
         user = request.user
         now = timezone.now()
-        scope_id = get_content_institution_id()
+        scope_id = get_content_institution_id(request.user)
 
         all_status_qs = UserQuestionStatus.objects.filter(
             user=user, question__institution_id=scope_id,

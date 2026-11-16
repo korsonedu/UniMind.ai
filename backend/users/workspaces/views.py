@@ -15,13 +15,24 @@ from courses.models import Course, CourseModule, VideoTranscript
 from core.file_validation import validate_upload_file
 from users.models_workspace import Workspace, WorkspaceMembership, WorkspaceCourse, WorkspaceInvite, WorkspaceEnrollment
 from users.models_commercial import InstitutionAuditLog
-from .access import membership_for, workspace_active, active_course_ids, require_admin
+from .access import workspace_active, active_course_ids, require_admin
+from .identity import account_membership_for as membership_for
 from .tasks import dispatch_processing
 
 
 class InviteThrottle(UserRateThrottle):
     rate = '20/min'
     scope = 'workspace_invite'
+
+
+class SelectWorkspaceView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .identity import select_learner
+        from users.serializers import UserSerializer
+        learner = select_learner(request.user, request.data.get('workspace_id'))
+        return Response({'user': UserSerializer(learner).data})
 
 
 class CodeInput(serializers.Serializer):
@@ -93,6 +104,8 @@ def snapshot(user):
     result = {'available': True, 'role': None, 'workspace': None, 'courses': [], 'members': [], 'invites': [], 'usage': [],
         'workspaces': [membership_summary(item) for item in WorkspaceMembership.objects.filter(user=user)
             .select_related('workspace__institution').order_by('joined_at', 'id')]}
+    for item in result['workspaces']:
+        item['is_current'] = bool(member and item['id'] == member.workspace_id)
     if not member:
         return result
     workspace = member.workspace
@@ -107,10 +120,12 @@ def snapshot(user):
         links = links.none()
     result['courses'] = [course_row(link, include_content=False) for link in links]
     if member.role == 'admin' and active:
+        learners = {row.account_id: row.user for row in workspace.learners.select_related('user')}
         for item in workspace.memberships.filter(role='student').select_related('user').prefetch_related('enrollments__courses'):
             grants = list(item.enrollments.all())
             end = max((grant.service_ends_on for grant in grants), default=today)
-            result['members'].append({'id': item.pk, 'name': item.user.nickname or item.user.username,
+            profile = learners.get(item.user_id, item.user)
+            result['members'].append({'id': item.pk, 'name': profile.nickname or profile.username,
                 'joined_at': item.joined_at, 'service_ends_at': min(end, workspace.service_ends_on),
                 'courses': sorted({c.pk for grant in grants if grant.service_ends_on >= today for c in grant.courses.all()}),
                 'active': item.is_active and item.user.is_active and end >= today})
@@ -195,6 +210,7 @@ class JoinView(APIView):
             audit(request.user, workspace, 'workspace.join', str(invite.pk))
         WorkspaceMembership.objects.filter(user=request.user, is_current=True).update(is_current=False)
         WorkspaceMembership.objects.filter(pk=member.pk).update(is_current=True)
+        request.user._selected_workspace_id = member.workspace_id
         return Response(snapshot(request.user))
 
 
@@ -211,6 +227,7 @@ class SwitchView(APIView):
             raise ValidationError('你尚未加入这家机构，请先使用机构邀请码加入。')
         WorkspaceMembership.objects.filter(user=request.user, is_current=True).update(is_current=False)
         WorkspaceMembership.objects.filter(pk=member.pk).update(is_current=True)
+        request.user._selected_workspace_id = member.workspace_id
         return Response(snapshot(request.user))
 
 
@@ -231,6 +248,8 @@ class LeaveView(APIView):
         was_current = member.is_current
         audit(request.user, workspace, 'workspace.leave')
         member.delete()
+        if getattr(request.user, '_selected_workspace_id', None) == workspace.pk:
+            request.user._selected_workspace_id = None
         if was_current:
             next_member = WorkspaceMembership.objects.filter(user=request.user).order_by('joined_at', 'id').first()
             if next_member:

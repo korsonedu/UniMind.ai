@@ -1,6 +1,7 @@
+import { spaceStorageKey } from '@/lib/activeWorkspace';
 import { toast } from 'sonner';
 
-const SETTINGS_KEY = 'learning-reminder-settings';
+const SETTINGS_KEY = spaceStorageKey('learning-reminder-settings');
 
 export interface LearningReminderSettings {
   questionType: boolean;

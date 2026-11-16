@@ -20,7 +20,7 @@ class SuperuserUserListView(APIView):
     permission_classes = [IsAuthenticated, IsPlatformAdmin]
 
     def get(self, request):
-        qs = User.objects.select_related('access_profile').prefetch_related(
+        qs = User.objects.filter(workspace_learner__isnull=True).select_related('access_profile').prefetch_related(
             'access_profile__tags', 'access_profile__permission_groups'
         ).order_by('-date_joined')
         search = request.query_params.get('search', '')

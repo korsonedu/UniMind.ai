@@ -52,7 +52,9 @@ def get_student_academic_context(user):
     strong_points = [item['question__knowledge_point__name'] for item in strong_points_data if item['question__knowledge_point__name']]
 
     # 6. 机构与学科上下文
-    institution = getattr(user, 'institution', None)
+    from users.workspaces.access import membership_for
+    member = membership_for(user)
+    institution = member.workspace.institution if member else None
     institution_name = institution.name if institution else ''
     institution_subject = institution.business_type if institution else ''
 

@@ -1,3 +1,4 @@
+import { setActiveWorkspace, spaceStorageKey } from '@/lib/activeWorkspace';
 import { setLocale, t, type Locale } from '@/i18n';
 import { toast } from 'sonner';
 import { create } from 'zustand';
@@ -30,6 +31,8 @@ function syncNativeToken(token: string | null): void {
 
 interface User {
   id: number;
+  account_id?: number;
+  workspace_id?: number | null;
   username: string;
   email?: string;
   nickname: string;
@@ -131,6 +134,7 @@ export const useAuthStore = create<AuthState>()(
         }
       },
       logout: (options) => {
+        setActiveWorkspace(null);
         languageUserId = null;
         if (isOfflineDemo()) { void get().exitDemo(); return; }
         authEpoch += 1;
@@ -152,7 +156,7 @@ export const useAuthStore = create<AuthState>()(
       })),
     }),
     {
-      name: 'auth-storage',
+      name: spaceStorageKey('auth-storage'),
       partialize: (state) => ({ user: state.demoActive ? realUserBeforeDemo : state.user }),
     }
   )

@@ -55,7 +55,7 @@ class KnowledgeEdgeListCreateView(generics.ListCreateAPIView):
         qs = KnowledgeEdge.objects.select_related('source', 'target')
 
         qs = apply_institution_filter(qs, user, self.request)
-        scope_id = get_content_institution_id()
+        scope_id = get_content_institution_id(self.request.user)
         qs = qs.filter(source__institution_id=scope_id, target__institution_id=scope_id)
 
         # 按学科过滤
@@ -84,7 +84,7 @@ class KnowledgeEdgeListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         from quizzes.services.memorix_scheduler import invalidate_adjacency_cache
-        institution_id = get_content_institution_id()
+        institution_id = get_content_institution_id(self.request.user)
         validated = serializer.validated_data
         existing = KnowledgeEdge.objects.filter(
             source=validated['source'],
@@ -127,7 +127,7 @@ class KnowledgeEdgeDetailView(generics.RetrieveUpdateDestroyAPIView):
         return serializer
 
     def get_queryset(self):
-        scope_id = get_content_institution_id()
+        scope_id = get_content_institution_id(self.request.user)
         return apply_institution_filter(
             KnowledgeEdge.objects.select_related('source', 'target'), self.request.user, self.request,
         ).filter(source__institution_id=scope_id, target__institution_id=scope_id)
@@ -152,7 +152,7 @@ class KnowledgeEdgeDetailView(generics.RetrieveUpdateDestroyAPIView):
             raise PermissionDenied('树边由系统自动维护，不可手动修改。')
         from quizzes.services.memorix_scheduler import invalidate_adjacency_cache
         validated = serializer.validated_data
-        institution_id = get_content_institution_id()
+        institution_id = get_content_institution_id(self.request.user)
         if {'source', 'target', 'edge_type'} & set(validated):
             duplicate = KnowledgeEdge.objects.filter(
                 source=validated.get('source', instance.source),
@@ -193,7 +193,7 @@ class KnowledgeEdgeBulkCreateView(APIView):
             return Response({'detail': 'edges 不能为空'}, status=status.HTTP_400_BAD_REQUEST)
 
         from quizzes.services.memorix_scheduler import invalidate_adjacency_cache
-        inst_id = get_content_institution_id()
+        inst_id = get_content_institution_id(request.user)
         created, skipped, errors = 0, 0, []
         changed = False
 

@@ -193,7 +193,7 @@ class OSSMultipartInitView(APIView):
         if ext not in VIDEO_EXTENSIONS:
             return Response({"error": f"视频上传仅支持视频格式，不支持 {ext}"}, status=400)
 
-        institution = get_content_institution()
+        institution = get_content_institution(request.user)
         institution_id = institution.pk if institution else "public"
         unique_name = f"{uuid.uuid4().hex}{ext}"
         object_key = f"institutions/{institution_id}/video/{unique_name}"
@@ -246,7 +246,7 @@ class OSSMultipartCompleteView(APIView):
         metadata.is_valid(raise_exception=True)
 
         # 校验 object_key 归属当前内容范围
-        institution = get_content_institution()
+        institution = get_content_institution(request.user)
         user_inst_id = institution.pk if institution else None
         expected_prefix = f"institutions/{user_inst_id or 'public'}/"
         if not object_key.startswith(expected_prefix):
@@ -330,7 +330,7 @@ class OSSMultipartCompleteView(APIView):
         validate_upload_file(reference_materials, allowed_extensions=DOCUMENT_EXTENSIONS, max_size_bytes=DOC_MAX_BYTES)
 
         # 存储配额（原子化）
-        inst = get_content_institution()
+        inst = get_content_institution(request.user)
         total_upload_size = video_size
         for f in (cover_image, courseware, reference_materials):
             if f:
@@ -407,7 +407,7 @@ class OSSMultipartAbortView(APIView):
             return Response({"error": "缺少 upload_id 或 object_key"}, status=400)
 
         # 校验 object_key 归属当前内容范围
-        institution = get_content_institution()
+        institution = get_content_institution(request.user)
         user_inst_id = institution.pk if institution else None
         expected_prefix = f"institutions/{user_inst_id or 'public'}/"
         if not object_key.startswith(expected_prefix):
@@ -435,7 +435,7 @@ class OSSMultipartResignView(APIView):
             return Response({"error": "缺少 upload_id / object_key / total_parts"}, status=400)
 
         # 校验 object_key 归属当前内容范围
-        institution = get_content_institution()
+        institution = get_content_institution(request.user)
         user_inst_id = institution.pk if institution else None
         expected_prefix = f"institutions/{user_inst_id or 'public'}/"
         if not object_key.startswith(expected_prefix):
@@ -542,7 +542,7 @@ class StartupMaterialListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         validate_upload_file(self.request.FILES.get("file"))
         total_size = sum(f.size for f in self.request.FILES.values() if f)
-        inst = get_content_institution()
+        inst = get_content_institution(self.request.user)
         check_and_add_storage_usage(inst, total_size)
         serializer.save(institution=inst)
 
@@ -589,7 +589,7 @@ class AlbumListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         validate_upload_file(self.request.FILES.get("cover_image"), allowed_extensions=IMAGE_EXTENSIONS, max_size_bytes=IMAGE_MAX_BYTES)
         total_size = sum(f.size for f in self.request.FILES.values() if f)
-        inst = get_content_institution()
+        inst = get_content_institution(self.request.user)
         check_and_add_storage_usage(inst, total_size)
         serializer.save(institution=inst)
 
@@ -675,7 +675,7 @@ class CourseListCreateView(generics.ListCreateAPIView):
             from django.db.models import Count
             matching_qs = CourseTagRelation.objects.filter(
                 tag__slug__in=tag,
-                tag__institution=get_content_institution(),
+                tag__institution=get_content_institution(self.request.user),
             ).values('course_id').annotate(n=Count('id')).filter(n=len(tag))
             qs = qs.filter(id__in=matching_qs.values('course_id'))
         return course_list_queryset(qs, self.request)
@@ -702,7 +702,7 @@ class CourseListCreateView(generics.ListCreateAPIView):
         validate_upload_file(files.get("courseware"), allowed_extensions=DOCUMENT_EXTENSIONS, max_size_bytes=DOC_MAX_BYTES)
         validate_upload_file(files.get("reference_materials"), allowed_extensions=DOCUMENT_EXTENSIONS, max_size_bytes=DOC_MAX_BYTES)
         total_size = sum(f.size for f in files.values() if f)
-        inst = get_content_institution()
+        inst = get_content_institution(self.request.user)
 
         # 支持 OSS 直传：使用上传成功的对象路径
         video_file_url = self.request.data.get('video_file_url')

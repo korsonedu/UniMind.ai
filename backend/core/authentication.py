@@ -13,8 +13,13 @@ class CookieTokenAuthentication(TokenAuthentication):
         if token_obj:
             SessionAuthentication().enforce_csrf(request)
             get_token(request)
-            return (token_obj.user, token_obj)
-        return super().authenticate(request)
+            authenticated = (token_obj.user, token_obj)
+        else:
+            authenticated = super().authenticate(request)
+        if authenticated:
+            from users.workspaces.identity import request_learner
+            return request_learner(request, authenticated[0]), authenticated[1]
+        return None
 
     def authenticate_credentials(self, key):
         token = LoginSession.resolve(key)

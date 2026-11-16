@@ -1176,7 +1176,7 @@ def pre_grade_single_question(session_id: str, question_id: int, user_answer: st
         if not session or session['user_id'] != user_id or question_id not in {q['id'] for q in session['questions']}:
             return
         user = User.objects.get(id=user_id, is_active=True)
-        question = Question.objects.get(id=question_id, institution_id=get_content_institution_id())
+        question = Question.objects.get(id=question_id, institution_id=get_content_institution_id(user))
         ai = AIService()
 
         result = GradingEngine.grade(

@@ -103,10 +103,12 @@ def issue_media_ticket(user, raw_path: str) -> tuple[str, str] | None:
     media_path = normalize_media_path(raw_path)
     if not media_path:
         return None
+    from users.workspaces.identity import account_user
+    account = account_user(user)
     payload = {
         "u": user.id,
         "p": media_path,
-        "v": user.account_session_version,
+        "v": account.account_session_version,
     }
     token = signing.dumps(payload, salt=MEDIA_TICKET_SALT, compress=True)
     return token, media_path
@@ -128,7 +130,11 @@ def resolve_user_from_media_token(media_token: str, media_path: str):
             or not isinstance(version, int) or isinstance(version, bool)):
         return None
     user = get_user_model().objects.filter(pk=user_id, is_active=True).first()
-    if not user or user.account_session_version != version:
+    if not user:
+        return None
+    from users.workspaces.identity import account_user
+    account = account_user(user)
+    if not account.is_active or account.account_session_version != version:
         return None
     return user
 
@@ -142,8 +148,11 @@ def media_serve(request, path):
             authentication = CookieTokenAuthentication().authenticate(request)
         except AuthenticationFailed:
             return HttpResponse(status=401)
+        except PermissionDenied:
+            return HttpResponse(status=403)
         if authentication is not None:
             request.user, _ = authentication
+    media_identity = False
     if not request.user.is_authenticated and request.method in ("GET", "HEAD"):
         media_token = request.GET.get("media_token", "").strip()
         if media_token:
@@ -151,6 +160,18 @@ def media_serve(request, path):
             if user is None:
                 return HttpResponse(status=401)
             request.user = user
+            media_identity = True
+
+    if request.user.is_authenticated:
+        from users.workspaces.identity import account_user, request_learner
+        try:
+            if media_identity:
+                from users.workspaces.access import membership_for
+                membership_for(request.user)
+            else:
+                request.user = request_learner(request, account_user(request.user))
+        except PermissionDenied:
+            return HttpResponse(status=403)
 
     from django.db.models import Q
     from courses.models import Course, StartupMaterial

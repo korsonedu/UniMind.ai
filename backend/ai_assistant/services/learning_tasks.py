@@ -131,7 +131,7 @@ def create_task(project, arguments):
         if len(ids) != len(set(ids)):
             raise ValidationError('任务题目不能重复。')
         questions = {q.pk: q for q in Question.objects.select_for_update().filter(
-            pk__in=ids, institution_id=get_content_institution_id()).order_by('pk')}
+            pk__in=ids, institution_id=get_content_institution_id(project.user)).order_by('pk')}
         if len(questions) != len(ids):
             raise ValidationError('题目不存在或不在当前内容范围。')
         snapshots = {}
@@ -210,7 +210,7 @@ def task_result_snapshot(task, result):
             raise ValidationError('开放任务原始定义或提交快照已变化。')
         return expected
     snapshot = task.question_snapshot.get(str(result.question_id))
-    if not snapshot or not result.question or result.question.institution_id != get_content_institution_id():
+    if not snapshot or not result.question or result.question.institution_id != get_content_institution_id(task.project.user):
         raise ValidationError('任务题目已不可核验。')
     validate_task_question(task, result.question)
     if any(result.question_snapshot.get(key) != snapshot.get(key) for key in result.question_snapshot):
@@ -259,7 +259,7 @@ def sync_exam_task_result(result_id):
 def task_data(task):
     authorized = has_learning_feature(_current_user(task.project), 'quiz.exam')
     available = authorized and (bool(task.definition) or Question.objects.filter(
-        pk__in=task.question_ids, institution_id=get_content_institution_id()).count() == len(task.question_ids))
+        pk__in=task.question_ids, institution_id=get_content_institution_id(task.project.user)).count() == len(task.question_ids))
     exam = task.exam if task.exam_id else None
     summary = exam_result_payload(exam, include_results=False) if exam and authorized else None
     if exam:

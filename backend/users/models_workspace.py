@@ -34,6 +34,21 @@ class WorkspaceMembership(models.Model):
         ]
 
 
+class WorkspaceLearner(models.Model):
+    """An account's independent learning identity inside one workspace.
+
+    Existing learning tables reference User. A separate, non-login identity keeps
+    their ownership checks, background jobs and caches scoped without copying data.
+    Authentication and billing continue to belong to account.
+    """
+    account = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='workspace_learners')
+    workspace = models.ForeignKey(Workspace, on_delete=models.PROTECT, related_name='learners')
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='workspace_learner')
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['account', 'workspace'], name='workspace_learner_account_space')]
+
+
 class WorkspaceCourse(models.Model):
     workspace = models.ForeignKey(Workspace, on_delete=models.PROTECT, related_name='course_links')
     course = models.OneToOneField('courses.Course', on_delete=models.CASCADE, related_name='workspace_content')
