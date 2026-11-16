@@ -35,7 +35,7 @@ try {
   await page.getByRole('button', { name: /Offline trial|Try offline|离线试用/i }).click();
   await page.waitForURL(url => !url.pathname.startsWith('/login'));
   await page.goto(`${base}/notes/1`);
-  const title = page.getByRole('textbox', { name: /Note title|笔记标题/i, exact: true });
+  const title = page.getByRole('textbox', { name: /^(?:Note title|笔记标题)$/i });
   await title.fill('Persisted offline edit');
   await page.waitForTimeout(1800);
   await page.reload();
