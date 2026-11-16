@@ -1,13 +1,14 @@
 import { getLocale, t, useLocale } from '@/i18n';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowRight } from '@phosphor-icons/react';
 import api from '@/lib/api';
-import type { ProjectLearning } from '@/lib/projectLearning';
+import { learningUrl, type ProjectLearning } from '@/lib/projectLearning';
 import type { LearningKnowledge } from './LearningKnowledgePanel';
 import { MarkdownContent } from './MarkdownContent';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 
 type Node = LearningKnowledge['nodes'][number];
 interface MapVersion { version_id: number; revision: number; title: string; nodes: Node[] }
@@ -18,6 +19,10 @@ export function LearningKnowledgeView({ project, selected, onSelect, onStudy, on
 }) {
   useLocale();
   const userId = useAuthStore(state => state.user?.id);
+  const { chat } = useXiaoYuChat();
+  const [searchParams] = useSearchParams();
+  const conversationId = (chat.projectId === project.project_id && chat.conversationId)
+    || searchParams.get('conversation') || project.conversation_id || undefined;
   const knowledge = project.knowledge;
   const [allNodes, setAllNodes] = useState(false);
   const [choosing, setChoosing] = useState(!knowledge?.path);
@@ -55,6 +60,7 @@ export function LearningKnowledgeView({ project, selected, onSelect, onStudy, on
   targets.forEach(visit);
   return <section className="um-work-knowledge">
     <div className="um-work-section-heading"><div><h2>{t('知识关系')}</h2><p>{knowledge?.title || t('围绕当前学习内容，了解前置与依据')}{knowledge?.revision && t(' · 版本 {0}', { 0: knowledge.revision })}</p></div><button className="um-agent-button" onClick={() => setChoosing(value => !value)}>{t('选择学习范围')}</button></div>
+    <Link className="um-learning-text-button" to={learningUrl('/knowledge-builder', project.project_id, conversationId)}>{t('知识结构图谱构建器')}</Link>
     {choosing ? <div className="um-work-map-picker">
       <p>{t('地图与来源可以复用，当前表现按项目分别记录。采用新版本时，已有作答保留在原版本。')}</p>
       {maps.isPending && <p role="status">{t('正在读取知识地图…')}</p>}

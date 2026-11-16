@@ -9,6 +9,11 @@ DEFAULT_BASE_URL = 'https://api.deepseek.com/v1/chat/completions'
 # Per-task model routing table.
 # Each task → (per_task_env_key, tier) where tier ∈ {'fast', 'pro'}.
 _TASK_MODEL_MAP = {
+    'knowledge_tree_dispatch': ('AI_MODEL_KNOWLEDGE_TREE_DISPATCH', 'fast'),
+    'knowledge_tree_decompose': ('AI_MODEL_GENERATE_KNOWLEDGE_TREE', 'fast'),
+    'knowledge_tree_edges': ('AI_MODEL_GENERATE_KNOWLEDGE_TREE', 'fast'),
+    'knowledge_tree_repair': ('AI_MODEL_SCHEMA_REPAIR', 'fast'),
+    'knowledge_tree_block': ('AI_MODEL_GENERATE_KNOWLEDGE_TREE', 'fast'),
     # ── Chat ──
     # 前缀匹配规则：'assistant.chat.planner' 精确匹配小宇，其他 agent 操作 fallback 到默认 flash
     'assistant.chat.planner': ('AI_MODEL_CHAT', 'fast'),
@@ -39,7 +44,7 @@ _TASK_MODEL_MAP = {
 EMBEDDING_MODEL = os.getenv('AI_EMBEDDING_MODEL', 'Qwen/Qwen3-Embedding-0.6B')
 EMBEDDING_BASE_URL = os.getenv('AI_EMBEDDING_BASE_URL', 'http://127.0.0.1:8012/v1').rstrip('/')
 EMBEDDING_API_KEY = os.getenv('AI_EMBEDDING_API_KEY', 'local')
-EMBEDDING_DIMENSIONS = int(os.getenv('AI_EMBEDDING_DIMENSIONS', '1024'))
+EMBEDDING_DIMENSIONS = int(os.getenv('AI_EMBEDDING_DIMENSIONS') or '1024')
 
 # Thinking effort per task prefix.
 # When thinking is enabled with tool calls, reasoning_content MUST be

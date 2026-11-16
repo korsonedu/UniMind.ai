@@ -52,6 +52,7 @@ const BillingPage = lazy(() => import('./pages/Billing').then(module => ({ defau
 const PaymentResult = lazy(() => import('./pages/PaymentResult').then(module => ({ default: module.PaymentResult })));
 const Checkout = lazy(() => import('./pages/Checkout').then(module => ({ default: module.Checkout })));
 const DiagnosticTest = lazy(() => import('./pages/DiagnosticTest').then(module => ({ default: module.DiagnosticTest })));
+const KnowledgeBuilder = lazy(() => import('./pages/KnowledgeBuilder'));
 const NotesPage = lazy(() => import('./pages/notes/NotesPage'));
 const PracticeSession = lazy(() => import('./pages/xiaoyu/PracticeSession'));
 const ProjectKnowledge = lazy(() => import('./pages/ProjectKnowledge'));
@@ -272,6 +273,8 @@ const router = createBrowserRouter([
           { path: "notes", element: workspacePage(NotesPage) },
           { path: "notes/:id", element: workspacePage(NotesPage) },
           { path: "knowledge-tree", element: <FeatureGuard feature="ai.assistant">{workspacePage(ProjectKnowledge)}</FeatureGuard> },
+          { path: "knowledge-builder", element: <FeatureGuard feature="ai.assistant">{workspacePage(KnowledgeBuilder)}</FeatureGuard> },
+          { path: "knowledge-builder/:buildId", element: <FeatureGuard feature="ai.assistant">{workspacePage(KnowledgeBuilder)}</FeatureGuard> },
           { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant">{workspacePage(XiaoYu)}</FeatureGuard> },
           { path: "xiaoyu/practice/:sessionId", element: <FeatureGuard feature="ai.assistant">{workspacePage(PracticeSession)}</FeatureGuard> },
           { path: "settings", element: workspacePage(Settings) },
