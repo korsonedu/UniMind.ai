@@ -16,14 +16,14 @@ export interface LearningTask {
   is_current?: boolean; stage_id: string;
   id: string; title: string; instructions: string; node_id: string; version_id: number | null;
   purpose?: 'diagnostic' | 'practice' | 'recheck'; source_task_id?: string | null;
-  response_type?: 'explanation' | 'calculation' | 'reasoning' | 'case' | 'code'; criteria?: string[]; sources?: string[];
+  response_type?: 'objective' | 'explanation' | 'calculation' | 'reasoning' | 'case' | 'code'; criteria?: string[]; sources?: string[];
   status: 'ready' | 'processing' | 'completed' | 'partial' | 'failed' | 'unavailable';
   exam_id: number | null; assistance: string; review_due_at: string | null;
   summary: { total_score: number; max_score: number; graded_count: number; total_questions: number; label_source?: string } | null;
   payload: PracticePayload;
 }
 const purposes = { diagnostic: '起点任务', practice: '学习任务', recheck: '换题检验' };
-const responseTypes = { explanation: '解释', calculation: '计算过程', reasoning: '推理', case: '案例分析', code: '代码文本' };
+const responseTypes = { objective: '选择题', explanation: '解释', calculation: '计算过程', reasoning: '推理', case: '案例分析', code: '代码文本' };
 const statuses = { ready: '待作答', processing: '批改中', completed: '已完成本次作答', partial: '批改未全部完成', failed: '批改待重试', unavailable: '内容当前不可用' };
 
 export function LearningTasksPanel({ project, onStudy }: { project: ProjectLearning; onStudy: (text: string) => void }) {

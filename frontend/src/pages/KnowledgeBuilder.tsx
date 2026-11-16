@@ -18,6 +18,8 @@ import api from '@/lib/api';
 import { normalizeApiError } from '@/lib/apiError';
 import { learningKey, learningUrl, useProjectLearning, type ProjectLearning } from '@/lib/projectLearning';
 import { KnowledgeBuilderGraph } from '@/components/KnowledgeBuilderGraph';
+import { BlockStudyDialog } from '@/components/BlockStudyDialog';
+import { TreePublicAssetModal } from '@/components/TreePublicAssetModal';
 import {
   Dialog,
   DialogContent,
@@ -65,6 +67,8 @@ export default function KnowledgeBuilder() {
   const [searchParams, setSearchParams] = useSearchParams();
   const projectTab = searchParams.get('tab') === 'project';
   const { chat, openingProject } = useXiaoYuChat();
+  const [studyBlockId, setStudyBlockId] = useState<number | null>(null);
+  const [publicAssetsBuildId, setPublicAssetsBuildId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const userId = useAuthStore(s => s.user?.id);
 
@@ -275,6 +279,9 @@ export default function KnowledgeBuilder() {
       <div className="kb-unified-workspace">
         {workspaceTabs}
         <div className="kb-plan-toolbar">
+          <Button type="button" variant="outline" onClick={() => setPublicAssetsBuildId(detailQuery.data.id)}>
+            {t('公开资产池 & 整树挂载')}
+          </Button>
           <span>{t('已选择 {0} 个目标学习块', { 0: selectedBlocks.size })}</span>
           <Button type="button" variant="outline" disabled={!selectedBlocks.size || openingProject || planning || !projectQuery.data?.planning_enabled} onClick={async () => {
             if (!chat.projectId || !projectQuery.data) return;
@@ -317,7 +324,26 @@ export default function KnowledgeBuilder() {
             else blocks.add(id);
             return { buildId: activeBuildId, blocks };
           })}
+          onStudyBlock={setStudyBlockId}
         />
+        {detailQuery.data.blocks.filter(block => block.id === studyBlockId).map(block => <BlockStudyDialog
+          key={`${detailQuery.data.id}:${block.id}`} tree={detailQuery.data} block={block}
+          project={projectQuery.data}
+          onClose={() => setStudyBlockId(null)}
+          onChanged={() => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBuilder.detail(detailQuery.data.id) });
+            void queryClient.invalidateQueries({ queryKey: ['knowledge-tree-public-assets', userId, detailQuery.data.id] });
+          }}
+        />)}
+        {publicAssetsBuildId === detailQuery.data.id && <TreePublicAssetModal
+          key={detailQuery.data.id}
+          tree={detailQuery.data}
+          onClose={() => setPublicAssetsBuildId(null)}
+          onChanged={() => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBuilder.detail(detailQuery.data.id) });
+            void queryClient.invalidateQueries({ queryKey: ['knowledge-block-resources', userId, detailQuery.data.id] });
+          }}
+        />}
         {createModal}
       </div>
     );

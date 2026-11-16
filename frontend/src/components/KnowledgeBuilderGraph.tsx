@@ -2,6 +2,7 @@ import { t, useLocale } from '@/i18n';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import type { BaselineSummary, KnowledgeTreeBuildDetail } from '@/types/knowledgeBuilder';
+import { resolvePublicAssetLink } from '@/lib/knowledgeBuilderApi';
 import {
   adaptKnowledgeTree,
   computeColumnLayout,
@@ -22,6 +23,7 @@ interface KnowledgeBuilderGraphProps {
   headerRightSlot?: ReactNode;
   selectedBlockIds?: ReadonlySet<number>;
   onToggleBlockSelection?: (id: number) => void;
+  onStudyBlock?: (id: number) => void;
 }
 
 interface TooltipState {
@@ -244,6 +246,7 @@ export function KnowledgeBuilderGraph({
   selectedBlockIds,
   blockProgress,
   onToggleBlockSelection,
+  onStudyBlock,
 }: KnowledgeBuilderGraphProps) {
   const locale = useLocale();
   const uid = useId().replace(/:/g, '');
@@ -704,6 +707,10 @@ export function KnowledgeBuilderGraph({
                 <div className="kb-level">{t('第 {0} 层', { 0: col.layer })}</div>
 
                 {col.blocks.map(block => {
+                  const resources = tree.blocks.find(item => item.id === block.id)?.resources ?? [];
+                  const spine = resources.find(resource => resource.asset_track === 'spine');
+                  const hasSpotlight = resources.some(resource => resource.asset_track === 'spotlight');
+                  const hasWiki = resources.some(resource => resource.asset_track === 'wiki');
                   const isOpen = openIds.has(block.id);
                   const isHighlighted = highlightedBlockIds.has(block.id) || flashBlockId === block.id;
                   const isDimmed = hasHoverFocus && !isHighlighted;
@@ -750,9 +757,14 @@ export function KnowledgeBuilderGraph({
                         </small>
                         <span className="kb-badges">
                           <span className="kb-cardtype">{block.domainTitle}</span>
+                          <span className="kb-badge">📚 {resources.length}</span>
+                          {spine && <span className="kb-badge kb-asset-badge--spine" title={`主线配套课${spine.locator ? ` · ${spine.locator}` : ''}`}>🎬 {spine.locator || '主线'}</span>}
+                          {hasSpotlight && <span className="kb-badge kb-asset-badge--spotlight" title="单点神作">🌟 神作</span>}
+                          {hasWiki && <span className="kb-badge kb-asset-badge--wiki" title={tree.region_pref === 'intl' ? 'Wikipedia 概念词条' : 'OI-Wiki / 开源学科词条'}>{tree.region_pref === 'intl' ? '📖 Wikipedia 词条' : '📖 专业开源 Wiki 词条'}</span>}
                           {renderTopicBadges([block.shortTitle, ...block.steps.flatMap(step => step.atoms.map(item => item.atom.name))])}
                         </span>
                       </button>
+                      {onStudyBlock && <button type="button" className="kb-study-open" aria-label={`${block.shortTitle}：学习资源与任务检测`} onClick={() => onStudyBlock(block.id)}>资源与任务</button>}
 
                       {isOpen && (
                         <div className="kb-panel">
@@ -764,6 +776,17 @@ export function KnowledgeBuilderGraph({
                               </span>
                             ))}
                           </div>
+                          {resources.length > 0 && <nav className="kb-card-resources" aria-label={`${block.shortTitle}的学习资源`}>
+                            {resources.map(resource => {
+                              const href = resource.source_kind === 'course' && resource.course_id ? `/course/${resource.course_id}` : resolvePublicAssetLink(resource.url, resource.locator);
+                              if (!href) return null;
+                              const trackLabel = resource.asset_track === 'spine' ? '🎬 主线' : resource.asset_track === 'spotlight' ? '🌟 神作' : resource.asset_track === 'wiki' ? (tree.region_pref === 'intl' ? '📖 Wikipedia 词条' : '📖 专业开源 Wiki 词条') : '📚 资源';
+                              return <a key={resource.id} className="kb-card-resource-link" href={href} target="_blank" rel="noopener noreferrer"
+                                onClick={event => event.stopPropagation()} title={`直接打开：${resource.title}${resource.locator ? ` · ${resource.locator}` : ''}`}>
+                                {trackLabel} · {resource.title}{resource.locator ? ` · ${resource.locator}` : ''} ↗
+                              </a>;
+                            })}
+                          </nav>}
                           <div className="kb-hint">
                             {t('悬停知识点可查看学习目标与易错点；实线框为必学原子，虚线框为拓展延伸；点击黄色先修接口可跳转定位')}
                           </div>
@@ -848,7 +871,7 @@ export function KnowledgeBuilderGraph({
                                       key={item.atom.id}
                                       data-point={item.atom.code}
                                       title={item.tooltip}
-                                      className={item.membership === 'extension' ? 'kb-point ext' : 'kb-point'}
+                                      className={`kb-point${item.membership === 'extension' ? ' ext' : ''}`}
                                     >
                                       <div>{item.atom.name}</div>
                                       <span className="kb-badges">{renderTopicBadges([item.atom.name])}</span>

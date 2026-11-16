@@ -1,5 +1,34 @@
 import api from '@/lib/api';
+import type { BlockResourceItem, BlockResourcePayload, BlockResourcesResponse, BlockQuizMode, BlockAssessment } from '@/types/knowledgeBuilder';
 import type { BuildArchetype, BuildSummary, KnowledgeTreeBuildDetail, IntakeRequestPayload, IntakeResponsePayload } from '@/types/knowledgeBuilder';
+import type { AssetTrack, BlockResourceUpdatePayload, TreePublicAssetImportPayload, TreePublicAssetsResponse } from '@/types/knowledgeBuilder';
+
+export function resolvePublicAssetLink(url: string, locator?: string): string | undefined {
+  const internal = /^\/courses(?:\/|[?#]|$)/.test(url);
+  if (!internal && !/^https:\/\//i.test(url)) return undefined;
+  let link: URL;
+  try {
+    link = new URL(url, 'https://unimind.invalid');
+  } catch {
+    return undefined;
+  }
+  if (link.protocol !== 'https:' || (internal && !/^\/courses(?:\/|$)/.test(link.pathname))) return undefined;
+  if (!locator?.trim()) return url;
+
+  const host = link.hostname.toLowerCase();
+  const bilibili = host === 'bilibili.com' || host.endsWith('.bilibili.com');
+  const youtube = host === 'youtu.be' || host === 'youtube.com' || host.endsWith('.youtube.com');
+  const episode = locator.match(/(?:\bP\s*|第\s*)(\d+)\s*(?:P|集|讲|章)?/i);
+  const timestamp = locator.match(/(?:^|[^\d])(?:(\d+):)?(\d{1,2}):([0-5]\d)(?!\d)/);
+  const anchor = locator.match(/#(.+)$/);
+  if (bilibili && episode) link.searchParams.set('p', episode[1]);
+  if ((bilibili || youtube) && timestamp) {
+    const seconds = Number(timestamp[1] ?? 0) * 3600 + Number(timestamp[2]) * 60 + Number(timestamp[3]);
+    link.searchParams.set('t', String(seconds));
+  }
+  if (anchor) link.hash = anchor[1];
+  return internal ? `${link.pathname}${link.search}${link.hash}` : link.href;
+}
 
 export async function listKnowledgeBuilds(signal?: AbortSignal): Promise<BuildSummary[]> {
   const { data } = await api.get<BuildSummary[]>('/knowledge-builder/', { signal });
@@ -23,5 +52,39 @@ export async function createKnowledgeBuild(payload: { subject: string; archetype
 
 export async function inquireKnowledgeRequirements(payload: IntakeRequestPayload): Promise<IntakeResponsePayload> {
   const { data } = await api.post<IntakeResponsePayload>('/knowledge-builder/intake/', payload);
+  return data;
+}
+
+const blockPath = (buildId: string, blockId: number) => `/knowledge-builder/${encodeURIComponent(buildId)}/blocks/${blockId}`;
+
+export async function getBlockResources(buildId: string, blockId: number, query?: string): Promise<BlockResourcesResponse> {
+  const { data } = await api.get<BlockResourcesResponse>(`${blockPath(buildId, blockId)}/resources/`, { params: query === undefined ? {} : { query } });
+  return data;
+}
+export async function getTreePublicAssets(buildId: string, signal?: AbortSignal): Promise<TreePublicAssetsResponse> {
+  const { data } = await api.get<TreePublicAssetsResponse>(`/knowledge-builder/${encodeURIComponent(buildId)}/public-assets/`, { signal });
+  return data;
+}
+export async function importTreePublicAsset(buildId: string, payload: TreePublicAssetImportPayload): Promise<{ mounted_count: number; asset_track: AssetTrack; resources: BlockResourceItem[] }> {
+  const { data } = await api.post<{ mounted_count: number; asset_track: AssetTrack; resources: BlockResourceItem[] }>(`/knowledge-builder/${encodeURIComponent(buildId)}/public-assets/`, payload);
+  return data;
+}
+export async function updateBlockResource(buildId: string, blockId: number, payload: BlockResourceUpdatePayload): Promise<BlockResourceItem> {
+  const { data } = await api.patch<BlockResourceItem>(`${blockPath(buildId, blockId)}/resources/`, payload);
+  return data;
+}
+export async function attachBlockResource(buildId: string, blockId: number, payload: BlockResourcePayload): Promise<BlockResourceItem> {
+  const { data } = await api.post<BlockResourceItem>(`${blockPath(buildId, blockId)}/resources/`, payload);
+  return data;
+}
+export async function deleteBlockResource(buildId: string, blockId: number, resourceId: number): Promise<void> {
+  await api.delete(`${blockPath(buildId, blockId)}/resources/`, { data: { resource_id: resourceId } });
+}
+export async function blockAssessment(buildId: string, blockId: number, payload: { project_id: number; action: 'read' | 'generate'; mode?: BlockQuizMode; retest?: boolean }): Promise<{ assessment: BlockAssessment | null; preparation: { status: 'pending' | 'completed' | 'failed'; error: string } | null }> {
+  const { data } = await api.post(`${blockPath(buildId, blockId)}/quiz/`, payload);
+  return data;
+}
+export async function attachBlockResourceToProject(buildId: string, blockId: number, projectId: number, resourceId: number): Promise<{ notice: string }> {
+  const { data } = await api.post(`${blockPath(buildId, blockId)}/resources/`, { action: 'attach_project', project_id: projectId, resource_id: resourceId });
   return data;
 }

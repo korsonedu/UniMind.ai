@@ -16,7 +16,7 @@ _QUESTION_SCHEMA = {
         "q_type": {"type": "string", "enum": ["objective", "subjective"]},
         "subjective_type": {
             "type": ["string", "null"],
-            "enum": ["noun", "short", "essay", "calculate", None],
+            "enum": ["", "noun", "short", "essay", "calculate", None],
         },
         "options": {
             "type": ["array", "null"],

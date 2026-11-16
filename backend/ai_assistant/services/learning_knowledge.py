@@ -242,6 +242,12 @@ def knowledge_state(project, state, *, compact=False):
     def ready(node):
         if version.snapshot.get('builder'):
             rows = observations.get((node['id'], 'apply'), [])
+            if rows and all(row.get('builder_block_id') for row in rows):
+                return all(
+                    len(checks := [row for row in rows if row['builder_block_id'] == block_id]) >= 2
+                    and all(row['outcome'] == 'success' and row['assistance'] == 'independent' for row in checks[-2:])
+                    for block_id in node.get('builder_block_ids', [])
+                ) and (node['beliefs']['apply']['stale_days'] or 0) <= 30
             return (len(rows) >= 2 and all(row['outcome'] == 'success' and row['assistance'] == 'independent' for row in rows[-2:])
                     and (node['beliefs']['apply']['stale_days'] or 0) <= 30)
         estimate = node['beliefs']['apply']

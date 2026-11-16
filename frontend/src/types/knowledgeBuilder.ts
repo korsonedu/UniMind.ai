@@ -1,3 +1,4 @@
+import type { LearningTask } from '@/components/LearningTasksPanel';
 export type BuildArchetype =
   | 'auto'
   | 'institution_mechanism_theory'
@@ -104,6 +105,7 @@ export interface BlockNodeShape {
 }
 
 export interface LearningBlock {
+  resources?: BlockResourceItem[];
   id: number;
   code: string;
   short_title: string;
@@ -140,6 +142,7 @@ export interface CrossBlockInterface {
 }
 
 export interface KnowledgeTreeBuildDetail extends BuildSummary {
+  region_pref?: 'cn' | 'intl';
   modules: TreeModule[];
   atoms: TreeAtomPoint[];
   atom_edges: TreeAtomEdge[];
@@ -187,4 +190,95 @@ export interface IntakeResponsePayload {
   subject: string; mode: IntakeMode; catalog_match: CatalogMatchSummary; needs_diagnostic: boolean;
   cards: IntakeCard[]; diagnostic_questions: DiagnosticProbeQuestion[]; assistant_reply: string;
   requirements_draft: RequirementsDraft; ready_to_build: boolean;
+}
+
+export type BlockQuizMode = 'objective' | 'challenge';
+export type AssetTrack = 'spine' | 'spotlight' | 'wiki';
+export type AssetSourceKind = 'course' | 'library' | 'web' | 'bilibili' | 'github' | 'wikipedia' | 'youtube' | 'marketplace';
+export type PedagogicalRole = '' | 'series_episode' | 'concept_intuition' | 'core_derivation' | 'worked_example' | 'wiki_reference';
+
+export interface PublicAssetSegment {
+  index: number;
+  title: string;
+  url: string;
+  locator: string;
+  summary: string;
+}
+
+export interface PublicAssetCatalogItem {
+  id: number;
+  subject: string;
+  title: string;
+  url: string;
+  source_kind: AssetSourceKind;
+  asset_track: AssetTrack;
+  pedagogical_role: string;
+  region_scope: 'cn' | 'intl' | 'global';
+  description: string;
+  topic_keywords: string[];
+  segments: PublicAssetSegment[];
+  created_at: string;
+}
+
+export interface WikiCandidateItem {
+  title: string;
+  url: string;
+  summary: string;
+  source_kind: 'wikipedia';
+  asset_track: 'wiki';
+  pedagogical_role: string;
+  locator: string;
+  region_scope: 'cn' | 'intl' | 'global';
+}
+
+export interface TreePublicAssetsResponse {
+  region_pref: 'cn' | 'intl';
+  catalog_assets: PublicAssetCatalogItem[];
+  marketplace_listings: { id: number; title: string; description: string; content_type: string; subject: string }[];
+  albums: { id: number; name: string; description: string; course_count: number }[];
+  wiki_candidates: WikiCandidateItem[];
+  mounted_summary: { spine_count: number; spotlight_count: number; wiki_count: number };
+}
+
+export interface TreePublicAssetImportPayload {
+  url?: string;
+  title?: string;
+  asset_track?: AssetTrack;
+  pedagogical_role?: string;
+  outline_text?: string;
+  public_asset_id?: number;
+  marketplace_listing_id?: number;
+  album_id?: number;
+  target_block_id?: number;
+  target_atom_id?: number;
+}
+
+export interface BlockResourceItem {
+  id: number; block: number; step: number | null; atom: number | null;
+  source_kind: AssetSourceKind; title: string; url: string; excerpt: string;
+  course_id: number | null; library_resource_id: number | null; created_at: string;
+  asset_track?: AssetTrack; pedagogical_role?: string; locator?: string;
+  region_scope?: 'cn' | 'intl' | 'global'; public_asset?: number | null; marketplace_listing_id?: number | null;
+}
+export interface BlockResourcePayload {
+  url?: string; course_id?: number; library_resource_id?: number;
+  step_id?: number | null; atom_id?: number | null; save_to_library?: boolean;
+  asset_track?: AssetTrack; pedagogical_role?: string; locator?: string;
+  public_asset_id?: number; marketplace_listing_id?: number;
+}
+export interface BlockResourceUpdatePayload {
+  resource_id: number; block_id?: number; step_id?: number | null; atom_id?: number | null;
+  asset_track?: AssetTrack; pedagogical_role?: string; locator?: string;
+}
+export interface BlockResourcesResponse {
+  region_pref?: 'cn' | 'intl';
+  resources: BlockResourceItem[];
+  internal_candidates: (BlockResourcePayload & { source_kind: 'course' | 'library'; title: string; url: string; excerpt: string })[];
+  web_candidates: { title: string; url: string; summary: string }[];
+  wiki_candidates?: WikiCandidateItem[];
+  catalog_candidates?: PublicAssetCatalogItem[];
+}
+export interface BlockAssessment {
+  id: number; block_id: number; mode: BlockQuizMode; complete: boolean; passed: boolean; accuracy: number | null;
+  items: { task_id: string; atom_id: number; atom_name: string; membership_type: 'core' | 'extension'; q_type: 'objective' | 'subjective'; task: LearningTask }[];
 }

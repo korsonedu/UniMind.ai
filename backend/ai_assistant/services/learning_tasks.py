@@ -22,10 +22,20 @@ ASSISTANCE = ['independent', 'hint', 'guided', 'unknown']
 
 class DefinitionInput(serializers.Serializer):
     prompt = serializers.CharField(min_length=5, max_length=8000)
-    response_type = serializers.ChoiceField(choices=['explanation', 'calculation', 'reasoning', 'case', 'code'])
+    response_type = serializers.ChoiceField(choices=['objective', 'explanation', 'calculation', 'reasoning', 'case', 'code'])
+    options = serializers.DictField(child=serializers.CharField(max_length=2000), required=False)
     criteria = serializers.ListField(child=serializers.CharField(max_length=500), min_length=1, max_length=8)
     reference_answer = serializers.CharField(max_length=8000, required=False, allow_blank=True, default='')
     sources = serializers.ListField(child=serializers.CharField(max_length=60), max_length=10, default=list)
+
+    def validate(self, data):
+        if data['response_type'] == 'objective':
+            options = normalize_options(data.get('options'))
+            answer = normalize_objective_answer(data['reference_answer'], options)
+            if sum(bool(value) for value in options.values()) < 2 or not options.get(answer):
+                raise ValidationError('选择题需要明确选项与唯一标准答案。')
+            data.update(options=options, reference_answer=answer)
+        return data
 
 
 class TaskInput(serializers.Serializer):
@@ -70,9 +80,10 @@ def assessment_snapshot(question):
 
 def personal_question(definition):
     """A grading input only: this Question is never inserted into the shared bank."""
-    return Question(text=definition['prompt'], q_type='subjective',
+    objective = definition['response_type'] == 'objective'
+    return Question(text=definition['prompt'], q_type='objective' if objective else 'subjective',
         subjective_type='calculate' if definition['response_type'] == 'calculation' else 'short',
-        options=[], correct_answer=definition.get('reference_answer', ''),
+        options=definition.get('options', []), correct_answer=definition.get('reference_answer', ''),
         grading_points='\n'.join(definition['criteria']), difficulty_level='normal')
 
 
@@ -80,7 +91,8 @@ def _personal_snapshot(task):
     return assessment_snapshot(personal_question(task.definition)) | {
         'learning_task_id': str(task.pk), 'source_kind': 'personal_task',
         'response_type': task.definition['response_type'], 'criteria': task.definition['criteria'],
-        'sources': task.definition.get('sources', []), 'label_source': 'model_rubric_grade',
+        'sources': task.definition.get('sources', []),
+        'label_source': 'objective_answer_key' if task.definition['response_type'] == 'objective' else 'model_rubric_grade',
     }
 
 
@@ -219,7 +231,7 @@ def task_result_snapshot(task, result):
 
 
 def task_label_source(task, result):
-    return 'model_rubric_grade' if task.definition or result.question_snapshot.get('q_type') != 'objective' else 'objective_answer_key'
+    return 'objective_answer_key' if result.question_snapshot.get('q_type') == 'objective' else 'model_rubric_grade'
 
 
 def sync_task_result(result):
@@ -265,7 +277,7 @@ def task_data(task):
     if exam:
         for item in exam.results.filter(status='graded'):
             sync_exam_task_result(item.pk)
-    label_source = 'model_rubric_grade' if task.definition or any(s['q_type'] != 'objective' for s in task.question_snapshot.values()) else 'objective_answer_key'
+    label_source = 'model_rubric_grade' if any(s['q_type'] != 'objective' for s in task.question_snapshot.values()) else 'objective_answer_key'
     if summary:
         summary['label_source'] = label_source
     questions = []

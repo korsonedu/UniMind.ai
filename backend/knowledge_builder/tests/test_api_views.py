@@ -25,6 +25,10 @@ def test_serializers_explicit_fields():
         serializers.StepAtomSerializer, serializers.StepSerializer, serializers.BlockSerializer,
         serializers.BlockEdgeSerializer, serializers.InterfaceSerializer,
         serializers.FullKnowledgeTreeSerializer,
+        serializers.BlockResourceSerializer,
+        serializers.AttachBlockResourceSerializer, serializers.BlockQuizRequestSerializer,
+        serializers.BlockResourceInputSerializer, serializers.BlockResourceUpdateSerializer,
+        serializers.PublicAssetCatalogSerializer, serializers.TreePublicAssetImportSerializer,
     ):
         assert isinstance(serializer.Meta.fields, tuple)
         assert set(serializer().fields) == set(serializer.Meta.fields)
@@ -483,3 +487,141 @@ def test_intake_offline_multiturn_follows_its_questions(client, intake_catalog):
     assert draft['scope_inclusions'] == ['完整学科']
     assert draft['depth_preference'] == '综合应用'
     assert draft['learner_background'] == '学过但不熟'
+
+
+@pytest.fixture
+def study_block(user, monkeypatch):
+    monkeypatch.setattr('knowledge_builder.block_study.config._get_api_key', lambda: '')
+    build = models.KnowledgeTreeBuild.objects.create(subject='公司理财', created_by=user, status='COMPLETED')
+    module = models.TreeModule.objects.create(build=build, code='M1', title='价值', path='价值')
+    block = models.LearningBlock.objects.create(build=build, code='B1', short_title='现金流折现', narrative_summary='分析价值')
+    step = models.BlockStep.objects.create(block=block, step_index=1, step_title='折现', step_role='机制')
+    for index, name in enumerate(('现金流', '折现率', '终值', '风险')):
+        atom = models.TreeAtomPoint.objects.create(build=build, module=module, code=f'A{index}', name=name,
+            goal_statement=f'解释{name}如何影响估值', cognitive_level='理解', goal_type='机制', granularity_minutes=4,
+            key_elements=[f'{name}的定义', f'{name}的适用条件'],
+            common_misconceptions=[f'{name}始终固定', f'{name}不受条件影响', f'忽略{name}也能估值'])
+        models.BlockStepAtom.objects.create(step=step, atom=atom, membership_type='core' if index < 2 else 'extension', position=index)
+    return block
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
+def test_block_auto_mount_internal_with_content_scope(study_block, user):
+    from django.utils import timezone
+    from ai_assistant.models import LearningResource
+    from courses.models import Course, CourseModule
+    from knowledge_builder.block_study import auto_mount_internal_resources
+    from core.utils import get_content_institution_id
+    from rest_framework.exceptions import PermissionDenied
+    public = CourseModule.objects.create(name='公开', is_public=True)
+    course = Course.objects.create(title='现金流讲解', is_published=True, module=public)
+    Course.objects.create(title='现金流未发布', is_published=False, module=public)
+    Course.objects.create(title='现金流受限', is_published=True)
+    library = LearningResource.objects.create(user=user, title='折现率笔记', url='https://example.org/note',
+        url_hash='note', excerpt='折现率的定义', read_at=timezone.now())
+    LearningResource.objects.create(user=user, title='现金流归档', url='https://example.org/archive',
+        url_hash='archive', excerpt='现金流', read_at=timezone.now(), is_archived=True)
+    auto_mount_internal_resources(study_block.build)
+    auto_mount_internal_resources(study_block.build)
+    resources = study_block.resources.all()
+    assert resources.count() == 2
+    assert resources.get(source_kind='course').course_id == course.pk
+    assert resources.get(source_kind='library').library_resource_id == library.pk
+    assert all(resource.atom_id and resource.step_id for resource in resources)
+    assert get_content_institution_id() is None
+    with override_settings(UNIMIND_CONTENT_INSTITUTION_ID=None), pytest.raises(PermissionDenied):
+        get_content_institution_id()
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
+def test_block_resource_search_attach_library_delete(client, study_block, user, monkeypatch):
+    monkeypatch.setattr('knowledge_builder.public_asset_resolvers.search_wikipedia_concepts', lambda *args, **kwargs: [])
+    from ai_assistant.models import LearningResource
+    calls = []
+    def public_text(url):
+        calls.append(url)
+        if 'format=rss' in url:
+            return url, '<rss><channel><item><title>现金流教程</title><link>https://example.org/lesson</link><description>讲解</description></item><item><link>http://example.org/insecure</link></item></channel></rss>'
+        return url, '<html><head><title>现金流教程</title><script>secret</script></head><body>现金流的定义与适用条件</body></html>'
+    monkeypatch.setattr('ai_assistant.services.learning_resources.public_text', public_text)
+    path = f'/{study_block.build_id}/blocks/{study_block.pk}/resources/'
+    assert client.get(path).status_code == 200
+    assert not calls
+    search = client.get(path, {'query': '现金流'}).data
+    assert len(search['web_candidates']) == 1
+    response = client.post(path, {'url': 'https://example.org/lesson', 'save_to_library': True}, format='json')
+    assert response.status_code == 201
+    resource = models.BlockResource.objects.get(pk=response.data['id'])
+    assert resource.atom.name == '现金流'
+    assert '现金流的定义' in resource.excerpt and 'secret' not in resource.excerpt
+    library = LearningResource.objects.get(pk=resource.library_resource_id)
+    assert library.user_id == user.pk and library.versions.count() == 1
+    response = client.post(path, {'url': 'https://example.org/lesson', 'save_to_library': True}, format='json')
+    assert response.status_code == 201
+    library.refresh_from_db()
+    assert library.revision == 2 and library.versions.count() == 2
+    assert client.get(path).data['resources'][0]['id'] == resource.pk
+    assert client.delete(path, {'resource_id': resource.pk}, format='json').status_code == 204
+    assert LearningResource.objects.filter(pk=library.pk).exists()
+    assert client.post(path, {'url': 'http://example.org'}, format='json').status_code == 400
+    other = models.KnowledgeTreeBuild.objects.create(subject='other')
+    other_block = models.LearningBlock.objects.create(build=other, code='other', short_title='other')
+    other_step = models.BlockStep.objects.create(block=other_block, step_index=1)
+    assert client.post(path, {'url': 'https://example.org', 'step_id': other_step.pk}, format='json').status_code == 400
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
+def test_block_resource_visibility(client, study_block, user, monkeypatch):
+    monkeypatch.setattr('knowledge_builder.public_asset_resolvers.search_wikipedia_concepts', lambda *args, **kwargs: [])
+    from django.utils import timezone
+    from ai_assistant.models import LearningResource
+    from courses.models import Course, CourseModule
+    from users.models import Institution
+    other = get_user_model().objects.create_user(username='resource_other')
+    foreign = LearningResource.objects.create(user=other, title='现金流私有笔记', url='https://example.org/private',
+        url_hash='private', excerpt='私密笔记', read_at=timezone.now())
+    public = CourseModule.objects.create(name='public', is_public=True)
+    course = Course.objects.create(title='现金流课程', is_published=True, module=public)
+    inst = Institution.objects.create(name='其他机构')
+    restricted = Course.objects.create(title='现金流课程', is_published=True, institution=inst, module=public)
+    path = f'/{study_block.build_id}/blocks/{study_block.pk}/resources/'
+    assert client.post(path, {'course_id': restricted.pk}, format='json').status_code == 400
+    assert client.post(path, {'library_resource_id': foreign.pk}, format='json').status_code == 400
+    assert client.post(path, {'course_id': course.pk}, format='json').status_code == 201
+    assert client.get(f'/{study_block.build_id}/blocks/999999/resources/').status_code == 404
+    own = client.post(path, {'url': 'javascript:alert(1)'}, format='json')
+    assert own.status_code == 400
+    private = models.BlockResource.objects.create(build=study_block.build, block=study_block, source_kind='library',
+        title=foreign.title, url=foreign.url, excerpt=foreign.excerpt, library_resource_id=foreign.pk, created_by=other)
+    assert private.pk not in {row['id'] for row in client.get(path).data['resources']}
+    assert private.pk not in {row['id'] for row in client.get(f'/{study_block.build_id}/').data['blocks'][0]['resources']}
+    client.force_authenticate(user=other)
+    assert client.get(path).status_code == 404
+
+
+@override_settings(UNIMIND_CONTENT_INSTITUTION_ID='global')
+def test_run_build_mounts_resources_after_publication(user, monkeypatch):
+    monkeypatch.setattr('knowledge_builder.public_asset_resolvers.load_seed_public_assets', lambda *args, **kwargs: [])
+    from django.utils import timezone
+    from courses.models import Course, CourseModule
+    from ai_assistant.models import LearningResource
+    from ai_engine.ai_service import AIService
+    from knowledge_builder.tests.test_pipeline_e2e import SemanticFixture
+    from knowledge_builder.pipeline import create_build, run_build
+    fixture = SemanticFixture()
+    monkeypatch.setattr(AIService, 'structured_output', fixture.ai)
+    monkeypatch.setattr('knowledge_builder.embedding_client.httpx.post', fixture.http)
+    public = CourseModule.objects.create(name='公开极限课', is_public=True)
+    Course.objects.create(title='极限能力1课程', is_published=True, module=public)
+    LearningResource.objects.create(user=user, title='连续性能力1资料', url='https://example.org/continuity',
+        url_hash='continuity', excerpt='连续性能力1的讲解', read_at=timezone.now())
+    build = run_build(create_build('微积分', created_by=user).pk)
+    assert build.status == 'COMPLETED'
+    assert set(build.block_resources.values_list('source_kind', flat=True)) == {'course', 'library'}
+    def failed_mount(build):
+        models.BlockResource.objects.create(build=build, block=build.blocks.first(), title='待回滚', url='https://example.org')
+        raise RuntimeError('matching unavailable')
+    monkeypatch.setattr('knowledge_builder.block_study.auto_mount_internal_resources', failed_mount)
+    build = run_build(create_build('微积分', created_by=user).pk)
+    assert build.status == 'COMPLETED' and build.blocks.exists()
+    assert not build.block_resources.exists()

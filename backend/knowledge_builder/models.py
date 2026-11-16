@@ -146,3 +146,67 @@ class CrossBlockInterface(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['block_edge', 'from_atom', 'to_atom'], name='kb_interface_unique')]
+
+
+class PublicAssetCatalog(models.Model):
+    class AssetTrack(models.TextChoices):
+        SPINE = 'spine', 'spine'
+        SPOTLIGHT = 'spotlight', 'spotlight'
+        WIKI = 'wiki', 'wiki'
+
+    subject = models.CharField(max_length=200, db_index=True)
+    title = models.CharField(max_length=200)
+    url = models.CharField(max_length=1000)
+    source_kind = models.CharField(max_length=24, default='web')
+    asset_track = models.CharField(max_length=24, choices=AssetTrack.choices, default=AssetTrack.SPOTLIGHT)
+    pedagogical_role = models.CharField(max_length=32, blank=True, default='')
+    region_scope = models.CharField(max_length=16, choices=[('cn', 'cn'), ('intl', 'intl'), ('global', 'global')], default='global')
+    description = models.TextField(blank=True)
+    topic_keywords = models.JSONField(default=list)
+    segments = models.JSONField(default=list)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='contributed_public_assets')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ('-id',)
+        constraints = [models.UniqueConstraint(fields=['subject', 'url'], name='kb_public_asset_subject_url')]
+
+
+class BlockResource(models.Model):
+    class SourceKind(models.TextChoices):
+        COURSE = 'course', 'course'
+        LIBRARY = 'library', 'library'
+        WEB = 'web', 'web'
+        BILIBILI = 'bilibili', 'bilibili'
+        GITHUB = 'github', 'github'
+        WIKIPEDIA = 'wikipedia', 'wikipedia'
+        YOUTUBE = 'youtube', 'youtube'
+        MARKETPLACE = 'marketplace', 'marketplace'
+
+    class AssetTrack(models.TextChoices):
+        SPINE = 'spine', 'spine'
+        SPOTLIGHT = 'spotlight', 'spotlight'
+        WIKI = 'wiki', 'wiki'
+
+    build = models.ForeignKey(KnowledgeTreeBuild, on_delete=models.CASCADE, related_name='block_resources')
+    block = models.ForeignKey(LearningBlock, on_delete=models.CASCADE, related_name='resources')
+    step = models.ForeignKey(BlockStep, null=True, blank=True, on_delete=models.SET_NULL, related_name='resources')
+    atom = models.ForeignKey(TreeAtomPoint, null=True, blank=True, on_delete=models.SET_NULL, related_name='resources')
+    public_asset = models.ForeignKey(PublicAssetCatalog, null=True, blank=True, on_delete=models.SET_NULL, related_name='mounted_resources')
+    source_kind = models.CharField(max_length=24, choices=SourceKind.choices, default=SourceKind.WEB)
+    asset_track = models.CharField(max_length=24, choices=AssetTrack.choices, default=AssetTrack.SPOTLIGHT)
+    pedagogical_role = models.CharField(max_length=32, blank=True, default='')
+    locator = models.CharField(max_length=120, blank=True, default='')
+    region_scope = models.CharField(max_length=16, choices=[('cn', 'cn'), ('intl', 'intl'), ('global', 'global')], default='global')
+    title = models.CharField(max_length=200)
+    url = models.CharField(max_length=1000)
+    excerpt = models.TextField(blank=True)
+    course_id = models.PositiveIntegerField(null=True, blank=True)
+    library_resource_id = models.PositiveIntegerField(null=True, blank=True)
+    marketplace_listing_id = models.PositiveIntegerField(null=True, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_block_resources')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('id',)

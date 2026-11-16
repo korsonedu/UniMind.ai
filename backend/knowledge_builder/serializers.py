@@ -91,12 +91,110 @@ class StepSerializer(serializers.ModelSerializer):
         fields = ('id', 'step_index', 'step_title', 'step_role', 'branch_condition', 'intra_lines', 'step_atoms')
 
 
+class BlockResourceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.BlockResource
+        fields = ('id', 'block', 'step', 'atom', 'public_asset', 'source_kind', 'asset_track', 'pedagogical_role', 'locator', 'region_scope', 'title', 'url', 'excerpt', 'course_id', 'library_resource_id', 'marketplace_listing_id', 'created_at')
+
+
+class BlockResourceInputSerializer(serializers.Serializer):
+    url = serializers.URLField(required=False, max_length=1000)
+    course_id = serializers.IntegerField(required=False, min_value=1)
+    library_resource_id = serializers.IntegerField(required=False, min_value=1)
+    public_asset_id = serializers.IntegerField(required=False, min_value=1)
+    marketplace_listing_id = serializers.IntegerField(required=False, min_value=1)
+    asset_track = serializers.ChoiceField(choices=models.BlockResource.AssetTrack.values, required=False)
+    pedagogical_role = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    locator = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    step_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    atom_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    save_to_library = serializers.BooleanField(default=False)
+
+    def validate_url(self, value):
+        if not value.startswith('https://'):
+            raise serializers.ValidationError('请提供公开 HTTPS 链接。')
+        return value
+
+    class Meta:
+        fields = ('url', 'course_id', 'library_resource_id', 'public_asset_id', 'marketplace_listing_id', 'asset_track', 'pedagogical_role', 'locator', 'step_id', 'atom_id', 'save_to_library')
+
+
+class AttachBlockResourceSerializer(BlockResourceInputSerializer):
+    class Meta:
+        fields = ('url', 'course_id', 'library_resource_id', 'public_asset_id', 'marketplace_listing_id', 'asset_track', 'pedagogical_role', 'locator', 'step_id', 'atom_id', 'save_to_library')
+
+
+class PublicAssetCatalogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.PublicAssetCatalog
+        fields = ('id', 'subject', 'title', 'url', 'source_kind', 'asset_track', 'pedagogical_role', 'region_scope', 'description', 'topic_keywords', 'segments', 'created_at')
+
+
+class TreePublicAssetImportSerializer(serializers.Serializer):
+    url = serializers.URLField(required=False, max_length=1000)
+    title = serializers.CharField(required=False, max_length=200)
+    asset_track = serializers.ChoiceField(choices=models.BlockResource.AssetTrack.values, required=False)
+    pedagogical_role = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    outline_text = serializers.CharField(required=False, allow_blank=True, max_length=100000)
+    public_asset_id = serializers.IntegerField(required=False, min_value=1)
+    marketplace_listing_id = serializers.IntegerField(required=False, min_value=1)
+    album_id = serializers.IntegerField(required=False, min_value=1)
+    target_block_id = serializers.IntegerField(required=False, min_value=1)
+    target_atom_id = serializers.IntegerField(required=False, min_value=1)
+
+    def validate_url(self, value):
+        if not value.startswith('https://'):
+            raise serializers.ValidationError('请提供公开 HTTPS 链接。')
+        return value
+
+    def validate(self, attrs):
+        sources = ('url', 'public_asset_id', 'marketplace_listing_id', 'album_id')
+        if sum(bool(attrs.get(key)) for key in sources) != 1:
+            raise serializers.ValidationError('请指定一个公开链接、资产池条目、免费市场资源或课程专辑。')
+        return attrs
+
+    class Meta:
+        fields = ('url', 'title', 'asset_track', 'pedagogical_role', 'outline_text', 'public_asset_id', 'marketplace_listing_id', 'album_id', 'target_block_id', 'target_atom_id')
+
+
+class BlockResourceUpdateSerializer(serializers.Serializer):
+    resource_id = serializers.IntegerField(min_value=1)
+    block_id = serializers.IntegerField(required=False, min_value=1)
+    step_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    atom_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    asset_track = serializers.ChoiceField(choices=models.BlockResource.AssetTrack.values, required=False)
+    pedagogical_role = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    locator = serializers.CharField(required=False, allow_blank=True, max_length=120)
+
+    class Meta:
+        fields = ('resource_id', 'block_id', 'step_id', 'atom_id', 'asset_track', 'pedagogical_role', 'locator')
+
+
+class BlockQuizRequestSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=('generate', 'read'), default='generate')
+    project_id = serializers.IntegerField(min_value=1)
+    mode = serializers.ChoiceField(choices=('objective', 'challenge'), default='objective')
+    retest = serializers.BooleanField(default=False)
+
+    class Meta:
+        fields = ('action', 'project_id', 'mode', 'retest')
+
+
 class BlockSerializer(serializers.ModelSerializer):
     steps = StepSerializer(many=True, read_only=True)
+    resources = BlockResourceSerializer(many=True, read_only=True)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        from .block_study import visible_block_resources
+        visible_ids = set(visible_block_resources(request.user if request else None, instance, request=request).values_list('pk', flat=True))
+        data['resources'] = [row for row in data['resources'] if row['id'] in visible_ids]
+        return data
 
     class Meta:
         model = models.LearningBlock
-        fields = ('id', 'code', 'short_title', 'narrative_summary', 'layer', 'contraction_group', 'is_entry_block', 'node_shape', 'order', 'steps')
+        fields = ('id', 'code', 'short_title', 'narrative_summary', 'layer', 'contraction_group', 'is_entry_block', 'node_shape', 'order', 'steps', 'resources')
 
 
 class BlockEdgeSerializer(serializers.ModelSerializer):
@@ -118,6 +216,12 @@ class FullKnowledgeTreeSerializer(BuildSummarySerializer):
     blocks = BlockSerializer(many=True, read_only=True)
     block_edges = BlockEdgeSerializer(many=True, read_only=True)
     interfaces = InterfaceSerializer(source='cross_block_interfaces', many=True, read_only=True)
+    region_pref = serializers.SerializerMethodField()
+
+    def get_region_pref(self, instance):
+        from .public_asset_service import get_region_preference
+        request = self.context.get('request')
+        return get_region_preference(request.user if request else None, request)
 
     class Meta(BuildSummarySerializer.Meta):
-        fields = (*BuildSummarySerializer.Meta.fields, 'modules', 'atoms', 'atom_edges', 'blocks', 'block_edges', 'interfaces')
+        fields = (*BuildSummarySerializer.Meta.fields, 'modules', 'atoms', 'atom_edges', 'blocks', 'block_edges', 'interfaces', 'region_pref')

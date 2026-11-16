@@ -1,0 +1,2056 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": "finance-corporate-cn",
+      "subject": "金融431",
+      "title": "公司金融学：西南财经大学许志（转载公开课）",
+      "url": "https://www.bilibili.com/video/BV1Qx411Q77m",
+      "source_kind": "bilibili",
+      "asset_track": "spine",
+      "pedagogical_role": "series_episode",
+      "locator": "",
+      "region_scope": "cn",
+      "description": "西南财经大学许志公司金融学公开课的B站转载合集；精选前六P作为基础主线，后续MM与资本成本整讲另列单点。",
+      "summary": "西南财经大学许志公司金融学公开课的B站转载合集；精选前六P作为基础主线，后续MM与资本成本整讲另列单点。",
+      "topic_keywords": [
+        "金融431",
+        "公司理财",
+        "公司金融",
+        "货币时间价值"
+      ],
+      "segments": [
+        {
+          "index": 1,
+          "title": "课程简介-公司金融学",
+          "url": "https://www.bilibili.com/video/BV1Qx411Q77m?p=1",
+          "locator": "P1",
+          "summary": "认识公司金融的课程内容与学习顺序。",
+          "topic_keywords": [
+            "公司金融",
+            "课程导论"
+          ]
+        },
+        {
+          "index": 2,
+          "title": "1 什么是公司金融学？",
+          "url": "https://www.bilibili.com/video/BV1Qx411Q77m?p=2",
+          "locator": "P2",
+          "summary": "从企业投资、融资与现金流认识公司金融。",
+          "topic_keywords": [
+            "公司金融",
+            "投资决策",
+            "融资决策"
+          ]
+        },
+        {
+          "index": 3,
+          "title": "2 公司经营的目标是什么？",
+          "url": "https://www.bilibili.com/video/BV1Qx411Q77m?p=3",
+          "locator": "P3",
+          "summary": "讨论公司经营目标与价值最大化。",
+          "topic_keywords": [
+            "企业价值",
+            "股东财富最大化"
+          ]
+        },
+        {
+          "index": 4,
+          "title": "1.1 单利和复利",
+          "url": "https://www.bilibili.com/video/BV1Qx411Q77m?p=4",
+          "locator": "P4",
+          "summary": "用单利与复利计算货币的时间价值。",
+          "topic_keywords": [
+            "货币时间价值",
+            "单利",
+            "复利"
+          ]
+        },
+        {
+          "index": 5,
+          "title": "1.2 简单的时间价值问题",
+          "url": "https://www.bilibili.com/video/BV1Qx411Q77m?p=5",
+          "locator": "P5",
+          "summary": "通过简单现金流学习现值与终值。",
+          "topic_keywords": [
+            "现值",
+            "终值",
+            "现金流"
+          ]
+        },
+        {
+          "index": 6,
+          "title": "1.3 复杂的时间价值问题",
+          "url": "https://www.bilibili.com/video/BV1Qx411Q77m?p=6",
+          "locator": "P6",
+          "summary": "进一步处理多期现金流的时间价值。",
+          "topic_keywords": [
+            "现金流折现",
+            "年金",
+            "货币时间价值"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "finance-money-cn",
+      "subject": "金融431",
+      "title": "货币金融学：中南财经政法大学（精品课转载）",
+      "url": "https://www.bilibili.com/video/BV1Hv4y147ip",
+      "source_kind": "bilibili",
+      "asset_track": "spine",
+      "pedagogical_role": "series_episode",
+      "locator": "",
+      "region_scope": "cn",
+      "description": "中南财经政法大学货币金融学课程的B站转载合集；精选货币基础六讲。",
+      "summary": "中南财经政法大学货币金融学课程的B站转载合集；精选货币基础六讲。",
+      "topic_keywords": [
+        "金融431",
+        "货币金融学",
+        "货币银行学",
+        "货币制度"
+      ],
+      "segments": [
+        {
+          "index": 1,
+          "title": "货币的产生过程",
+          "url": "https://www.bilibili.com/video/BV1Hv4y147ip?p=1",
+          "locator": "P1",
+          "summary": "从交换关系理解货币的产生。",
+          "topic_keywords": [
+            "货币",
+            "交换"
+          ]
+        },
+        {
+          "index": 2,
+          "title": "货币形式的发展",
+          "url": "https://www.bilibili.com/video/BV1Hv4y147ip?p=2",
+          "locator": "P2",
+          "summary": "梳理货币形式的演进。",
+          "topic_keywords": [
+            "货币形式",
+            "信用货币"
+          ]
+        },
+        {
+          "index": 3,
+          "title": "货币的价值尺度与流通手段职能",
+          "url": "https://www.bilibili.com/video/BV1Hv4y147ip?p=3",
+          "locator": "P3",
+          "summary": "理解货币计价与交换职能。",
+          "topic_keywords": [
+            "价值尺度",
+            "流通手段"
+          ]
+        },
+        {
+          "index": 4,
+          "title": "货币的储藏货币、国际货币及其他职能",
+          "url": "https://www.bilibili.com/video/BV1Hv4y147ip?p=4",
+          "locator": "P4",
+          "summary": "学习货币的储藏与国际支付相关职能。",
+          "topic_keywords": [
+            "货币职能",
+            "价值储藏"
+          ]
+        },
+        {
+          "index": 5,
+          "title": "货币的范围与层次",
+          "url": "https://www.bilibili.com/video/BV1Hv4y147ip?p=5",
+          "locator": "P5",
+          "summary": "理解货币供给的统计范围和层次。",
+          "topic_keywords": [
+            "货币层次",
+            "货币供给"
+          ]
+        },
+        {
+          "index": 6,
+          "title": "货币制度",
+          "url": "https://www.bilibili.com/video/BV1Hv4y147ip?p=6",
+          "locator": "P6",
+          "summary": "认识货币制度的组成与演变。",
+          "topic_keywords": [
+            "货币制度",
+            "金本位",
+            "信用货币制度"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "finance-mit-intl",
+      "subject": "金融431",
+      "title": "MIT 15.401 Finance Theory I",
+      "url": "https://ocw.mit.edu/courses/15-401-finance-theory-i-fall-2008/",
+      "source_kind": "web",
+      "asset_track": "spine",
+      "pedagogical_role": "series_episode",
+      "locator": "",
+      "region_scope": "intl",
+      "description": "Andrew Lo的MIT金融理论公开课，按估值、风险与资本预算精选六个主题章节。",
+      "summary": "Andrew Lo的MIT金融理论公开课，按估值、风险与资本预算精选六个主题章节。",
+      "topic_keywords": [
+        "金融431",
+        "公司金融",
+        "投资学",
+        "CAPM"
+      ],
+      "segments": [
+        {
+          "index": 1,
+          "title": "现值关系",
+          "url": "https://ocw.mit.edu/courses/15-401-finance-theory-i-fall-2008/pages/video-lectures-and-slides/present-value-relations/",
+          "locator": "现值关系",
+          "summary": "现金流折现与现值计算。",
+          "topic_keywords": [
+            "现值",
+            "NPV",
+            "年金"
+          ]
+        },
+        {
+          "index": 2,
+          "title": "固定收益证券",
+          "url": "https://ocw.mit.edu/courses/15-401-finance-theory-i-fall-2008/pages/video-lectures-and-slides/fixed-income-securities/",
+          "locator": "固定收益证券",
+          "summary": "债券估值、即期利率与期限结构。",
+          "topic_keywords": [
+            "债券",
+            "利率期限结构",
+            "收益率曲线"
+          ]
+        },
+        {
+          "index": 3,
+          "title": "股票估值",
+          "url": "https://ocw.mit.edu/courses/15-401-finance-theory-i-fall-2008/pages/video-lectures-and-slides/equities/",
+          "locator": "股票估值",
+          "summary": "股票与股权现金流估值。",
+          "topic_keywords": [
+            "股票估值",
+            "股利折现"
+          ]
+        },
+        {
+          "index": 4,
+          "title": "投资组合理论",
+          "url": "https://ocw.mit.edu/courses/15-401-finance-theory-i-fall-2008/pages/video-lectures-and-slides/portfolio-theory/",
+          "locator": "投资组合理论",
+          "summary": "风险分散与均值方差分析。",
+          "topic_keywords": [
+            "投资组合",
+            "有效前沿"
+          ]
+        },
+        {
+          "index": 5,
+          "title": "CAPM与APT",
+          "url": "https://ocw.mit.edu/courses/15-401-finance-theory-i-fall-2008/pages/video-lectures-and-slides/the-capm-and-apt/",
+          "locator": "CAPM与APT",
+          "summary": "系统性风险与资产要求收益率。",
+          "topic_keywords": [
+            "CAPM",
+            "APT",
+            "贝塔"
+          ]
+        },
+        {
+          "index": 6,
+          "title": "资本预算",
+          "url": "https://ocw.mit.edu/courses/15-401-finance-theory-i-fall-2008/pages/video-lectures-and-slides/capital-budgeting/",
+          "locator": "资本预算",
+          "summary": "以现金流和折现率评价投资项目。",
+          "topic_keywords": [
+            "资本预算",
+            "NPV",
+            "资本成本"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "finance-capm-cn",
+      "subject": "金融431",
+      "title": "清华五道口：资产定价基石CAPM",
+      "url": "https://www.bilibili.com/video/BV1G34y1k7j4?p=1&t=0",
+      "source_kind": "bilibili",
+      "asset_track": "spotlight",
+      "pedagogical_role": "concept_intuition",
+      "locator": "P1 · 00:00",
+      "region_scope": "cn",
+      "description": "清华五道口官方公益课整讲，从00:00开始学习CAPM与资产定价。",
+      "summary": "清华五道口官方公益课整讲，从00:00开始学习CAPM与资产定价。",
+      "topic_keywords": [
+        "CAPM",
+        "资本资产定价模型",
+        "贝塔",
+        "系统性风险"
+      ],
+      "segments": []
+    },
+    {
+      "id": "finance-mm-cn",
+      "subject": "金融431",
+      "title": "许志：莫迪格里亚尼和米勒定理（无税）",
+      "url": "https://www.bilibili.com/video/BV1Qx411Q77m?p=28&t=0",
+      "source_kind": "bilibili",
+      "asset_track": "spotlight",
+      "pedagogical_role": "core_derivation",
+      "locator": "P28 · 00:00",
+      "region_scope": "cn",
+      "description": "公司金融学P28整讲，从00:00开始学习无税MM定理与资本结构。",
+      "summary": "公司金融学P28整讲，从00:00开始学习无税MM定理与资本结构。",
+      "topic_keywords": [
+        "MM定理",
+        "莫迪利安尼-米勒定理",
+        "资本结构"
+      ],
+      "segments": []
+    },
+    {
+      "id": "finance-wacc-cn",
+      "subject": "金融431",
+      "title": "许志：加权平均资本成本法",
+      "url": "https://www.bilibili.com/video/BV1Qx411Q77m?p=33&t=0",
+      "source_kind": "bilibili",
+      "asset_track": "spotlight",
+      "pedagogical_role": "worked_example",
+      "locator": "P33 · 00:00",
+      "region_scope": "cn",
+      "description": "公司金融学P33整讲，从00:00开始学习加权平均资本成本法。",
+      "summary": "公司金融学P33整讲，从00:00开始学习加权平均资本成本法。",
+      "topic_keywords": [
+        "WACC",
+        "加权平均资本成本",
+        "资本成本"
+      ],
+      "segments": []
+    },
+    {
+      "id": "finance-term-cn",
+      "subject": "金融431",
+      "title": "货币金融学：利息期限结构和利率市场化",
+      "url": "https://www.bilibili.com/video/BV1Hv4y147ip?p=16&t=0",
+      "source_kind": "bilibili",
+      "asset_track": "spotlight",
+      "pedagogical_role": "concept_intuition",
+      "locator": "P16 · 00:00",
+      "region_scope": "cn",
+      "description": "货币金融学P16整讲，从00:00开始学习利率期限结构与利率市场化。",
+      "summary": "货币金融学P16整讲，从00:00开始学习利率期限结构与利率市场化。",
+      "topic_keywords": [
+        "利率期限结构",
+        "收益率曲线",
+        "利率市场化"
+      ],
+      "segments": []
+    },
+    {
+      "id": "finance-capm-mit",
+      "subject": "金融431",
+      "title": "MIT：CAPM与APT推导",
+      "url": "https://ocw.mit.edu/courses/15-401-finance-theory-i-fall-2008/pages/video-lectures-and-slides/the-capm-and-apt/",
+      "source_kind": "web",
+      "asset_track": "spotlight",
+      "pedagogical_role": "core_derivation",
+      "locator": "The CAPM and APT",
+      "region_scope": "intl",
+      "description": "配合公开视频与课件学习CAPM、市场组合及风险溢价。",
+      "summary": "配合公开视频与课件学习CAPM、市场组合及风险溢价。",
+      "topic_keywords": [
+        "CAPM",
+        "APT",
+        "风险溢价"
+      ],
+      "segments": []
+    },
+    {
+      "id": "finance-capm-wiki-zh",
+      "subject": "金融431",
+      "title": "资本资产定价模型",
+      "url": "https://zh.wikipedia.org/wiki/%E8%B5%84%E6%9C%AC%E8%B5%84%E4%BA%A7%E5%AE%9A%E4%BB%B7%E6%A8%A1%E5%9E%8B#CAPM%E4%B9%8B%E5%B0%8E%E5%87%BA",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#CAPM之導出",
+      "region_scope": "intl",
+      "description": "查阅CAPM的定义、收益率公式与模型假设。",
+      "summary": "查阅CAPM的定义、收益率公式与模型假设。",
+      "topic_keywords": [
+        "金融431",
+        "CAPM",
+        "资本资产定价模型",
+        "系统性风险"
+      ],
+      "segments": []
+    },
+    {
+      "id": "finance-capm-wiki-en",
+      "subject": "金融431",
+      "title": "Capital asset pricing model",
+      "url": "https://en.wikipedia.org/wiki/Capital_asset_pricing_model#Formula",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#Formula",
+      "region_scope": "intl",
+      "description": "查阅CAPM的定义、收益率公式与模型假设。",
+      "summary": "查阅CAPM的定义、收益率公式与模型假设。",
+      "topic_keywords": [
+        "金融431",
+        "CAPM",
+        "资本资产定价模型",
+        "系统性风险"
+      ],
+      "segments": []
+    },
+    {
+      "id": "finance-mm-wiki-zh",
+      "subject": "金融431",
+      "title": "莫迪利安尼-米勒定理",
+      "url": "https://zh.wikipedia.org/wiki/%E8%8E%AB%E8%BF%AA%E5%88%A9%E5%AE%89%E5%B0%BC-%E7%B1%B3%E5%8B%92%E5%AE%9A%E7%90%86#%E6%97%A0%E7%A8%8E%E7%9A%84MM%E5%91%BD%E9%A2%98%EF%BC%88MM%E5%AE%9A%E7%90%86%EF%BC%89%E6%80%BB%E7%BB%93",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#无税的MM命题（MM定理）总结",
+      "region_scope": "intl",
+      "description": "查阅MM定理中的公司价值、资本结构及税收影响。",
+      "summary": "查阅MM定理中的公司价值、资本结构及税收影响。",
+      "topic_keywords": [
+        "金融431",
+        "MM定理",
+        "资本结构"
+      ],
+      "segments": []
+    },
+    {
+      "id": "finance-mm-wiki-en",
+      "subject": "金融431",
+      "title": "Modigliani–Miller theorem",
+      "url": "https://en.wikipedia.org/wiki/Modigliani%E2%80%93Miller_theorem#Without_taxes",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#Without taxes",
+      "region_scope": "intl",
+      "description": "查阅MM定理中的公司价值、资本结构及税收影响。",
+      "summary": "查阅MM定理中的公司价值、资本结构及税收影响。",
+      "topic_keywords": [
+        "金融431",
+        "MM定理",
+        "资本结构"
+      ],
+      "segments": []
+    },
+    {
+      "id": "finance-wacc-wiki-zh",
+      "subject": "金融431",
+      "title": "加权平均资本成本",
+      "url": "https://zh.wikipedia.org/wiki/%E5%8A%A0%E6%9D%83%E5%B9%B3%E5%9D%87%E8%B5%84%E6%9C%AC%E6%88%90%E6%9C%AC#%E5%85%AC%E5%BC%8F",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#公式",
+      "region_scope": "intl",
+      "description": "查阅债务与权益成本的加权计算及税盾处理。",
+      "summary": "查阅债务与权益成本的加权计算及税盾处理。",
+      "topic_keywords": [
+        "金融431",
+        "WACC",
+        "加权平均资本成本"
+      ],
+      "segments": []
+    },
+    {
+      "id": "finance-wacc-wiki-en",
+      "subject": "金融431",
+      "title": "Weighted average cost of capital",
+      "url": "https://en.wikipedia.org/wiki/Weighted_average_cost_of_capital#Calculation",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#Calculation",
+      "region_scope": "intl",
+      "description": "查阅债务与权益成本的加权计算及税盾处理。",
+      "summary": "查阅债务与权益成本的加权计算及税盾处理。",
+      "topic_keywords": [
+        "金融431",
+        "WACC",
+        "加权平均资本成本"
+      ],
+      "segments": []
+    },
+    {
+      "id": "finance-term-wiki-zh",
+      "subject": "金融431",
+      "title": "收益率曲线",
+      "url": "https://zh.wikipedia.org/wiki/%E6%94%B6%E7%9B%8A%E7%8E%87%E6%9B%B2%E7%BA%BF#%E5%85%B8%E5%9E%8B%E7%9A%84%E6%94%B6%E7%9B%8A%E7%8E%87%E6%9B%B2%E7%B7%9A",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#典型的收益率曲線",
+      "region_scope": "intl",
+      "description": "查阅不同期限收益率的曲线形状及期限结构理论。",
+      "summary": "查阅不同期限收益率的曲线形状及期限结构理论。",
+      "topic_keywords": [
+        "金融431",
+        "收益率曲线",
+        "利率期限结构"
+      ],
+      "segments": []
+    },
+    {
+      "id": "finance-term-wiki-en",
+      "subject": "金融431",
+      "title": "Yield curve",
+      "url": "https://en.wikipedia.org/wiki/Yield_curve#Theory",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#Theory",
+      "region_scope": "intl",
+      "description": "查阅不同期限收益率的曲线形状及期限结构理论。",
+      "summary": "查阅不同期限收益率的曲线形状及期限结构理论。",
+      "topic_keywords": [
+        "金融431",
+        "收益率曲线",
+        "利率期限结构"
+      ],
+      "segments": []
+    },
+    {
+      "id": "cs-notes-global",
+      "subject": "计算机408",
+      "title": "CS-Notes：操作系统与网络基础",
+      "url": "https://github.com/CyC2018/CS-Notes",
+      "source_kind": "github",
+      "asset_track": "spine",
+      "pedagogical_role": "series_episode",
+      "locator": "",
+      "region_scope": "intl",
+      "description": "中文开源计算机基础笔记，精选操作系统五章与网络目录。",
+      "summary": "中文开源计算机基础笔记，精选操作系统五章与网络目录。",
+      "topic_keywords": [
+        "计算机408",
+        "操作系统",
+        "计算机网络",
+        "计算机基础"
+      ],
+      "segments": [
+        {
+          "index": 1,
+          "title": "计算机操作系统 - 概述",
+          "url": "https://github.com/CyC2018/CS-Notes/blob/master/notes/%E8%AE%A1%E7%AE%97%E6%9C%BA%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%20-%20%E6%A6%82%E8%BF%B0.md",
+          "locator": "计算机操作系统 - 概述.md",
+          "summary": "阅读概述的核心概念、示例与参考资料。",
+          "topic_keywords": [
+            "操作系统",
+            "系统调用"
+          ]
+        },
+        {
+          "index": 2,
+          "title": "计算机操作系统 - 进程管理",
+          "url": "https://github.com/CyC2018/CS-Notes/blob/master/notes/%E8%AE%A1%E7%AE%97%E6%9C%BA%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%20-%20%E8%BF%9B%E7%A8%8B%E7%AE%A1%E7%90%86.md",
+          "locator": "计算机操作系统 - 进程管理.md",
+          "summary": "阅读进程管理的核心概念、示例与参考资料。",
+          "topic_keywords": [
+            "进程",
+            "线程",
+            "调度"
+          ]
+        },
+        {
+          "index": 3,
+          "title": "计算机操作系统 - 死锁",
+          "url": "https://github.com/CyC2018/CS-Notes/blob/master/notes/%E8%AE%A1%E7%AE%97%E6%9C%BA%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%20-%20%E6%AD%BB%E9%94%81.md",
+          "locator": "计算机操作系统 - 死锁.md",
+          "summary": "阅读死锁的核心概念、示例与参考资料。",
+          "topic_keywords": [
+            "死锁",
+            "资源分配"
+          ]
+        },
+        {
+          "index": 4,
+          "title": "计算机操作系统 - 内存管理",
+          "url": "https://github.com/CyC2018/CS-Notes/blob/master/notes/%E8%AE%A1%E7%AE%97%E6%9C%BA%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%20-%20%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86.md",
+          "locator": "计算机操作系统 - 内存管理.md",
+          "summary": "阅读内存管理的核心概念、示例与参考资料。",
+          "topic_keywords": [
+            "虚拟内存",
+            "页表",
+            "页面置换"
+          ]
+        },
+        {
+          "index": 5,
+          "title": "计算机操作系统 - 设备管理",
+          "url": "https://github.com/CyC2018/CS-Notes/blob/master/notes/%E8%AE%A1%E7%AE%97%E6%9C%BA%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%20-%20%E8%AE%BE%E5%A4%87%E7%AE%A1%E7%90%86.md",
+          "locator": "计算机操作系统 - 设备管理.md",
+          "summary": "阅读设备管理的核心概念、示例与参考资料。",
+          "topic_keywords": [
+            "设备管理",
+            "I/O"
+          ]
+        },
+        {
+          "index": 6,
+          "title": "计算机网络 - 目录",
+          "url": "https://github.com/CyC2018/CS-Notes/blob/master/notes/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C%20-%20%E7%9B%AE%E5%BD%95.md",
+          "locator": "计算机网络 - 目录.md",
+          "summary": "阅读计算机网络 - 目录的核心概念、示例与参考资料。",
+          "topic_keywords": [
+            "计算机网络",
+            "协议分层"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cs-mit-intl",
+      "subject": "计算机408",
+      "title": "MIT 6.006 Introduction to Algorithms",
+      "url": "https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-fall-2011/",
+      "source_kind": "web",
+      "asset_track": "spine",
+      "pedagogical_role": "series_episode",
+      "locator": "",
+      "region_scope": "intl",
+      "description": "MIT算法导论公开课前六讲，覆盖算法分析、排序、堆与搜索树。",
+      "summary": "MIT算法导论公开课前六讲，覆盖算法分析、排序、堆与搜索树。",
+      "topic_keywords": [
+        "计算机408",
+        "数据结构",
+        "算法",
+        "复杂度"
+      ],
+      "segments": [
+        {
+          "index": 1,
+          "title": "算法思维与峰值搜索",
+          "url": "https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-fall-2011/resources/lecture-1-algorithmic-thinking-peak-finding/",
+          "locator": "Lecture 1",
+          "summary": "学习算法思维与峰值搜索及其算法实现与复杂度。",
+          "topic_keywords": [
+            "算法分析",
+            "峰值搜索"
+          ]
+        },
+        {
+          "index": 2,
+          "title": "计算模型与文档距离",
+          "url": "https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-fall-2011/resources/lecture-2-models-of-computation-document-distance/",
+          "locator": "Lecture 2",
+          "summary": "学习计算模型与文档距离及其算法实现与复杂度。",
+          "topic_keywords": [
+            "计算模型",
+            "复杂度"
+          ]
+        },
+        {
+          "index": 3,
+          "title": "插入排序与归并排序",
+          "url": "https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-fall-2011/resources/lecture-3-insertion-sort-merge-sort/",
+          "locator": "Lecture 3",
+          "summary": "学习插入排序与归并排序及其算法实现与复杂度。",
+          "topic_keywords": [
+            "插入排序",
+            "归并排序"
+          ]
+        },
+        {
+          "index": 4,
+          "title": "堆与堆排序",
+          "url": "https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-fall-2011/resources/lecture-4-heaps-and-heap-sort/",
+          "locator": "Lecture 4",
+          "summary": "学习堆与堆排序及其算法实现与复杂度。",
+          "topic_keywords": [
+            "堆",
+            "堆排序"
+          ]
+        },
+        {
+          "index": 5,
+          "title": "二叉搜索树",
+          "url": "https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-fall-2011/resources/lecture-5-binary-search-trees-bst-sort/",
+          "locator": "Lecture 5",
+          "summary": "学习二叉搜索树及其算法实现与复杂度。",
+          "topic_keywords": [
+            "二叉搜索树",
+            "BST"
+          ]
+        },
+        {
+          "index": 6,
+          "title": "AVL树",
+          "url": "https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-fall-2011/resources/lecture-6-avl-trees-avl-sort/",
+          "locator": "Lecture 6",
+          "summary": "学习AVL树及其算法实现与复杂度。",
+          "topic_keywords": [
+            "AVL树",
+            "平衡树"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cs-kmp-global",
+      "subject": "计算机408",
+      "title": "OI Wiki源码：前缀函数与KMP算法",
+      "url": "https://github.com/OI-wiki/OI-wiki/blob/master/docs/string/kmp.md",
+      "source_kind": "github",
+      "asset_track": "spotlight",
+      "pedagogical_role": "core_derivation",
+      "locator": "kmp.md",
+      "region_scope": "intl",
+      "description": "从前缀函数推导KMP匹配过程，并结合代码学习线性时间复杂度。",
+      "summary": "从前缀函数推导KMP匹配过程，并结合代码学习线性时间复杂度。",
+      "topic_keywords": [
+        "计算机408",
+        "数据结构",
+        "KMP",
+        "前缀函数",
+        "字符串匹配"
+      ],
+      "segments": []
+    },
+    {
+      "id": "cs-vmemory-global",
+      "subject": "计算机408",
+      "title": "CS-Notes：虚拟内存与分页地址映射",
+      "url": "https://github.com/CyC2018/CS-Notes/blob/master/notes/%E8%AE%A1%E7%AE%97%E6%9C%BA%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%20-%20%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86.md#%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98",
+      "source_kind": "github",
+      "asset_track": "spotlight",
+      "pedagogical_role": "core_derivation",
+      "locator": "#虚拟内存",
+      "region_scope": "intl",
+      "description": "通过内存管理专章学习虚拟地址、页表、地址转换和页面置换。",
+      "summary": "通过内存管理专章学习虚拟地址、页表、地址转换和页面置换。",
+      "topic_keywords": [
+        "计算机408",
+        "操作系统",
+        "虚拟内存",
+        "页表",
+        "TLB"
+      ],
+      "segments": []
+    },
+    {
+      "id": "cs-bplus-global",
+      "subject": "计算机408",
+      "title": "CS-Notes：B+树与数据库索引",
+      "url": "https://github.com/CyC2018/CS-Notes/blob/master/notes/MySQL.md#b-tree-%E5%8E%9F%E7%90%86",
+      "source_kind": "github",
+      "asset_track": "spotlight",
+      "pedagogical_role": "worked_example",
+      "locator": "#B+ Tree 原理",
+      "region_scope": "intl",
+      "description": "阅读MySQL专章中的索引部分，理解B+树的节点布局、范围扫描与磁盘访问。",
+      "summary": "阅读MySQL专章中的索引部分，理解B+树的节点布局、范围扫描与磁盘访问。",
+      "topic_keywords": [
+        "计算机408",
+        "数据结构",
+        "B+树",
+        "B+Tree",
+        "索引"
+      ],
+      "segments": []
+    },
+    {
+      "id": "cs-kmp-wiki-cn",
+      "subject": "计算机408",
+      "title": "前缀函数与KMP算法：OI Wiki",
+      "url": "https://oi-wiki.org/string/kmp/",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "前缀函数与KMP算法",
+      "region_scope": "cn",
+      "description": "OI Wiki的KMP参考页，包含前缀函数、算法步骤与实现。",
+      "summary": "OI Wiki的KMP参考页，包含前缀函数、算法步骤与实现。",
+      "topic_keywords": [
+        "计算机408",
+        "KMP",
+        "前缀函数",
+        "字符串"
+      ],
+      "segments": []
+    },
+    {
+      "id": "cs-kmp-wiki-en",
+      "subject": "计算机408",
+      "title": "Knuth–Morris–Pratt algorithm",
+      "url": "https://en.wikipedia.org/wiki/Knuth%E2%80%93Morris%E2%80%93Pratt_algorithm#KMP_algorithm",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#KMP algorithm",
+      "region_scope": "intl",
+      "description": "查阅KMP搜索算法、部分匹配表及复杂度。",
+      "summary": "查阅KMP搜索算法、部分匹配表及复杂度。",
+      "topic_keywords": [
+        "计算机408",
+        "KMP",
+        "字符串匹配"
+      ],
+      "segments": []
+    },
+    {
+      "id": "cs-vmemory-wiki-zh",
+      "subject": "计算机408",
+      "title": "虚拟内存",
+      "url": "https://zh.wikipedia.org/wiki/%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98#%E7%94%A8%E9%80%94%E4%B8%8E%E5%AE%9E%E7%8E%B0",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#用途与实现",
+      "region_scope": "intl",
+      "description": "查阅虚拟内存的地址空间、分页与操作系统实现。",
+      "summary": "查阅虚拟内存的地址空间、分页与操作系统实现。",
+      "topic_keywords": [
+        "计算机408",
+        "操作系统",
+        "虚拟内存",
+        "分页"
+      ],
+      "segments": []
+    },
+    {
+      "id": "cs-vmemory-wiki-en",
+      "subject": "计算机408",
+      "title": "Virtual memory",
+      "url": "https://en.wikipedia.org/wiki/Virtual_memory#Paged_virtual_memory",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#Paged virtual memory",
+      "region_scope": "intl",
+      "description": "查阅虚拟内存的地址空间、分页与操作系统实现。",
+      "summary": "查阅虚拟内存的地址空间、分页与操作系统实现。",
+      "topic_keywords": [
+        "计算机408",
+        "操作系统",
+        "虚拟内存",
+        "分页"
+      ],
+      "segments": []
+    },
+    {
+      "id": "cs-bplus-wiki-zh",
+      "subject": "计算机408",
+      "title": "B+树",
+      "url": "https://zh.wikipedia.org/wiki/B%2B%E6%A0%91#%E8%8A%82%E7%82%B9%E7%BB%93%E6%9E%84",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#节点结构",
+      "region_scope": "intl",
+      "description": "查阅B+树的节点结构、查找与更新算法。",
+      "summary": "查阅B+树的节点结构、查找与更新算法。",
+      "topic_keywords": [
+        "计算机408",
+        "数据结构",
+        "B+树",
+        "B+Tree"
+      ],
+      "segments": []
+    },
+    {
+      "id": "cs-bplus-wiki-en",
+      "subject": "计算机408",
+      "title": "B+ tree",
+      "url": "https://en.wikipedia.org/wiki/B%2B_tree#Structure",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#Structure",
+      "region_scope": "intl",
+      "description": "查阅B+树的节点结构、查找与更新算法。",
+      "summary": "查阅B+树的节点结构、查找与更新算法。",
+      "topic_keywords": [
+        "计算机408",
+        "数据结构",
+        "B+树",
+        "B+Tree"
+      ],
+      "segments": []
+    },
+    {
+      "id": "calculus-bili-cn",
+      "subject": "微积分",
+      "title": "【官方双语/合集】微积分的本质 - 系列合集",
+      "url": "https://www.bilibili.com/video/BV1qW411N7FU",
+      "source_kind": "bilibili",
+      "asset_track": "spine",
+      "pedagogical_role": "series_episode",
+      "locator": "",
+      "region_scope": "cn",
+      "description": "3Blue1Brown官方B站双语合集，精选前六P；极限P7作为单点入口。",
+      "summary": "3Blue1Brown官方B站双语合集，精选前六P；极限P7作为单点入口。",
+      "topic_keywords": [
+        "微积分",
+        "高数",
+        "导数",
+        "极限",
+        "积分"
+      ],
+      "segments": [
+        {
+          "index": 1,
+          "title": "01",
+          "url": "https://www.bilibili.com/video/BV1qW411N7FU?p=1",
+          "locator": "P1",
+          "summary": "从面积和变化率建立微积分的总体直觉。",
+          "topic_keywords": [
+            "微积分",
+            "面积",
+            "变化率"
+          ]
+        },
+        {
+          "index": 2,
+          "title": "02 - 导数的悖论",
+          "url": "https://www.bilibili.com/video/BV1qW411N7FU?p=2",
+          "locator": "P2",
+          "summary": "理解瞬时变化率与导数的极限思想。",
+          "topic_keywords": [
+            "导数",
+            "瞬时变化率"
+          ]
+        },
+        {
+          "index": 3,
+          "title": "03 - 用几何来求导",
+          "url": "https://www.bilibili.com/video/BV1qW411N7FU?p=3",
+          "locator": "P3",
+          "summary": "用几何变化理解求导公式。",
+          "topic_keywords": [
+            "求导",
+            "几何直觉"
+          ]
+        },
+        {
+          "index": 4,
+          "title": "04 - 直观理解链式法则和乘积法则",
+          "url": "https://www.bilibili.com/video/BV1qW411N7FU?p=4",
+          "locator": "P4",
+          "summary": "以图形理解复合函数和乘积求导。",
+          "topic_keywords": [
+            "链式法则",
+            "乘积法则"
+          ]
+        },
+        {
+          "index": 5,
+          "title": "05 - 指数函数求导",
+          "url": "https://www.bilibili.com/video/BV1qW411N7FU?p=5",
+          "locator": "P5",
+          "summary": "建立指数函数与导数的联系。",
+          "topic_keywords": [
+            "指数函数",
+            "导数"
+          ]
+        },
+        {
+          "index": 6,
+          "title": "06 - 隐函数求导是怎么回事？",
+          "url": "https://www.bilibili.com/video/BV1qW411N7FU?p=6",
+          "locator": "P6",
+          "summary": "学习隐函数关系中的变化率。",
+          "topic_keywords": [
+            "隐函数",
+            "隐函数求导"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "calculus-mit-intl",
+      "subject": "微积分",
+      "title": "MIT 18.01SC Single Variable Calculus",
+      "url": "https://ocw.mit.edu/courses/18-01sc-single-variable-calculus-fall-2010/",
+      "source_kind": "web",
+      "asset_track": "spine",
+      "pedagogical_role": "series_episode",
+      "locator": "",
+      "region_scope": "intl",
+      "description": "MIT单变量微积分公开课，配有讲授视频、习题及解答。",
+      "summary": "MIT单变量微积分公开课，配有讲授视频、习题及解答。",
+      "topic_keywords": [
+        "微积分",
+        "高数",
+        "极限",
+        "导数",
+        "积分"
+      ],
+      "segments": [
+        {
+          "index": 1,
+          "title": "导数定义与基本法则",
+          "url": "https://ocw.mit.edu/courses/18-01sc-single-variable-calculus-fall-2010/pages/1.-differentiation/part-a-definition-and-basic-rules/",
+          "locator": "导数定义与基本法则",
+          "summary": "学习导数定义与基本法则的定义、方法与练习。",
+          "topic_keywords": [
+            "导数",
+            "极限",
+            "连续"
+          ]
+        },
+        {
+          "index": 2,
+          "title": "隐函数求导与反函数",
+          "url": "https://ocw.mit.edu/courses/18-01sc-single-variable-calculus-fall-2010/pages/1.-differentiation/part-b-implicit-differentiation-and-inverse-functions/",
+          "locator": "隐函数求导与反函数",
+          "summary": "学习隐函数求导与反函数的定义、方法与练习。",
+          "topic_keywords": [
+            "隐函数",
+            "反函数"
+          ]
+        },
+        {
+          "index": 3,
+          "title": "近似与曲线描绘",
+          "url": "https://ocw.mit.edu/courses/18-01sc-single-variable-calculus-fall-2010/pages/unit-2-applications-of-differentiation/part-a-approximation-and-curve-sketching/",
+          "locator": "近似与曲线描绘",
+          "summary": "学习近似与曲线描绘的定义、方法与练习。",
+          "topic_keywords": [
+            "近似",
+            "曲线",
+            "导数应用"
+          ]
+        },
+        {
+          "index": 4,
+          "title": "中值定理与原函数",
+          "url": "https://ocw.mit.edu/courses/18-01sc-single-variable-calculus-fall-2010/pages/unit-2-applications-of-differentiation/part-c-mean-value-theorem-antiderivatives-and-differential-equations/",
+          "locator": "中值定理与原函数",
+          "summary": "学习中值定理与原函数的定义、方法与练习。",
+          "topic_keywords": [
+            "中值定理",
+            "原函数"
+          ]
+        },
+        {
+          "index": 5,
+          "title": "定积分与微积分基本定理",
+          "url": "https://ocw.mit.edu/courses/18-01sc-single-variable-calculus-fall-2010/pages/unit-3-the-definite-integral-and-its-applications/part-a-definition-of-the-definite-integral-and-first-fundamental-theorem/",
+          "locator": "定积分与微积分基本定理",
+          "summary": "学习定积分与微积分基本定理的定义、方法与练习。",
+          "topic_keywords": [
+            "定积分",
+            "微积分基本定理"
+          ]
+        },
+        {
+          "index": 6,
+          "title": "泰勒级数",
+          "url": "https://ocw.mit.edu/courses/18-01sc-single-variable-calculus-fall-2010/pages/unit-5-exploring-the-infinite/part-b-taylor-series/",
+          "locator": "泰勒级数",
+          "summary": "学习泰勒级数的定义、方法与练习。",
+          "topic_keywords": [
+            "泰勒级数",
+            "幂级数"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "calculus-limit-cn",
+      "subject": "微积分",
+      "title": "3Blue1Brown：极限的直觉",
+      "url": "https://www.bilibili.com/video/BV1qW411N7FU?p=7&t=0",
+      "source_kind": "bilibili",
+      "asset_track": "spotlight",
+      "pedagogical_role": "concept_intuition",
+      "locator": "P7 · 00:00",
+      "region_scope": "cn",
+      "description": "官方双语合集P7《07 - 极限》，从00:00开始理解趋近过程与极限。",
+      "summary": "官方双语合集P7《07 - 极限》，从00:00开始理解趋近过程与极限。",
+      "topic_keywords": [
+        "微积分",
+        "高数",
+        "极限",
+        "连续"
+      ],
+      "segments": []
+    },
+    {
+      "id": "calculus-mvt-mit",
+      "subject": "微积分",
+      "title": "MIT：中值定理、原函数与微分方程",
+      "url": "https://ocw.mit.edu/courses/18-01sc-single-variable-calculus-fall-2010/pages/unit-2-applications-of-differentiation/part-c-mean-value-theorem-antiderivatives-and-differential-equations/",
+      "source_kind": "web",
+      "asset_track": "spotlight",
+      "pedagogical_role": "core_derivation",
+      "locator": "Part C: Mean Value Theorem",
+      "region_scope": "intl",
+      "description": "通过中值定理主题单元学习定理条件、结论与应用练习。",
+      "summary": "通过中值定理主题单元学习定理条件、结论与应用练习。",
+      "topic_keywords": [
+        "微积分",
+        "中值定理",
+        "拉格朗日中值定理",
+        "罗尔定理"
+      ],
+      "segments": []
+    },
+    {
+      "id": "calculus-mvt-cn",
+      "subject": "微积分",
+      "title": "MIT：中值定理的描述（英文单点视频）",
+      "url": "https://www.ocw.mit.edu/courses/18-01sc-single-variable-calculus-fall-2010/resources/clip-1-description-of-the-mean-value-theorem/",
+      "source_kind": "web",
+      "asset_track": "spotlight",
+      "pedagogical_role": "concept_intuition",
+      "locator": "00:00",
+      "region_scope": "intl",
+      "description": "MIT单变量微积分Lecture 14的Clip 1：Description of the Mean Value Theorem，从00:00开始学习中值定理的描述。",
+      "summary": "MIT单变量微积分Lecture 14的Clip 1：Description of the Mean Value Theorem，从00:00开始学习中值定理的描述。",
+      "topic_keywords": [
+        "微积分",
+        "高数",
+        "中值定理",
+        "拉格朗日中值定理"
+      ],
+      "segments": []
+    },
+    {
+      "id": "calculus-limit-wiki-zh",
+      "subject": "微积分",
+      "title": "函数极限",
+      "url": "https://zh.wikipedia.org/wiki/%E5%87%BD%E6%95%B0%E6%9E%81%E9%99%90#%E6%AD%A3%E5%BC%8F%E5%AE%9A%E4%B9%89",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#正式定义",
+      "region_scope": "intl",
+      "description": "查阅函数极限的严格定义、左右极限与连续性。",
+      "summary": "查阅函数极限的严格定义、左右极限与连续性。",
+      "topic_keywords": [
+        "微积分",
+        "高数",
+        "极限",
+        "连续",
+        "函数极限"
+      ],
+      "segments": []
+    },
+    {
+      "id": "calculus-limit-wiki-en",
+      "subject": "微积分",
+      "title": "Limit of a function",
+      "url": "https://en.wikipedia.org/wiki/Limit_of_a_function#Relationship_to_continuity",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#Relationship to continuity",
+      "region_scope": "intl",
+      "description": "查阅函数极限的严格定义、左右极限与连续性。",
+      "summary": "查阅函数极限的严格定义、左右极限与连续性。",
+      "topic_keywords": [
+        "微积分",
+        "高数",
+        "极限",
+        "连续",
+        "函数极限"
+      ],
+      "segments": []
+    },
+    {
+      "id": "calculus-mvt-wiki-zh",
+      "subject": "微积分",
+      "title": "中值定理",
+      "url": "https://zh.wikipedia.org/wiki/%E4%B8%AD%E5%80%BC%E5%AE%9A%E7%90%86#%E5%BE%AE%E5%88%86%E4%B8%AD%E5%80%BC%E5%AE%9A%E7%90%86",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#微分中值定理",
+      "region_scope": "intl",
+      "description": "查阅微分中值定理的条件、几何含义与证明。",
+      "summary": "查阅微分中值定理的条件、几何含义与证明。",
+      "topic_keywords": [
+        "微积分",
+        "高数",
+        "中值定理",
+        "罗尔定理",
+        "拉格朗日中值定理"
+      ],
+      "segments": []
+    },
+    {
+      "id": "calculus-mvt-wiki-en",
+      "subject": "微积分",
+      "title": "Mean value theorem",
+      "url": "https://en.wikipedia.org/wiki/Mean_value_theorem#Statement",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#Statement",
+      "region_scope": "intl",
+      "description": "查阅微分中值定理的条件、几何含义与证明。",
+      "summary": "查阅微分中值定理的条件、几何含义与证明。",
+      "topic_keywords": [
+        "微积分",
+        "高数",
+        "中值定理",
+        "罗尔定理",
+        "拉格朗日中值定理"
+      ],
+      "segments": []
+    },
+    {
+      "id": "linear-bili-cn",
+      "subject": "线性代数",
+      "title": "【官方双语/合集】线性代数的本质 - 系列合集",
+      "url": "https://www.bilibili.com/video/BV1ys411472E",
+      "source_kind": "bilibili",
+      "asset_track": "spine",
+      "pedagogical_role": "series_episode",
+      "locator": "",
+      "region_scope": "cn",
+      "description": "3Blue1Brown官方B站双语合集，精选前六P；特征值与特征向量位于P14。",
+      "summary": "3Blue1Brown官方B站双语合集，精选前六P；特征值与特征向量位于P14。",
+      "topic_keywords": [
+        "线性代数",
+        "线代",
+        "矩阵",
+        "向量",
+        "线性变换"
+      ],
+      "segments": [
+        {
+          "index": 1,
+          "title": "00 - 序言",
+          "url": "https://www.bilibili.com/video/BV1ys411472E?p=1",
+          "locator": "P1",
+          "summary": "了解线性代数的几何学习路径。",
+          "topic_keywords": [
+            "线性代数",
+            "几何直觉"
+          ]
+        },
+        {
+          "index": 2,
+          "title": "01 - 向量究竟是什么？",
+          "url": "https://www.bilibili.com/video/BV1ys411472E?p=2",
+          "locator": "P2",
+          "summary": "从几何与坐标理解向量。",
+          "topic_keywords": [
+            "向量",
+            "坐标"
+          ]
+        },
+        {
+          "index": 3,
+          "title": "02 - 线性组合、张成的空间与基",
+          "url": "https://www.bilibili.com/video/BV1ys411472E?p=3",
+          "locator": "P3",
+          "summary": "理解线性组合、张成空间和基向量。",
+          "topic_keywords": [
+            "线性组合",
+            "基",
+            "张成空间"
+          ]
+        },
+        {
+          "index": 4,
+          "title": "03 - 矩阵与线性变换",
+          "url": "https://www.bilibili.com/video/BV1ys411472E?p=4",
+          "locator": "P4",
+          "summary": "把矩阵理解为线性变换。",
+          "topic_keywords": [
+            "矩阵",
+            "线性变换"
+          ]
+        },
+        {
+          "index": 5,
+          "title": "04 - 矩阵乘法与线性变换复合",
+          "url": "https://www.bilibili.com/video/BV1ys411472E?p=5",
+          "locator": "P5",
+          "summary": "理解矩阵乘法表示变换的先后复合。",
+          "topic_keywords": [
+            "矩阵乘法",
+            "复合变换"
+          ]
+        },
+        {
+          "index": 6,
+          "title": "附注1 - 三维空间中的线性变换",
+          "url": "https://www.bilibili.com/video/BV1ys411472E?p=6",
+          "locator": "P6",
+          "summary": "把线性变换的直觉拓展到三维空间。",
+          "topic_keywords": [
+            "三维空间",
+            "线性变换"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "linear-mit-intl",
+      "subject": "线性代数",
+      "title": "MIT 18.06SC Linear Algebra",
+      "url": "https://ocw.mit.edu/courses/18-06sc-linear-algebra-fall-2011/",
+      "source_kind": "web",
+      "asset_track": "spine",
+      "pedagogical_role": "series_episode",
+      "locator": "",
+      "region_scope": "intl",
+      "description": "Gilbert Strang的MIT线性代数公开课，按方程组、子空间与特征值精选六章。",
+      "summary": "Gilbert Strang的MIT线性代数公开课，按方程组、子空间与特征值精选六章。",
+      "topic_keywords": [
+        "线性代数",
+        "线代",
+        "矩阵",
+        "子空间",
+        "特征值"
+      ],
+      "segments": [
+        {
+          "index": 1,
+          "title": "线性方程的几何",
+          "url": "https://ocw.mit.edu/courses/18-06sc-linear-algebra-fall-2011/pages/ax-b-and-the-four-subspaces/the-geometry-of-linear-equations/",
+          "locator": "线性方程的几何",
+          "summary": "学习线性方程的几何的概念、计算与练习。",
+          "topic_keywords": [
+            "线性方程",
+            "行图像",
+            "列图像"
+          ]
+        },
+        {
+          "index": 2,
+          "title": "矩阵消元",
+          "url": "https://ocw.mit.edu/courses/18-06sc-linear-algebra-fall-2011/pages/ax-b-and-the-four-subspaces/elimination-with-matrices/",
+          "locator": "矩阵消元",
+          "summary": "学习矩阵消元的概念、计算与练习。",
+          "topic_keywords": [
+            "高斯消元",
+            "矩阵"
+          ]
+        },
+        {
+          "index": 3,
+          "title": "矩阵乘法与逆矩阵",
+          "url": "https://ocw.mit.edu/courses/18-06sc-linear-algebra-fall-2011/pages/ax-b-and-the-four-subspaces/multiplication-and-inverse-matrices/",
+          "locator": "矩阵乘法与逆矩阵",
+          "summary": "学习矩阵乘法与逆矩阵的概念、计算与练习。",
+          "topic_keywords": [
+            "矩阵乘法",
+            "逆矩阵"
+          ]
+        },
+        {
+          "index": 4,
+          "title": "列空间与零空间",
+          "url": "https://ocw.mit.edu/courses/18-06sc-linear-algebra-fall-2011/pages/ax-b-and-the-four-subspaces/column-space-and-nullspace/",
+          "locator": "列空间与零空间",
+          "summary": "学习列空间与零空间的概念、计算与练习。",
+          "topic_keywords": [
+            "列空间",
+            "零空间"
+          ]
+        },
+        {
+          "index": 5,
+          "title": "投影矩阵与最小二乘",
+          "url": "https://ocw.mit.edu/courses/18-06sc-linear-algebra-fall-2011/pages/least-squares-determinants-and-eigenvalues/projection-matrices-and-least-squares/",
+          "locator": "投影矩阵与最小二乘",
+          "summary": "学习投影矩阵与最小二乘的概念、计算与练习。",
+          "topic_keywords": [
+            "投影",
+            "最小二乘"
+          ]
+        },
+        {
+          "index": 6,
+          "title": "特征值与特征向量",
+          "url": "https://ocw.mit.edu/courses/18-06sc-linear-algebra-fall-2011/pages/least-squares-determinants-and-eigenvalues/eigenvalues-and-eigenvectors/",
+          "locator": "特征值与特征向量",
+          "summary": "学习特征值与特征向量的概念、计算与练习。",
+          "topic_keywords": [
+            "特征值",
+            "特征向量"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "linear-eigen-cn",
+      "subject": "线性代数",
+      "title": "3Blue1Brown：特征向量与特征值",
+      "url": "https://www.bilibili.com/video/BV1ys411472E?p=14&t=0",
+      "source_kind": "bilibili",
+      "asset_track": "spotlight",
+      "pedagogical_role": "concept_intuition",
+      "locator": "P14 · 00:00",
+      "region_scope": "cn",
+      "description": "官方双语合集P14《10 - 特征向量与特征值》，从00:00开始建立几何直觉。",
+      "summary": "官方双语合集P14《10 - 特征向量与特征值》，从00:00开始建立几何直觉。",
+      "topic_keywords": [
+        "线性代数",
+        "线代",
+        "特征值",
+        "特征向量"
+      ],
+      "segments": []
+    },
+    {
+      "id": "linear-eigen-mit",
+      "subject": "线性代数",
+      "title": "MIT：特征值与特征向量",
+      "url": "https://ocw.mit.edu/courses/18-06sc-linear-algebra-fall-2011/pages/least-squares-determinants-and-eigenvalues/eigenvalues-and-eigenvectors/",
+      "source_kind": "web",
+      "asset_track": "spotlight",
+      "pedagogical_role": "core_derivation",
+      "locator": "Eigenvalues and Eigenvectors",
+      "region_scope": "intl",
+      "description": "结合讲授视频与解题视频学习特征方程和特征向量计算。",
+      "summary": "结合讲授视频与解题视频学习特征方程和特征向量计算。",
+      "topic_keywords": [
+        "线性代数",
+        "特征值",
+        "特征向量"
+      ],
+      "segments": []
+    },
+    {
+      "id": "linear-eigen-wiki-zh",
+      "subject": "线性代数",
+      "title": "特征值和特征向量",
+      "url": "https://zh.wikipedia.org/wiki/%E7%89%B9%E5%BE%81%E5%80%BC%E5%92%8C%E7%89%B9%E5%BE%81%E5%90%91%E9%87%8F#%E5%AE%9A%E4%B9%89",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#定义",
+      "region_scope": "intl",
+      "description": "查阅特征值、特征向量的定义、计算方法与应用。",
+      "summary": "查阅特征值、特征向量的定义、计算方法与应用。",
+      "topic_keywords": [
+        "线性代数",
+        "线代",
+        "特征值",
+        "特征向量"
+      ],
+      "segments": []
+    },
+    {
+      "id": "linear-eigen-wiki-en",
+      "subject": "线性代数",
+      "title": "Eigenvalues and eigenvectors",
+      "url": "https://en.wikipedia.org/wiki/Eigenvalues_and_eigenvectors#Overview",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#Overview",
+      "region_scope": "intl",
+      "description": "查阅特征值、特征向量的定义、计算方法与应用。",
+      "summary": "查阅特征值、特征向量的定义、计算方法与应用。",
+      "topic_keywords": [
+        "线性代数",
+        "线代",
+        "特征值",
+        "特征向量"
+      ],
+      "segments": []
+    },
+    {
+      "id": "general-missing-cn",
+      "subject": "通用",
+      "title": "Missing Semester：计算机教育中缺失的一课（中文）",
+      "url": "https://github.com/missing-semester-cn/missing-semester-cn.github.io",
+      "source_kind": "github",
+      "asset_track": "spine",
+      "pedagogical_role": "series_episode",
+      "locator": "",
+      "region_scope": "intl",
+      "description": "MIT Missing Semester的中文开源翻译，精选六章学习研究与开发常用工具。",
+      "summary": "MIT Missing Semester的中文开源翻译，精选六章学习研究与开发常用工具。",
+      "topic_keywords": [
+        "通用",
+        "工具",
+        "学习工具",
+        "Git",
+        "命令行"
+      ],
+      "segments": [
+        {
+          "index": 1,
+          "title": "课程概览与shell",
+          "url": "https://github.com/missing-semester-cn/missing-semester-cn.github.io/blob/master/_2020/course-shell.md",
+          "locator": "course-shell.md",
+          "summary": "学习课程概览与shell并完成相应练习。",
+          "topic_keywords": [
+            "命令行",
+            "shell"
+          ]
+        },
+        {
+          "index": 2,
+          "title": "Shell工具和脚本",
+          "url": "https://github.com/missing-semester-cn/missing-semester-cn.github.io/blob/master/_2020/shell-tools.md",
+          "locator": "shell-tools.md",
+          "summary": "学习Shell工具和脚本并完成相应练习。",
+          "topic_keywords": [
+            "shell脚本",
+            "自动化"
+          ]
+        },
+        {
+          "index": 3,
+          "title": "编辑器Vim",
+          "url": "https://github.com/missing-semester-cn/missing-semester-cn.github.io/blob/master/_2020/editors.md",
+          "locator": "editors.md",
+          "summary": "学习编辑器Vim并完成相应练习。",
+          "topic_keywords": [
+            "Vim",
+            "编辑器"
+          ]
+        },
+        {
+          "index": 4,
+          "title": "数据整理",
+          "url": "https://github.com/missing-semester-cn/missing-semester-cn.github.io/blob/master/_2020/data-wrangling.md",
+          "locator": "data-wrangling.md",
+          "summary": "学习数据整理并完成相应练习。",
+          "topic_keywords": [
+            "数据整理",
+            "正则表达式"
+          ]
+        },
+        {
+          "index": 5,
+          "title": "命令行环境",
+          "url": "https://github.com/missing-semester-cn/missing-semester-cn.github.io/blob/master/_2020/command-line.md",
+          "locator": "command-line.md",
+          "summary": "学习命令行环境并完成相应练习。",
+          "topic_keywords": [
+            "命令行",
+            "进程"
+          ]
+        },
+        {
+          "index": 6,
+          "title": "版本控制Git",
+          "url": "https://github.com/missing-semester-cn/missing-semester-cn.github.io/blob/master/_2020/version-control.md",
+          "locator": "version-control.md",
+          "summary": "学习版本控制Git并完成相应练习。",
+          "topic_keywords": [
+            "Git",
+            "版本控制"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "general-missing-youtube",
+      "subject": "通用",
+      "title": "MIT Missing Semester 2020：官方视频播放列表",
+      "url": "https://www.youtube.com/playlist?list=PLyzOVJj3bHQuloKGG59rS43e29ro7I57J",
+      "source_kind": "youtube",
+      "asset_track": "spine",
+      "pedagogical_role": "series_episode",
+      "locator": "",
+      "region_scope": "intl",
+      "description": "由MIT课程官网链接的2020年官方视频列表，精选六讲。",
+      "summary": "由MIT课程官网链接的2020年官方视频列表，精选六讲。",
+      "topic_keywords": [
+        "通用",
+        "工具",
+        "shell",
+        "Git",
+        "命令行"
+      ],
+      "segments": [
+        {
+          "index": 1,
+          "title": "课程概览与shell",
+          "url": "https://www.youtube.com/watch?v=Z56Jmr9Z34Q",
+          "locator": "Lecture 1",
+          "summary": "观看课程概览与shell的MIT官方讲授。",
+          "topic_keywords": [
+            "命令行",
+            "shell"
+          ]
+        },
+        {
+          "index": 2,
+          "title": "Shell工具和脚本",
+          "url": "https://www.youtube.com/watch?v=kgII-YWo3Zw",
+          "locator": "Lecture 2",
+          "summary": "观看Shell工具和脚本的MIT官方讲授。",
+          "topic_keywords": [
+            "shell脚本",
+            "自动化"
+          ]
+        },
+        {
+          "index": 3,
+          "title": "编辑器Vim",
+          "url": "https://www.youtube.com/watch?v=a6Q8Na575qc",
+          "locator": "Lecture 3",
+          "summary": "观看编辑器Vim的MIT官方讲授。",
+          "topic_keywords": [
+            "Vim",
+            "编辑器"
+          ]
+        },
+        {
+          "index": 4,
+          "title": "数据整理",
+          "url": "https://www.youtube.com/watch?v=sz_dsktIjt4",
+          "locator": "Lecture 4",
+          "summary": "观看数据整理的MIT官方讲授。",
+          "topic_keywords": [
+            "数据整理",
+            "正则表达式"
+          ]
+        },
+        {
+          "index": 5,
+          "title": "命令行环境",
+          "url": "https://www.youtube.com/watch?v=e8BO_dYxk5c",
+          "locator": "Lecture 5",
+          "summary": "观看命令行环境的MIT官方讲授。",
+          "topic_keywords": [
+            "命令行",
+            "进程"
+          ]
+        },
+        {
+          "index": 6,
+          "title": "版本控制Git",
+          "url": "https://www.youtube.com/watch?v=2sjqTHE0zok",
+          "locator": "Lecture 6",
+          "summary": "观看版本控制Git的MIT官方讲授。",
+          "topic_keywords": [
+            "Git",
+            "版本控制"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "general-git-cn",
+      "subject": "通用",
+      "title": "Missing Semester中文：Git的数据模型",
+      "url": "https://github.com/missing-semester-cn/missing-semester-cn.github.io/blob/master/_2020/version-control.md",
+      "source_kind": "github",
+      "asset_track": "spotlight",
+      "pedagogical_role": "concept_intuition",
+      "locator": "version-control.md",
+      "region_scope": "intl",
+      "description": "从快照、提交历史与分支的数据模型理解Git，再练习常用命令。",
+      "summary": "从快照、提交历史与分支的数据模型理解Git，再练习常用命令。",
+      "topic_keywords": [
+        "通用",
+        "Git",
+        "版本控制",
+        "数据模型"
+      ],
+      "segments": []
+    },
+    {
+      "id": "general-git-youtube",
+      "subject": "通用",
+      "title": "MIT Missing Semester：版本控制Git",
+      "url": "https://www.youtube.com/watch?v=2sjqTHE0zok&t=0",
+      "source_kind": "youtube",
+      "asset_track": "spotlight",
+      "pedagogical_role": "concept_intuition",
+      "locator": "00:00",
+      "region_scope": "intl",
+      "description": "MIT官方课程整讲，从00:00开始学习版本控制的数据模型与Git操作。",
+      "summary": "MIT官方课程整讲，从00:00开始学习版本控制的数据模型与Git操作。",
+      "topic_keywords": [
+        "通用",
+        "Git",
+        "版本控制"
+      ],
+      "segments": []
+    },
+    {
+      "id": "general-meta-wiki-zh",
+      "subject": "通用",
+      "title": "元认知",
+      "url": "https://zh.wikipedia.org/wiki/%E5%85%83%E8%AE%A4%E7%9F%A5#%E5%BE%8C%E8%A8%AD%E8%AA%8D%E7%9F%A5%E7%AD%96%E7%95%A5",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#後設認知策略",
+      "region_scope": "intl",
+      "description": "查阅监控、反思和调整自身学习过程的概念与策略。",
+      "summary": "查阅监控、反思和调整自身学习过程的概念与策略。",
+      "topic_keywords": [
+        "通用",
+        "学习方法",
+        "元认知",
+        "后设认知"
+      ],
+      "segments": []
+    },
+    {
+      "id": "general-meta-wiki-en",
+      "subject": "通用",
+      "title": "Metacognition",
+      "url": "https://en.wikipedia.org/wiki/Metacognition#Definition",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#Definition",
+      "region_scope": "intl",
+      "description": "查阅监控、反思和调整自身学习过程的概念与策略。",
+      "summary": "查阅监控、反思和调整自身学习过程的概念与策略。",
+      "topic_keywords": [
+        "通用",
+        "学习方法",
+        "元认知",
+        "后设认知"
+      ],
+      "segments": []
+    },
+    {
+      "id": "cs-hello-algo-cn",
+      "subject": "计算机408",
+      "title": "Hello 算法：数据结构与算法开源教材",
+      "url": "https://www.hello-algo.com/",
+      "source_kind": "wikipedia",
+      "asset_track": "spine",
+      "pedagogical_role": "series_episode",
+      "locator": "",
+      "region_scope": "cn",
+      "description": "从数组与链表到树、图和查找，按开源教材章节学习数据结构。",
+      "summary": "从数组与链表到树、图和查找，按开源教材章节学习数据结构。",
+      "topic_keywords": [
+        "计算机408",
+        "数据结构",
+        "数组",
+        "链表",
+        "栈",
+        "树",
+        "图"
+      ],
+      "segments": [
+        {
+          "index": 1,
+          "title": "数组",
+          "url": "https://www.hello-algo.com/chapter_array_and_linkedlist/array/",
+          "locator": "数组",
+          "summary": "学习数组的定义与基本操作。",
+          "topic_keywords": [
+            "数组"
+          ]
+        },
+        {
+          "index": 2,
+          "title": "链表",
+          "url": "https://www.hello-algo.com/chapter_array_and_linkedlist/linked_list/",
+          "locator": "链表",
+          "summary": "学习链表的定义与基本操作。",
+          "topic_keywords": [
+            "链表"
+          ]
+        },
+        {
+          "index": 3,
+          "title": "栈",
+          "url": "https://www.hello-algo.com/chapter_stack_and_queue/stack/",
+          "locator": "栈",
+          "summary": "学习栈的定义与基本操作。",
+          "topic_keywords": [
+            "栈"
+          ]
+        },
+        {
+          "index": 4,
+          "title": "队列",
+          "url": "https://www.hello-algo.com/chapter_stack_and_queue/queue/",
+          "locator": "队列",
+          "summary": "学习队列的定义与基本操作。",
+          "topic_keywords": [
+            "队列"
+          ]
+        },
+        {
+          "index": 5,
+          "title": "二叉树",
+          "url": "https://www.hello-algo.com/chapter_tree/binary_tree/",
+          "locator": "二叉树",
+          "summary": "学习二叉树的定义与基本操作。",
+          "topic_keywords": [
+            "二叉树"
+          ]
+        },
+        {
+          "index": 6,
+          "title": "图",
+          "url": "https://www.hello-algo.com/chapter_graph/graph/",
+          "locator": "图",
+          "summary": "学习图的定义与基本操作。",
+          "topic_keywords": [
+            "图"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cs-kmp-oi-cn",
+      "subject": "计算机408",
+      "title": "OI-Wiki：KMP 前缀函数",
+      "url": "https://oi-wiki.org/string/kmp/#前缀函数",
+      "source_kind": "wikipedia",
+      "asset_track": "spotlight",
+      "pedagogical_role": "concept_intuition",
+      "locator": "#前缀函数",
+      "region_scope": "cn",
+      "description": "从前缀函数的定义与递推理解 KMP 字符串匹配。",
+      "summary": "从前缀函数的定义与递推理解 KMP 字符串匹配。",
+      "topic_keywords": [
+        "计算机408",
+        "数据结构",
+        "KMP",
+        "字符串",
+        "前缀函数"
+      ],
+      "segments": []
+    },
+    {
+      "id": "cs-array-hello-wiki-cn",
+      "subject": "计算机408",
+      "title": "Hello 算法：数组",
+      "url": "https://www.hello-algo.com/chapter_array_and_linkedlist/array/",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "",
+      "region_scope": "cn",
+      "description": "查阅数组的定义、随机访问与插入删除操作。",
+      "summary": "查阅数组的定义、随机访问与插入删除操作。",
+      "topic_keywords": [
+        "计算机408",
+        "数据结构",
+        "数组",
+        "顺序存储"
+      ],
+      "segments": []
+    },
+    {
+      "id": "calculus-integral-oi-wiki-cn",
+      "subject": "微积分",
+      "title": "OI-Wiki：定积分与数值积分",
+      "url": "https://oi-wiki.org/math/numerical/integral/#定积分的定义",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#定积分的定义",
+      "region_scope": "cn",
+      "description": "查阅定积分的几何意义与辛普森积分公式。",
+      "summary": "查阅定积分的几何意义与辛普森积分公式。",
+      "topic_keywords": [
+        "微积分",
+        "高等数学",
+        "定积分",
+        "积分",
+        "数值积分",
+        "辛普森法"
+      ],
+      "segments": []
+    },
+    {
+      "id": "linear-eigen-oi-wiki-cn",
+      "subject": "线性代数",
+      "title": "OI-Wiki：特征值与特征向量",
+      "url": "https://oi-wiki.org/math/linear-algebra/char-poly/#特征值与特征向量",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#特征值与特征向量",
+      "region_scope": "cn",
+      "description": "查阅特征值、特征向量与矩阵特征多项式的定义及计算。",
+      "summary": "查阅特征值、特征向量与矩阵特征多项式的定义及计算。",
+      "topic_keywords": [
+        "线性代数",
+        "线代",
+        "矩阵",
+        "特征值",
+        "特征向量",
+        "特征多项式"
+      ],
+      "segments": []
+    },
+    {
+      "id": "linear-matrix-oi-wiki-cn",
+      "subject": "线性代数",
+      "title": "OI-Wiki：矩阵",
+      "url": "https://oi-wiki.org/math/linear-algebra/matrix/",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "",
+      "region_scope": "cn",
+      "description": "查阅矩阵的定义、加法、乘法及矩阵运算性质。",
+      "summary": "查阅矩阵的定义、加法、乘法及矩阵运算性质。",
+      "topic_keywords": [
+        "线性代数",
+        "线代",
+        "矩阵",
+        "矩阵乘法"
+      ],
+      "segments": []
+    },
+    {
+      "id": "general-git-oi-cn",
+      "subject": "通用",
+      "title": "OI-Wiki：Git 开源工具讲义",
+      "url": "https://oi-wiki.org/tools/git/",
+      "source_kind": "wikipedia",
+      "asset_track": "spine",
+      "pedagogical_role": "series_episode",
+      "locator": "",
+      "region_scope": "cn",
+      "description": "按安装配置、仓库操作、提交记录与分支管理学习 Git。",
+      "summary": "按安装配置、仓库操作、提交记录与分支管理学习 Git。",
+      "topic_keywords": [
+        "通用",
+        "Git",
+        "版本控制",
+        "学习工具",
+        "命令行"
+      ],
+      "segments": [
+        {
+          "index": 1,
+          "title": "安装",
+          "url": "https://oi-wiki.org/tools/git/#安装",
+          "locator": "#安装",
+          "summary": "学习 Git 的安装。",
+          "topic_keywords": [
+            "安装"
+          ]
+        },
+        {
+          "index": 2,
+          "title": "配置",
+          "url": "https://oi-wiki.org/tools/git/#配置",
+          "locator": "#配置",
+          "summary": "学习 Git 的配置。",
+          "topic_keywords": [
+            "配置"
+          ]
+        },
+        {
+          "index": 3,
+          "title": "新建 Git 仓库",
+          "url": "https://oi-wiki.org/tools/git/#新建-git-仓库",
+          "locator": "#新建-git-仓库",
+          "summary": "学习 Git 的新建 Git 仓库。",
+          "topic_keywords": [
+            "新建 Git 仓库"
+          ]
+        },
+        {
+          "index": 4,
+          "title": "跟踪文件",
+          "url": "https://oi-wiki.org/tools/git/#跟踪文件",
+          "locator": "#跟踪文件",
+          "summary": "学习 Git 的跟踪文件。",
+          "topic_keywords": [
+            "跟踪文件"
+          ]
+        },
+        {
+          "index": 5,
+          "title": "查看提交记录",
+          "url": "https://oi-wiki.org/tools/git/#查看提交记录",
+          "locator": "#查看提交记录",
+          "summary": "学习 Git 的查看提交记录。",
+          "topic_keywords": [
+            "查看提交记录"
+          ]
+        },
+        {
+          "index": 6,
+          "title": "分支管理",
+          "url": "https://oi-wiki.org/tools/git/#分支管理",
+          "locator": "#分支管理",
+          "summary": "学习 Git 的分支管理。",
+          "topic_keywords": [
+            "分支管理"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "general-git-branch-cn",
+      "subject": "通用",
+      "title": "OI-Wiki：Git 分支管理",
+      "url": "https://oi-wiki.org/tools/git/#分支管理",
+      "source_kind": "wikipedia",
+      "asset_track": "spotlight",
+      "pedagogical_role": "concept_intuition",
+      "locator": "#分支管理",
+      "region_scope": "cn",
+      "description": "通过创建与合并分支练习版本控制。",
+      "summary": "通过创建与合并分支练习版本控制。",
+      "topic_keywords": [
+        "通用",
+        "Git",
+        "版本控制",
+        "分支",
+        "合并"
+      ],
+      "segments": []
+    },
+    {
+      "id": "general-git-oi-wiki-cn",
+      "subject": "通用",
+      "title": "OI-Wiki：Git 仓库操作",
+      "url": "https://oi-wiki.org/tools/git/#仓库操作基础",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#仓库操作基础",
+      "region_scope": "cn",
+      "description": "查阅仓库创建、文件跟踪及提交记录等 Git 基础概念。",
+      "summary": "查阅仓库创建、文件跟踪及提交记录等 Git 基础概念。",
+      "topic_keywords": [
+        "通用",
+        "Git",
+        "版本控制",
+        "仓库",
+        "提交记录",
+        "学习工具"
+      ],
+      "segments": []
+    },
+    {
+      "id": "finance-risk-oi-wiki-cn",
+      "subject": "金融431",
+      "title": "OI-Wiki：投资收益与风险的概率论基础",
+      "url": "https://oi-wiki.org/math/probability/exp-var/",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "",
+      "region_scope": "cn",
+      "description": "投资收益与风险的概率论基础：查阅数学期望、方差与协方差，为理解投资组合的收益与风险计算准备数学知识。",
+      "summary": "投资收益与风险的概率论基础：查阅数学期望、方差与协方差，为理解投资组合的收益与风险计算准备数学知识。",
+      "topic_keywords": [
+        "金融431",
+        "投资学",
+        "投资组合",
+        "收益",
+        "风险",
+        "期望",
+        "方差",
+        "协方差"
+      ],
+      "segments": []
+    }
+  ]
+}
