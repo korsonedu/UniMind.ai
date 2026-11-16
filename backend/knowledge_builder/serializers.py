@@ -200,12 +200,11 @@ class BlockSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         request = self.context.get('request')
         user_id = request.user.pk if request and request.user.is_authenticated else None
-        from .public_asset_service import get_region_preference
-        region = get_region_preference(request.user if request else None, request,
-                                       request.query_params.get('region', '') if request else '')
+        from .public_asset_service import get_region_preference, public_asset_allowed
+        region = get_region_preference(request.user if request else None, request)
         visible_ids = {row.pk for row in instance.resources.all()
                        if (row.source_kind != 'library' or user_id is not None and row.created_by_id == user_id)
-                       and (region != 'cn' or row.region_scope != 'intl')}
+                       and public_asset_allowed({'url': row.url, 'region_scope': row.region_scope}, region)}
         data['resources'] = [row for row in data['resources'] if row['id'] in visible_ids]
         return data
 
@@ -234,6 +233,12 @@ class FullKnowledgeTreeSerializer(BuildSummarySerializer):
     block_edges = BlockEdgeSerializer(many=True, read_only=True)
     interfaces = InterfaceSerializer(source='cross_block_interfaces', many=True, read_only=True)
     block_progress = serializers.SerializerMethodField()
+    region_pref = serializers.SerializerMethodField()
+
+    def get_region_pref(self, instance):
+        from .public_asset_service import get_region_preference
+        request = self.context.get('request')
+        return get_region_preference(request.user if request else None, request)
 
     def get_block_progress(self, instance):
         request = self.context.get('request')
@@ -242,4 +247,4 @@ class FullKnowledgeTreeSerializer(BuildSummarySerializer):
         return UserBlockProgressSerializer(instance.user_block_progress.filter(user=request.user), many=True).data
 
     class Meta(BuildSummarySerializer.Meta):
-        fields = (*BuildSummarySerializer.Meta.fields, 'modules', 'atoms', 'atom_edges', 'blocks', 'block_edges', 'interfaces', 'block_progress')
+        fields = (*BuildSummarySerializer.Meta.fields, 'modules', 'atoms', 'atom_edges', 'blocks', 'block_edges', 'interfaces', 'block_progress', 'region_pref')

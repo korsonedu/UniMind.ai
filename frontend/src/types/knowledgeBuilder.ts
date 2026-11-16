@@ -141,6 +141,7 @@ export interface CrossBlockInterface {
 }
 
 export interface KnowledgeTreeBuildDetail extends BuildSummary {
+  region_pref?: 'cn' | 'intl';
   block_progress?: UserBlockProgressItem[];
   modules: TreeModule[];
   atoms: TreeAtomPoint[];
@@ -270,6 +271,7 @@ export interface BlockResourceUpdatePayload {
   asset_track?: AssetTrack; pedagogical_role?: string; locator?: string;
 }
 export interface BlockResourcesResponse {
+  region_pref?: 'cn' | 'intl';
   resources: BlockResourceItem[];
   internal_candidates: (BlockResourcePayload & { source_kind: 'course' | 'library'; title: string; url: string; excerpt: string })[];
   web_candidates: { title: string; url: string; summary: string }[];

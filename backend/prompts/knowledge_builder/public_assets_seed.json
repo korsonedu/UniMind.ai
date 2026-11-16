@@ -376,7 +376,7 @@
       "asset_track": "wiki",
       "pedagogical_role": "wiki_reference",
       "locator": "#CAPM之導出",
-      "region_scope": "cn",
+      "region_scope": "intl",
       "description": "查阅CAPM的定义、收益率公式与模型假设。",
       "summary": "查阅CAPM的定义、收益率公式与模型假设。",
       "topic_keywords": [
@@ -416,7 +416,7 @@
       "asset_track": "wiki",
       "pedagogical_role": "wiki_reference",
       "locator": "#无税的MM命题（MM定理）总结",
-      "region_scope": "cn",
+      "region_scope": "intl",
       "description": "查阅MM定理中的公司价值、资本结构及税收影响。",
       "summary": "查阅MM定理中的公司价值、资本结构及税收影响。",
       "topic_keywords": [
@@ -454,7 +454,7 @@
       "asset_track": "wiki",
       "pedagogical_role": "wiki_reference",
       "locator": "#公式",
-      "region_scope": "cn",
+      "region_scope": "intl",
       "description": "查阅债务与权益成本的加权计算及税盾处理。",
       "summary": "查阅债务与权益成本的加权计算及税盾处理。",
       "topic_keywords": [
@@ -492,7 +492,7 @@
       "asset_track": "wiki",
       "pedagogical_role": "wiki_reference",
       "locator": "#典型的收益率曲線",
-      "region_scope": "cn",
+      "region_scope": "intl",
       "description": "查阅不同期限收益率的曲线形状及期限结构理论。",
       "summary": "查阅不同期限收益率的曲线形状及期限结构理论。",
       "topic_keywords": [
@@ -530,7 +530,7 @@
       "asset_track": "spine",
       "pedagogical_role": "series_episode",
       "locator": "",
-      "region_scope": "global",
+      "region_scope": "intl",
       "description": "中文开源计算机基础笔记，精选操作系统五章与网络目录。",
       "summary": "中文开源计算机基础笔记，精选操作系统五章与网络目录。",
       "topic_keywords": [
@@ -706,7 +706,7 @@
       "asset_track": "spotlight",
       "pedagogical_role": "core_derivation",
       "locator": "kmp.md",
-      "region_scope": "global",
+      "region_scope": "intl",
       "description": "从前缀函数推导KMP匹配过程，并结合代码学习线性时间复杂度。",
       "summary": "从前缀函数推导KMP匹配过程，并结合代码学习线性时间复杂度。",
       "topic_keywords": [
@@ -727,7 +727,7 @@
       "asset_track": "spotlight",
       "pedagogical_role": "core_derivation",
       "locator": "#虚拟内存",
-      "region_scope": "global",
+      "region_scope": "intl",
       "description": "通过内存管理专章学习虚拟地址、页表、地址转换和页面置换。",
       "summary": "通过内存管理专章学习虚拟地址、页表、地址转换和页面置换。",
       "topic_keywords": [
@@ -748,7 +748,7 @@
       "asset_track": "spotlight",
       "pedagogical_role": "worked_example",
       "locator": "#B+ Tree 原理",
-      "region_scope": "global",
+      "region_scope": "intl",
       "description": "阅读MySQL专章中的索引部分，理解B+树的节点布局、范围扫描与磁盘访问。",
       "summary": "阅读MySQL专章中的索引部分，理解B+树的节点布局、范围扫描与磁盘访问。",
       "topic_keywords": [
@@ -808,7 +808,7 @@
       "asset_track": "wiki",
       "pedagogical_role": "wiki_reference",
       "locator": "#用途与实现",
-      "region_scope": "cn",
+      "region_scope": "intl",
       "description": "查阅虚拟内存的地址空间、分页与操作系统实现。",
       "summary": "查阅虚拟内存的地址空间、分页与操作系统实现。",
       "topic_keywords": [
@@ -848,7 +848,7 @@
       "asset_track": "wiki",
       "pedagogical_role": "wiki_reference",
       "locator": "#节点结构",
-      "region_scope": "cn",
+      "region_scope": "intl",
       "description": "查阅B+树的节点结构、查找与更新算法。",
       "summary": "查阅B+树的节点结构、查找与更新算法。",
       "topic_keywords": [
@@ -1107,7 +1107,7 @@
       "asset_track": "spotlight",
       "pedagogical_role": "concept_intuition",
       "locator": "00:00",
-      "region_scope": "global",
+      "region_scope": "intl",
       "description": "MIT单变量微积分Lecture 14的Clip 1：Description of the Mean Value Theorem，从00:00开始学习中值定理的描述。",
       "summary": "MIT单变量微积分Lecture 14的Clip 1：Description of the Mean Value Theorem，从00:00开始学习中值定理的描述。",
       "topic_keywords": [
@@ -1127,7 +1127,7 @@
       "asset_track": "wiki",
       "pedagogical_role": "wiki_reference",
       "locator": "#正式定义",
-      "region_scope": "cn",
+      "region_scope": "intl",
       "description": "查阅函数极限的严格定义、左右极限与连续性。",
       "summary": "查阅函数极限的严格定义、左右极限与连续性。",
       "topic_keywords": [
@@ -1169,7 +1169,7 @@
       "asset_track": "wiki",
       "pedagogical_role": "wiki_reference",
       "locator": "#微分中值定理",
-      "region_scope": "cn",
+      "region_scope": "intl",
       "description": "查阅微分中值定理的条件、几何含义与证明。",
       "summary": "查阅微分中值定理的条件、几何含义与证明。",
       "topic_keywords": [
@@ -1428,7 +1428,7 @@
       "asset_track": "wiki",
       "pedagogical_role": "wiki_reference",
       "locator": "#定义",
-      "region_scope": "cn",
+      "region_scope": "intl",
       "description": "查阅特征值、特征向量的定义、计算方法与应用。",
       "summary": "查阅特征值、特征向量的定义、计算方法与应用。",
       "topic_keywords": [
@@ -1468,7 +1468,7 @@
       "asset_track": "spine",
       "pedagogical_role": "series_episode",
       "locator": "",
-      "region_scope": "global",
+      "region_scope": "intl",
       "description": "MIT Missing Semester的中文开源翻译，精选六章学习研究与开发常用工具。",
       "summary": "MIT Missing Semester的中文开源翻译，精选六章学习研究与开发常用工具。",
       "topic_keywords": [
@@ -1644,7 +1644,7 @@
       "asset_track": "spotlight",
       "pedagogical_role": "concept_intuition",
       "locator": "version-control.md",
-      "region_scope": "global",
+      "region_scope": "intl",
       "description": "从快照、提交历史与分支的数据模型理解Git，再练习常用命令。",
       "summary": "从快照、提交历史与分支的数据模型理解Git，再练习常用命令。",
       "topic_keywords": [
@@ -1683,7 +1683,7 @@
       "asset_track": "wiki",
       "pedagogical_role": "wiki_reference",
       "locator": "#後設認知策略",
-      "region_scope": "cn",
+      "region_scope": "intl",
       "description": "查阅监控、反思和调整自身学习过程的概念与策略。",
       "summary": "查阅监控、反思和调整自身学习过程的概念与策略。",
       "topic_keywords": [
@@ -1711,6 +1711,344 @@
         "学习方法",
         "元认知",
         "后设认知"
+      ],
+      "segments": []
+    },
+    {
+      "id": "cs-hello-algo-cn",
+      "subject": "计算机408",
+      "title": "Hello 算法：数据结构与算法开源教材",
+      "url": "https://www.hello-algo.com/",
+      "source_kind": "wikipedia",
+      "asset_track": "spine",
+      "pedagogical_role": "series_episode",
+      "locator": "",
+      "region_scope": "cn",
+      "description": "从数组与链表到树、图和查找，按开源教材章节学习数据结构。",
+      "summary": "从数组与链表到树、图和查找，按开源教材章节学习数据结构。",
+      "topic_keywords": [
+        "计算机408",
+        "数据结构",
+        "数组",
+        "链表",
+        "栈",
+        "树",
+        "图"
+      ],
+      "segments": [
+        {
+          "index": 1,
+          "title": "数组",
+          "url": "https://www.hello-algo.com/chapter_array_and_linkedlist/array/",
+          "locator": "数组",
+          "summary": "学习数组的定义与基本操作。",
+          "topic_keywords": [
+            "数组"
+          ]
+        },
+        {
+          "index": 2,
+          "title": "链表",
+          "url": "https://www.hello-algo.com/chapter_array_and_linkedlist/linked_list/",
+          "locator": "链表",
+          "summary": "学习链表的定义与基本操作。",
+          "topic_keywords": [
+            "链表"
+          ]
+        },
+        {
+          "index": 3,
+          "title": "栈",
+          "url": "https://www.hello-algo.com/chapter_stack_and_queue/stack/",
+          "locator": "栈",
+          "summary": "学习栈的定义与基本操作。",
+          "topic_keywords": [
+            "栈"
+          ]
+        },
+        {
+          "index": 4,
+          "title": "队列",
+          "url": "https://www.hello-algo.com/chapter_stack_and_queue/queue/",
+          "locator": "队列",
+          "summary": "学习队列的定义与基本操作。",
+          "topic_keywords": [
+            "队列"
+          ]
+        },
+        {
+          "index": 5,
+          "title": "二叉树",
+          "url": "https://www.hello-algo.com/chapter_tree/binary_tree/",
+          "locator": "二叉树",
+          "summary": "学习二叉树的定义与基本操作。",
+          "topic_keywords": [
+            "二叉树"
+          ]
+        },
+        {
+          "index": 6,
+          "title": "图",
+          "url": "https://www.hello-algo.com/chapter_graph/graph/",
+          "locator": "图",
+          "summary": "学习图的定义与基本操作。",
+          "topic_keywords": [
+            "图"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cs-kmp-oi-cn",
+      "subject": "计算机408",
+      "title": "OI-Wiki：KMP 前缀函数",
+      "url": "https://oi-wiki.org/string/kmp/#前缀函数",
+      "source_kind": "wikipedia",
+      "asset_track": "spotlight",
+      "pedagogical_role": "concept_intuition",
+      "locator": "#前缀函数",
+      "region_scope": "cn",
+      "description": "从前缀函数的定义与递推理解 KMP 字符串匹配。",
+      "summary": "从前缀函数的定义与递推理解 KMP 字符串匹配。",
+      "topic_keywords": [
+        "计算机408",
+        "数据结构",
+        "KMP",
+        "字符串",
+        "前缀函数"
+      ],
+      "segments": []
+    },
+    {
+      "id": "cs-array-hello-wiki-cn",
+      "subject": "计算机408",
+      "title": "Hello 算法：数组",
+      "url": "https://www.hello-algo.com/chapter_array_and_linkedlist/array/",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "",
+      "region_scope": "cn",
+      "description": "查阅数组的定义、随机访问与插入删除操作。",
+      "summary": "查阅数组的定义、随机访问与插入删除操作。",
+      "topic_keywords": [
+        "计算机408",
+        "数据结构",
+        "数组",
+        "顺序存储"
+      ],
+      "segments": []
+    },
+    {
+      "id": "calculus-integral-oi-wiki-cn",
+      "subject": "微积分",
+      "title": "OI-Wiki：定积分与数值积分",
+      "url": "https://oi-wiki.org/math/numerical/integral/#定积分的定义",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#定积分的定义",
+      "region_scope": "cn",
+      "description": "查阅定积分的几何意义与辛普森积分公式。",
+      "summary": "查阅定积分的几何意义与辛普森积分公式。",
+      "topic_keywords": [
+        "微积分",
+        "高等数学",
+        "定积分",
+        "积分",
+        "数值积分",
+        "辛普森法"
+      ],
+      "segments": []
+    },
+    {
+      "id": "linear-eigen-oi-wiki-cn",
+      "subject": "线性代数",
+      "title": "OI-Wiki：特征值与特征向量",
+      "url": "https://oi-wiki.org/math/linear-algebra/char-poly/#特征值与特征向量",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#特征值与特征向量",
+      "region_scope": "cn",
+      "description": "查阅特征值、特征向量与矩阵特征多项式的定义及计算。",
+      "summary": "查阅特征值、特征向量与矩阵特征多项式的定义及计算。",
+      "topic_keywords": [
+        "线性代数",
+        "线代",
+        "矩阵",
+        "特征值",
+        "特征向量",
+        "特征多项式"
+      ],
+      "segments": []
+    },
+    {
+      "id": "linear-matrix-oi-wiki-cn",
+      "subject": "线性代数",
+      "title": "OI-Wiki：矩阵",
+      "url": "https://oi-wiki.org/math/linear-algebra/matrix/",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "",
+      "region_scope": "cn",
+      "description": "查阅矩阵的定义、加法、乘法及矩阵运算性质。",
+      "summary": "查阅矩阵的定义、加法、乘法及矩阵运算性质。",
+      "topic_keywords": [
+        "线性代数",
+        "线代",
+        "矩阵",
+        "矩阵乘法"
+      ],
+      "segments": []
+    },
+    {
+      "id": "general-git-oi-cn",
+      "subject": "通用",
+      "title": "OI-Wiki：Git 开源工具讲义",
+      "url": "https://oi-wiki.org/tools/git/",
+      "source_kind": "wikipedia",
+      "asset_track": "spine",
+      "pedagogical_role": "series_episode",
+      "locator": "",
+      "region_scope": "cn",
+      "description": "按安装配置、仓库操作、提交记录与分支管理学习 Git。",
+      "summary": "按安装配置、仓库操作、提交记录与分支管理学习 Git。",
+      "topic_keywords": [
+        "通用",
+        "Git",
+        "版本控制",
+        "学习工具",
+        "命令行"
+      ],
+      "segments": [
+        {
+          "index": 1,
+          "title": "安装",
+          "url": "https://oi-wiki.org/tools/git/#安装",
+          "locator": "#安装",
+          "summary": "学习 Git 的安装。",
+          "topic_keywords": [
+            "安装"
+          ]
+        },
+        {
+          "index": 2,
+          "title": "配置",
+          "url": "https://oi-wiki.org/tools/git/#配置",
+          "locator": "#配置",
+          "summary": "学习 Git 的配置。",
+          "topic_keywords": [
+            "配置"
+          ]
+        },
+        {
+          "index": 3,
+          "title": "新建 Git 仓库",
+          "url": "https://oi-wiki.org/tools/git/#新建-git-仓库",
+          "locator": "#新建-git-仓库",
+          "summary": "学习 Git 的新建 Git 仓库。",
+          "topic_keywords": [
+            "新建 Git 仓库"
+          ]
+        },
+        {
+          "index": 4,
+          "title": "跟踪文件",
+          "url": "https://oi-wiki.org/tools/git/#跟踪文件",
+          "locator": "#跟踪文件",
+          "summary": "学习 Git 的跟踪文件。",
+          "topic_keywords": [
+            "跟踪文件"
+          ]
+        },
+        {
+          "index": 5,
+          "title": "查看提交记录",
+          "url": "https://oi-wiki.org/tools/git/#查看提交记录",
+          "locator": "#查看提交记录",
+          "summary": "学习 Git 的查看提交记录。",
+          "topic_keywords": [
+            "查看提交记录"
+          ]
+        },
+        {
+          "index": 6,
+          "title": "分支管理",
+          "url": "https://oi-wiki.org/tools/git/#分支管理",
+          "locator": "#分支管理",
+          "summary": "学习 Git 的分支管理。",
+          "topic_keywords": [
+            "分支管理"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "general-git-branch-cn",
+      "subject": "通用",
+      "title": "OI-Wiki：Git 分支管理",
+      "url": "https://oi-wiki.org/tools/git/#分支管理",
+      "source_kind": "wikipedia",
+      "asset_track": "spotlight",
+      "pedagogical_role": "concept_intuition",
+      "locator": "#分支管理",
+      "region_scope": "cn",
+      "description": "通过创建与合并分支练习版本控制。",
+      "summary": "通过创建与合并分支练习版本控制。",
+      "topic_keywords": [
+        "通用",
+        "Git",
+        "版本控制",
+        "分支",
+        "合并"
+      ],
+      "segments": []
+    },
+    {
+      "id": "general-git-oi-wiki-cn",
+      "subject": "通用",
+      "title": "OI-Wiki：Git 仓库操作",
+      "url": "https://oi-wiki.org/tools/git/#仓库操作基础",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "#仓库操作基础",
+      "region_scope": "cn",
+      "description": "查阅仓库创建、文件跟踪及提交记录等 Git 基础概念。",
+      "summary": "查阅仓库创建、文件跟踪及提交记录等 Git 基础概念。",
+      "topic_keywords": [
+        "通用",
+        "Git",
+        "版本控制",
+        "仓库",
+        "提交记录",
+        "学习工具"
+      ],
+      "segments": []
+    },
+    {
+      "id": "finance-risk-oi-wiki-cn",
+      "subject": "金融431",
+      "title": "OI-Wiki：投资收益与风险的概率论基础",
+      "url": "https://oi-wiki.org/math/probability/exp-var/",
+      "source_kind": "wikipedia",
+      "asset_track": "wiki",
+      "pedagogical_role": "wiki_reference",
+      "locator": "",
+      "region_scope": "cn",
+      "description": "投资收益与风险的概率论基础：查阅数学期望、方差与协方差，为理解投资组合的收益与风险计算准备数学知识。",
+      "summary": "投资收益与风险的概率论基础：查阅数学期望、方差与协方差，为理解投资组合的收益与风险计算准备数学知识。",
+      "topic_keywords": [
+        "金融431",
+        "投资学",
+        "投资组合",
+        "收益",
+        "风险",
+        "期望",
+        "方差",
+        "协方差"
       ],
       "segments": []
     }

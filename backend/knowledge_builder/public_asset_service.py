@@ -4,6 +4,7 @@ import importlib
 import re
 from urllib.parse import urlsplit
 
+from django.conf import settings
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
 
@@ -27,13 +28,36 @@ def _resolvers():
 
 
 def get_region_preference(user=None, request=None, explicit_region=''):
-    if not explicit_region and request is not None:
-        explicit_region = getattr(request, 'query_params', {}).get('region', '')
     if explicit_region in ('cn', 'intl'):
         return explicit_region
-    language = request.headers.get('Accept-Language', '') if request is not None else ''
-    language = language or getattr(user, 'preferred_language', '')
-    return 'intl' if language.casefold().startswith('en') else 'cn'
+    if getattr(settings, 'UNIMIND_PUBLIC_ASSET_EDITION', 'cn') != 'intl':
+        return 'cn'
+    requested = getattr(request, 'query_params', {}).get('region', '') if request is not None else ''
+    return requested if requested in ('cn', 'intl') else 'intl'
+
+
+def public_asset_allowed(data, region_pref='cn'):
+    from .public_asset_resolvers import is_asset_url_allowed
+    return (not (region_pref == 'cn' and data.get('region_scope') == 'intl')
+            and is_asset_url_allowed(data.get('url', ''), region_pref)
+            and all(is_asset_url_allowed(segment.get('url', ''), region_pref)
+                    for segment in data.get('segments', [])))
+
+
+def validate_public_asset_data(data, region_pref='cn'):
+    if public_asset_allowed(data, region_pref):
+        return
+    from .public_asset_resolvers import is_asset_url_allowed
+    urls = [data.get('url', ''), *(segment.get('url', '') for segment in data.get('segments', []))]
+    if any(not is_asset_url_allowed(url, 'intl') for url in urls):
+        raise ValidationError('禁止使用百度百科，请使用专业开源 Wiki 或开源讲义仓库。')
+    raise ValidationError('当前为国内版环境，已屏蔽境外不可直连站点（如 Wikipedia / YouTube），请使用 B 站、专业开源 Wiki（如 OI-Wiki / Hello-Algo）、开源讲义仓库或站内课程链接。')
+
+
+def filter_resources_for_region(resources, region_pref='cn'):
+    excluded = [row.pk for row in resources
+                if not public_asset_allowed({'url': row.url, 'region_scope': row.region_scope}, region_pref)]
+    return resources.exclude(pk__in=excluded)
 
 
 def _text(value):
@@ -108,8 +132,9 @@ def ensure_subject_public_assets(subject, region_pref='cn'):
             )
     rows = PublicAssetCatalog.objects.all()
     rows = rows.filter(region_scope__in=('cn', 'global') if region_pref == 'cn' else ('intl', 'global'))
-    return [row for row in rows if row.subject in ('', '*', 'general', '通用')
-            or _score(subject, [row.subject, row.title, row.topic_keywords]) > 0]
+    return [row for row in rows if public_asset_allowed(asset_data_from_catalog(row), region_pref)
+            and (row.subject in ('', '*', 'general', '通用')
+                 or _score(subject, [row.subject, row.title, row.topic_keywords]) > 0)]
 
 
 def _blocks(build):
@@ -235,7 +260,8 @@ def catalog_candidates_for_build(build, region_pref='cn', block=None):
     rows = PublicAssetCatalog.objects.all()
     rows = rows.filter(region_scope__in=('cn', 'global') if region_pref == 'cn' else ('intl', 'global'))
     ranked = [(max(_score(_asset_text(asset_data_from_catalog(row)), labels),
-                   _score(row.subject, labels) if block is None else 0), row) for row in rows]
+                   _score(row.subject, labels) if block is None else 0), row) for row in rows
+              if public_asset_allowed(asset_data_from_catalog(row), region_pref)]
     return [row for score, row in sorted(ranked, key=lambda pair: (-pair[0], pair[1].pk)) if score > 0]
 
 
@@ -270,19 +296,25 @@ def wiki_candidates_for_block(block, region_pref='cn'):
         query = block.steps.values_list('step_atoms__atom__name', flat=True).exclude(
             step_atoms__atom__name=None).first() or ''
     candidates = resolver.search_wikipedia_concepts(
-        query, lang='en' if region_pref == 'intl' else 'zh', limit=5)
+        query, lang='en' if region_pref == 'intl' else 'zh', limit=5, region_pref=region_pref)
     scopes = ('cn', 'global') if region_pref == 'cn' else ('intl', 'global')
-    return [item for item in candidates if item.get('region_scope', 'global') in scopes]
+    return [item for item in candidates if item.get('region_scope', 'global') in scopes
+            and public_asset_allowed(item, region_pref)]
 
 
 def resolve_and_store_asset(build, url, payload=None, user=None, region_pref='cn'):
     from ai_assistant.services import learning_resources
     payload = payload or {}
+    if getattr(settings, 'UNIMIND_PUBLIC_ASSET_EDITION', 'cn') != 'intl':
+        region_pref = 'cn'
+    validate_public_asset_data({'url': url}, region_pref)
     resolver = _resolvers()
     fetched = []
 
     def fetch(target):
+        validate_public_asset_data({'url': target}, region_pref)
         result = learning_resources.public_text(target)
+        validate_public_asset_data({'url': result[0]}, region_pref)
         fetched.append(result)
         return result
 
@@ -317,6 +349,7 @@ def resolve_and_store_asset(build, url, payload=None, user=None, region_pref='cn
                 data['asset_track'] = 'spine'
     except (OSError, http.client.HTTPException, ValueError) as exc:
         raise ValidationError('公开资产读取或解析失败，请检查链接或稍后重试。') from exc
+    validate_public_asset_data(data, region_pref)
     asset = store_public_asset(build, data, user)
     return data, asset
 
@@ -381,6 +414,7 @@ def import_tree_public_asset(user, build, payload, request=None):
     else:
         data, asset = resolve_and_store_asset(build, payload['url'], payload, user,
                                              get_region_preference(user, request))
+    validate_public_asset_data(data, get_region_preference(user, request))
     for field in ('asset_track', 'pedagogical_role', 'locator'):
         if payload.get(field):
             data[field] = payload[field]

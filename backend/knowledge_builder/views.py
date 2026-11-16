@@ -101,16 +101,16 @@ class BlockResourceView(BuildStatusView):
 
     def get(self, request, build_id, block_id):
         block = self.get_block(request, build_id, block_id)
-        region = public_asset_service.get_region_preference(request.user, request, request.query_params.get('region', ''))
+        region = public_asset_service.get_region_preference(request.user, request)
         resources = block_study.visible_block_resources(request.user, block, request=request, explicit_region=region)
         data = {'resources': BlockResourceSerializer(resources, many=True).data,
-                'internal_candidates': block_study.internal_resource_candidates(request.user, block), 'web_candidates': [],
+                'internal_candidates': block_study.internal_resource_candidates(request.user, block, region), 'web_candidates': [],
                 'region_pref': region,
                 'wiki_candidates': public_asset_service.wiki_candidates_for_block(block, region),
                 'catalog_candidates': PublicAssetCatalogSerializer(
                     public_asset_service.catalog_candidates_for_build(block.build, region, block=block), many=True).data}
         if 'query' in request.query_params:
-            data['web_candidates'] = block_study.search_block_web_resources(block, request.query_params['query'])
+            data['web_candidates'] = block_study.search_block_web_resources(block, request.query_params['query'], region)
         return Response(data)
 
     def post(self, request, build_id, block_id):
@@ -129,6 +129,10 @@ class BlockResourceView(BuildStatusView):
         if block.build.created_by_id != request.user.pk:
             resources = resources.filter(created_by=request.user)
         resource = get_object_or_404(resources, pk=payload['resource_id'])
+        public_asset_service.validate_public_asset_data(
+            {'url': resource.url, 'region_scope': resource.region_scope},
+            public_asset_service.get_region_preference(request.user, request),
+        )
         target = block
         if 'block_id' in payload:
             target = get_object_or_404(LearningBlock, build=block.build, pk=payload['block_id'])
@@ -165,7 +169,7 @@ class BlockResourceView(BuildStatusView):
 class TreePublicAssetView(BuildStatusView):
     def get(self, request, build_id):
         build = get_object_or_404(_visible_builds(request.user), pk=build_id)
-        region = public_asset_service.get_region_preference(request.user, request, request.query_params.get('region', ''))
+        region = public_asset_service.get_region_preference(request.user, request)
         catalog = public_asset_service.catalog_candidates_for_build(build, region)
         listings = public_asset_service.marketplace_candidates(build)
         albums = public_asset_service.album_candidates(build, request.user)
@@ -184,11 +188,10 @@ class TreePublicAssetView(BuildStatusView):
             else:
                 wiki_candidates = [
                     candidate for candidate in search_wikipedia_concepts(
-                        build.subject, lang='en' if region == 'intl' else 'zh')
-                    if region != 'cn' or candidate.get('region_scope') != 'intl']
+                        build.subject, lang='en' if region == 'intl' else 'zh', region_pref=region)
+                    if public_asset_service.public_asset_allowed(candidate, region)]
         mounted = build.block_resources.filter(~Q(source_kind='library') | Q(created_by=request.user))
-        if region == 'cn':
-            mounted = mounted.exclude(region_scope='intl')
+        mounted = public_asset_service.filter_resources_for_region(mounted, region)
         summary = {track: 0 for track in ('spine', 'spotlight', 'wiki')}
         for track in mounted.values_list('asset_track', flat=True):
             summary[track] += 1

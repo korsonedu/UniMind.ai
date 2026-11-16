@@ -18,24 +18,10 @@ interface Props {
 }
 
 type AssetFilter = 'all' | AssetTrack | 'internal';
-const trackLabels: Record<AssetTrack, string> = {
-  spine: '🎬 主线配套课', spotlight: '🌟 单点神作', wiki: '📖 权威维基',
-};
-const sourceLabels: Record<AssetSourceKind, string> = {
-  course: '站内课程', library: '个人资料', web: '公开课 / 网页', bilibili: 'B站合集',
-  github: 'GitHub开源', wikipedia: '维基百科', youtube: 'YouTube/OCW', marketplace: '共享市场',
-};
 const roleLabels: Record<string, string> = {
   series_episode: '系列主线讲次', concept_intuition: '概念直觉与动画',
   core_derivation: '核心推导与机制', worked_example: '典型例题实战', wiki_reference: '权威词条定义',
 };
-const filters: { value: AssetFilter; label: string }[] = [
-  { value: 'all', label: '全部' },
-  { value: 'spine', label: '🎬 主线成套课（自动按分P对位到各块）' },
-  { value: 'spotlight', label: '🌟 单点神作（直达难点）' },
-  { value: 'wiki', label: '📖 权威维基词条' },
-  { value: 'internal', label: '🏛️ 站内课程专辑与共享市场' },
-];
 
 function errorMessage(error: unknown): string {
   const data = (error as { response?: { data?: unknown } })?.response?.data;
@@ -50,6 +36,21 @@ export function TreePublicAssetModal({ tree, onClose, onChanged }: Props) {
   const queryClient = useQueryClient();
   const queryKey = ['knowledge-tree-public-assets', userId, tree.id];
   const assetsQuery = useQuery({ queryKey, queryFn: ({ signal }) => getTreePublicAssets(tree.id, signal) });
+  const isIntl = (assetsQuery.data?.region_pref ?? tree.region_pref ?? 'cn') === 'intl';
+  const trackLabels: Record<AssetTrack, string> = {
+    spine: '🎬 主线配套课', spotlight: '🌟 单点神作', wiki: isIntl ? '📖 Wikipedia 词条' : '📖 专业开源 Wiki 词条',
+  };
+  const sourceLabels: Record<AssetSourceKind, string> = {
+    course: '站内课程', library: '个人资料', web: '公开课 / 网页', bilibili: 'B站合集',
+    github: '开源讲义仓库', wikipedia: isIntl ? 'Wikipedia' : 'OI-Wiki / 开源学科词条', youtube: isIntl ? 'YouTube / OCW' : '公开视频', marketplace: '共享市场',
+  };
+  const filters: { value: AssetFilter; label: string }[] = [
+    { value: 'all', label: '全部' },
+    { value: 'spine', label: '🎬 主线成套课（自动按分P对位到各块）' },
+    { value: 'spotlight', label: '🌟 单点神作（直达难点）' },
+    { value: 'wiki', label: trackLabels.wiki },
+    { value: 'internal', label: '🏛️ 站内课程专辑与共享市场' },
+  ];
   const [tab, setTab] = useState<'catalog' | 'import'>('catalog');
   const [filter, setFilter] = useState<AssetFilter>('all');
   const [url, setUrl] = useState('');
@@ -111,8 +112,8 @@ export function TreePublicAssetModal({ tree, onClose, onChanged }: Props) {
       </DialogHeader>
       <div className="kb-public-assets-summary" aria-label="整树三轨挂载概览">
         {data ? <>
-          <p>🎬 主线配套课 ({data.mounted_summary.spine_count}) · 🌟 单点神作 ({data.mounted_summary.spotlight_count}) · 📖 权威维基 ({data.mounted_summary.wiki_count})</p>
-          <p className="text-sm text-muted-foreground">{data.region_pref === 'cn' ? '国内信源模式（B站 / 中文维基 / GitHub / 站内）' : '国际信源模式（YouTube / 英文维基 / GitHub / OCW）'}</p>
+          <p>🎬 主线配套课 ({data.mounted_summary.spine_count}) · 🌟 单点神作 ({data.mounted_summary.spotlight_count}) · {trackLabels.wiki} ({data.mounted_summary.wiki_count})</p>
+          <p className="text-sm text-muted-foreground">{isIntl ? '国际信源模式（YouTube / Wikipedia / GitHub / OCW）' : '国内信源模式（B站 / OI-Wiki / Hello-Algo / 开源讲义仓库 / 站内）'}</p>
         </> : <p>{assetsQuery.isLoading ? '正在读取三轨挂载概览…' : '三轨挂载概览读取失败。'}</p>}
       </div>
       <div className="kb-public-assets-tabs flex flex-wrap gap-2" role="tablist" aria-label="公开资产导入方式">
@@ -134,7 +135,7 @@ export function TreePublicAssetModal({ tree, onClose, onChanged }: Props) {
           {showWiki && data?.wiki_candidates.map(candidate => <article key={`wiki-${candidate.url}`} className="kb-public-asset-card space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <a href={resolvePublicAssetLink(candidate.url, candidate.locator)} target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-4">{candidate.title}</a>
-              <span className="kb-badge">维基百科</span><span className="kb-badge kb-track-wiki">📖 权威维基</span>
+              <span className="kb-badge">{sourceLabels.wikipedia}</span><span className="kb-badge kb-track-wiki">{trackLabels.wiki}</span>
               <span className="kb-badge">{roleLabels[candidate.pedagogical_role] ?? (candidate.pedagogical_role || '权威词条定义')}</span>
               {candidate.locator && <span className="kb-badge">{candidate.locator}</span>}
             </div>
@@ -158,12 +159,12 @@ export function TreePublicAssetModal({ tree, onClose, onChanged }: Props) {
           event.preventDefault();
           importAsset({ url: url.trim(), ...(title.trim() ? { title: title.trim() } : {}), ...(track ? { asset_track: track } : {}), ...(role ? { pedagogical_role: role } : {}), ...(outline.trim() ? { outline_text: outline.trim() } : {}) });
         }}>
-          <p className="text-sm text-muted-foreground">支持 B站多P或单品视频、GitHub 开源讲义、维基百科词条及国际公开课。解析后自动沉淀进资产池，并挂载到本树。</p>
+          <p className="text-sm text-muted-foreground">{isIntl ? '支持 YouTube、Wikipedia、GitHub 开源讲义及国际公开课。' : '支持 B站多P或单品视频、专业开源 Wiki（如 OI-Wiki / Hello-Algo）、开源学科讲义及站内课程。'}解析后自动沉淀进资产池，并挂载到本树。</p>
           <label className="block text-sm space-y-2"><span>公开资源 HTTPS 链接</span><Input type="url" required pattern="https://.*" maxLength={2000} value={url} placeholder="https://www.bilibili.com/video/BV…" onChange={event => setUrl(event.target.value)} disabled={mount.isPending} /></label>
           <label className="block text-sm space-y-2"><span>资源标题（可选）</span><Input value={title} maxLength={300} placeholder="留空时自动读取标题" onChange={event => setTitle(event.target.value)} disabled={mount.isPending} /></label>
           <div className="kb-public-assets-form-grid">
             <label className="block text-sm">挂载轨道<select className="kb-study-select" value={track} disabled={mount.isPending} onChange={event => setTrack(event.target.value as AssetTrack | '')}>
-              <option value="">自动识别</option><option value="spine">主线成套课 Spine（拆集分发到整树）</option><option value="spotlight">单点神作 Spotlight</option><option value="wiki">权威百科 Wiki</option>
+              <option value="">自动识别</option><option value="spine">主线成套课 Spine（拆集分发到整树）</option><option value="spotlight">单点神作 Spotlight</option><option value="wiki">{trackLabels.wiki}</option>
             </select></label>
             <label className="block text-sm">教学角色<select className="kb-study-select" value={role} disabled={mount.isPending} onChange={event => setRole(event.target.value as PedagogicalRole)}>
               <option value="">自动识别</option>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}

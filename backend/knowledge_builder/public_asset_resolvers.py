@@ -10,22 +10,33 @@ from urllib.parse import parse_qs, quote, unquote, urlencode, urljoin, urlsplit,
 
 
 _SEED_PATH = Path(__file__).resolve().parents[1] / 'prompts/knowledge_builder/public_assets_seed.json'
+INTL_ONLY_HOSTS = ('wikipedia.org', 'youtube.com', 'youtu.be', 'ocw.mit.edu',
+                   'khanacademy.org', 'coursera.org', 'edx.org')
 
 
 def _host(url):
-    return (urlsplit(url).hostname or '').lower().rstrip('.')
+    return (urlsplit(url).hostname or '').encode('idna').decode('ascii').lower().rstrip('.')
 
 
 def _domain(host, domain):
     return host == domain or host.endswith('.' + domain)
 
 
+def is_intl_only_url(url: str) -> bool:
+    return any(_domain(_host(url), domain) for domain in INTL_ONLY_HOSTS)
+
+
+def is_asset_url_allowed(url: str, region_pref: str = 'cn') -> bool:
+    return not _domain(_host(url), 'baike.baidu.com') and not (
+        region_pref == 'cn' and is_intl_only_url(url))
+
+
 def detect_source_kind(url: str) -> str:
     host = _host(url)
     for kind, domains in (
         ('bilibili', ('bilibili.com', 'b23.tv')),
-        ('github', ('github.com',)),
-        ('wikipedia', ('wikipedia.org', 'oi-wiki.org')),
+        ('github', ('github.com', 'gitee.com')),
+        ('wikipedia', ('wikipedia.org', 'oi-wiki.org', 'hello-algo.com')),
         ('youtube', ('youtube.com', 'youtu.be')),
     ):
         if any(_domain(host, domain) for domain in domains):
@@ -34,11 +45,12 @@ def detect_source_kind(url: str) -> str:
 
 
 def infer_region_scope(url: str, source_kind: str = '') -> str:
-    kind, host = source_kind or detect_source_kind(url), _host(url)
-    if kind == 'bilibili' or host in ('zh.wikipedia.org', 'oi-wiki.org') or _domain(host, 'oi-wiki.org') or host.endswith('.cn'):
-        return 'cn'
-    if kind == 'youtube' or host == 'en.wikipedia.org':
+    host = _host(url)
+    if is_intl_only_url(url):
         return 'intl'
+    if host.endswith('.cn') or any(_domain(host, domain) for domain in (
+            'bilibili.com', 'b23.tv', 'oi-wiki.org', 'hello-algo.com', 'gitee.com')):
+        return 'cn'
     return 'global'
 
 
@@ -114,11 +126,11 @@ class _Page(HTMLParser):
         attrs = dict(attrs)
         if tag == 'meta' and attrs.get('name', attrs.get('property', '')).lower() in ('description', 'og:description'):
             self.description = attrs.get('content', '')
-        if tag in ('title', 'h1', 'h2', 'p', 'a') or (tag == 'li' and 'data-page' in attrs):
+        if tag in ('title', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'a') or (tag == 'li' and 'data-page' in attrs):
             self._captures.append({'tag': tag, 'attrs': attrs, 'text': [], 'anchor': attrs.get('id', '')})
         if attrs.get('id'):
             for capture in self._captures:
-                if capture['tag'] == 'h2' and not capture['anchor']:
+                if capture['tag'] in ('h2', 'h3', 'h4', 'h5', 'h6') and not capture['anchor']:
                     capture['anchor'] = attrs['id']
 
     def handle_data(self, data):
@@ -138,7 +150,7 @@ class _Page(HTMLParser):
                 self.h1 = label
             elif tag == 'p' and label and not self.first_paragraph:
                 self.first_paragraph = label
-            elif tag == 'h2' and capture['anchor']:
+            elif tag in ('h2', 'h3', 'h4', 'h5', 'h6') and capture['anchor']:
                 self.headings.append((label, capture['anchor']))
             elif tag == 'a' and attrs.get('href'):
                 self.links.append((label, attrs['href']))
@@ -217,20 +229,23 @@ def _bilibili_pages(content, page):
 
 def _github_link(base_url, href):
     parts = urlsplit(base_url)
+    host = _host(base_url)
     path = parts.path.strip('/').split('/')
     if len(path) < 2:
         return ''
     if not href.startswith(('/', 'https://', 'http://', '#', '?')):
         if len(path) >= 4 and path[2] in ('blob', 'tree'):
             directory = parts.path.rsplit('/', 1)[0] if path[2] == 'blob' else parts.path.rstrip('/')
-            base_url = f'https://github.com{directory}/'
-        else:
+            base_url = f'https://{host}{directory}/'
+        elif host == 'github.com':
             # HEAD is GitHub's default-branch reference, including master repos.
-            base_url = f'https://github.com/{path[0]}/{path[1]}/blob/HEAD/'
+            base_url = f'https://{host}/{path[0]}/{path[1]}/blob/HEAD/'
+        else:
+            return ''
     url = urljoin(base_url, href)
     target = urlsplit(url)
     target_path = target.path.strip('/').split('/')
-    if (target.scheme != 'https' or target.hostname != 'github.com' or len(target_path) < 5
+    if (target.scheme != 'https' or target.hostname != host or len(target_path) < 5
             or target_path[:2] != path[:2] or target_path[2] not in ('blob', 'tree')):
         return ''
     document = bool(re.search(r'\.(?:md|mdx|rst|ipynb|html?)$', target.path, re.I))
@@ -248,8 +263,12 @@ def resolve_public_asset_url(url: str, preferred_lang: str = 'zh', html_fetcher=
                 'pedagogical_role': 'concept_intuition', 'locator': '', 'region_scope': 'global',
                 'description': '', 'segments': []}
     _https_url(url)
+    if not is_asset_url_allowed(url, 'intl'):
+        raise ValueError('公开学习资源禁止使用百度百科，请使用专业开源 Wiki 或开源讲义。')
     final_url, content = (html_fetcher or _public_text)(url)
     _https_url(final_url)
+    if not is_asset_url_allowed(final_url, 'intl'):
+        raise ValueError('公开学习资源禁止使用百度百科，请使用专业开源 Wiki 或开源讲义。')
     kind = detect_source_kind(final_url)
     page = _Page(content)
     original_parts = urlsplit(url)
@@ -288,6 +307,7 @@ def resolve_public_asset_url(url: str, preferred_lang: str = 'zh', html_fetcher=
                                   for index, (target, title) in enumerate(links.items(), 1)]
     elif kind == 'wikipedia':
         result.update(asset_track='wiki', pedagogical_role='wiki_reference')
+        result['description'] = _clean(page.first_paragraph or page.description)
         base_url = urlunsplit(final_parts._replace(fragment=''))
         headings = list(page.headings)
         if not headings:
@@ -346,17 +366,39 @@ def load_seed_public_assets(subject: str = '', region_pref: str = 'cn') -> list[
     with _SEED_PATH.open(encoding='utf-8') as source:
         assets = json.load(source)['assets']
     scopes = ('intl', 'global') if region_pref == 'intl' else ('cn', 'global')
-    matches = [asset for asset in assets if asset.get('region_scope') in scopes and _subject_matches(subject, asset)]
+    matches = [asset for asset in assets if asset.get('region_scope') in scopes and _subject_matches(subject, asset)
+               and all(is_asset_url_allowed(url, region_pref) for url in (
+                   asset.get('url', ''), *[segment.get('url', '') for segment in asset.get('segments', [])]))]
     if region_pref == 'intl':
         matches.sort(key=lambda asset: asset['region_scope'] != 'intl')
     return matches
 
 
-def search_wikipedia_concepts(query: str, lang: str = 'zh', limit: int = 5, fetcher=None) -> list[dict]:
+def search_wikipedia_concepts(query: str, lang: str = 'zh', limit: int = 5, fetcher=None, region_pref: str = '') -> list[dict]:
     if lang not in ('zh', 'en'):
         raise ValueError('Wikipedia search language must be zh or en.')
     if limit <= 0 or not query.strip():
         return []
+    from django.conf import settings
+
+    edition = getattr(settings, 'UNIMIND_PUBLIC_ASSET_EDITION', 'cn')
+    domestic = region_pref == 'cn' or (region_pref != 'intl' and edition != 'intl')
+    if domestic:
+        terms = query.casefold().split()
+        results = []
+        for asset in load_seed_public_assets('', 'cn'):
+            if asset.get('asset_track') != 'wiki':
+                continue
+            haystack = ' '.join([asset.get('title', ''), asset.get('subject', ''),
+                                 asset.get('description', ''), *asset.get('topic_keywords', [])]).casefold()
+            if all(term in haystack for term in terms):
+                results.append({'title': asset['title'], 'url': asset['url'],
+                                'locator': asset.get('locator', ''),
+                                'summary': asset.get('summary', asset.get('description', '')),
+                                'asset_track': 'wiki', 'source_kind': 'wikipedia', 'region_scope': 'cn'})
+                if len(results) >= limit:
+                    break
+        return results
     base_url = f'https://{lang}.wikipedia.org'
     endpoint = base_url + '/w/api.php?' + urlencode({'action': 'query', 'list': 'search', 'srsearch': query,
                                                    'srlimit': min(limit, 50), 'format': 'json', 'utf8': 1})
@@ -379,14 +421,14 @@ def search_wikipedia_concepts(query: str, lang: str = 'zh', limit: int = 5, fetc
             results.append({'title': title, 'url': base_url + '/wiki/' + quote(title.replace(' ', '_'), safe=''),
                             'locator': '#' + title, 'summary': _clean(row.get('snippet', row.get('extract', ''))),
                             'asset_track': 'wiki', 'source_kind': 'wikipedia',
-                            'region_scope': 'cn' if lang == 'zh' else 'intl'})
+                            'region_scope': 'intl'})
         if results:
             return results
     except (OSError, http.client.HTTPException, ValueError, ValidationError, ImproperlyConfigured):
         # Offline seed lookup is part of the public search contract.
         pass
     terms = [word.casefold() for word in re.split(r'\s+', query.strip())]
-    seeds = load_seed_public_assets('', 'cn' if lang == 'zh' else 'intl')
+    seeds = load_seed_public_assets('', 'intl')
     results = []
     for asset in seeds:
         if asset.get('asset_track') != 'wiki' or _host(asset.get('url', '')) != f'{lang}.wikipedia.org':
@@ -395,7 +437,7 @@ def search_wikipedia_concepts(query: str, lang: str = 'zh', limit: int = 5, fetc
         if all(term in haystack for term in terms):
             results.append({'title': asset['title'], 'url': asset['url'], 'locator': asset.get('locator', ''),
                             'summary': asset.get('summary', asset.get('description', '')), 'asset_track': 'wiki',
-                            'source_kind': 'wikipedia', 'region_scope': 'cn' if lang == 'zh' else 'intl'})
+                            'source_kind': 'wikipedia', 'region_scope': 'intl'})
             if len(results) >= limit:
                 break
     return results

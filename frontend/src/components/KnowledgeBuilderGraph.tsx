@@ -760,7 +760,7 @@ export function KnowledgeBuilderGraph({
                           <span className="kb-badge">📚 {resources.length}</span>
                           {spine && <span className="kb-badge kb-asset-badge--spine" title={`主线配套课${spine.locator ? ` · ${spine.locator}` : ''}`}>🎬 {spine.locator || '主线'}</span>}
                           {hasSpotlight && <span className="kb-badge kb-asset-badge--spotlight" title="单点神作">🌟 神作</span>}
-                          {hasWiki && <span className="kb-badge kb-asset-badge--wiki" title="权威百科与开源文档">📖 维基</span>}
+                          {hasWiki && <span className="kb-badge kb-asset-badge--wiki" title={tree.region_pref === 'intl' ? 'Wikipedia 概念词条' : 'OI-Wiki / 开源学科词条'}>{tree.region_pref === 'intl' ? '📖 Wikipedia 词条' : '📖 专业开源 Wiki 词条'}</span>}
                           {renderTopicBadges([block.shortTitle, ...block.steps.flatMap(step => step.atoms.map(item => item.atom.name))])}
                         </span>
                       </button>
@@ -780,7 +780,7 @@ export function KnowledgeBuilderGraph({
                             {resources.map(resource => {
                               const href = resolvePublicAssetLink(resource.url, resource.locator);
                               if (!href) return null;
-                              const trackLabel = resource.asset_track === 'spine' ? '🎬 主线' : resource.asset_track === 'spotlight' ? '🌟 神作' : resource.asset_track === 'wiki' ? '📖 维基' : '📚 资源';
+                              const trackLabel = resource.asset_track === 'spine' ? '🎬 主线' : resource.asset_track === 'spotlight' ? '🌟 神作' : resource.asset_track === 'wiki' ? (tree.region_pref === 'intl' ? '📖 Wikipedia 词条' : '📖 专业开源 Wiki 词条') : '📚 资源';
                               return <a key={resource.id} className="kb-card-resource-link" href={href} target="_blank" rel="noopener noreferrer"
                                 onClick={event => event.stopPropagation()} title={`直接打开：${resource.title}${resource.locator ? ` · ${resource.locator}` : ''}`}>
                                 {trackLabel} · {resource.title}{resource.locator ? ` · ${resource.locator}` : ''} ↗

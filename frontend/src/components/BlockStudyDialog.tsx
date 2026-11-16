@@ -13,11 +13,6 @@ interface Props {
   tree: KnowledgeTreeBuildDetail; block: LearningBlock; progress?: UserBlockProgressItem;
   onClose: () => void; onChanged: () => void;
 }
-const sourceLabels: Record<AssetSourceKind, string> = {
-  course: '站内课程', library: '个人资料快照', web: '公开网页', bilibili: 'B站', github: 'GitHub 开源',
-  wikipedia: '维基百科', youtube: 'YouTube / OCW', marketplace: '共享市场',
-};
-const trackLabels: Record<AssetTrack, string> = { spine: '🎬 主线配套课', spotlight: '🌟 单点神作', wiki: '📖 权威百科与开源文档' };
 const roleLabels: Record<string, string> = {
   series_episode: '系列主线讲次', concept_intuition: '概念直觉', core_derivation: '核心推导',
   worked_example: '例题实战', wiki_reference: '权威词条定义',
@@ -81,6 +76,12 @@ export function BlockStudyDialog({ tree, block, progress, onClose, onChanged }: 
   const statusText = status === 'COMPLETED' ? `已完成 ✓ · 最高正确率 ${Math.round(best * 100)}%` : status === 'NEEDS_REVIEW' ? '待强化 · 需核心点全对且正确率 ≥ 75%' : status === 'LEARNING' ? '学习中 · 需核心点全对且正确率 ≥ 75%' : '未开始';
   const resources = resourcesQuery.data?.resources ?? block.resources ?? [];
   const candidateData = searchResults ?? resourcesQuery.data;
+  const isIntl = (candidateData?.region_pref ?? tree.region_pref ?? 'cn') === 'intl';
+  const sourceLabels: Record<AssetSourceKind, string> = {
+    course: '站内课程', library: '个人资料快照', web: '公开网页', bilibili: 'B站', github: '开源讲义仓库',
+    wikipedia: isIntl ? 'Wikipedia' : 'OI-Wiki / 开源学科词条', youtube: isIntl ? 'YouTube / OCW' : '公开视频', marketplace: '共享市场',
+  };
+  const trackLabels: Record<AssetTrack, string> = { spine: '🎬 主线配套课', spotlight: '🌟 单点神作', wiki: isIntl ? '📖 Wikipedia 词条' : '📖 专业开源 Wiki 词条' };
   const renderResource = (resource: BlockResourceItem, allowEdit = true) => {
     const track = resourceTrack(resource);
     const href = resolvePublicAssetLink(resource.url, resource.locator);
@@ -99,7 +100,7 @@ export function BlockStudyDialog({ tree, block, progress, onClose, onChanged }: 
       {allowEdit && <div className="kb-resource-adjustments flex flex-wrap items-center gap-2">
         <label className="text-sm">轨道<select className="kb-study-select" aria-label={`${resource.title}的资源轨道`} value={track} disabled={busy} onChange={event => {
           setError(''); update.mutate({ resource_id: resource.id, asset_track: event.target.value as AssetTrack });
-        }}><option value="spine">主线</option><option value="spotlight">神作</option><option value="wiki">维基</option></select></label>
+        }}><option value="spine">主线</option><option value="spotlight">神作</option><option value="wiki">{trackLabels.wiki}</option></select></label>
         <label className="text-sm">绑定原子知识点<select className="kb-study-select" aria-label={`${resource.title}绑定的原子知识点`} value={resource.atom ?? ''} disabled={busy} onChange={event => {
           setError(''); update.mutate({ resource_id: resource.id, atom_id: event.target.value ? Number(event.target.value) : null, step_id: null });
         }}><option value="">整个知识块</option>{atoms.map(atom => <option key={atom.id} value={atom.id}>{atom.name}</option>)}</select></label>
@@ -131,8 +132,8 @@ export function BlockStudyDialog({ tree, block, progress, onClose, onChanged }: 
             {trackResources.length === 0 && <p className="text-sm text-muted-foreground">当前轨道还没有挂载资源。</p>}
           </section>;
         })}
-        <section className="space-y-2" aria-label="维基百科概念词条推荐">
-          <h3 className="font-semibold">📖 维基百科概念词条推荐</h3>
+        <section className="space-y-2" aria-label={`${trackLabels.wiki}推荐`}>
+          <h3 className="font-semibold">{trackLabels.wiki}推荐</h3>
           {candidateData?.wiki_candidates?.map(candidate => <article key={candidate.url} className="kb-study-resource space-y-2">
             <a href={resolvePublicAssetLink(candidate.url, candidate.locator)} target="_blank" rel="noopener noreferrer" className="font-medium underline">{candidate.title}</a>
             {candidate.locator && <span className="kb-badge">{candidate.locator}</span>}
@@ -174,7 +175,7 @@ export function BlockStudyDialog({ tree, block, progress, onClose, onChanged }: 
           <h3 className="font-semibold">直接粘贴 HTTPS 链接</h3>
           <div className="flex flex-wrap gap-3">
             <label className="text-sm">挂载轨道<select className="kb-study-select" value={assetTrack} onChange={event => setAssetTrack(event.target.value as AssetTrack)}>
-              <option value="spotlight">🌟 单点神作</option><option value="spine">🎬 主线配套</option><option value="wiki">📖 百科词条</option>
+              <option value="spotlight">🌟 单点神作</option><option value="spine">🎬 主线配套</option><option value="wiki">{trackLabels.wiki}</option>
             </select></label>
             <label className="flex-1 text-sm">定位符<Input aria-label="资源定位符" value={locator} maxLength={300} placeholder="P3 · 05:20 或 #资本市场线" onChange={event => setLocator(event.target.value)} /></label>
           </div>

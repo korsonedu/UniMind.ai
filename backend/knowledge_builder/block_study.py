@@ -65,7 +65,9 @@ def _match(block, assignments, text):
     return None, _normalized(block.short_title) in text
 
 
-def internal_resource_candidates(user, block):
+def internal_resource_candidates(user, block, region_pref=None):
+    from .public_asset_service import get_region_preference, public_asset_allowed
+    region = region_pref or get_region_preference(user)
     assignments = _assignments(block)
     candidates = []
     for course in _courses(user):
@@ -78,7 +80,7 @@ def internal_resource_candidates(user, block):
     if user and user.is_authenticated:
         for resource in LearningResource.objects.filter(user=user, is_archived=False):
             match, relevant = _match(block, assignments, f'{resource.title} {resource.topic} {resource.excerpt}')
-            if relevant:
+            if relevant and public_asset_allowed({'url': resource.url}, region):
                 candidates.append({'source_kind': 'library', 'library_resource_id': resource.pk,
                                    'title': resource.title, 'url': resource.url, 'excerpt': resource.excerpt,
                                    'step_id': match.step_id if match else None, 'atom_id': match.atom_id if match else None})
@@ -87,12 +89,11 @@ def internal_resource_candidates(user, block):
 
 def visible_block_resources(user, block, request=None, explicit_region=''):
     # A curated/shared build must not expose another learner's private library snapshots.
-    from .public_asset_service import get_region_preference
+    from .public_asset_service import filter_resources_for_region, get_region_preference
 
     resources = block.resources.filter(~Q(source_kind='library') | Q(created_by=user))
-    if get_region_preference(user, request, explicit_region) == 'cn':
-        resources = resources.exclude(region_scope='intl')
-    return resources.order_by('id')
+    region = get_region_preference(user, request, explicit_region)
+    return filter_resources_for_region(resources, region).order_by('id')
 
 
 def auto_mount_internal_resources(build):
@@ -106,7 +107,8 @@ def auto_mount_internal_resources(build):
                           **{key: value for key, value in fields.items() if key not in lookup}})
 
 
-def search_block_web_resources(block, query=''):
+def search_block_web_resources(block, query='', region_pref='cn'):
+    from .public_asset_service import public_asset_allowed
     query = query.strip() or f'{block.build.subject} {block.short_title}'
     if len(query) > 300:
         raise ValidationError('查询词最多 300 字，请缩小搜索范围。')
@@ -117,7 +119,8 @@ def search_block_web_resources(block, query=''):
         raise ValidationError('公开资源搜索失败，请稍后重试。') from exc
     candidates = [{'title': row.findtext('title', '')[:200], 'url': row.findtext('link', ''),
                    'summary': row.findtext('description', '')[:600]} for row in root.findall('./channel/item')]
-    return [item for item in candidates if item['url'].startswith('https://')][:5]
+    return [item for item in candidates if item['url'].startswith('https://')
+            and public_asset_allowed(item, region_pref)][:5]
 
 
 def _save_library(user, block, title, url, excerpt):
@@ -188,6 +191,8 @@ def attach_block_resource(user, block, payload, request=None):
             raise ValidationError('个人资料不存在或已归档。')
         fields = dict(source_kind='library', title=resource.title, url=resource.url,
                       excerpt=resource.excerpt, library_resource_id=resource.pk)
+    from .public_asset_service import get_region_preference, validate_public_asset_data
+    validate_public_asset_data(fields, get_region_preference(user, request))
     if len(fields['url']) > 1000:
         raise ValidationError('挂载链接最多 1000 字。')
     if assignment is None:
