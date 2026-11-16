@@ -23,28 +23,26 @@ function getHeaderValue(headers: unknown, key: string): string | undefined {
  * 从 DRF 响应 payload 中提取人类可读的错误信息。
  * DRF 可能把 error/detail 序列化为字符串、数组、或嵌套对象。
  */
-function extractDRFMessage(payload: Record<string, unknown> | undefined): string | null {
-  if (!payload) return null;
-
-  // 优先从 error / detail / message 字段提取（可能为 string 或 string[]）
+function extractDRFMessage(payload: unknown): string | null {
+  if (typeof payload === 'string') return payload.trim() ? t(payload.trim()) : null;
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      const message = extractDRFMessage(item);
+      if (message) return message;
+    }
+    return null;
+  }
+  if (!payload || typeof payload !== 'object') return null;
+  const fields = payload as Record<string, unknown>;
   for (const key of ['error', 'detail', 'message']) {
-    const val = payload[key];
-    if (typeof val === 'string' && val.trim()) return t(val.trim());
-    if (Array.isArray(val)) {
-      const first = val.find((v: unknown) => typeof v === 'string' && v.trim());
-      if (first) return t(first as string);
-    }
+    const message = extractDRFMessage(fields[key]);
+    if (message) return message;
   }
-
-  // 回退：从序列化器字段错误中提取第一条
-  for (const [field, msgs] of Object.entries(payload)) {
-    if (field === 'code' || field === 'request_id') continue;
-    if (Array.isArray(msgs)) {
-      const first = msgs.find((m: unknown) => typeof m === 'string' && m.trim());
-      if (first) return `${field}: ${t(first)}`;
-    }
+  for (const [field, value] of Object.entries(fields)) {
+    if (field === 'code' || field === 'request_id' || !Array.isArray(value)) continue;
+    const message = extractDRFMessage(value);
+    if (message) return message;
   }
-
   return null;
 }
 
@@ -65,7 +63,7 @@ export function normalizeApiError(error: unknown, fallbackMessage = '请求失�
     || (typeof payload?.request_id === 'string' ? payload.request_id : undefined);
 
   const drfMessage = extractDRFMessage(payload);
-  const message = drfMessage || error.message || fallbackMessage;
+  const message = drfMessage || t(fallbackMessage);
 
   const code =
     (typeof payload?.code === 'string' && payload.code)
@@ -82,6 +80,5 @@ export function normalizeApiError(error: unknown, fallbackMessage = '请求失�
 
 export function formatApiErrorToast(error: unknown, fallbackMessage = '请求失败，请检查网络后重试'): string {
   const normalized = normalizeApiError(error, fallbackMessage);
-  if (normalized.requestId) return `${t(normalized.message)} (RID: ${normalized.requestId})`;
   return t(normalized.message);
 }
