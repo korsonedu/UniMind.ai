@@ -28,7 +28,8 @@ def visible_courses(request):
     member = membership_for(request.user)
     if member:
         return Course.objects.filter(is_published=True, pk__in=active_course_ids(member))
-    courses = apply_institution_filter(Course.objects.filter(is_published=True), request.user, request)
+    courses = apply_institution_filter(Course.objects.filter(is_published=True), request.user, request).filter(
+        workspace_content__isnull=True, institution__learning_workspace__isnull=True)
     if not has_full_course_access(request.user):
         courses = courses.filter(module__is_public=True, module__institution_id=get_content_institution_id())
     return courses

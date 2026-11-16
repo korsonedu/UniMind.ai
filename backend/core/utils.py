@@ -16,7 +16,12 @@ def get_content_institution_id(user=None):
     try:
         if isinstance(value, bool) or int(value) < 1:
             raise ValueError
-        return int(value)
+        institution_id = int(value)
+        if user is not None:
+            from users.models_workspace import Workspace
+            if Workspace.objects.filter(institution_id=institution_id).exists():
+                return None
+        return institution_id
     except (TypeError, ValueError):
         raise PermissionDenied('内容访问范围尚未配置，请联系管理员。')
 
@@ -43,7 +48,7 @@ def apply_institution_filter(qs, user, request=None, institution_field='institut
         if qs.model._meta.label_lower == 'courses.course':
             qs = qs.filter(pk__in=active_course_ids(member), is_published=True)
     else:
-        institution_id = get_content_institution_id()
+        institution_id = get_content_institution_id(user)
     if request:
         params = getattr(request, 'query_params', None)
         if params is None:
@@ -59,4 +64,4 @@ def apply_institution_filter(qs, user, request=None, institution_field='institut
 def get_user_content_institution_id(user):
     from users.workspaces.access import membership_for
     member = membership_for(user)
-    return member.workspace.institution_id if member else get_content_institution_id()
+    return member.workspace.institution_id if member else get_content_institution_id(user)

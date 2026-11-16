@@ -75,7 +75,7 @@ class InstitutionFeatureView(APIView):
                          'student_count': member.workspace.memberships.filter(role='student').count(),
                          'invite_slug': '', 'business_type': member.workspace.institution.business_type}
         return Response({'is_platform_admin': is_platform_admin(user),
-                         'has_course_catalog': has_full_course_access(user),
+                         'has_course_catalog': bool(member) and has_full_course_access(user),
                          'institution': inst_data, 'features': features, 'usage': usage})
 
 

@@ -52,6 +52,7 @@ def test_only_mapped_platform_admin_gets_workbench_tools():
         assert not is_platform_admin(admin)
 
 
+@pytest.mark.django_db
 def test_unconfigured_scope_denies_and_explicit_global_never_means_all_tenants():
     query = Mock()
     with override_settings(UNIMIND_CONTENT_INSTITUTION_ID=''):

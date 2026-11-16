@@ -640,7 +640,10 @@ class CourseListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         user = self.request.user
         from .access import visible_courses, course_list_queryset
+        from users.workspaces.access import membership_for
         qs = visible_courses(self.request) if self.request.method == 'GET' else apply_institution_filter(Course.objects.select_related('module'), user, self.request)
+        if self.request.method == 'GET' and not membership_for(user):
+            qs = qs.none()
         if self.request.method == 'GET' and self.request.query_params.get('saved') == '1':
             from .models import WatchLater
             qs = qs.filter(pk__in=WatchLater.objects.filter(user=user).values('course_id'))

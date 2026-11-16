@@ -61,8 +61,8 @@ def seed_content():
             'created_knowledge_points': created_points, 'created_questions': created_questions}
 
 
-def _seeded_questions(content):
-    scope = get_content_institution_id()
+def _seeded_questions(content, user):
+    scope = get_content_institution_id(user)
     result = {}
     for node in content['nodes']:
         point = KnowledgePoint.objects.filter(code=node['code'], institution_id=scope, subject='高中数学').first()
@@ -113,7 +113,7 @@ def setup_sample(project):
     if project.instructions.strip() or has_learning_messages or state.status != 'preparing' or state.plan or state.resources or state.pending_plan or (state.revision and project.learning_events.exclude(kind='reminders').exists()):
         raise ValidationError('函数样板只能在全新的待准备项目中开始，不能覆盖现有学习安排。')
     content = sample_content()
-    question_ids = _seeded_questions(content)
+    question_ids = _seeded_questions(content, project.user)
     resource, resource_version = _original_resource(project.user, content)
     nodes = [{key: node[key] for key in ('id', 'title', 'outcome', 'prerequisites')} | {
         'citation': {'resource_id': resource.pk, 'revision': 1, 'quote': node['quote']}} for node in content['nodes']]

@@ -1,4 +1,4 @@
-"""Registered students see only explicitly public course modules."""
+"""Personal users have no default catalog; legacy explicit links retain their boundary."""
 import pytest
 from users.login_sessions import LoginSession
 from rest_framework.test import APIClient
@@ -27,7 +27,7 @@ def test_registered_public_course_boundary(auth_client, user, settings, tmp_path
         assert auth_client.get(f'/api/courses/{course.pk}/').status_code == 404
     listed = auth_client.get('/api/courses/')
     assert listed.status_code == 200
-    assert [item['id'] for item in listed.json()['items']] == [open_course.pk]
+    assert listed.json()['items'] == []
     detail = auth_client.get(f'/api/courses/{open_course.pk}/')
     assert detail.status_code == 200
     assert [item['id'] for item in detail.json()['album']['courses']] == [open_course.pk]
