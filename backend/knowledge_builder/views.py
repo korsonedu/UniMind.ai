@@ -2,17 +2,19 @@ from django.db.models import F, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.authentication import CookieTokenAuthentication
-from .models import KnowledgeTreeBuild, LearningBlock
+from .models import KnowledgeTreeBuild, LearningBlock, BlockStepAtom
 from .pipeline import create_build
 from .serializers import BuildSummarySerializer, CreateBuildSerializer, FullKnowledgeTreeSerializer, RequirementIntakeSerializer
 from . import intake
 from .tasks import build_knowledge_tree
-from . import block_study
-from .serializers import AttachBlockResourceSerializer, BlockQuizRequestSerializer, BlockResourceSerializer
+from . import block_study, public_asset_service
+from .serializers import (AttachBlockResourceSerializer, BlockQuizRequestSerializer, BlockResourceSerializer,
+                          BlockResourceUpdateSerializer, PublicAssetCatalogSerializer, TreePublicAssetImportSerializer)
 
 
 def _visible_builds(user):
@@ -99,9 +101,14 @@ class BlockResourceView(BuildStatusView):
 
     def get(self, request, build_id, block_id):
         block = self.get_block(request, build_id, block_id)
-        resources = block_study.visible_block_resources(request.user, block)
+        region = public_asset_service.get_region_preference(request.user, request, request.query_params.get('region', ''))
+        resources = block_study.visible_block_resources(request.user, block, request=request, explicit_region=region)
         data = {'resources': BlockResourceSerializer(resources, many=True).data,
-                'internal_candidates': block_study.internal_resource_candidates(request.user, block), 'web_candidates': []}
+                'internal_candidates': block_study.internal_resource_candidates(request.user, block), 'web_candidates': [],
+                'region_pref': region,
+                'wiki_candidates': public_asset_service.wiki_candidates_for_block(block, region),
+                'catalog_candidates': PublicAssetCatalogSerializer(
+                    public_asset_service.catalog_candidates_for_build(block.build, region, block=block), many=True).data}
         if 'query' in request.query_params:
             data['web_candidates'] = block_study.search_block_web_resources(block, request.query_params['query'])
         return Response(data)
@@ -110,8 +117,39 @@ class BlockResourceView(BuildStatusView):
         block = self.get_block(request, build_id, block_id)
         serializer = AttachBlockResourceSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        resource = block_study.attach_block_resource(request.user, block, serializer.validated_data)
+        resource = block_study.attach_block_resource(request.user, block, serializer.validated_data, request=request)
         return Response(BlockResourceSerializer(resource).data, status=status.HTTP_201_CREATED)
+
+    def patch(self, request, build_id, block_id):
+        block = self.get_block(request, build_id, block_id)
+        serializer = BlockResourceUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        resources = block.resources.filter(~Q(source_kind='library') | Q(created_by=request.user))
+        if block.build.created_by_id != request.user.pk:
+            resources = resources.filter(created_by=request.user)
+        resource = get_object_or_404(resources, pk=payload['resource_id'])
+        target = block
+        if 'block_id' in payload:
+            target = get_object_or_404(LearningBlock, build=block.build, pk=payload['block_id'])
+        moved = target.pk != block.pk
+        step_id = payload.get('step_id', None if moved else resource.step_id)
+        atom_id = payload.get('atom_id', None if moved else resource.atom_id)
+        if step_id is not None and not target.steps.filter(pk=step_id).exists():
+            raise ValidationError('步骤不属于目标知识块。')
+        if atom_id is not None:
+            assignment = BlockStepAtom.objects.filter(step__block=target, atom_id=atom_id).first()
+            if assignment is None:
+                raise ValidationError('原子点不属于目标知识块。')
+            if 'step_id' in payload and step_id is not None and assignment.step_id != step_id:
+                raise ValidationError('原子点不属于指定步骤。')
+            step_id = assignment.step_id
+        resource.block, resource.step_id, resource.atom_id = target, step_id, atom_id
+        for field in ('asset_track', 'pedagogical_role', 'locator'):
+            if field in payload:
+                setattr(resource, field, payload[field])
+        resource.save(update_fields=('block', 'step', 'atom', 'asset_track', 'pedagogical_role', 'locator'))
+        return Response(BlockResourceSerializer(resource).data)
 
     def delete(self, request, build_id, block_id):
         block = self.get_block(request, build_id, block_id)
@@ -122,6 +160,62 @@ class BlockResourceView(BuildStatusView):
             resources = resources.filter(created_by=request.user)
         get_object_or_404(resources, pk=resource_id).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class TreePublicAssetView(BuildStatusView):
+    def get(self, request, build_id):
+        build = get_object_or_404(_visible_builds(request.user), pk=build_id)
+        region = public_asset_service.get_region_preference(request.user, request, request.query_params.get('region', ''))
+        catalog = public_asset_service.catalog_candidates_for_build(build, region)
+        listings = public_asset_service.marketplace_candidates(build)
+        albums = public_asset_service.album_candidates(build, request.user)
+        wiki_assets = {asset.url: asset for asset in catalog if asset.asset_track == 'wiki'}
+        wiki_candidates = [
+            {'public_asset_id': asset.pk, 'title': asset.title, 'url': asset.url,
+             'source_kind': asset.source_kind, 'asset_track': asset.asset_track,
+             'region_scope': asset.region_scope, 'summary': asset.description}
+            for asset in wiki_assets.values()]
+        if not wiki_candidates:
+            try:
+                from .public_asset_resolvers import search_wikipedia_concepts
+            except ModuleNotFoundError as exc:
+                if exc.name != f'{__package__}.public_asset_resolvers':
+                    raise
+            else:
+                wiki_candidates = [
+                    candidate for candidate in search_wikipedia_concepts(
+                        build.subject, lang='en' if region == 'intl' else 'zh')
+                    if region != 'cn' or candidate.get('region_scope') != 'intl']
+        mounted = build.block_resources.filter(~Q(source_kind='library') | Q(created_by=request.user))
+        if region == 'cn':
+            mounted = mounted.exclude(region_scope='intl')
+        summary = {track: 0 for track in ('spine', 'spotlight', 'wiki')}
+        for track in mounted.values_list('asset_track', flat=True):
+            summary[track] += 1
+        return Response({
+            'region_pref': region,
+            'catalog_assets': PublicAssetCatalogSerializer(catalog, many=True).data,
+            'marketplace_listings': [
+                {'id': row.pk, 'title': row.title, 'subject': row.subject, 'description': row.description,
+                 'content_type': row.content_type, 'license_type': row.license_type, 'status': row.status, 'url': '/courses'}
+                for row in listings],
+            'albums': [{'id': row.pk, 'name': row.name, 'title': row.name, 'description': row.description,
+                        'url': '/courses'} for row in albums],
+            'wiki_candidates': wiki_candidates,
+            'mounted_summary': summary,
+        })
+
+    def post(self, request, build_id):
+        build = get_object_or_404(_visible_builds(request.user), pk=build_id)
+        serializer = TreePublicAssetImportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = public_asset_service.import_tree_public_asset(request.user, build, serializer.validated_data, request=request)
+        return Response({
+            'mounted_count': result['mounted_count'],
+            'asset_track': result['asset_track'],
+            'public_asset': PublicAssetCatalogSerializer(result['public_asset']).data if result['public_asset'] else None,
+            'resources': BlockResourceSerializer(result['resources'], many=True).data,
+        }, status=status.HTTP_201_CREATED)
 
 
 class BlockQuizView(BlockResourceView):

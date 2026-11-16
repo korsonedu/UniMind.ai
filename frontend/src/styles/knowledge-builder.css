@@ -820,3 +820,49 @@
 .kb-study-option { display: flex; align-items: flex-start; gap: 8px; padding: 12px; border: 1px solid hsl(var(--border)); border-radius: 8px; cursor: pointer; }
 .kb-study-option input { margin-top: 5px; }
 .kb-study-option.selected { border-color: #4b8c64; background: #eff8f2; color: #24583c; }
+
+.kb-asset-badge--spine { color: #315c83; background: #edf5fc; border-color: #b5cee4; }
+.kb-asset-badge--spotlight { color: #805d18; background: #fff8e8; border-color: #e8d19a; }
+.kb-asset-badge--wiki { color: #38624b; background: #edf7f0; border-color: #b8d7c2; }
+.dark .kb-asset-badge--spine { color: #b8d7f0; background: #243447; border-color: #4c6d8b; }
+.dark .kb-asset-badge--spotlight { color: #ead394; background: #3d3422; border-color: #817042; }
+.dark .kb-asset-badge--wiki { color: #b3d9c1; background: #253a2e; border-color: #4e795f; }
+.kb-card-resources { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.kb-card-resource-link { max-width: 100%; padding: 6px 10px; border: 1px solid var(--kb-border); border-radius: 7px; color: var(--kb-text); background: var(--kb-bg); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: 3px; }
+.kb-card-resource-link:hover { border-color: var(--kb-color, #558b6e); }
+.kb-resource-locator { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+.kb-resource-direct-link { display: inline-flex; align-items: center; margin-top: 8px; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.kb-study-track { display: grid; gap: 10px; padding: 16px; border: 1px solid hsl(var(--border)); border-radius: 12px; }
+.kb-study-track.is-spine { border-left: 3px solid #6d9bbd; }
+.kb-study-track.is-spotlight { border-left: 3px solid #c6a255; }
+.kb-study-track.is-wiki { border-left: 3px solid #76a185; }
+.kb-study-track-resource { min-width: 0; background: hsl(var(--background)); }
+.kb-resource-adjustments { padding-top: 10px; margin-top: 10px; border-top: 1px solid hsl(var(--border)); }
+.kb-resource-adjustments label { flex: 1 1 150px; min-width: 0; }
+.kb-resource-adjustments .kb-study-select { font-size: 13px; padding: 7px 9px; }
+
+.kb-public-assets-dialog { width: calc(100vw - 2rem); max-width: 1080px; max-height: 90dvh; overflow-y: auto; }
+.kb-public-assets-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 14px 16px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--muted)); line-height: 1.7; }
+.kb-public-assets-tabs, .kb-public-assets-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.kb-public-assets-tabs { padding-bottom: 12px; border-bottom: 1px solid hsl(var(--border)); }
+.kb-public-assets-tabs button, .kb-public-assets-filters button { height: auto; white-space: normal; text-align: left; }
+.kb-public-assets-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.kb-public-asset-card { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0; padding: 16px; border: 1px solid hsl(var(--border)); border-radius: 12px; overflow-wrap: anywhere; }
+.kb-public-asset-card > button { margin-top: auto; }
+.kb-public-asset-card a, .kb-public-asset-segments a { text-underline-offset: 3px; }
+.kb-public-asset-card .kb-badge { white-space: normal; }
+.kb-public-asset-segments { display: grid; gap: 8px; width: 100%; max-height: 220px; overflow-y: auto; padding: 10px 10px 10px 28px; border-radius: 8px; background: hsl(var(--muted)); font-size: 13px; }
+.kb-public-assets-form { display: grid; gap: 16px; }
+.kb-public-assets-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.kb-public-assets-form label { min-width: 0; }
+.kb-public-assets-form summary { cursor: pointer; font-size: 14px; }
+.kb-public-assets-dialog :is(a, button, select, summary):focus-visible,
+.kb-study-dialog :is(a, select, summary):focus-visible,
+.kb-card-resource-link:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+
+@media (max-width: 640px) {
+  .kb-public-assets-grid, .kb-public-assets-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .kb-public-assets-tabs > button { flex: 1 1 100%; }
+  .kb-study-track { padding: 12px; }
+  .kb-resource-adjustments > button { align-self: flex-end; }
+}

@@ -17,6 +17,7 @@ import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { knowledgeBuildPlanningPrompt } from '@/lib/knowledgeBuildPlanning';
 import { KnowledgeBuilderGraph } from '@/components/KnowledgeBuilderGraph';
 import { BlockStudyDialog } from '@/components/BlockStudyDialog';
+import { TreePublicAssetModal } from '@/components/TreePublicAssetModal';
 import {
   Dialog,
   DialogContent,
@@ -65,6 +66,7 @@ export default function KnowledgeBuilder() {
   const projectTab = searchParams.get('tab') === 'project';
   const { chat, openingProject } = useXiaoYuChat();
   const [studyBlockId, setStudyBlockId] = useState<number | null>(null);
+  const [publicAssetsBuildId, setPublicAssetsBuildId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const userId = useAuthStore(s => s.user?.id);
 
@@ -271,6 +273,9 @@ export default function KnowledgeBuilder() {
       <div className="kb-unified-workspace">
         {workspaceTabs}
         <div className="kb-plan-toolbar">
+          <Button type="button" variant="outline" onClick={() => setPublicAssetsBuildId(detailQuery.data.id)}>
+            {t('公开资产池 & 整树挂载')}
+          </Button>
           <span>{t('已选择 {0} 个目标学习块', { 0: selectedBlocks.size })}</span>
           <Button type="button" variant="outline" disabled={!selectedBlocks.size || openingProject} onClick={() => {
             chat.setInput(knowledgeBuildPlanningPrompt(detailQuery.data, selectedBlocks));
@@ -302,8 +307,20 @@ export default function KnowledgeBuilder() {
           key={`${detailQuery.data.id}:${block.id}`} tree={detailQuery.data} block={block}
           progress={detailQuery.data.block_progress?.find(progress => progress.block === block.id)}
           onClose={() => setStudyBlockId(null)}
-          onChanged={() => { void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBuilder.detail(detailQuery.data.id) }); }}
+          onChanged={() => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBuilder.detail(detailQuery.data.id) });
+            void queryClient.invalidateQueries({ queryKey: ['knowledge-tree-public-assets', userId, detailQuery.data.id] });
+          }}
         />)}
+        {publicAssetsBuildId === detailQuery.data.id && <TreePublicAssetModal
+          key={detailQuery.data.id}
+          tree={detailQuery.data}
+          onClose={() => setPublicAssetsBuildId(null)}
+          onChanged={() => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBuilder.detail(detailQuery.data.id) });
+            void queryClient.invalidateQueries({ queryKey: ['knowledge-block-resources', userId, detailQuery.data.id] });
+          }}
+        />}
         {createModal}
       </div>
     );

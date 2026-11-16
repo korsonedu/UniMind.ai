@@ -723,8 +723,10 @@ def run_build(build_id, progress=None):
         _persist(build,modules,atoms,edges,blocks,graph,plans,interfaces)
         try:
             from .block_study import auto_mount_internal_resources
+            from .public_asset_service import auto_mount_public_assets
             with transaction.atomic():
                 auto_mount_internal_resources(build)
+                auto_mount_public_assets(build)
         except Exception:
             logging.getLogger(__name__).exception('Initial resource matching failed for build %s', build.pk)
         return build

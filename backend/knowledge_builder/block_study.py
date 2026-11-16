@@ -85,9 +85,14 @@ def internal_resource_candidates(user, block):
     return candidates
 
 
-def visible_block_resources(user, block):
+def visible_block_resources(user, block, request=None, explicit_region=''):
     # A curated/shared build must not expose another learner's private library snapshots.
-    return block.resources.filter(~Q(source_kind='library') | Q(created_by=user)).order_by('id')
+    from .public_asset_service import get_region_preference
+
+    resources = block.resources.filter(~Q(source_kind='library') | Q(created_by=user))
+    if get_region_preference(user, request, explicit_region) == 'cn':
+        resources = resources.exclude(region_scope='intl')
+    return resources.order_by('id')
 
 
 def auto_mount_internal_resources(build):
@@ -130,7 +135,7 @@ def _save_library(user, block, title, url, excerpt):
     return row
 
 
-def attach_block_resource(user, block, payload):
+def attach_block_resource(user, block, payload, request=None):
     assignments = _assignments(block)
     step_id, atom_id = payload.get('step_id'), payload.get('atom_id')
     if step_id is not None and not block.steps.filter(pk=step_id).exists():
@@ -138,9 +143,39 @@ def attach_block_resource(user, block, payload):
     assignment = next((row for row in assignments if row.atom_id == atom_id), None)
     if atom_id is not None and (assignment is None or step_id is not None and assignment.step_id != step_id):
         raise ValidationError('原子点不属于当前知识块或指定步骤。')
-    source_keys = [key for key in ('url', 'course_id', 'library_resource_id') if payload.get(key)]
+    source_keys = [key for key in ('url', 'public_asset_id', 'marketplace_listing_id', 'course_id', 'library_resource_id')
+                   if payload.get(key)]
     if len(source_keys) != 1:
-        raise ValidationError('请指定一个网页 URL、站内课程或个人资料。')
+        raise ValidationError('请指定一个网页 URL、公开资产、免费市场资源、站内课程或个人资料。')
+    if source_keys[0] in ('url', 'public_asset_id', 'marketplace_listing_id'):
+        from .public_asset_service import (get_region_preference, import_tree_public_asset,
+                                           mount_single_public_asset, resolve_and_store_asset)
+
+        if source_keys[0] == 'url':
+            region_pref = get_region_preference(user, request)
+            asset_data, public_asset = resolve_and_store_asset(
+                block.build, payload['url'], payload, user, region_pref)
+            with transaction.atomic():
+                resource = mount_single_public_asset(
+                    block.build, asset_data, user=user, public_asset=public_asset,
+                    target_block=block, target_atom_id=atom_id)
+                if payload.get('save_to_library'):
+                    resource.library_resource_id = _save_library(
+                        user, block, resource.title, resource.url, resource.excerpt).pk
+                    resource.save(update_fields=('library_resource_id',))
+        else:
+            result = import_tree_public_asset(user, block.build, {
+                **payload, 'target_block_id': block.pk, 'target_atom_id': atom_id,
+            }, request=request)
+            resource = result['resources'][0]
+        if step_id is not None:
+            if assignment is None:
+                assignment, _ = _match(block, [row for row in assignments if row.step_id == step_id],
+                                       f'{resource.title} {resource.excerpt}')
+            resource.step_id = step_id
+            resource.atom_id = assignment.atom_id if assignment else None
+            resource.save(update_fields=('step', 'atom'))
+        return resource
     if source_keys[0] == 'course_id':
         course = _courses(user).filter(pk=payload['course_id']).first()
         if course is None:
@@ -153,17 +188,6 @@ def attach_block_resource(user, block, payload):
             raise ValidationError('个人资料不存在或已归档。')
         fields = dict(source_kind='library', title=resource.title, url=resource.url,
                       excerpt=resource.excerpt, library_resource_id=resource.pk)
-    else:
-        try:
-            url, html = learning_resources.public_text(payload['url'])
-        except (OSError, http.client.HTTPException, ValueError) as exc:
-            raise ValidationError('网页读取失败，请更换来源或稍后重试。') from exc
-        parser = learning_resources.PageText()
-        parser.feed(html)
-        excerpt = '\n'.join(parser.text).strip()[:10000]
-        if not excerpt:
-            raise ValidationError('页面没有可读正文，请更换来源。')
-        fields = dict(source_kind='web', title=' '.join(parser.title)[:200] or url[:200], url=url, excerpt=excerpt)
     if len(fields['url']) > 1000:
         raise ValidationError('挂载链接最多 1000 字。')
     if assignment is None:
@@ -171,9 +195,8 @@ def attach_block_resource(user, block, payload):
         assignment, _ = _match(block, matching_assignments, f"{fields['title']} {fields['excerpt']}")
     if assignment:
         atom_id, step_id = assignment.atom_id, assignment.step_id
+    fields.update({key: payload[key] for key in ('asset_track', 'pedagogical_role', 'locator') if key in payload})
     with transaction.atomic():
-        if fields['source_kind'] == 'web' and payload.get('save_to_library'):
-            fields['library_resource_id'] = _save_library(user, block, fields['title'], fields['url'], fields['excerpt']).pk
         return BlockResource.objects.create(build=block.build, block=block, created_by=user,
                                             atom_id=atom_id, step_id=step_id, **fields)
 

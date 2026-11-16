@@ -94,7 +94,7 @@ class StepSerializer(serializers.ModelSerializer):
 class BlockResourceSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.BlockResource
-        fields = ('id', 'block', 'step', 'atom', 'source_kind', 'title', 'url', 'excerpt', 'course_id', 'library_resource_id', 'created_at')
+        fields = ('id', 'block', 'step', 'atom', 'public_asset', 'source_kind', 'asset_track', 'pedagogical_role', 'locator', 'region_scope', 'title', 'url', 'excerpt', 'course_id', 'library_resource_id', 'marketplace_listing_id', 'created_at')
 
 
 class UserBlockProgressSerializer(serializers.ModelSerializer):
@@ -103,10 +103,15 @@ class UserBlockProgressSerializer(serializers.ModelSerializer):
         fields = ('block', 'status', 'best_accuracy', 'last_accuracy', 'core_passed', 'attempt_count', 'mastered_atom_ids', 'weak_atom_ids', 'last_quiz_result', 'completed_at', 'updated_at')
 
 
-class AttachBlockResourceSerializer(serializers.Serializer):
+class BlockResourceInputSerializer(serializers.Serializer):
     url = serializers.URLField(required=False, max_length=1000)
     course_id = serializers.IntegerField(required=False, min_value=1)
     library_resource_id = serializers.IntegerField(required=False, min_value=1)
+    public_asset_id = serializers.IntegerField(required=False, min_value=1)
+    marketplace_listing_id = serializers.IntegerField(required=False, min_value=1)
+    asset_track = serializers.ChoiceField(choices=models.BlockResource.AssetTrack.values, required=False)
+    pedagogical_role = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    locator = serializers.CharField(required=False, allow_blank=True, max_length=120)
     step_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
     atom_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
     save_to_library = serializers.BooleanField(default=False)
@@ -117,7 +122,58 @@ class AttachBlockResourceSerializer(serializers.Serializer):
         return value
 
     class Meta:
-        fields = ('url', 'course_id', 'library_resource_id', 'step_id', 'atom_id', 'save_to_library')
+        fields = ('url', 'course_id', 'library_resource_id', 'public_asset_id', 'marketplace_listing_id', 'asset_track', 'pedagogical_role', 'locator', 'step_id', 'atom_id', 'save_to_library')
+
+
+class AttachBlockResourceSerializer(BlockResourceInputSerializer):
+    class Meta:
+        fields = ('url', 'course_id', 'library_resource_id', 'public_asset_id', 'marketplace_listing_id', 'asset_track', 'pedagogical_role', 'locator', 'step_id', 'atom_id', 'save_to_library')
+
+
+class PublicAssetCatalogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.PublicAssetCatalog
+        fields = ('id', 'subject', 'title', 'url', 'source_kind', 'asset_track', 'pedagogical_role', 'region_scope', 'description', 'topic_keywords', 'segments', 'created_at')
+
+
+class TreePublicAssetImportSerializer(serializers.Serializer):
+    url = serializers.URLField(required=False, max_length=1000)
+    title = serializers.CharField(required=False, max_length=200)
+    asset_track = serializers.ChoiceField(choices=models.BlockResource.AssetTrack.values, required=False)
+    pedagogical_role = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    outline_text = serializers.CharField(required=False, allow_blank=True, max_length=100000)
+    public_asset_id = serializers.IntegerField(required=False, min_value=1)
+    marketplace_listing_id = serializers.IntegerField(required=False, min_value=1)
+    album_id = serializers.IntegerField(required=False, min_value=1)
+    target_block_id = serializers.IntegerField(required=False, min_value=1)
+    target_atom_id = serializers.IntegerField(required=False, min_value=1)
+
+    def validate_url(self, value):
+        if not value.startswith('https://'):
+            raise serializers.ValidationError('请提供公开 HTTPS 链接。')
+        return value
+
+    def validate(self, attrs):
+        sources = ('url', 'public_asset_id', 'marketplace_listing_id', 'album_id')
+        if sum(bool(attrs.get(key)) for key in sources) != 1:
+            raise serializers.ValidationError('请指定一个公开链接、资产池条目、免费市场资源或课程专辑。')
+        return attrs
+
+    class Meta:
+        fields = ('url', 'title', 'asset_track', 'pedagogical_role', 'outline_text', 'public_asset_id', 'marketplace_listing_id', 'album_id', 'target_block_id', 'target_atom_id')
+
+
+class BlockResourceUpdateSerializer(serializers.Serializer):
+    resource_id = serializers.IntegerField(min_value=1)
+    block_id = serializers.IntegerField(required=False, min_value=1)
+    step_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    atom_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    asset_track = serializers.ChoiceField(choices=models.BlockResource.AssetTrack.values, required=False)
+    pedagogical_role = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    locator = serializers.CharField(required=False, allow_blank=True, max_length=120)
+
+    class Meta:
+        fields = ('resource_id', 'block_id', 'step_id', 'atom_id', 'asset_track', 'pedagogical_role', 'locator')
 
 
 class BlockQuizRequestSerializer(serializers.Serializer):
@@ -144,8 +200,12 @@ class BlockSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         request = self.context.get('request')
         user_id = request.user.pk if request and request.user.is_authenticated else None
+        from .public_asset_service import get_region_preference
+        region = get_region_preference(request.user if request else None, request,
+                                       request.query_params.get('region', '') if request else '')
         visible_ids = {row.pk for row in instance.resources.all()
-                       if row.source_kind != 'library' or user_id is not None and row.created_by_id == user_id}
+                       if (row.source_kind != 'library' or user_id is not None and row.created_by_id == user_id)
+                       and (region != 'cn' or row.region_scope != 'intl')}
         data['resources'] = [row for row in data['resources'] if row['id'] in visible_ids]
         return data
 

@@ -27,6 +27,8 @@ def test_serializers_explicit_fields():
         serializers.FullKnowledgeTreeSerializer,
         serializers.BlockResourceSerializer, serializers.UserBlockProgressSerializer,
         serializers.AttachBlockResourceSerializer, serializers.BlockQuizRequestSerializer,
+        serializers.BlockResourceInputSerializer, serializers.BlockResourceUpdateSerializer,
+        serializers.PublicAssetCatalogSerializer, serializers.TreePublicAssetImportSerializer,
     ):
         assert isinstance(serializer.Meta.fields, tuple)
         assert set(serializer().fields) == set(serializer.Meta.fields)
@@ -538,6 +540,7 @@ def test_block_auto_mount_internal_and_optional_scope(study_block, user):
 
 @override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
 def test_block_resource_search_attach_library_delete(client, study_block, user, monkeypatch):
+    monkeypatch.setattr('knowledge_builder.public_asset_resolvers.search_wikipedia_concepts', lambda *args, **kwargs: [])
     from ai_assistant.models import LearningResource
     calls = []
     def public_text(url):
@@ -573,7 +576,8 @@ def test_block_resource_search_attach_library_delete(client, study_block, user, 
 
 
 @override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
-def test_block_resource_visibility(client, study_block, user):
+def test_block_resource_visibility(client, study_block, user, monkeypatch):
+    monkeypatch.setattr('knowledge_builder.public_asset_resolvers.search_wikipedia_concepts', lambda *args, **kwargs: [])
     from django.utils import timezone
     from ai_assistant.models import LearningResource
     from courses.models import Course, CourseModule
@@ -729,6 +733,7 @@ def test_block_ai_generation_and_grading_reuse(client, study_block, monkeypatch)
 
 @override_settings(UNIMIND_CONTENT_INSTITUTION_ID=None)
 def test_run_build_mounts_resources_after_publication(user, monkeypatch):
+    monkeypatch.setattr('knowledge_builder.public_asset_resolvers.load_seed_public_assets', lambda *args, **kwargs: [])
     from django.utils import timezone
     from courses.models import Course, CourseModule
     from ai_assistant.models import LearningResource

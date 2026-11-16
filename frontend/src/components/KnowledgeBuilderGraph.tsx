@@ -2,6 +2,7 @@ import { t, useLocale } from '@/i18n';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import type { BaselineSummary, KnowledgeTreeBuildDetail } from '@/types/knowledgeBuilder';
+import { resolvePublicAssetLink } from '@/lib/knowledgeBuilderApi';
 import {
   adaptKnowledgeTree,
   computeColumnLayout,
@@ -705,7 +706,10 @@ export function KnowledgeBuilderGraph({
 
                 {col.blocks.map(block => {
                   const progress = tree.block_progress?.find(item => item.block === block.id);
-                  const resourceCount = tree.blocks.find(item => item.id === block.id)?.resources?.length ?? 0;
+                  const resources = tree.blocks.find(item => item.id === block.id)?.resources ?? [];
+                  const spine = resources.find(resource => resource.asset_track === 'spine');
+                  const hasSpotlight = resources.some(resource => resource.asset_track === 'spotlight');
+                  const hasWiki = resources.some(resource => resource.asset_track === 'wiki');
                   const isOpen = openIds.has(block.id);
                   const isHighlighted = highlightedBlockIds.has(block.id) || flashBlockId === block.id;
                   const isDimmed = hasHoverFocus && !isHighlighted;
@@ -753,7 +757,10 @@ export function KnowledgeBuilderGraph({
                           <span className="kb-cardtype">{block.domainTitle}</span>
                           {progress?.status === 'COMPLETED' && <span className="kb-badge kb-badge--mastered">已完成 ✓</span>}
                           {progress?.status === 'NEEDS_REVIEW' && <span className="kb-badge kb-badge--weak">待强化 · {Math.round(progress.last_accuracy * 100)}%</span>}
-                          <span className="kb-badge">📚 {resourceCount}</span>
+                          <span className="kb-badge">📚 {resources.length}</span>
+                          {spine && <span className="kb-badge kb-asset-badge--spine" title={`主线配套课${spine.locator ? ` · ${spine.locator}` : ''}`}>🎬 {spine.locator || '主线'}</span>}
+                          {hasSpotlight && <span className="kb-badge kb-asset-badge--spotlight" title="单点神作">🌟 神作</span>}
+                          {hasWiki && <span className="kb-badge kb-asset-badge--wiki" title="权威百科与开源文档">📖 维基</span>}
                           {renderTopicBadges([block.shortTitle, ...block.steps.flatMap(step => step.atoms.map(item => item.atom.name))])}
                         </span>
                       </button>
@@ -769,6 +776,17 @@ export function KnowledgeBuilderGraph({
                               </span>
                             ))}
                           </div>
+                          {resources.length > 0 && <nav className="kb-card-resources" aria-label={`${block.shortTitle}的学习资源`}>
+                            {resources.map(resource => {
+                              const href = resolvePublicAssetLink(resource.url, resource.locator);
+                              if (!href) return null;
+                              const trackLabel = resource.asset_track === 'spine' ? '🎬 主线' : resource.asset_track === 'spotlight' ? '🌟 神作' : resource.asset_track === 'wiki' ? '📖 维基' : '📚 资源';
+                              return <a key={resource.id} className="kb-card-resource-link" href={href} target="_blank" rel="noopener noreferrer"
+                                onClick={event => event.stopPropagation()} title={`直接打开：${resource.title}${resource.locator ? ` · ${resource.locator}` : ''}`}>
+                                {trackLabel} · {resource.title}{resource.locator ? ` · ${resource.locator}` : ''} ↗
+                              </a>;
+                            })}
+                          </nav>}
                           <div className="kb-hint">
                             {t('悬停知识点可查看学习目标与易错点；实线框为必学原子，虚线框为拓展延伸；点击黄色先修接口可跳转定位')}
                           </div>
