@@ -201,6 +201,8 @@ def test_media_ticket_oss_uses_request_method(media_setup, user, settings, metho
         )
         WorkspaceMembership.objects.create(user=user, workspace=workspace, role='admin')
         WorkspaceCourse.objects.create(workspace=workspace, course=course)
+        from users.workspaces.identity import select_learner
+        user = select_learner(user, str(workspace.pk))
     ticket, path = issue_media_ticket(user, course.video_file.name)
     settings.OSS_ACCESS_KEY_ID = 'test-only'
     settings.OSS_ACCESS_KEY_SECRET = 'test-only'

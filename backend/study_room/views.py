@@ -45,7 +45,7 @@ class ChatMessageListView(generics.ListCreateAPIView):
                 pass
 
         serializer.save(user=self.request.user, related_plan=related_plan,
-                        institution=get_content_institution())
+                        institution=get_content_institution(self.request.user))
 
 class UndoBroadcastView(APIView):
     permission_classes = [IsMember]
@@ -97,6 +97,10 @@ class ImageUploadView(APIView):
         safe_name = f"chat_images/{uuid.uuid4().hex}.{ext}"
         file_name = default_storage.save(safe_name, file)
         file_url = request.build_absolute_uri('/media/' + file_name)
+        from users.workspaces.identity import learner_identity
+        identity = learner_identity(request.user)
+        if identity:
+            file_url += f'?space={identity.workspace_id}'
         return Response({'url': file_url})
 
 

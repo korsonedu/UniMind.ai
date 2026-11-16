@@ -327,7 +327,7 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
     learning_task = ProjectLearningTask.objects.select_related('project__user').filter(exam_id=exam_id).first()
     personal_task = bool(learning_task and learning_task.definition)
     try:
-        scope = None if personal_task else get_content_institution_id()
+        scope = None if personal_task else get_content_institution_id(user)
     except PermissionDenied as exc:
         _fail_pending_items(exam_id, str(exc))
         _finalize_exam(user_id, exam_id)
@@ -355,7 +355,7 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
                 task_result_snapshot(learning_task, item)
                 question = personal_question(learning_task.definition)
             else:
-                if get_content_institution_id() != scope:
+                if get_content_institution_id(user) != scope:
                     raise ValidationError('内容范围已变更')
                 question = Question.objects.select_related('knowledge_point').filter(
                     pk=item.question_id, institution_id=scope,
@@ -387,7 +387,7 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
                     question = Question.objects.select_related('knowledge_point').filter(
                         pk=locked.question_id, institution_id=scope,
                     ).first()
-                    if not question or get_content_institution_id() != scope:
+                    if not question or get_content_institution_id(user) != scope:
                         raise ValidationError('题目或内容范围已变更')
                     if learning_task:
                         task_result_snapshot(learning_task, locked)

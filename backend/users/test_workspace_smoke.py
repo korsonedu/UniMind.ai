@@ -53,8 +53,11 @@ def test_join_is_explicit_idempotent_and_course_scoped(setup_workspace, user, au
     assert auth_client.post(BASE+'join/', data).status_code == 200
     invite.refresh_from_db()
     assert invite.used_count == 1
+    auth_client.force_authenticate(user=None)
+    auth_client.cookies['auth_token'] = LoginSession.issue(user).key
+    auth_client.credentials(HTTP_X_UNIMIND_WORKSPACE=str(workspace.pk))
     features = auth_client.get('/api/users/institution/me/features/').data['features']
-    assert 'video.outline' in features and 'quiz.exam' not in features
+    assert 'video.outline' in features and 'quiz.exam' in features
     result = auth_client.get('/api/courses/').data
     items = result.get('items', result.get('results', [])) if isinstance(result, dict) else result
     assert {item['id'] for item in items} == {course.pk}
@@ -74,11 +77,14 @@ def test_pause_revokes_video_transcript_and_course_context(setup_workspace, user
     workspace, owner, course, link, invite, client = setup_workspace
     auth_client.post(BASE+'join/', {'code': invite.code})
     member = WorkspaceMembership.objects.get(user=user)
+    auth_client.force_authenticate(user=None)
+    auth_client.cookies['auth_token'] = LoginSession.issue(user).key
+    auth_client.credentials(HTTP_X_UNIMIND_WORKSPACE=str(workspace.pk))
     (tmp_path/'test-course.mp4').write_bytes(b'synthetic video')
     assert auth_client.get(f'/api/courses/{course.pk}/transcript/').status_code == 200
     assert client.patch(BASE+f'members/{member.pk}/', {'active': False}, format='json').status_code == 200
-    assert auth_client.get(f'/api/courses/{course.pk}/').status_code == 404
-    assert auth_client.get(f'/api/courses/{course.pk}/transcript/').status_code == 404
+    assert auth_client.get(f'/api/courses/{course.pk}/').status_code == 403
+    assert auth_client.get(f'/api/courses/{course.pk}/transcript/').status_code == 403
     session = LoginSession.issue(user)
     assert auth_client.get('/media/test-course.mp4', HTTP_AUTHORIZATION=f'Token {session.key}').status_code in (403, 404)
     from courses.access import visible_courses

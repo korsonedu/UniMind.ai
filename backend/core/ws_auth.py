@@ -26,6 +26,8 @@ def issue_ws_ticket(user, auth) -> str:
     from users.login_sessions import LoginSession
     from rest_framework.exceptions import AuthenticationFailed
 
+    from users.workspaces.identity import account_user
+    user = account_user(user)
     session = LoginSession.resolve(auth.key, touch=False) if isinstance(auth, LoginSession) else None
     if session is None or session.user_id != user.id:
         raise AuthenticationFailed('登录已失效，请重新登录。')
@@ -89,7 +91,7 @@ def consume_ws_ticket(ticket: str):
 
 
 @database_sync_to_async
-def get_user_from_token(token_key: str):
+def get_user_from_token(token_key: str, space='personal'):
     """根据 auth_token 查找有效登录会话对应的用户。失败返回 None。"""
     from users.login_sessions import LoginSession
 
@@ -97,7 +99,14 @@ def get_user_from_token(token_key: str):
         return None
 
     token = LoginSession.resolve(token_key, touch=False)
-    return token.user if token else None
+    if not token:
+        return None
+    from users.workspaces.identity import select_learner
+    from rest_framework.exceptions import PermissionDenied
+    try:
+        return select_learner(token.user, space)
+    except PermissionDenied:
+        return None
 
 
 class TokenAuthMiddleware(BaseMiddleware):
@@ -112,11 +121,14 @@ class TokenAuthMiddleware(BaseMiddleware):
         cookies = scope.get("cookies", {})
         token_key = cookies.get("auth_token", "")
         scope = dict(scope)
+        space = parse_qs(scope.get('query_string', b'').decode()).get('space', ['personal'])[0]
         if token_key:
-            user = await get_user_from_token(token_key)
+            user = await get_user_from_token(token_key, space)
         else:
             ticket = _extract_ticket_from_scope(scope)
             user, token_key = await consume_ws_ticket(ticket) if ticket else (None, "")
+            if user:
+                user = await get_user_from_token(token_key, space)
         scope["user"] = user or AnonymousUser()
         if not scope['user'].is_authenticated:
             return await super().__call__(scope, receive, send)
@@ -129,7 +141,7 @@ class TokenAuthMiddleware(BaseMiddleware):
                     message = None
                 if message and message['type'] in {'websocket.connect', 'websocket.disconnect'}:
                     return message
-                if not await get_user_from_token(token_key):
+                if not await get_user_from_token(token_key, space):
                     await send({'type': 'websocket.close', 'code': 4001})
                     return {'type': 'websocket.disconnect', 'code': 4001}
                 if message is not None:

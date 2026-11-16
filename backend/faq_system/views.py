@@ -74,7 +74,7 @@ class QuestionListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         validate_upload_file(self.request.FILES.get("attachment"))
         total_size = sum(f.size for f in self.request.FILES.values() if f)
-        inst = get_content_institution()
+        inst = get_content_institution(self.request.user)
         check_and_add_storage_usage(inst, total_size)
         serializer.save(user=self.request.user, institution=inst)
 

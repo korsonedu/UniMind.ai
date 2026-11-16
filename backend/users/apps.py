@@ -5,6 +5,7 @@ class UsersConfig(AppConfig):
     name = "users"
 
     def ready(self):
+        from users.workspaces import signals  # noqa: F401
         from django.db.models.signals import post_migrate
         from users.services.achievements import seed_achievements, connect_achievement_signals
         connect_achievement_signals()

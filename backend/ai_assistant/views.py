@@ -12,6 +12,7 @@ from rest_framework import generics, permissions, serializers
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from core.utils import get_content_institution, get_content_institution_id
 from .models import AIChatMessage, AgentMemory, Bot, BotVisibility, Conversation
 from .services.language import request_language
 from .serializers import AIChatMessageSerializer, AgentMemorySerializer, BotSerializer, ConversationSerializer
@@ -62,9 +63,8 @@ def _get_chat_history(user, bot, conversation_id, exclude_ids=(), limit=10):
 
 
 def _can_use_learning_context(user):
-    from users.learning import is_course_student
-    from users.permissions import is_platform_admin
-    return is_platform_admin(user) or is_course_student(user)
+    from users.feature_access import has_learning_feature
+    return has_learning_feature(user, 'full.report')
 
 
 def _reserve_chat_request(user, data, bot):
@@ -155,7 +155,7 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                 message=user_message,
                 history=project_history,
                 chat_context={'conversation_id': str(conversation_id), 'message_id': current_user_message_id, 'bot_id': bot.pk},
-                institution=getattr(user, 'institution', None),
+                institution=get_content_institution(user),
                 student_context=student_context,
                 memory_context=memory_context,
                 adaptive_directives=adaptive_directives,
@@ -201,8 +201,8 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
 
             # 计入 AI 调用总次数
             from users.quota import increment_quota
-            if user.institution:
-                increment_quota(user.institution, 'ai_call_total')
+            if get_content_institution(user):
+                increment_quota(get_content_institution(user), 'ai_call_total')
 
             if reservation and _complete_ai_result(res, ai_content, pending_msg.metadata if pending_msg else None):
                 from users.learning import confirm_ai_call
@@ -283,15 +283,15 @@ def _user_can_access_bot(user, bot):
         # planner/exam_generator 始终可见，不允许租户隐藏
         if bot.bot_type in ('planner', 'exam_generator'):
             return True
-        if user.institution:
+        if get_content_institution(user):
             vis = BotVisibility.objects.filter(
-                institution=user.institution, bot=bot
+                institution=get_content_institution(user), bot=bot
             ).first()
             if vis and not vis.is_visible:
                 return False
         return True
     # 机构 bot：必须匹配用户机构
-    return bot.institution == user.institution
+    return bot.institution == get_content_institution(user)
 
 
 class BotListCreateView(generics.ListCreateAPIView):
@@ -306,14 +306,14 @@ class BotListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.institution:
+        if get_content_institution(user):
             # planner/exam_generator 始终可见，不参与隐藏过滤
             hidden_ids = BotVisibility.objects.filter(
-                institution=user.institution, is_visible=False,
+                institution=get_content_institution(user), is_visible=False,
             ).exclude(bot__bot_type__in=('planner', 'exam_generator')).values_list('bot_id', flat=True)
             qs = Bot.objects.filter(
                 models.Q(institution__isnull=True, is_active=True) |
-                models.Q(institution=user.institution, is_active=True)
+                models.Q(institution=get_content_institution(user), is_active=True)
             ).exclude(
                 models.Q(institution__isnull=True) & models.Q(id__in=hidden_ids)
             )
@@ -330,7 +330,7 @@ class BotListCreateView(generics.ListCreateAPIView):
         if is_platform_admin(user):
             bot = serializer.save(institution=None)
         else:
-            inst = user.institution
+            inst = get_content_institution(user)
             if not inst:
                 raise serializers.ValidationError("您需要先加入机构。")
             if not check_quota(inst, 'custom_bot'):
@@ -358,7 +358,7 @@ class BotDetailView(generics.RetrieveUpdateDestroyAPIView):
             return
         if obj.institution is None:
             raise PermissionDenied("无法编辑全局机器人。")
-        if user.institution != obj.institution:
+        if get_content_institution(user) != obj.institution:
             raise PermissionDenied("无法编辑其他机构的机器人。")
 
     def perform_update(self, serializer):
@@ -376,7 +376,7 @@ class BotVisibilityView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsInstitutionAdmin]
 
     def get(self, request):
-        inst = request.user.institution
+        inst = get_content_institution(request.user)
         # 排除始终可见的 planner/exam_generator
         global_bots = Bot.objects.filter(
             institution__isnull=True,
@@ -396,7 +396,7 @@ class BotVisibilityView(APIView):
         return Response(result)
 
     def patch(self, request):
-        inst = request.user.institution
+        inst = get_content_institution(request.user)
         bot_id = request.data.get('bot_id')
         is_visible = request.data.get('is_visible')
 
@@ -711,7 +711,7 @@ class AIChatStreamView(APIView):
                 message=user_message,
                 history=project_history,
                 chat_context={'conversation_id': str(conversation_id), 'message_id': user_msg.pk, 'bot_id': bot.pk},
-                institution=getattr(request.user, 'institution', None),
+                institution=get_content_institution(request.user),
                 student_context=student_context,
                 memory_context=memory_context,
                 adaptive_directives=adaptive_directives,
@@ -940,8 +940,8 @@ class AIChatStreamView(APIView):
 
                     from users.quota import increment_quota
                     def _bump_quota():
-                        if request.user.institution:
-                            increment_quota(request.user.institution, 'ai_call_total')
+                        if get_content_institution(request.user):
+                            increment_quota(get_content_institution(request.user), 'ai_call_total')
                     await sync_to_async(_bump_quota)()
                 else:
                     # Delete pending message if not saving
@@ -1061,12 +1061,12 @@ class SemanticMemoryListView(APIView):
 
     def get(self, request):
         user = request.user
-        if not user.institution_id:
+        if not get_content_institution_id(user):
             return Response({"memories": []})
 
         try:
             from ai_assistant.services.tenant_memory import TenantMemoryManager
-            manager = TenantMemoryManager(institution_id=user.institution_id)
+            manager = TenantMemoryManager(institution_id=get_content_institution_id(user))
             limit = min(int(request.query_params.get('limit', 100)), 200)
             memories = manager.get_all(user_id=user.id)[:limit]
             return Response({"memories": memories})
@@ -1081,12 +1081,12 @@ class SemanticMemoryDeleteView(APIView):
 
     def delete(self, request, memory_id=None):
         user = request.user
-        if not user.institution_id:
+        if not get_content_institution_id(user):
             return Response({"error": "无机构信息"}, status=400)
 
         try:
             from ai_assistant.services.tenant_memory import TenantMemoryManager
-            manager = TenantMemoryManager(institution_id=user.institution_id)
+            manager = TenantMemoryManager(institution_id=get_content_institution_id(user))
             if memory_id:
                 # Verify ownership: only delete if memory belongs to this user
                 user_memories = manager.get_all(user_id=user.id)

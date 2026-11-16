@@ -74,7 +74,7 @@ class ArticleListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         validate_upload_file(self.request.FILES.get("cover_image"), allowed_extensions=IMAGE_EXTENSIONS, max_size_bytes=IMAGE_MAX_BYTES)
         total_size = sum(f.size for f in self.request.FILES.values() if f)
-        inst = get_content_institution()
+        inst = get_content_institution(self.request.user)
         check_and_add_storage_usage(inst, total_size)
         serializer.save(author=self.request.user, institution=inst)
 

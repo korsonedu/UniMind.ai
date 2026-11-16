@@ -26,7 +26,7 @@ def person(user):
 
 def list_students(request, data):
     query = str(data.get('search', '')).strip()[:200]
-    queryset = get_user_model().objects.order_by('-date_joined', '-id')
+    queryset = get_user_model().objects.filter(workspace_learner__isnull=True).order_by('-date_joined', '-id')
     if query:
         queryset = queryset.filter(Q(email__icontains=query) | Q(username__icontains=query) | Q(nickname__icontains=query))
     if data.get('cohort_id'):

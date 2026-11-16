@@ -1,7 +1,8 @@
 from django.urls import path
-from .views import WorkspaceView, InvitePreviewView, JoinView, InvitesView, InviteDetailView, MemberDetailView, CoursesView, CourseDetailView
+from .views import WorkspaceView, SelectWorkspaceView, InvitePreviewView, JoinView, InvitesView, InviteDetailView, MemberDetailView, CoursesView, CourseDetailView
 
 urlpatterns = [
+    path('select/', SelectWorkspaceView.as_view()),
     path('', WorkspaceView.as_view()),
     path('invite-preview/', InvitePreviewView.as_view()),
     path('join/', JoinView.as_view()),
