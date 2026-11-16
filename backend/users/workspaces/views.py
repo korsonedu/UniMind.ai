@@ -1,4 +1,5 @@
 from pathlib import Path
+import secrets
 from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -13,10 +14,11 @@ from rest_framework.views import APIView
 from rest_framework.throttling import UserRateThrottle
 from courses.models import Course, CourseModule, VideoTranscript
 from core.file_validation import validate_upload_file
-from users.models_workspace import Workspace, WorkspaceMembership, WorkspaceCourse, WorkspaceInvite, WorkspaceEnrollment
+from users.models_workspace import EnterpriseAccount, Workspace, WorkspaceMembership, WorkspaceCourse, WorkspaceInvite, WorkspaceEnrollment
 from users.models_commercial import InstitutionAuditLog
 from .access import workspace_active, active_course_ids, require_admin
 from .identity import account_membership_for as membership_for
+from .identity import account_user
 from .tasks import dispatch_processing
 
 
@@ -41,6 +43,18 @@ class CodeInput(serializers.Serializer):
 
 class WorkspaceInput(serializers.Serializer):
     workspace_id = serializers.IntegerField(min_value=1)
+
+
+class WorkspaceNameInput(WorkspaceInput):
+    name = serializers.CharField(max_length=100, error_messages={
+        'blank': '请填写 Workspace 名称。', 'max_length': 'Workspace 名称最多 100 个字。',
+    })
+
+
+class WorkspaceCreateInput(serializers.Serializer):
+    name = serializers.CharField(max_length=100, error_messages={
+        'blank': '请填写机构名称。', 'max_length': '机构名称最多 100 个字。',
+    })
 
 
 class InviteInput(serializers.Serializer):
@@ -94,15 +108,19 @@ def membership_summary(member):
         grant_end = member.enrollments.aggregate(end=Max('service_ends_on'))['end']
         ends = min(ends, grant_end) if grant_end else ends
     active = workspace_active(member) and (member.role == 'admin' or ends >= today)
-    return {'id': workspace.pk, 'name': workspace.institution.name, 'description': workspace.description,
+    return {'id': workspace.pk, 'name': str(workspace), 'description': workspace.description,
         'role': member.role, 'is_current': member.is_current, 'joined_at': member.joined_at,
         'service_ends_at': ends, 'service_active': active}
 
 
 def snapshot(user):
     member = membership_for(user)
+    account = account_user(user)
+    enterprise = EnterpriseAccount.objects.filter(user=account).first()
     result = {'available': True, 'role': None, 'workspace': None, 'courses': [], 'members': [], 'invites': [], 'usage': [],
-        'workspaces': [membership_summary(item) for item in WorkspaceMembership.objects.filter(user=user)
+        'enterprise': {'can_create': enterprise.is_active and enterprise.service_ends_on >= timezone.localdate(),
+            'service_ends_at': enterprise.service_ends_on, 'max_students': enterprise.max_students} if enterprise else None,
+        'workspaces': [membership_summary(item) for item in WorkspaceMembership.objects.filter(user=account)
             .select_related('workspace__institution').order_by('joined_at', 'id')]}
     for item in result['workspaces']:
         item['is_current'] = bool(member and item['id'] == member.workspace_id)
@@ -175,6 +193,39 @@ class WorkspaceView(APIView):
     def get(self, request):
         return Response(snapshot(request.user))
 
+    @transaction.atomic
+    def post(self, request):
+        from users.models import Institution
+        account = account_user(request.user)
+        get_user_model().objects.select_for_update().get(pk=account.pk)
+        enterprise = EnterpriseAccount.objects.select_for_update().filter(user=account, is_active=True,
+            service_ends_on__gte=timezone.localdate()).first()
+        if not enterprise:
+            raise PermissionDenied('创建机构需要有效的企业版服务，请联系平台开通。')
+        payload = WorkspaceCreateInput(data=request.data)
+        payload.is_valid(raise_exception=True)
+        name = payload.validated_data['name']
+        institution = Institution.objects.create(name=name, slug=f'workspace-{secrets.token_hex(8)}', created_by=account)
+        workspace = Workspace.objects.create(institution=institution, name=name,
+            service_ends_on=enterprise.service_ends_on, max_students=enterprise.max_students)
+        WorkspaceMembership.objects.create(user=account, workspace=workspace, role='admin',
+            is_current=not WorkspaceMembership.objects.filter(user=account, is_current=True).exists())
+        audit(account, workspace, 'workspace.create', name)
+        return Response(snapshot(request.user), status=201)
+
+    @transaction.atomic
+    def patch(self, request):
+        member = require_admin(request.user)
+        payload = WorkspaceNameInput(data=request.data)
+        payload.is_valid(raise_exception=True)
+        if payload.validated_data['workspace_id'] != member.workspace_id:
+            raise ValidationError('当前机构已变更，请刷新后重试。')
+        workspace = Workspace.objects.select_for_update().get(pk=member.workspace_id)
+        workspace.name = payload.validated_data['name']
+        workspace.save(update_fields=['name'])
+        audit(request.user, workspace, 'workspace.rename', workspace.name)
+        return Response(snapshot(request.user))
+
 
 class InvitePreviewView(APIView):
     permission_classes = [IsAuthenticated]
@@ -182,7 +233,7 @@ class InvitePreviewView(APIView):
 
     def post(self, request):
         invite = find_invite(request)
-        return Response({'name': invite.workspace.institution.name, 'service': invite.name,
+        return Response({'name': str(invite.workspace), 'service': invite.name,
             'courses': list(invite.courses.filter(is_published=True).values_list('title', flat=True)),
             'service_ends_at': invite.service_ends_on})
 

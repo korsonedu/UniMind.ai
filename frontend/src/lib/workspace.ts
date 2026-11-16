@@ -1,4 +1,4 @@
-import { setActiveWorkspace } from '@/lib/activeWorkspace';
+import { activeWorkspace, setActiveWorkspace } from '@/lib/activeWorkspace';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import api from '@/lib/api';
@@ -24,6 +24,7 @@ export interface JoinedWorkspace {
 }
 export interface WorkspaceSnapshot {
   available: boolean; demo?: boolean; role: 'admin' | 'student' | null;
+  enterprise?: { can_create: boolean; service_ends_at: string; max_students: number } | null;
   workspace: { id?: number; name: string; description: string; joined_at: string; service_ends_at: string; service_active?: boolean } | null;
   workspaces?: JoinedWorkspace[];
   courses: WorkspaceCourse[]; members: WorkspaceMember[]; invites: WorkspaceInvite[];
@@ -43,7 +44,14 @@ export function useWorkspace() {
   return useQuery({ queryKey: ['workspace', userId], enabled: userId !== undefined, retry: false,
     refetchInterval: query => query.state.data?.courses.some(course => course.status === 'processing') ? 5000 : false,
     queryFn: async (): Promise<WorkspaceSnapshot> => {
-      try { return (await api.get(workspacePath)).data; }
+      try {
+        const data: WorkspaceSnapshot = (await api.get(workspacePath)).data;
+        if (!data.workspaces?.length && data.workspace?.id && data.role) {
+          data.workspaces = [{ ...data.workspace, id: data.workspace.id, role: data.role,
+            is_current: activeWorkspace() === String(data.workspace.id), service_active: data.workspace.service_active !== false }];
+        }
+        return data;
+      }
       catch (error) {
         if (axios.isAxiosError(error) && [404, 410].includes(error.response?.status || 0)) return emptyWorkspace;
         throw error;
