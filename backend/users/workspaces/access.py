@@ -9,7 +9,7 @@ def membership_for(user):
         return None
     if not isinstance(user, get_user_model()) or not user.pk:
         return None
-    return WorkspaceMembership.objects.select_related('workspace__institution').filter(user=user).first()
+    return WorkspaceMembership.objects.select_related('workspace__institution').filter(user=user, is_current=True).first()
 
 
 def workspace_active(member):
