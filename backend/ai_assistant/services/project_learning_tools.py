@@ -70,8 +70,9 @@ PROJECT_LEARNING_TOOLS.extend([
 
 
 PROJECT_LEARNING_TOOLS.append(tool('manage_learning_knowledge',
-    '管理本人版本化知识地图。search 找地图，read 读确切版本；save 用本人资料库版本原文引用组织单元与有向前置教学建议；prepare 把所选目标及前置节点的来源接入项目，但须另存阶段计划才生效。probe 在当前范围登记单节点任务、常规或候选迁移类型、判断标准；本轮成功回复须原样呈现 question，后续另一轮真实作答才能由 record_learning_progress.knowledge_check 更新 BEP。不能伪造检验或从相邻节点推断实测。',
-    obj({'action': {'type': 'string', 'enum': ['search', 'read', 'save', 'prepare', 'probe']},
+    '管理本人版本化知识地图。builds 查询可用学科图谱及学习块；from_build 根据 build_id、block_ids、当前 revision 和 depth 导入图谱，形成待用户确认路径，确认前不改变原安排。search 找地图，read 读确切版本；save 用本人资料库版本原文引用组织单元与有向前置教学建议；prepare 把所选目标及前置节点的来源接入项目，但须另存阶段计划才生效。probe 在当前范围登记单节点任务、常规或候选迁移类型、判断标准；本轮成功回复须原样呈现 question，后续另一轮真实作答才能由 record_learning_progress.knowledge_check 更新 BEP。不能伪造检验或从相邻节点推断实测。',
+    obj({'action': {'type': 'string', 'enum': ['search', 'read', 'save', 'prepare', 'probe', 'builds', 'from_build']},
+         'build_id': text('已完成图谱 UUID'), 'block_ids': {'type': 'array', 'items': {'type': 'integer'}},
          'query': text(), 'map_id': {'type': 'integer'}, 'revision': {'type': 'integer'}, 'version_id': {'type': 'integer'},
          'title': text(), 'nodes': {'type': 'array', 'maxItems': 30, 'items': obj({
              'id': text(), 'title': text(), 'outcome': text('可检查的具体目标'),

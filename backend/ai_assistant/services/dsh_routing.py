@@ -64,7 +64,7 @@ def grouped_tools(allowed, message, recent_messages=None, project=False):
         initial = 'authoring'
     if 'interactive' in groups and '交互' in message and '题' in message:
         initial = 'interactive'
-    if project and any(word in message for word in ('知识地图', '知识单元', '先修', '贝叶斯', '证据路径')):
+    if project and any(word in message for word in ('知识地图', '知识单元', '先修', '贝叶斯', '证据路径', '学习路径', '知识结构', '图谱', 'learning path', 'knowledge graph')):
         initial = 'knowledge'
     if project and initial not in ('interactive', 'authoring', 'presentation', 'practice', 'knowledge'):
         initial = 'project'

@@ -24,6 +24,13 @@ def item(label, value, link=None):
 def build_tool_card(name, result):
     if name in {'get_learning_stats', 'get_knowledge_mastery_map', 'get_due_reviews', 'get_recent_practice_result', 'get_practice_questions'}:
         return result.get('visual')
+    if name == 'manage_learning_knowledge' and 'builds' in result:
+        return data_card('选择学习路径', [item(build['subject'], '查看并选择目标范围', build['href']) for build in result['builds']],
+            ('生成知识结构', result['create_href']), '先选择范围，再回到小宇确认学习路径。')
+    if name == 'manage_learning_knowledge' and result.get('href'):
+        return data_card('确认学习路径', [item(stage['title'], stage['outcome'])
+            for stage in result.get('pending_plan', {}).get('plan', {}).get('stages', [])[:10]],
+            ('查看并确认学习路径', result['href']), '确认后开始，原学习安排在确认前保持不变。')
     if name == 'manage_learning_tasks' and result.get('href'):
         return data_card(result['title'], [item('学习任务', '已准备，等待你实际作答')],
             ('打开学习任务', result['href']), '提交后按已保存的标准评价，完成任务不代表已经掌握。')
@@ -95,7 +102,7 @@ def build_tool_card(name, result):
     return None
 
 # Presentation is a separate read-only tool, never a free-form business operation.
-INTERNAL_PATH = re.compile(r'/(?:courses|course/[1-9][0-9]*|tests(?:/results/[1-9][0-9]*|/session\?source=xiaoyu&preference=review_first)?|report-card|achievements|diagnostic|study|qa)')
+INTERNAL_PATH = re.compile(r'/(?:courses|course/[1-9][0-9]*|tests(?:/results/[1-9][0-9]*|/session\?source=xiaoyu&preference=review_first)?|report-card|achievements|diagnostic|study|qa|knowledge-builder(?:/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?\?project=[1-9][0-9]*(?:&create=1)?|xiaoyu\?project=[1-9][0-9]*&learning_view=(?:proposal|knowledge))')
 
 
 def _object(properties, required):
@@ -135,7 +142,7 @@ VISUAL_SCHEMAS = {
 }
 PRESENTATION_TOOL = {'type': 'function', 'function': {
     'name': 'present_learning_visual',
-    'description': '展示受控教学卡片：公式推导、分步解题、有限采样点函数图或回复选项与站内导航。仅展示，不执行表达式，不代学生提交、写笔记或改变成绩。函数图每条曲线只提供2到100个有限坐标点，最多3条，不接受formula；导航只允许课程、习题、报告、成就、诊断、自习与答疑既有站内路由。reply的url是回复文字，input模式可为空；input与rating每组只能有一张卡，rating的url必须为评分：{rating}。',
+    'description': '展示受控教学卡片：公式推导、分步解题、有限采样点函数图或回复选项与站内导航。仅展示，不执行表达式，不代学生提交、写笔记或改变成绩。函数图每条曲线只提供2到100个有限坐标点，最多3条，不接受formula；导航只允许课程、习题、报告、成就、诊断、自习、答疑，以及工具返回的知识结构和小宇路径确认站内路由。reply的url是回复文字，input模式可为空；input与rating每组只能有一张卡，rating的url必须为评分：{rating}。',
     'parameters': _object({'type': {'type': 'string', 'enum': list(VISUAL_SCHEMAS)},
         'payload': {'oneOf': list(VISUAL_SCHEMAS.values())}}, ['type', 'payload']),
 }}

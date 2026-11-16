@@ -1,6 +1,6 @@
 import { t, useLocale } from '@/i18n';
 import { useEffect, useMemo, useState } from 'react';
-import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowClockwise, Plus, Spinner } from '@phosphor-icons/react';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -14,7 +14,9 @@ import {
 import type { BuildArchetype, BuildStatus, BuildSummary } from '@/types/knowledgeBuilder';
 import { KnowledgeIntakeWizard } from '@/components/KnowledgeIntakeWizard';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
-import { knowledgeBuildPlanningPrompt } from '@/lib/knowledgeBuildPlanning';
+import api from '@/lib/api';
+import { normalizeApiError } from '@/lib/apiError';
+import { learningKey, learningUrl, useProjectLearning, type ProjectLearning } from '@/lib/projectLearning';
 import { KnowledgeBuilderGraph } from '@/components/KnowledgeBuilderGraph';
 import {
   Dialog,
@@ -66,8 +68,11 @@ export default function KnowledgeBuilder() {
   const queryClient = useQueryClient();
   const userId = useAuthStore(s => s.user?.id);
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [newSubject, setNewSubject] = useState('');
+  const projectQuery = useProjectLearning(chat.projectId);
+  const [planning, setPlanning] = useState(false);
+  const [planningError, setPlanningError] = useState('');
+  const [createOpen, setCreateOpen] = useState(searchParams.get('create') === '1');
+  const [newSubject, setNewSubject] = useState(searchParams.get('subject') || '');
   const [newArchetype, setNewArchetype] = useState<BuildArchetype>('auto');
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -145,7 +150,8 @@ export default function KnowledgeBuilder() {
       setNewArchetype('auto');
       setFormError(null);
       void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBuilder.list(userId) });
-      navigate({ pathname: `/knowledge-builder/${encodeURIComponent(created.id)}`, search: searchParams.toString() });
+      const params = new URLSearchParams(searchParams); params.delete('create'); params.delete('subject');
+      navigate({ pathname: `/knowledge-builder/${encodeURIComponent(created.id)}`, search: params.toString() });
     },
     onError: err => {
       setFormError(extractApiError(err));
@@ -270,10 +276,25 @@ export default function KnowledgeBuilder() {
         {workspaceTabs}
         <div className="kb-plan-toolbar">
           <span>{t('已选择 {0} 个目标学习块', { 0: selectedBlocks.size })}</span>
-          <Button type="button" variant="outline" disabled={!selectedBlocks.size || openingProject} onClick={() => {
-            chat.setInput(knowledgeBuildPlanningPrompt(detailQuery.data, selectedBlocks));
-            navigate({ pathname: '/xiaoyu', search: searchParams.toString() });
-          }}>{t('带入小宇学习项目规划路径')}</Button>
+          <Button type="button" variant="outline" disabled={!selectedBlocks.size || openingProject || planning || !projectQuery.data?.planning_enabled} onClick={async () => {
+            if (!chat.projectId || !projectQuery.data) return;
+            setPlanning(true); setPlanningError('');
+            try {
+              const { data } = await api.post<ProjectLearning>(`/ai/projects/${chat.projectId}/learning/knowledge/`, {
+                action: 'from_build', build_id: detailQuery.data.id, block_ids: [...selectedBlocks],
+                revision: projectQuery.data.revision, depth: 'apply',
+              });
+              await queryClient.invalidateQueries({ queryKey: learningKey(userId, chat.projectId) });
+              await queryClient.invalidateQueries({ queryKey: ['learning-knowledge-maps', userId, chat.projectId] });
+              navigate(learningUrl('/xiaoyu?learning_view=proposal', data.project_id, chat.conversationId || undefined));
+            } catch (error) {
+              setPlanningError(normalizeApiError(error, t('学习路径暂时无法准备，请重试。')).message);
+              void projectQuery.refetch();
+            } finally { setPlanning(false); }
+          }}>{planning ? t('正在准备学习路径…') : t('带回小宇确认学习路径')}</Button>
+          {!projectQuery.data?.planning_enabled && <p>{t('采用路径需要在规划项目中进行。')}<Link to="/xiaoyu?new=project">{t('新建规划项目')}</Link></p>}
+          {planningError && <p role="alert">{planningError}</p>}
+          <Button type="button" variant="ghost" onClick={() => navigate(learningUrl('/xiaoyu?learning_view=knowledge', chat.projectId, chat.conversationId || undefined))}>{t('返回小宇学习路径')}</Button>
           {!!detailQuery.data.requirements && Object.keys(detailQuery.data.requirements).length > 0 && <details className="kb-requirements-summary">
             <summary>{t('本次构建需求 · {0}', { 0: String(detailQuery.data.requirements.learning_goal || t('自定义学习需求')) })}</summary>
             <p>{t('重点模块：')}{Array.isArray(detailQuery.data.requirements.scope_inclusions) ? detailQuery.data.requirements.scope_inclusions.join('、') : t('未指定')}</p>
@@ -287,6 +308,8 @@ export default function KnowledgeBuilder() {
           tree={detailQuery.data}
           headerLeftSlot={buildPicker}
           headerRightSlot={createButton}
+          blockProgress={projectQuery.data?.knowledge?.builder?.build_id === detailQuery.data.id
+            ? Object.fromEntries(projectQuery.data.knowledge.nodes.flatMap(node => (node.builder_block_ids || []).map(id => [id, node.learning_status || 'unassessed']))) : undefined}
           selectedBlockIds={selectedBlocks}
           onToggleBlockSelection={id => setSelection(current => {
             const blocks = new Set(current.blocks);

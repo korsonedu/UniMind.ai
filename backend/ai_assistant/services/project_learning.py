@@ -172,7 +172,9 @@ def activity_snapshot(project, raw):
     targets = serializers.ListField(child=serializers.CharField(max_length=60), min_length=1, max_length=30).run_validation(targets)
     return {'kind': 'knowledge', 'version_id': version.pk, 'title': version.snapshot['title'],
             'node_id': targets[0] if raw.get('node_id') else None, 'targets': targets,
-            'nodes': closure(version.snapshot, targets), 'depth': raw.get('depth', 'apply'), 'mainline': False}
+            'nodes': closure(version.snapshot, targets), 'depth': raw.get('depth', 'apply'),
+            'stage_id': next((stage['id'] for stage in project.learning.plan.get('stages', [])
+                              if raw.get('node_id') in stage.get('knowledge_nodes', [])), None), 'mainline': False}
 
 
 def project_context(user, conversation_id):
@@ -323,7 +325,7 @@ def change_learning(project, data, *, message=None, model=False, language='zh-CN
         known_sources = {item['id'] for item in state.resources}
         if any(not set(stage['sources']).issubset(known_sources) for stage in plan['stages']):
             raise ValidationError('计划只能引用当前项目实际读取过的来源。')
-        if _major(state.plan, plan) or (state.plan and data.get('major_change')):
+        if data.get('require_confirmation') or _major(state.plan, plan) or (state.plan and data.get('major_change')):
             state.pending_plan = {'plan': plan, 'reason': event['reason'], 'base_revision': state.revision}
             if plan.get('knowledge_path'):
                 from .learning_knowledge import owned_version
@@ -471,7 +473,7 @@ def tool_operation(executor, name, arguments):
 def compact_learning(data):
     knowledge = data.get('knowledge', {})
     knowledge.pop('evidence', None)
-    knowledge['nodes'] = [{'id': node['id'], 'title': node['title'], 'beliefs': node['beliefs']} for node in knowledge.get('nodes', [])]
+    knowledge['nodes'] = [{'id': node['id'], 'title': node['title'], 'beliefs': node['beliefs'], 'learning_status': node['learning_status']} for node in knowledge.get('nodes', [])]
     data['tasks'] = data.get('tasks', [])[-15:]
     data['events'] = data['events'][:5]
     for event in data['events']:
