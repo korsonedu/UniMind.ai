@@ -1,4 +1,11 @@
 .iw-settings,.iw-management { color:var(--um-color-text); font-size:14px; }
+.iw-joined { margin-bottom:24px; }
+.iw-joined-row { display:flex; align-items:center; gap:12px; padding:18px 0; border-bottom:1px solid var(--um-color-border); }
+.iw-joined-row>div { flex:1; min-width:0; }
+.iw-joined-row h3 { font-weight:500; }
+.iw-joined-row p { margin-top:5px; font-size:12px; color:var(--um-color-text-muted); }
+.iw-add-title { margin-top:32px; }
+@media (max-width:640px) { .iw-joined-row { flex-wrap:wrap; } .iw-joined-row>div { flex-basis:calc(100% - 40px); } }
 .iw-preview { display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:10px 12px; margin-bottom:24px; border:1px dashed var(--um-color-border); border-radius:8px; color:var(--um-color-text-muted); font-size:11px; }
 .iw-preview div { display:flex; gap:14px; }
 .iw-preview a:hover { color:var(--um-color-text); text-decoration:underline; }
