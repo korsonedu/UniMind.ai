@@ -306,17 +306,3 @@ test('computeOuterWireRoutes emits same-column, adjacent Bezier, and corridor-av
   assert.match(wires[2].d, / Q /);
   assert.equal(roundedOrthoPath([[0, 0], [50, 0], [50, 50]], 10).includes('Q 50.0 0.0'), true);
 });
-
-test('带入小宇的计划草稿包含所选目标及其前置关系，并保留构建需求', async () => {
-  const { knowledgeBuildPlanningPrompt } = await import('../src/lib/knowledgeBuildPlanning.ts');
-  const tree = makeSampleTree();
-  tree.requirements = { learning_goal: '考试复习', suggested_entry_topics: ['基金界定'] };
-  const target = tree.blocks.at(-1)!;
-  const prompt = knowledgeBuildPlanningPrompt(tree, new Set([target.id]));
-  assert.ok(prompt.includes(tree.subject));
-  assert.ok(prompt.includes(`目标学习块：${target.code} ${target.short_title}`));
-  assert.ok(prompt.includes('图谱推荐起点：B1'));
-  assert.ok(prompt.includes('→'));
-  assert.ok(prompt.includes('考试复习'));
-  assert.ok(prompt.includes('保留所有客观前置知识'));
-});

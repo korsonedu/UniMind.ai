@@ -70,8 +70,9 @@ PROJECT_LEARNING_TOOLS.extend([
 
 
 PROJECT_LEARNING_TOOLS.append(tool('manage_learning_knowledge',
-    '管理本人版本化知识地图。search 找地图，read 读确切版本；save 用本人资料库版本原文引用组织单元与有向前置教学建议；prepare 把所选目标及前置节点的来源接入项目，但须另存阶段计划才生效。probe 在当前范围登记单节点任务、常规或候选迁移类型、判断标准；本轮成功回复须原样呈现 question，后续另一轮真实作答才能由 record_learning_progress.knowledge_check 更新 BEP。不能伪造检验或从相邻节点推断实测。',
-    obj({'action': {'type': 'string', 'enum': ['search', 'read', 'save', 'prepare', 'probe']},
+    '管理本人版本化知识地图。builds 查询可用学科图谱及学习块；from_build 根据 build_id、block_ids、当前 revision 和 depth 导入图谱，形成待用户确认路径，确认前不改变原安排。search 找地图，read 读确切版本；save 用本人资料库版本原文引用组织单元与有向前置教学建议；prepare 把所选目标及前置节点的来源接入项目，但须另存阶段计划才生效。probe 在当前范围登记单节点任务、常规或候选迁移类型、判断标准；本轮成功回复须原样呈现 question，后续另一轮真实作答才能由 record_learning_progress.knowledge_check 更新 BEP。不能伪造检验或从相邻节点推断实测。',
+    obj({'action': {'type': 'string', 'enum': ['search', 'read', 'save', 'prepare', 'probe', 'builds', 'from_build']},
+         'build_id': text('已完成图谱 UUID'), 'block_ids': {'type': 'array', 'items': {'type': 'integer'}},
          'query': text(), 'map_id': {'type': 'integer'}, 'revision': {'type': 'integer'}, 'version_id': {'type': 'integer'},
          'title': text(), 'nodes': {'type': 'array', 'maxItems': 30, 'items': obj({
              'id': text(), 'title': text(), 'outcome': text('可检查的具体目标'),
@@ -85,7 +86,7 @@ PROJECT_LEARNING_TOOLS.append(tool('manage_learning_knowledge',
 
 
 PROJECT_LEARNING_TOOLS.append(tool('manage_learning_tasks',
-    '管理当前项目通用学习任务：list读取实际进展与teaching_guidance；read读取已评分原作答与标准后复盘；create从授权题库选题，或为本人项目原创开放任务。普通阶段计划可先诊断，无需先建地图；有地图须绑定当前版本节点。解释、计算、推理、案例与代码文本均可评价，但代码未运行不能称为验证通过。模型评分尚未独立复核。错误先补救，有帮助完成再换题独立检查；不代用户作答，不传入分数。',
+    '管理当前项目通用学习任务：list读取实际进展与teaching_guidance；read读取已评分原作答与标准后复盘；create从授权题库选题，或为本人项目原创开放任务（系统满分10分，不自行声明其他总分或分项分值）。普通阶段计划可先诊断，无需先建地图；有地图须绑定当前版本节点。解释、计算、推理、案例与代码文本均可评价，但代码未运行不能称为验证通过。模型评分尚未独立复核。错误先补救，有帮助完成再换题独立检查；不代用户作答，不传入分数。',
     obj({'action': {'type': 'string', 'enum': ['list', 'read', 'create']},
          'task_id': text('read时填写任务UUID'), 'version_id': {'type': 'integer'}, 'node_id': text(),
          'stage_id': text('当前计划阶段编号'), 'title': text(), 'instructions': text('讲解、非原题示例与作答要求，不能泄露任务参考解答'),
@@ -95,7 +96,7 @@ PROJECT_LEARNING_TOOLS.append(tool('manage_learning_tasks',
          'question_ids': {'type': 'array', 'items': {'type': 'integer'}, 'minItems': 1, 'maxItems': 10},
          'definition': obj({'prompt': text('原创开放任务题干'),
              'response_type': {'type': 'string', 'enum': ['explanation', 'calculation', 'reasoning', 'case', 'code']},
-             'criteria': {'type': 'array', 'items': text('公开、可核对的成果标准'), 'minItems': 1, 'maxItems': 8},
+             'criteria': {'type': 'array', 'items': text('服务器留存、可核对的评价标准；提交前不公开，学习目标在 instructions 中说明'), 'minItems': 1, 'maxItems': 8},
              'reference_answer': text('服务器留存参考，不在提交前公开；缺乏依据时不编造确定结论'),
              'sources': {'type': 'array', 'items': text('本人项目实际来源id；未核验的知识须明确说明')}},
              ('prompt', 'response_type', 'criteria')),
