@@ -46,7 +46,11 @@ export function workspacePreview(path: string, method = 'get', payload?: Record<
     return course;
   }
   if (state.role !== 'admin') reject('你没有管理此机构的权限。');
-  if (path === '/users/workspace/courses/' && method === 'post' && payload instanceof FormData) {
+  if (path === '/users/workspace/' && method === 'patch') {
+    const name = String(body.name || '').trim();
+    if (!state.workspace || Number(body.workspace_id) !== state.workspace.id || !name || name.length > 100) reject('请填写有效的 Workspace 名称。');
+    state.workspace.name = name;
+  } else if (path === '/users/workspace/courses/' && method === 'post' && payload instanceof FormData) {
     const videos = payload.getAll('videos').filter((file): file is File => file instanceof File);
     if (!videos.length || !String(payload.get('module') || '').trim()) reject('请选择视频并填写所属模块。');
     for (const video of videos) {
