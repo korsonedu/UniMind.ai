@@ -27,6 +27,12 @@ def account_membership_for(user):
     return WorkspaceMembership.objects.select_related('workspace__institution').filter(user=account_user(user)).first()
 
 
+def selected_institution(user):
+    from .access import membership_for
+    member = membership_for(user)
+    return member.workspace.institution if member else None
+
+
 @transaction.atomic
 def select_learner(user, space):
     account = account_user(user)
