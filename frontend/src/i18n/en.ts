@@ -1,5 +1,9 @@
 // English messages keyed by their Chinese source text.
 const en: Record<string, string> = {
+  "机构与学习服务": "Institution & learning services",
+  "加入机构": "Join an institution",
+  "查看机构信息、课程授权与服务期限": "View your institution, course access and service period",
+  "输入机构邀请码，加入课程 Workspace": "Enter an institution invite code to join its course Workspace",
   "课程 Workspace": "Course Workspace",
   "个人空间": "Personal space",
   "查看 AI 额度": "View AI allowance",
