@@ -311,17 +311,26 @@ class AIEngine:
                 AICircuitBreaker.record_success(operation, model_tier=get_model_tier_for_operation(operation))
                 duration_ms = int((time.monotonic() - started_at) * 1000)
                 usage = payload.get('usage', {}) if isinstance(payload, dict) else {}
+                details = usage.get('prompt_tokens_details') or {}
+                cached_tokens = usage.get('prompt_cache_hit_tokens')
+                if cached_tokens is None and isinstance(details, dict):
+                    cached_tokens = details.get('cached_tokens')
+                metadata = {
+                    'attempts': attempt + 1,
+                    'max_retries': max_retries,
+                    'status': r.status_code,
+                    'prompt_tokens': usage.get('prompt_tokens', 0),
+                    'completion_tokens': usage.get('completion_tokens', 0),
+                }
+                if cached_tokens is not None:
+                    metadata['cached_tokens'] = cached_tokens
+                if 'prompt_cache_miss_tokens' in usage:
+                    metadata['cache_miss_tokens'] = usage['prompt_cache_miss_tokens']
                 record_ai_operation(
                     operation=operation,
                     success=True,
                     duration_ms=duration_ms,
-                    metadata={
-                        'attempts': attempt + 1,
-                        'max_retries': max_retries,
-                        'status': r.status_code,
-                        'prompt_tokens': usage.get('prompt_tokens', 0),
-                        'completion_tokens': usage.get('completion_tokens', 0),
-                    },
+                    metadata=metadata,
                 )
                 return payload
             except requests.Timeout as e:
