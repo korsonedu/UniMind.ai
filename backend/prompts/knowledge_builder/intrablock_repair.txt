@@ -1,0 +1,3 @@
+依据errors精确修复当前block的块内计划并返回完整steps和narrative_summary。当M>=4时steps总步数必须严格控制在2至5步（若出现步数超限或intra_lines超限，可直接按suggested_step_buckets重新合并分步，勿超过5步也勿塞进超过4个原子），M<=3用1至M步。跨步[u,v]无需intra_lines；同一步内strong边保留必要kind="progression"线，删除多余contrast线使全块总intra_lines<=max_intra_lines。core_atoms+extension_atoms严格互斥且完整覆盖atom_codes全部原子code，每步至少一核心点且总点数<=4。零逆步，所有线只连本步节点，串讲显式点名全部核心点name。诊断分流条件不得为空。
+严格按工具Schema返回结构化结果。输入数据如下。
+{context}
