@@ -1,3 +1,4 @@
+import { activeWorkspace } from '@/lib/activeWorkspace';
 import { useEffect, useRef, useCallback } from 'react';
 import { useStudyRoomStore } from '@/store/useStudyRoomStore';
 
@@ -52,7 +53,7 @@ export function useStudyRoomWs(enabled: boolean) {
       wsRef.current = null;
     }
 
-    const ws = new WebSocket(`${WS_BASE}/ws/study-room/`);
+    const ws = new WebSocket(`${WS_BASE}/ws/study-room/?space=${encodeURIComponent(activeWorkspace())}`);
     wsRef.current = ws;
 
     ws.onopen = () => {

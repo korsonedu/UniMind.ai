@@ -12,7 +12,7 @@ class CourseModuleSerializer(serializers.ModelSerializer):
         validators = []
 
     def validate(self, attrs):
-        institution = get_content_institution()
+        institution = get_content_institution(self.context['request'].user)
         institution_id = institution.pk if institution else None
         subject = attrs.get('subject', self.instance.subject if self.instance else '').strip()
         name = attrs.get('name', self.instance.name if self.instance else '')
@@ -33,7 +33,11 @@ class RelativeFileField(serializers.FileField):
         if not value:
             return None
         from urllib.parse import quote
-        return '/media/' + quote(value.name, safe='/')
+        from users.workspaces.identity import learner_identity
+        request = self.context.get('request')
+        identity = learner_identity(request.user) if request and request.user.is_authenticated else None
+        suffix = f'?space={identity.workspace_id}' if identity else ''
+        return '/media/' + quote(value.name, safe='/') + suffix
 
 
 class RelativeImageField(serializers.ImageField):
@@ -102,7 +106,7 @@ class CourseSerializer(serializers.ModelSerializer):
         return legacy_subject(self.context['_legacy_subject_points'], obj.knowledge_point_id)
 
     def validate(self, attrs):
-        institution = get_content_institution()
+        institution = get_content_institution(self.context['request'].user)
         institution_id = institution.pk if institution else None
         module = attrs.get('module')
         if not self.instance and not module:

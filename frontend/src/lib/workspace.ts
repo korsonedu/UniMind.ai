@@ -19,7 +19,7 @@ export interface WorkspaceMember {
 }
 export interface WorkspaceSnapshot {
   available: boolean; demo?: boolean; role: 'admin' | 'student' | null;
-  workspace: { name: string; description: string; joined_at: string; service_ends_at: string; service_active?: boolean } | null;
+  workspace: { id: number; name: string; description: string; joined_at: string; service_ends_at: string; service_active?: boolean } | null;
   courses: WorkspaceCourse[]; members: WorkspaceMember[]; invites: WorkspaceInvite[];
   usage: { label: string; used: number; limit: number | null; unit: string }[];
 }

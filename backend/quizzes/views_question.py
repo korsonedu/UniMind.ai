@@ -184,7 +184,7 @@ class QuestionListView(generics.ListCreateAPIView):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
-        question = serializer.save(institution=get_content_institution())
+        question = serializer.save(institution=get_content_institution(self.request.user))
         if not question.ai_answer:
             self.generate_ai_answer(question)
 
@@ -215,7 +215,7 @@ class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
         return qs
 
     def perform_update(self, serializer):
-        serializer.save(institution=get_content_institution())
+        serializer.save(institution=get_content_institution(self.request.user))
 
 
 class AdminQuestionListView(APIView):

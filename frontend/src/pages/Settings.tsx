@@ -110,8 +110,8 @@ export const Settings: React.FC = () => {
     if (busy || !email.trim()) return;
     setBusy('email');
     try {
-      const { data } = await api.patch('/users/me/email/', { email: email.trim() });
-      updateUser({ ...data, email: email.trim() }); setEditing(null); toast.success(t("邮箱已更新")); setEmail('');
+      await api.patch('/users/me/email/', { email: email.trim() });
+      updateUser({ email: email.trim() }); setEditing(null); toast.success(t("邮箱已更新")); setEmail('');
     } catch (error) { toast.error(formatApiErrorToast(error, t("邮箱更新失败，请重试。"))); }
     finally { setBusy(null); }
   };

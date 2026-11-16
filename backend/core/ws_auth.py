@@ -4,6 +4,7 @@ Channels WebSocket 认证中间件 — 从 auth_token cookie 解析独立登录�
 """
 import asyncio
 import logging
+from urllib.parse import parse_qs
 
 from channels.db import database_sync_to_async
 from channels.middleware import BaseMiddleware
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 @database_sync_to_async
-def get_user_from_token(token_key: str):
+def get_user_from_token(token_key: str, space='personal'):
     """根据 auth_token 查找有效登录会话对应的用户。失败返回 None。"""
     from users.login_sessions import LoginSession
 
@@ -21,7 +22,14 @@ def get_user_from_token(token_key: str):
         return None
 
     token = LoginSession.resolve(token_key, touch=False)
-    return token.user if token else None
+    if not token:
+        return None
+    from users.workspaces.identity import select_learner
+    from rest_framework.exceptions import PermissionDenied
+    try:
+        return select_learner(token.user, space)
+    except PermissionDenied:
+        return None
 
 
 class TokenAuthMiddleware(BaseMiddleware):
@@ -36,7 +44,8 @@ class TokenAuthMiddleware(BaseMiddleware):
         cookies = scope.get("cookies", {})
         token_key = cookies.get("auth_token", "")
         scope = dict(scope)
-        scope["user"] = await get_user_from_token(token_key) or AnonymousUser()
+        space = parse_qs(scope.get('query_string', b'').decode()).get('space', ['personal'])[0]
+        scope["user"] = await get_user_from_token(token_key, space) or AnonymousUser()
         if not scope['user'].is_authenticated:
             return await super().__call__(scope, receive, send)
 
@@ -48,7 +57,7 @@ class TokenAuthMiddleware(BaseMiddleware):
                     message = None
                 if message and message['type'] in {'websocket.connect', 'websocket.disconnect'}:
                     return message
-                if not await get_user_from_token(token_key):
+                if not await get_user_from_token(token_key, space):
                     await send({'type': 'websocket.close', 'code': 4001})
                     return {'type': 'websocket.disconnect', 'code': 4001}
                 if message is not None:

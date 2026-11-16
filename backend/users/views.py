@@ -423,7 +423,8 @@ class UserDetailView(generics.RetrieveAPIView):
 
     def retrieve(self, request, *args, **kwargs):
         response = super().retrieve(request, *args, **kwargs)
-        response.data['email'] = request.user.email
+        from users.workspaces.identity import account_user
+        response.data['email'] = account_user(request.user).email
         return response
 
     def get_object(self):
@@ -582,7 +583,7 @@ class MyKnowledgeMasteryView(APIView):
         now = timezone.now()
         qs = UserQuestionStatus.objects.filter(
             user=request.user,
-            question__institution_id=get_content_institution_id(),
+            question__institution_id=get_content_institution_id(request.user),
             stability__gt=0,
             last_review__isnull=False,
         ).select_related('question__knowledge_point')
@@ -617,7 +618,7 @@ class DiagnosticGenerateView(APIView):
         from quizzes.services.diagnostic_service import (
             generate_diagnostic_questions, DIAGNOSTIC_TIME_LIMIT_SECONDS,
         )
-        questions = generate_diagnostic_questions(get_content_institution_id())
+        questions = generate_diagnostic_questions(get_content_institution_id(request.user))
 
         if not questions:
             return Response({'error': '暂无可用知识点，请联系管理员'}, status=400)
@@ -650,7 +651,7 @@ class DiagnosticSubmitView(APIView):
                 grade_diagnostic_answers, initialize_memorix_from_diagnostic,
             )
 
-            results, kp_scores = grade_diagnostic_answers(answers)
+            results, kp_scores = grade_diagnostic_answers(answers, user=request.user)
             initialize_memorix_from_diagnostic(user, kp_scores)
 
             # 标记诊断完成
@@ -977,67 +978,72 @@ class AccountDeleteView(APIView):
         from django.db import transaction
 
         with transaction.atomic():
-            # 1. 匿名化个人数据
-            user.username = f'deleted_{user.id}'
-            user.email = ''
-            user.nickname = ''
-            user.bio = ''
-            user.avatar_seed = ''
-            user.verification_code = ''
-            user.set_unusable_password()
-            user.is_active = False
-            user.email_verified = False
-            user.is_member = False
-            user.membership_tier = 'free'
-            user.membership_expires_at = None
-            user.is_superuser = False
-            user.is_staff = False
+            account = user
+            identities = [account, *User.objects.filter(workspace_learner__account=account)]
+            for user in identities:
+                # 1. 匿名化个人数据
+                user.username = f'deleted_{user.id}'
+                user.email = ''
+                user.nickname = ''
+                user.bio = ''
+                user.avatar_seed = ''
+                user.verification_code = ''
+                user.set_unusable_password()
+                user.is_active = False
+                user.email_verified = False
+                user.is_member = False
+                user.membership_tier = 'free'
+                user.membership_expires_at = None
+                user.is_superuser = False
+                user.is_staff = False
 
-            # 清空敏感字段
-            user.current_task = ''
-            user.today_completed_tasks = []
-            user.dashboard_config = {}
+                # 清空敏感字段
+                user.current_task = ''
+                user.today_completed_tasks = []
+                user.dashboard_config = {}
 
-            user.save()
+                user.save()
 
-            # 2. 删除 Token（使所有登录态失效）
-            Token.objects.filter(user=user).delete()
+                # 2. 删除 Token（使所有登录态失效）
+                Token.objects.filter(user=user).delete()
 
-            # 3. 匿名化关联数据
-            # AI 对话历史
-            from ai_assistant.models import AIChatMessage, AgentMemory, ActionCardInteraction
-            AIChatMessage.objects.filter(user=user).delete()
-            AgentMemory.objects.filter(user=user).delete()
-            ActionCardInteraction.objects.filter(user=user).delete()
+                # 3. 匿名化关联数据
+                # AI 对话历史
+                from ai_assistant.models import AIChatMessage, AgentMemory, ActionCardInteraction
+                AIChatMessage.objects.filter(user=user).delete()
+                AgentMemory.objects.filter(user=user).delete()
+                ActionCardInteraction.objects.filter(user=user).delete()
 
-            # 学习数据
-            from quizzes.models import (
-                UserQuestionStatus, QuizExam, ReviewLog,
-                UserKnowledgeState, MemorixProfile, KnowledgePointAnnotation, PracticeSubmission,
-            )
-            UserQuestionStatus.objects.filter(user=user).delete()
-            QuizExam.objects.filter(user=user).delete()
-            ReviewLog.objects.filter(user=user).delete()
-            UserKnowledgeState.objects.filter(user=user).delete()
-            MemorixProfile.objects.filter(user=user).delete()
-            KnowledgePointAnnotation.objects.filter(user=user).delete()
-            PracticeSubmission.objects.filter(user=user).delete()
+                # 学习数据
+                from quizzes.models import (
+                    UserQuestionStatus, QuizExam, ReviewLog,
+                    UserKnowledgeState, MemorixProfile, KnowledgePointAnnotation, PracticeSubmission,
+                )
+                UserQuestionStatus.objects.filter(user=user).delete()
+                QuizExam.objects.filter(user=user).delete()
+                ReviewLog.objects.filter(user=user).delete()
+                UserKnowledgeState.objects.filter(user=user).delete()
+                MemorixProfile.objects.filter(user=user).delete()
+                KnowledgePointAnnotation.objects.filter(user=user).delete()
+                PracticeSubmission.objects.filter(user=user).delete()
 
-            # 其他关联
-            from notifications.models import Notification
-            Notification.objects.filter(recipient=user).delete()
+                # 其他关联
+                from notifications.models import Notification
+                Notification.objects.filter(recipient=user).delete()
 
-            from study_room.models import StudySession, ChatMessage
-            StudySession.objects.filter(user=user).delete()
-            ChatMessage.objects.filter(user=user).delete()
+                from study_room.models import StudySession, ChatMessage
+                StudySession.objects.filter(user=user).delete()
+                ChatMessage.objects.filter(user=user).delete()
 
-            from faq_system.models import Question
-            Question.objects.filter(user=user).delete()
+                from faq_system.models import Question
+                Question.objects.filter(user=user).delete()
 
-            # 4. 脱离机构
-            user.institution = None
-            user.institution_role = 'student'
-            user.save(update_fields=['institution', 'institution_role'])
+                # 4. 脱离机构
+                user.institution = None
+                user.institution_role = 'student'
+                user.save(update_fields=['institution', 'institution_role'])
+
+            user = account
 
             # 5. 安全审计日志
             from core.models import SecurityAuditLog

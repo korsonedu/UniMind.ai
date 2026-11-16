@@ -4,7 +4,7 @@ const mode = new URLSearchParams(location.search).get('workspace');
 const stored = sessionStorage.getItem('unimind-workspace-fixture');
 const initial = (): WorkspaceSnapshot => ({
   available: true, demo: true, role: mode === 'unjoined' ? null : mode === 'admin' ? 'admin' : 'student',
-  workspace: mode === 'unjoined' ? null : { name: '青禾学社', description: '2027 金融基础班 · 课程与小宇伴学', joined_at: '2026-11-01', service_ends_at: '2027-06-30' },
+  workspace: mode === 'unjoined' ? null : { id: 1, name: '青禾学社', description: '2027 金融基础班 · 课程与小宇伴学', joined_at: '2026-11-01', service_ends_at: '2027-06-30' },
   courses: [
     { id: 1, title: '资金时间价值', module: '公司理财', duration: '42:18', filename: '01-资金时间价值.mp4', status: 'published', transcript: '00:00  从一个问题开始：今天的一百元，和一年后的一百元，为什么价值不同？\n\n02:16  比较不同时间点的资金，需要使用同一个时间基准。把未来金额换算到今天，就得到了现值。\n\n08:42  折现率既反映时间，也需要与现金流的风险和口径匹配。', knowledge: [{ name: '资金时间价值', children: ['现值与终值', '单利与复利', '年金与永续年金'] }, { name: '折现的应用', children: ['现金流时间轴', '折现率的选择', '估值口径一致性'] }] },
     { id: 2, title: '债券定价与收益率', module: '货币金融学', duration: '38:52', filename: '02-债券定价.mp4', status: 'published', transcript: '00:00  债券价格可以理解为未来现金流的现值之和。\n\n04:30  票息和到期本金构成了债券的现金流，收益率是计算这些现金流现值时使用的折现率。\n\n12:08  市场收益率提高时，同一组现金流的现值下降，因此债券价格下降。', knowledge: [{ name: '债券估值', children: ['票息与到期本金', '到期收益率', '价格与收益率关系'] }, { name: '利率风险', children: ['久期', '期限与价格敏感性'] }] },
@@ -26,12 +26,16 @@ export function workspacePreview(path: string, method = 'get', payload?: Record<
   if (!path.startsWith('/users/workspace/')) return undefined;
   if (path === '/users/workspace/' && method === 'get') return visible();
   const body = payload instanceof FormData ? {} : payload || {};
+  if (path.endsWith('/select/')) {
+    if (body.workspace_id != null && (!state.workspace || Number(body.workspace_id) !== state.workspace.id)) reject('请先加入机构。');
+    return {};
+  }
   if (path.endsWith('/invite-preview/') || path.endsWith('/join/')) {
     const invite = state.invites.find(item => item.code === String(body.code).trim());
     if (!invite?.active || invite.used_count >= invite.max_uses || new Date(`${invite.expires_at}T23:59:59+08:00`) < new Date()) reject('邀请码无效、已停用或已领完，请联系机构获取有效邀请码。');
     if (path.endsWith('/invite-preview/')) return { name: '青禾学社', service: invite.name, courses: state.courses.filter(course => invite.courses.includes(course.id)).map(course => course.title), service_ends_at: invite.service_ends_at } satisfies InvitePreview;
     if (!state.workspace) {
-      state.workspace = { name: '青禾学社', description: `${invite.name} · 课程与小宇伴学`, joined_at: new Date().toISOString(), service_ends_at: invite.service_ends_at };
+      state.workspace = { id: 1, name: '青禾学社', description: `${invite.name} · 课程与小宇伴学`, joined_at: new Date().toISOString(), service_ends_at: invite.service_ends_at };
       state.role = 'student'; state.grantedCourses = [...invite.courses]; invite.used_count++; save();
     }
     return visible();

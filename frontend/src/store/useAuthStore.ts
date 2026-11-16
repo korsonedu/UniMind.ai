@@ -1,3 +1,4 @@
+import { setActiveWorkspace, spaceStorageKey } from '@/lib/activeWorkspace';
 import { setLocale, type Locale } from '@/i18n';
 import { create } from 'zustand';
 import { useDesktopStore } from '@/lib/desktop';
@@ -10,6 +11,8 @@ import { resetOfflineCache } from '@/lib/offlineData';
 
 interface User {
   id: number;
+  account_id?: number;
+  workspace_id?: number | null;
   username: string;
   email?: string;
   nickname: string;
@@ -81,6 +84,7 @@ export const useAuthStore = create<AuthState>()(
         }
       },
       logout: (options) => {
+        setActiveWorkspace(null);
         languageUserId = null;
         useDesktopStore.setState({ state: null, error: null });
         if (!options?.preserveDesktop) {
@@ -99,7 +103,7 @@ export const useAuthStore = create<AuthState>()(
       })),
     }),
     {
-      name: 'auth-storage',
+      name: spaceStorageKey('auth-storage'),
       partialize: (state) => ({ user: state.user }),
     }
   )

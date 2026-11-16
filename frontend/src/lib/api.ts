@@ -2,6 +2,7 @@ import { getLocale, t } from '@/i18n';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { getLoginPath } from './routing';
+import { activeWorkspace, setActiveWorkspace, spaceStorageKey } from './activeWorkspace';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
@@ -27,6 +28,7 @@ export function setPreviewInstitutionId(id: number | null) { _previewInstitution
 export function getPreviewInstitutionId() { return _previewInstitutionId; }
 
 api.interceptors.request.use(async (config) => {
+  config.headers.set('X-UniMind-Workspace', activeWorkspace());
   if (!config.headers.has('Accept-Language')) config.headers.set('Accept-Language', getLocale());
   // Auth via httpOnly cookie (CookieTokenAuthentication) — no Authorization header needed
   if (!['get', 'head', 'options'].includes(config.method?.toLowerCase() || 'get')) {
@@ -42,8 +44,13 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    if (error.response?.status === 403 && error.response?.data?.code === 'workspace_unavailable') {
+      setActiveWorkspace(null);
+      window.location.replace('/xiaoyu');
+      return Promise.reject(error);
+    }
     if (error.response?.status === 401 && error.config?.url !== '/users/login/' && error.config?.url !== '/users/login-by-code/') {
-      localStorage.removeItem('auth-storage');
+      localStorage.removeItem(spaceStorageKey('auth-storage'));
       window.dispatchEvent(new Event('auth:logout'));
       // The root identity check renders Landing or the login redirect itself.
       if (error.config?.url !== '/users/me/'
@@ -96,6 +103,7 @@ export async function streamFetch(
 ): Promise<{ url: string; init: RequestInit }> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'X-UniMind-Workspace': activeWorkspace(),
     'Accept-Language': getLocale(),
     'X-CSRFToken': await getCsrfToken(),
     ...extraHeaders,

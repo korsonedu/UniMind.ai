@@ -197,6 +197,8 @@ if IS_PROD and CORS_ALLOW_ALL_ORIGINS:
     raise ImproperlyConfigured("CORS_ALLOW_ALL_ORIGINS must be False in production.")
 CORS_ALLOWED_ORIGINS = _get_list("CORS_ALLOWED_ORIGINS")
 CORS_ALLOWED_ORIGIN_REGEXES = _get_list("CORS_ALLOWED_ORIGIN_REGEXES")
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = (*default_headers, 'x-unimind-workspace')
 CORS_ALLOW_CREDENTIALS = _get_bool("CORS_ALLOW_CREDENTIALS", default=True)
 CSRF_TRUSTED_ORIGINS = _get_list("CSRF_TRUSTED_ORIGINS", [
     "http://localhost:5173", "http://127.0.0.1:5173",

@@ -2,6 +2,16 @@ from rest_framework import serializers
 from .models import User, DailyPlan, DailyCheckIn, Achievement, UserAchievement
 
 class UserSerializer(serializers.ModelSerializer):
+    def to_representation(self, instance):
+        from .workspaces.identity import learner_identity
+        data = super().to_representation(instance)
+        identity = learner_identity(instance)
+        data['account_id'] = identity.account_id if identity else instance.pk
+        data['workspace_id'] = identity.workspace_id if identity else None
+        if identity:
+            data['username'] = identity.account.username
+        return data
+
     avatar_url = serializers.ReadOnlyField()
     institution = serializers.SerializerMethodField()
     is_admin = serializers.SerializerMethodField()

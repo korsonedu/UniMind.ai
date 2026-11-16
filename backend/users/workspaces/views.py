@@ -15,13 +15,24 @@ from courses.models import Course, CourseModule, VideoTranscript
 from core.file_validation import validate_upload_file
 from users.models_workspace import Workspace, WorkspaceMembership, WorkspaceCourse, WorkspaceInvite, WorkspaceEnrollment
 from users.models_commercial import InstitutionAuditLog
-from .access import membership_for, workspace_active, active_course_ids, require_admin
+from .access import workspace_active, active_course_ids, require_admin
+from .identity import account_membership_for as membership_for
 from .tasks import dispatch_processing
 
 
 class InviteThrottle(UserRateThrottle):
     rate = '20/min'
     scope = 'workspace_invite'
+
+
+class SelectWorkspaceView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .identity import select_learner
+        from users.serializers import UserSerializer
+        learner = select_learner(request.user, request.data.get('workspace_id'))
+        return Response({'user': UserSerializer(learner).data})
 
 
 class CodeInput(serializers.Serializer):
@@ -83,7 +94,7 @@ def snapshot(user):
         grant_end = member.enrollments.aggregate(end=Max('service_ends_on'))['end']
         ends = min(ends, grant_end) if grant_end else ends
     active = workspace_active(member) and (member.role == 'admin' or ends >= today)
-    result.update(role=member.role, workspace={'name': workspace.institution.name, 'description': workspace.description,
+    result.update(role=member.role, workspace={'id': workspace.pk, 'name': workspace.institution.name, 'description': workspace.description,
         'joined_at': member.joined_at, 'service_ends_at': ends, 'service_active': active})
     links = workspace.course_links.select_related('course__module', 'course__transcript').order_by('course__sort_order', 'id')
     if member.role != 'admin':
@@ -92,10 +103,12 @@ def snapshot(user):
         links = links.none()
     result['courses'] = [course_row(link, include_content=False) for link in links]
     if member.role == 'admin' and active:
+        learners = {row.account_id: row.user for row in workspace.learners.select_related('user')}
         for item in workspace.memberships.filter(role='student').select_related('user').prefetch_related('enrollments__courses'):
             grants = list(item.enrollments.all())
             end = max((grant.service_ends_on for grant in grants), default=today)
-            result['members'].append({'id': item.pk, 'name': item.user.nickname or item.user.username,
+            profile = learners.get(item.user_id, item.user)
+            result['members'].append({'id': item.pk, 'name': profile.nickname or profile.username,
                 'joined_at': item.joined_at, 'service_ends_at': min(end, workspace.service_ends_on),
                 'courses': sorted({c.pk for grant in grants if grant.service_ends_on >= today for c in grant.courses.all()}),
                 'active': item.is_active and item.user.is_active and end >= today})

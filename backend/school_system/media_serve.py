@@ -69,8 +69,17 @@ def media_serve(request, path):
             authentication = CookieTokenAuthentication().authenticate(request)
         except AuthenticationFailed:
             return HttpResponse(status=401)
+        except PermissionDenied:
+            return HttpResponse(status=403)
         if authentication is not None:
             request.user, _ = authentication
+
+    if request.user.is_authenticated:
+        from users.workspaces.identity import account_user, request_learner
+        try:
+            request.user = request_learner(request, account_user(request.user))
+        except PermissionDenied:
+            return HttpResponse(status=403)
 
     from django.db.models import Q
     from courses.models import Course, StartupMaterial

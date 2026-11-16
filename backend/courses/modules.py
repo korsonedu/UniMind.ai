@@ -26,7 +26,7 @@ class ModuleListCreateView(generics.ListCreateAPIView):
         return CourseModule.objects.filter(pk__in=ids).annotate(course_count=Count('courses'))
 
     def perform_create(self, serializer):
-        serializer.save(institution=get_content_institution())
+        serializer.save(institution=get_content_institution(self.request.user))
 
 
 class ModuleDetailView(generics.RetrieveUpdateDestroyAPIView):
