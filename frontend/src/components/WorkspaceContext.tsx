@@ -19,6 +19,14 @@ export const CourseSidebarContext = createContext<{
   setAvailable: (available: boolean) => void;
 }>({ host: null, view: 'home', visible: false, recordRecent: () => {}, setAvailable: () => {} });
 
+export const ProjectChatSidebarContext = createContext<{
+  host: HTMLDivElement | null;
+  visible: boolean;
+  open: () => void;
+  close: () => void;
+  setAvailable: (available: boolean) => void;
+}>({ host: null, visible: false, open: () => {}, close: () => {}, setAvailable: () => {} });
+
 export function useNotesSidebarAvailability(available: boolean) {
   const { setAvailable } = useContext(NotesSidebarContext);
   useEffect(() => {

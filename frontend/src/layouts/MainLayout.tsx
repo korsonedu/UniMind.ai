@@ -25,7 +25,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import GuidedTour, { type TourStep } from '@/components/GuidedTour';
 import { ExamActivityBar } from '@/components/ExamActivityBar';
 import { WorkspaceTrail } from '@/components/WorkspaceTrail';
-import { CourseSidebarContext, type SidebarView, type SidebarRecentItem, NotesSidebarContext, WorkspaceActiveContext, WorkspaceToolbarHostContext } from '@/components/WorkspaceContext';
+import { ProjectChatSidebarContext, CourseSidebarContext, type SidebarView, type SidebarRecentItem, NotesSidebarContext, WorkspaceActiveContext, WorkspaceToolbarHostContext } from '@/components/WorkspaceContext';
 import { useExamActivity } from '@/hooks/useExamActivity';
 import '@/styles/app-shell.css';
 import NotesSidebar from '@/pages/notes/NotesSidebar';
@@ -90,6 +90,9 @@ export const MainLayout: React.FC = () => {
     setSidebarWidth(value);
     try { localStorage.setItem(spaceStorageKey('unimind-right-sidebar-width'), String(value)); } catch { /* Best effort. */ }
   };
+  const [projectChatHost, setProjectChatHost] = useState<HTMLDivElement | null>(null);
+  const [projectChatAvailability, setProjectChatAvailability] = useState({ key: '', available: false });
+  const setProjectChatAvailable = useCallback((available: boolean) => { setProjectChatAvailability({ key: location.key, available }); }, [location.key]);
   const [courseSidebarHost, setCourseSidebarHost] = useState<HTMLDivElement | null>(null);
   const [courseSidebarAvailability, setCourseSidebarAvailability] = useState({ key: '', available: false });
   const setCourseSidebarAvailable = useCallback((available: boolean) => { setCourseSidebarAvailability({ key: location.key, available }); }, [location.key]);
@@ -101,6 +104,7 @@ export const MainLayout: React.FC = () => {
     }
     if (view === 'notes') setNotesMounted(true);
   }, []);
+  const openProjectChat = useCallback(() => selectSidebarView('chat'), [selectSidebarView]);
   const [historyKey, setHistoryKey] = useState(location.key);
   if (historyKey !== location.key) {
     setHistoryKey(location.key);
@@ -175,16 +179,17 @@ export const MainLayout: React.FC = () => {
   const notesAvailable = notesPageAvailability.key === location.key && notesPageAvailability.available;
   const courseSidebarAvailable = courseSidebarAvailability.key === location.key && courseSidebarAvailability.available;
   const savedCoursesAvailable = !hasCourseCatalog && hasFeature('course.video') && (xiaoyuVisible || location.pathname === '/courses' || /^\/course\/\d+/.test(location.pathname));
-  const sidebarAvailable = notesAvailable || courseSidebarAvailable || savedCoursesAvailable;
+  const projectChatAvailable = xiaoyuVisible && projectChatAvailability.key === location.key && projectChatAvailability.available;
+  const sidebarAvailable = projectChatAvailable || notesAvailable || courseSidebarAvailable || savedCoursesAvailable;
   const sidebarVisible = notesOpen && sidebarAvailable;
-  const activeSidebarView = courseSidebarAvailable || sidebarView === 'notes' || (savedCoursesAvailable && sidebarView === 'saved-courses') ? sidebarView : 'home';
+  const activeSidebarView = (projectChatAvailable && sidebarView === 'chat') || courseSidebarAvailable || sidebarView === 'notes' || (savedCoursesAvailable && sidebarView === 'saved-courses') ? sidebarView : 'home';
   const notesVisible = sidebarVisible && activeSidebarView === 'notes';
   const sidebarTools = [...(courseSidebarAvailable ? [
     { id: 'chat' as const, label: t('小宇'), icon: ChatCircle },
     { id: 'outline' as const, label: t('课程大纲'), icon: ListBullets },
     { id: 'materials' as const, label: t('资料'), icon: Files },
     { id: 'notes' as const, label: t('笔记'), icon: NotePencil },
-  ] : [{ id: 'notes' as const, label: t('笔记'), icon: NotePencil }]), ...(savedCoursesAvailable ? [{ id: 'saved-courses' as const, label: t('已保存课程'), icon: BookOpen }] : [])];
+  ] : [...(projectChatAvailable ? [{ id: 'chat' as const, label: t('小宇'), icon: ChatCircle }] : []), { id: 'notes' as const, label: t('笔记'), icon: NotePencil }]), ...(savedCoursesAvailable ? [{ id: 'saved-courses' as const, label: t('已保存课程'), icon: BookOpen }] : [])];
   const sidebarTabs = openedSidebarTools.map(id => sidebarTools.find(tool => tool.id === id)).filter(tool => !!tool);
   if (!featuresLoading && sidebarLocationKey !== location.key) {
     setSidebarLocationKey(location.key);
@@ -309,7 +314,9 @@ export const MainLayout: React.FC = () => {
             <WorkspaceActiveContext.Provider value={xiaoyuVisible}>
               <NotesSidebarContext.Provider value={{ open: notesVisible, close: closeNotes, setAvailable: setNotesAvailable }}>
                 <CourseSidebarContext.Provider value={{ host: courseSidebarHost, view: activeSidebarView, visible: sidebarVisible, recordRecent: recordSidebarRecent, setAvailable: setCourseSidebarAvailable }}>
-                  <Outlet context={{ toolbarHost }} />
+                  <ProjectChatSidebarContext.Provider value={{ host: projectChatHost, visible: sidebarVisible && activeSidebarView === 'chat', open: openProjectChat, close: closeNotes, setAvailable: setProjectChatAvailable }}>
+                    <Outlet context={{ toolbarHost }} />
+                  </ProjectChatSidebarContext.Provider>
                 </CourseSidebarContext.Provider>
               </NotesSidebarContext.Provider>
             </WorkspaceActiveContext.Provider>
@@ -334,6 +341,7 @@ export const MainLayout: React.FC = () => {
           <button type="button" className="um-agent-icon-button" aria-label={t('关闭右侧栏')} onClick={closeNotes}><X size={17} /></button>
         </header>
         {activeSidebarView === 'home' && <SidebarHome tools={sidebarTools} added={addedSidebarTools} recent={sidebarRecent} onSelect={selectSidebarView} onOpenRecent={openSidebarRecent} />}
+        <div ref={setProjectChatHost} id={projectChatAvailable ? 'sidebar-panel-chat' : undefined} role="tabpanel" aria-labelledby="sidebar-tab-chat" className="um-right-panel-content um-native-agent" hidden={!projectChatAvailable || activeSidebarView !== 'chat'} />
         <div ref={setCourseSidebarHost} className="um-course-sidebar-host" hidden={!courseSidebarAvailable || activeSidebarView === 'notes' || activeSidebarView === 'home' || activeSidebarView === 'saved-courses'} />
         <div id="sidebar-panel-saved-courses" role="tabpanel" aria-labelledby="sidebar-tab-saved-courses" className="um-right-panel-content" hidden={activeSidebarView !== 'saved-courses'}>
           {sidebarVisible && savedCoursesAvailable && activeSidebarView === 'saved-courses' && <SavedCoursesPanel />}
