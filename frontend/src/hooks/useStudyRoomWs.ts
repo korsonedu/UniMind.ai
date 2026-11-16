@@ -1,3 +1,4 @@
+import { activeWorkspace } from '@/lib/activeWorkspace';
 import { useEffect, useRef, useCallback } from 'react';
 import { useStudyRoomStore } from '@/store/useStudyRoomStore';
 
@@ -55,11 +56,11 @@ export function useStudyRoomWs(enabled: boolean) {
       wsRef.current = null;
     }
 
-    let url = `${getWsBaseUrl()}/ws/study-room/`;
+    let url = `${getWsBaseUrl()}/ws/study-room/?space=${encodeURIComponent(activeWorkspace())}`;
     try {
       if (isNativePlatform()) {
         const { data } = await api.post('/ws-ticket/');
-        url += `?ticket=${encodeURIComponent(data.ticket)}`;
+        url += `&ticket=${encodeURIComponent(data.ticket)}`;
       }
     } catch {
       if (!mountedRef.current || generation !== generationRef.current) return;

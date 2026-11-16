@@ -172,7 +172,9 @@ def activity_snapshot(project, raw):
     targets = serializers.ListField(child=serializers.CharField(max_length=60), min_length=1, max_length=30).run_validation(targets)
     return {'kind': 'knowledge', 'version_id': version.pk, 'title': version.snapshot['title'],
             'node_id': targets[0] if raw.get('node_id') else None, 'targets': targets,
-            'nodes': closure(version.snapshot, targets), 'depth': raw.get('depth', 'apply'), 'mainline': False}
+            'nodes': closure(version.snapshot, targets), 'depth': raw.get('depth', 'apply'),
+            'stage_id': next((stage['id'] for stage in project.learning.plan.get('stages', [])
+                              if raw.get('node_id') in stage.get('knowledge_nodes', [])), None), 'mainline': False}
 
 
 def project_context(user, conversation_id):
@@ -323,7 +325,7 @@ def change_learning(project, data, *, message=None, model=False, language='zh-CN
         known_sources = {item['id'] for item in state.resources}
         if any(not set(stage['sources']).issubset(known_sources) for stage in plan['stages']):
             raise ValidationError('计划只能引用当前项目实际读取过的来源。')
-        if _major(state.plan, plan) or (state.plan and data.get('major_change')):
+        if data.get('require_confirmation') or _major(state.plan, plan) or (state.plan and data.get('major_change')):
             state.pending_plan = {'plan': plan, 'reason': event['reason'], 'base_revision': state.revision}
             if plan.get('knowledge_path'):
                 from .learning_knowledge import owned_version
@@ -445,7 +447,7 @@ def tool_operation(executor, name, arguments):
             data = task_data(task)
             return {key: data[key] for key in ('id', 'title', 'status', 'version_id', 'node_id', 'stage_id')} | {
                 'href': f'/xiaoyu?project={project.pk}&learning_task={task.pk}',
-                'notice': '任务已准备，用户可在本项目学习安排中作答；不得代答或自报成绩。'}
+                'notice': '任务已保存。用户通过任务卡片提交后，评分流程保存原作答与评价并关联知识节点；不等于正式考试成绩。本轮安排已完成，立即停止其他工具调用并简短引导到任务卡片，不再记录旧表现或设置跟进；不重复题目或评分标准，不声称只在对话评分；不得代答或自报成绩。'}
     if name == 'manage_learning_knowledge':
         from .learning_knowledge import knowledge_operation
         return knowledge_operation(project, arguments, message=message)
@@ -471,7 +473,7 @@ def tool_operation(executor, name, arguments):
 def compact_learning(data):
     knowledge = data.get('knowledge', {})
     knowledge.pop('evidence', None)
-    knowledge['nodes'] = [{'id': node['id'], 'title': node['title'], 'beliefs': node['beliefs']} for node in knowledge.get('nodes', [])]
+    knowledge['nodes'] = [{'id': node['id'], 'title': node['title'], 'beliefs': node['beliefs'], 'learning_status': node['learning_status']} for node in knowledge.get('nodes', [])]
     data['tasks'] = data.get('tasks', [])[-15:]
     data['events'] = data['events'][:5]
     for event in data['events']:

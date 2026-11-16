@@ -1,3 +1,4 @@
+import { spaceStorageKey } from '@/lib/activeWorkspace';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -34,7 +35,7 @@ interface SystemState extends ExperiencePreferences {
   setExperience: (preferences: Partial<ExperiencePreferences>) => void;
 }
 
-const STORAGE_KEY = 'system-storage';
+const STORAGE_KEY = spaceStorageKey('system-storage');
 
 const applyThemeClass = (theme: ThemeMode) => {
   if (typeof document === 'undefined') return;
@@ -87,7 +88,7 @@ export const initializeSystemAppearance = () => {
 
 const readLegacyPracticePreference = (): ExperiencePreferences['practicePreference'] => {
   try {
-    const value = window.localStorage.getItem('quiz_preference');
+    const value = window.localStorage.getItem(spaceStorageKey('quiz_preference'));
     return value === 'new_first' || value === 'review_first' ? value : 'balanced';
   } catch { return 'balanced'; }
 };

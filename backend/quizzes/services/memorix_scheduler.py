@@ -201,7 +201,7 @@ def get_memorix_session_plan(user, minutes: int = 25, preferred_limit: Optional[
     now = timezone.now()
     minutes = _clamp(_safe_int(minutes, 25), 10, 120)
 
-    scope_id = get_content_institution_id()
+    scope_id = get_content_institution_id(user)
     all_status_qs = UserQuestionStatus.objects.filter(
         user=user, question__institution_id=scope_id,
     )

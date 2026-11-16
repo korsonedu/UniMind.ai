@@ -6,6 +6,7 @@ import { getServerOrigin } from './serverConfig';
 import { toast } from 'sonner';
 import { getLoginPath } from './routing';
 import { getApiBaseUrl, getRegisteredAuthToken, isNativePlatform } from './serverConfig';
+import { activeWorkspace, setActiveWorkspace, spaceStorageKey } from './activeWorkspace';
 
 const api = axios.create({
   baseURL: getApiBaseUrl(),
@@ -31,6 +32,7 @@ export function setPreviewInstitutionId(id: number | null) { _previewInstitution
 export function getPreviewInstitutionId() { return _previewInstitutionId; }
 
 api.interceptors.request.use(async (config) => {
+  config.headers.set('X-UniMind-Workspace', activeWorkspace());
   if (!config.headers.has('Accept-Language')) config.headers.set('Accept-Language', getLocale());
   const native = isNativePlatform();
   if (native && isOfflineDemo()) {
@@ -81,7 +83,7 @@ api.interceptors.response.use(
   async (response) => {
     if (isNativePlatform() && !isOfflineDemo()) {
       setNativeOffline(false);
-      const id = JSON.parse(localStorage.getItem('auth-storage') || '{}').state?.user?.id;
+      const id = JSON.parse(localStorage.getItem(spaceStorageKey('auth-storage')) || '{}').state?.user?.id;
       if (id > 0 && ['/users/me/','/users/institution/me/features/'].includes(response.config.url || '')) {
         await Preferences.set({ key: `unimind:identity:${getServerOrigin()}:${id}:${response.config.url}`, value: JSON.stringify(response.data) }).catch(() => { toast.info(t('本地缓存保存失败，当前在线会话仍可使用'), { id: 'offline-cache-write' }); });
       }
@@ -89,9 +91,14 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
+    if (error.response?.status === 403 && error.response?.data?.code === 'workspace_unavailable') {
+      setActiveWorkspace(null);
+      window.location.replace('/xiaoyu');
+      return Promise.reject(error);
+    }
     if (isNativePlatform() && !isOfflineDemo() && !error.response && !axios.isCancel(error)) {
       setNativeOffline(true);
-      const id = JSON.parse(localStorage.getItem('auth-storage') || '{}').state?.user?.id;
+      const id = JSON.parse(localStorage.getItem(spaceStorageKey('auth-storage')) || '{}').state?.user?.id;
       if (id > 0 && ['/users/me/','/users/institution/me/features/'].includes(error.config?.url || '')) {
         const { value } = await Preferences.get({ key: `unimind:identity:${getServerOrigin()}:${id}:${error.config.url}` });
         if (value && error.config.url !== '/users/me/') return { data: JSON.parse(value), status: 200, statusText: 'Offline cache', headers: {}, config: error.config };
@@ -99,7 +106,7 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
     if (!isOfflineDemo() && error.response?.status === 401 && error.config?.url !== '/users/login/' && error.config?.url !== '/users/login-by-code/') {
-      localStorage.removeItem('auth-storage');
+      localStorage.removeItem(spaceStorageKey('auth-storage'));
       window.dispatchEvent(new Event('auth:logout'));
       if (isNativePlatform()) {
         // Let the queued Preferences removal finish before a full-page redirect.
@@ -159,6 +166,7 @@ export async function streamFetch(
   const native = isNativePlatform();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'X-UniMind-Workspace': activeWorkspace(),
     'Accept-Language': getLocale(),
   };
 

@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useXiaoYuChat } from './xiaoyu/xiaoYuChatContext';
 
 const SKILLS = [
+  { icon: Target, label: '确定学习路径', prompt: '我想系统学习一个目标，请先和我明确用途、范围和基础，再给我一段可以开始的学习路径。' },
   { icon: Target, label: '分析薄弱点', prompt: '帮我分析薄弱知识点，给出提升建议' },
   { icon: CalendarCheck, label: '制定复习安排', prompt: '根据我的薄弱点和到期复习情况，帮我安排今天的复习' },
   { icon: CheckCircle, label: '查看复习任务', prompt: '帮我看看今天有哪些需要复习的内容' },

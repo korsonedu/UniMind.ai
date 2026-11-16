@@ -46,7 +46,7 @@ class MemorySystem:
 
         # 收集所有有 review 记录的题目，在 Python 层计算固定间隔是否到期
         all_statuses = UserQuestionStatus.objects.filter(
-            user=user, question__institution_id=get_content_institution_id()
+            user=user, question__institution_id=get_content_institution_id(user)
         ).select_related('question__knowledge_point').order_by('last_review')
 
         due_list = []
@@ -140,7 +140,7 @@ class MemorySystem:
         from quizzes.models import UserKnowledgeState
 
         qs = UserKnowledgeState.objects.filter(user=user).select_related('knowledge_point')
-        qs = qs.filter(knowledge_point__institution_id=get_content_institution_id())
+        qs = qs.filter(knowledge_point__institution_id=get_content_institution_id(user))
         subject_filter = (subject or '').strip()
         if subject_filter:
             qs = qs.filter(knowledge_point__subject=subject_filter)
@@ -175,7 +175,7 @@ class MemorySystem:
         from quizzes.models import UserQuestionStatus
 
         qs = UserQuestionStatus.objects.filter(user=user, wrong_count__gt=0)
-        qs = qs.filter(question__institution_id=get_content_institution_id())
+        qs = qs.filter(question__institution_id=get_content_institution_id(user))
 
         aggregated = (
             qs.values('question__knowledge_point__name', 'question__knowledge_point__code')
@@ -205,7 +205,7 @@ class MemorySystem:
         limit = min(int(limit), 50)
         now = timezone.now()
         due_qs = UserQuestionStatus.objects.filter(user=user, next_review_at__lte=now)
-        due_qs = due_qs.filter(question__institution_id=get_content_institution_id())
+        due_qs = due_qs.filter(question__institution_id=get_content_institution_id(user))
         due_qs = due_qs.select_related('question__knowledge_point').order_by('next_review_at')
         due_count = due_qs.count()
         due_list = due_qs[:limit]
@@ -267,7 +267,7 @@ class MemorySystem:
             user=user
         ).select_related('question__knowledge_point')
 
-        qs = qs.filter(question__institution_id=get_content_institution_id())
+        qs = qs.filter(question__institution_id=get_content_institution_id(user))
 
         if subject:
             qs = qs.filter(question__knowledge_point__subject=subject)
@@ -343,7 +343,7 @@ class MemorySystem:
 
         limit = min(int(limit), 10)
         qs = UserQuestionStatus.objects.filter(user=user, wrong_count__gt=0)
-        qs = qs.filter(question__institution_id=get_content_institution_id())
+        qs = qs.filter(question__institution_id=get_content_institution_id(user))
         wrong_qs = qs.select_related('question__knowledge_point').order_by('-wrong_count')[:limit]
 
         return {
@@ -368,7 +368,7 @@ class MemorySystem:
         from quizzes.models import UserQuestionStatus
         return {
             "subjects": list(
-                UserQuestionStatus.objects.filter(user=user, question__institution_id=get_content_institution_id())
+                UserQuestionStatus.objects.filter(user=user, question__institution_id=get_content_institution_id(user))
                 .values_list('question__knowledge_point__subject', flat=True)
                 .distinct()
             ),
@@ -390,7 +390,7 @@ class MemorySystem:
             user_subjects = user_subjects_data.get("subjects", [])
             if user_subjects:
                 qs = qs.filter(Q(subject__in=user_subjects) | Q(subject__isnull=True))
-        qs = qs.filter(institution_id=get_content_institution_id())
+        qs = qs.filter(institution_id=get_content_institution_id(user))
 
         nodes = list(qs.select_related('parent').values(
             'id', 'code', 'name', 'level', 'subject', 'parent__name',
@@ -462,7 +462,7 @@ class MemorySystem:
         limit = min(int(limit), 10)
         qs = Question.objects.select_related('knowledge_point')
 
-        qs = qs.filter(institution_id=get_content_institution_id())
+        qs = qs.filter(institution_id=get_content_institution_id(user))
 
         if kp_name:
             qs = qs.filter(knowledge_point__name__icontains=kp_name)

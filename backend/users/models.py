@@ -684,4 +684,4 @@ from .models_learning import (
     AIAddonProduct, AIAddonGrant, WeeklyAIUsage, AIUsageReservation,
 )
 from .login_sessions import LoginSession
-from .models_workspace import Workspace, WorkspaceMembership, WorkspaceCourse, WorkspaceInvite, WorkspaceEnrollment
+from .models_workspace import Workspace, WorkspaceMembership, WorkspaceLearner, WorkspaceCourse, WorkspaceInvite, WorkspaceEnrollment

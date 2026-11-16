@@ -33,6 +33,8 @@ class DshTaskAuthentication(BaseAuthentication):
             if not isinstance(claims, dict) or claims.get('purpose') != SALT:
                 raise ValueError()
             user = get_user_model().objects.get(pk=claims['user'], is_active=True)
+            from users.workspaces.access import membership_for
+            membership_for(user)  # Revalidate the learning identity on every callback.
             if claims.get('reservation'):
                 if not AIUsageReservation.objects.filter(pk=claims['reservation'], user=user, status='pending',
                                                        attempt_id=claims['attempt']).exists():

@@ -86,7 +86,8 @@ class AuditSmokeTests(SimpleTestCase):
             ):
                 with self.subTest(range=value):
                     request = APIRequestFactory().get('/media/course_covers/audit.png', HTTP_RANGE=value)
-                    request.user = SimpleNamespace(is_authenticated=True)
+                    from django.contrib.auth.models import AnonymousUser
+                    request.user = AnonymousUser()
                     response = media_serve(request, 'course_covers/audit.png')
                     self.assertEqual(response.status_code, status)
                     self.assertEqual(response['Content-Range'], content_range)

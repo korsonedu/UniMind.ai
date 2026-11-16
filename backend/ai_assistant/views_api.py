@@ -46,7 +46,7 @@ def _resolve_user(request):
         if not (is_platform_admin(request.user) or is_institution_admin(request.user)):
             return None, Response({'error': '无权查询其他用户'}, status=403)
         try:
-            target = User.objects.get(id=user_id, is_active=True, institution_id=get_content_institution_id())
+            target = User.objects.get(id=user_id, is_active=True, institution_id=get_content_institution_id(request.user))
         except User.DoesNotExist:
             return None, Response({'error': '用户不存在'}, status=404)
         from users.learning import is_course_student
@@ -73,7 +73,7 @@ def grade_view(request):
         return Response({'error': 'question_id and user_answer are required'}, status=400)
 
     try:
-        question = Question.objects.get(id=question_id, institution_id=get_content_institution_id())
+        question = Question.objects.get(id=question_id, institution_id=get_content_institution_id(request.user))
     except Question.DoesNotExist:
         return Response({'error': '题目不存在'}, status=404)
 
@@ -113,7 +113,7 @@ def profile_view(request):
     try:
         profile = MemorySystem.query_user_profile(
             user,
-            institution=get_content_institution(),
+            institution=get_content_institution(request.user),
         )
     except Exception:
         logger.exception("Profile query failed for user_id=%s", user.id)
@@ -142,7 +142,7 @@ def due_view(request):
         due_data = MemorySystem.query_due_reviews(
             user,
             limit=limit,
-            institution=get_content_institution(),
+            institution=get_content_institution(request.user),
         )
     except Exception:
         logger.exception("Due reviews query failed for user_id=%s", user.id)
@@ -165,7 +165,7 @@ def stats_view(request):
     try:
         stats = MemorySystem.query_learning_stats(
             user,
-            institution=get_content_institution(),
+            institution=get_content_institution(request.user),
         )
     except Exception:
         logger.exception("Stats query failed for user_id=%s", user.id)
@@ -197,7 +197,7 @@ def practice_start_view(request):
     count = serializers.IntegerField(min_value=1, max_value=10).run_validation(request.data.get('count', 5))
 
     user = request.user
-    institution = get_content_institution()
+    institution = get_content_institution(request.user)
 
     try:
         result = MemorySystem.query_practice_questions(
@@ -250,7 +250,7 @@ def practice_session_view(request, session_id):
     if session['user_id'] != request.user.pk:
         return Response({'error': '无权访问此练习'}, status=403)
     ids = {question['id'] for question in session['questions']}
-    if Question.objects.filter(pk__in=ids, institution_id=get_content_institution_id()).count() != len(ids):
+    if Question.objects.filter(pk__in=ids, institution_id=get_content_institution_id(request.user)).count() != len(ids):
         return Response({'error': '题目已不在当前内容范围'}, status=403)
     return Response({'session_id': session_id, 'questions': session['questions']})
 
@@ -288,7 +288,7 @@ def practice_pre_grade_view(request):
     if question_id not in session_questions:
         return Response({'error': '题目不属于此会话'}, status=400)
 
-    if not Question.objects.filter(id=question_id, institution_id=get_content_institution_id()).exists():
+    if not Question.objects.filter(id=question_id, institution_id=get_content_institution_id(request.user)).exists():
         return Response({'error': '题目不在当前内容范围'}, status=403)
 
     # 异步派发 Celery task
@@ -341,7 +341,7 @@ def practice_submit_view(request):
         return Response({'error': '无权访问此会话'}, status=403)
     if set(ids) != {question['id'] for question in session['questions']}:
         return Response({'error': '请提交会话内全部题目的答案'}, status=400)
-    scope = get_content_institution_id()
+    scope = get_content_institution_id(request.user)
     questions = {question.pk: question for question in Question.objects.filter(
         pk__in=ids, institution_id=scope,
     ).select_related('knowledge_point')}
@@ -429,7 +429,7 @@ def practice_submit_view(request):
         current_questions = {question.pk: question for question in Question.objects.select_for_update().filter(
             pk__in=ids, institution_id=scope,
         ).order_by('pk')}
-        if get_content_institution_id() != scope or len(current_questions) != len(ids):
+        if get_content_institution_id(request.user) != scope or len(current_questions) != len(ids):
             return Response({'error': '题目内容范围已变更，请重新开始练习'}, status=409)
         for question, text, grade, score, maximum, is_correct, rating in graded:
             question = current_questions[question.pk]

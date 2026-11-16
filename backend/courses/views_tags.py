@@ -48,7 +48,7 @@ class TagListCreateView(generics.ListCreateAPIView):
         return tags.annotate(course_count=Count('course_relations', filter=Q(course_relations__course__in=visible)))
 
     def perform_create(self, serializer):
-        inst = get_content_institution()
+        inst = get_content_institution(self.request.user)
         name = serializer.validated_data.get('name', '')
         slug = slugify(name)
         base = slug
@@ -80,7 +80,7 @@ class BatchAssignTagsView(APIView):
         if not course:
             return Response({"error": "Course not found"}, status=404)
 
-        inst = get_content_institution()
+        inst = get_content_institution(request.user)
         _assign_tags(course, tag_names, inst)
 
         relations = course.tag_relations.select_related('tag').all()

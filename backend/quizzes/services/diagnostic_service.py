@@ -45,7 +45,7 @@ def generate_diagnostic_questions(institution_id):
     return questions
 
 
-def grade_diagnostic_answers(answers):
+def grade_diagnostic_answers(answers, user=None):
     """评分诊断答案，返回结果和知识点分析。诊断只接受受管范围内的客观题。"""
     from quizzes.models import Question
 
@@ -60,7 +60,7 @@ def grade_diagnostic_answers(answers):
         raise serializers.ValidationError({'answers': '诊断题目不能重复。'})
     questions = Question.objects.filter(
         pk__in=question_ids,
-        institution_id=get_content_institution_id(),
+        institution_id=get_content_institution_id(user),
         q_type='objective',
     ).select_related('knowledge_point').in_bulk()
     if len(questions) != len(question_ids):
@@ -119,7 +119,7 @@ def initialize_memorix_from_diagnostic(user, kp_scores):
         from quizzes.models import Question
         qs = Question.objects.filter(
             knowledge_point_id=kp_id,
-            institution_id=get_content_institution_id(),
+            institution_id=get_content_institution_id(user),
         )
         questions = qs[:5]
 
@@ -162,7 +162,7 @@ def generate_reassessment(user, previous_diagnostic_id=None):
         if state.mastery_score is not None:
             weak_kp_ids.add(state.knowledge_point_id)
 
-    scope_id = get_content_institution_id()
+    scope_id = get_content_institution_id(user)
     qs = Question.objects.filter(
         q_type='objective',
         institution_id=scope_id,

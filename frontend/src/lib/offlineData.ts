@@ -1,3 +1,4 @@
+import { activeWorkspace } from '@/lib/activeWorkspace';
 import { t } from '@/i18n';
 import axios from 'axios';
 import { Preferences } from '@capacitor/preferences';
@@ -37,7 +38,7 @@ export interface OfflineCache {
 const MAX_NOTES = 200;
 const MAX_PRACTICE = 20;
 const bridge = () => (
-  window.unimindDesktop?.readOfflineData && window.unimindDesktop?.writeOfflineData
+  activeWorkspace() === 'personal' && window.unimindDesktop?.readOfflineData && window.unimindDesktop?.writeOfflineData
     ? window.unimindDesktop
     : null
 );

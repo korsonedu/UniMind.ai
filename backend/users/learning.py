@@ -80,11 +80,17 @@ def set_weekly_quota_config(*, experience_calls, course_calls, actor=None):
 
 
 def ai_limit(user):
+    from .workspaces.identity import account_user
+    from .models_workspace import WorkspaceMembership
+    from .workspaces.access import workspace_active, active_course_ids
+    user = account_user(user)
+    members = WorkspaceMembership.objects.select_related('workspace__institution').filter(user=user)
     from .permissions import is_platform_admin
     if is_platform_admin(user):
         return None
     config = get_weekly_quota_config()
-    return config.course_calls if is_course_student(user) else config.experience_calls
+    course_service = is_course_student(user) or any(workspace_active(member) and (member.role == 'admin' or active_course_ids(member).exists()) for member in members)
+    return config.course_calls if course_service else config.experience_calls
 
 
 def week_bounds(now=None):
@@ -95,21 +101,27 @@ def week_bounds(now=None):
 
 
 def active_addons(user):
+    from .workspaces.identity import account_user
+    user = account_user(user)
     now = timezone.now()
     return AIAddonGrant.objects.filter(user=user, starts_at__lte=now, expires_at__gt=now)
 
 
 def _release_stale_reservations(user):
+    from .workspaces.identity import account_user, account_learner_ids
+    user = account_user(user)
     # A killed process cannot execute its finally block. Keep abandoned requests
     # from consuming base or purchased capacity indefinitely.
     cutoff = timezone.now() - timedelta(hours=1)
     with transaction.atomic():
         get_user_model().objects.select_for_update().get(pk=user.pk)
-        AIUsageReservation.objects.filter(user=user, status='pending', updated_at__lt=cutoff).update(
+        AIUsageReservation.objects.filter(user_id__in=account_learner_ids(user), status='pending', updated_at__lt=cutoff).update(
             status='released', response={}, updated_at=timezone.now())
 
 
 def usage_info(user):
+    from .workspaces.identity import account_user, account_learner_ids
+    user = account_user(user)
     from .permissions import is_platform_admin
     _release_stale_reservations(user)
     week, resets_at = week_bounds()
@@ -117,7 +129,7 @@ def usage_info(user):
     limit = ai_limit(user)
     unlimited = is_platform_admin(user)
     configured = unlimited or limit is not None
-    pending = AIUsageReservation.objects.filter(user=user, week=week, status='pending', addon__isnull=True, unlimited=False).count()
+    pending = AIUsageReservation.objects.filter(user_id__in=account_learner_ids(user), week=week, status='pending', addon__isnull=True, unlimited=False).count()
     base_remaining = None if unlimited else max(0, (limit or 0) - used - pending)
     addon_remaining = sum(max(0, grant.ai_calls - grant.used_calls - grant.reservations.filter(status='pending').count())
                           for grant in active_addons(user))
@@ -133,12 +145,14 @@ def reserve_ai_call(user, request_id=None, *, fingerprint=''):
     from uuid import UUID, uuid4
     from rest_framework.exceptions import ValidationError
     from .permissions import is_platform_admin
+    from .workspaces.identity import account_user, account_learner_ids
+    account = account_user(user)
     try:
         request_id = UUID(str(request_id)) if request_id else uuid4()
     except (ValueError, TypeError, AttributeError):
         raise ValidationError({'request_id': '请求标识必须为 UUID。'})
-    get_user_model().objects.select_for_update().get(pk=user.pk)
-    _release_stale_reservations(user)
+    get_user_model().objects.select_for_update().get(pk=account.pk)
+    _release_stale_reservations(account)
     existing = AIUsageReservation.objects.filter(user=user, request_id=request_id).first()
     if existing and existing.fingerprint != fingerprint:
         raise ValidationError({'request_id': '该请求标识已用于另一条提问。'})
@@ -147,9 +161,9 @@ def reserve_ai_call(user, request_id=None, *, fingerprint=''):
         return existing
     week, _ = week_bounds()
     limit = ai_limit(user)
-    unlimited = is_platform_admin(user)
-    usage, _ = WeeklyAIUsage.objects.get_or_create(user=user, week=week)
-    pending = AIUsageReservation.objects.filter(user=user, week=week, status='pending', addon__isnull=True, unlimited=False).count()
+    unlimited = is_platform_admin(account)
+    usage, _ = WeeklyAIUsage.objects.get_or_create(user=account, week=week)
+    pending = AIUsageReservation.objects.filter(user_id__in=account_learner_ids(user), week=week, status='pending', addon__isnull=True, unlimited=False).count()
     addon = None
     if not unlimited and (limit is None or usage.ai_calls + pending >= limit):
         for candidate in active_addons(user).order_by('expires_at', 'id'):
@@ -162,7 +176,7 @@ def reserve_ai_call(user, request_id=None, *, fingerprint=''):
     from users.workspaces.access import membership_for, workspace_active, active_course_ids
     member = membership_for(user)
     values = {'attempt_id': uuid4(), 'week': week, 'status': 'pending', 'addon': addon,
-              'unlimited': unlimited, 'response': {}, 'fingerprint': fingerprint, 'workspace_id': member.workspace_id if workspace_active(member) and (member.role == 'admin' or active_course_ids(member).exists()) else None}
+              'unlimited': unlimited, 'response': {}, 'fingerprint': fingerprint, 'workspace_id': member.workspace_id if workspace_active(member) else None}
     if existing:
         for key, value in values.items():
             setattr(existing, key, value)
@@ -176,7 +190,9 @@ def reserve_ai_call(user, request_id=None, *, fingerprint=''):
 
 @transaction.atomic
 def finish_ai_call(reservation, *, success, response=None):
-    get_user_model().objects.select_for_update().get(pk=reservation.user_id)
+    from .workspaces.identity import account_user
+    account = account_user(reservation.user)
+    get_user_model().objects.select_for_update().get(pk=account.pk)
     _release_stale_reservations(reservation.user)
     current = AIUsageReservation.objects.get(pk=reservation.pk)
     if current.attempt_id != reservation.attempt_id or current.status != 'pending':
@@ -185,7 +201,7 @@ def finish_ai_call(reservation, *, success, response=None):
         if current.addon_id:
             AIAddonGrant.objects.filter(pk=current.addon_id).update(used_calls=F('used_calls') + 1)
         else:
-            WeeklyAIUsage.objects.filter(user_id=current.user_id, week=current.week).update(ai_calls=F('ai_calls') + 1)
+            WeeklyAIUsage.objects.filter(user=account, week=current.week).update(ai_calls=F('ai_calls') + 1)
     current.status = 'succeeded' if success else 'released'
     current.response = response or {}
     current.save(update_fields=['status', 'response', 'updated_at'])

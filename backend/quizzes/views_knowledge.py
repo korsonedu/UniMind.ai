@@ -55,7 +55,7 @@ class KnowledgePointListView(generics.ListCreateAPIView):
         return [IsAdminWriteMemberRead()]
 
     def _get_tree_cache_key(self, user):
-        institution_id = get_content_institution_id()
+        institution_id = get_content_institution_id(user)
         return f"knowledge_tree:ids:inst:{institution_id}" if institution_id else "knowledge_tree:ids:global"
 
     def get_queryset(self):
@@ -94,7 +94,7 @@ class KnowledgePointListView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         user = self.request.user
-        institution = get_content_institution()
+        institution = get_content_institution(self.request.user)
         serializer.save(institution=institution)
         _invalidate_tree_cache(serializer.instance)
 
@@ -127,7 +127,7 @@ class KnowledgePointDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def perform_update(self, serializer):
         user = self.request.user
-        institution = get_content_institution()
+        institution = get_content_institution(self.request.user)
         serializer.save(institution=institution)
         _invalidate_tree_cache(serializer.instance)
 
@@ -322,7 +322,7 @@ class KnowledgePointImportMDView(APIView):
         if not tree:
             return Response({'error': '未解析到有效的知识树结构'}, status=400)
 
-        institution = get_content_institution()
+        institution = get_content_institution(request.user)
 
         created, updated = _create_or_update_knowledge_tree(tree, institution=institution)
         # 清除对应机构（或全局）的知识树缓存
@@ -345,7 +345,7 @@ class KnowledgePointExportMDView(APIView):
 
     def get(self, request):
         user = request.user
-        root_filter = {'institution_id': get_content_institution_id()}
+        root_filter = {'institution_id': get_content_institution_id(request.user)}
 
         roots = KnowledgePoint.objects.filter(level='sub', parent__isnull=True, **root_filter).order_by('order', 'id')
         if not roots.exists():
@@ -389,7 +389,7 @@ class KnowledgePointSubjectsView(APIView):
     def get(self, request):
         subjects_qs = KnowledgePoint.objects.filter(
             level='sub',
-            institution_id=get_content_institution_id(),
+            institution_id=get_content_institution_id(request.user),
         ).values('subject', 'code', 'name').order_by('subject', 'order')
 
         # group by subject name

@@ -41,7 +41,7 @@ def draft(user, kind, fields, source=None):
     request_id = str(uuid5(NAMESPACE_URL, identity) if source else uuid4())
     expires = int(time.time()) + (DIAGNOSTIC_TIME_LIMIT_SECONDS if kind == 'diagnostic' else 86400)
     claims = {**fields, 'user': user.pk, 'kind': kind, 'request_id': request_id,
-              'scope': get_content_institution_id(), 'source': source, 'expires_at': expires}
+              'scope': get_content_institution_id(user), 'source': source, 'expires_at': expires}
     return {**fields, 'kind': kind, 'request_id': request_id, 'expires_at': expires,
             'token': signing.dumps(claims, salt=SALT, compress=True)}
 
@@ -53,7 +53,7 @@ def prepare_diagnostic(user, source=None):
         return {'already_completed': True, 'message': '已完成首次诊断，请到诊断页按规则重新评估。',
                 'visual': {'type': 'data_card', 'payload': {'title': '诊断已完成', 'items': [],
                     'cta': {'label': '查看诊断与重新评估', 'link': '/diagnostic'}}}}
-    questions = generate_diagnostic_questions(get_content_institution_id())
+    questions = generate_diagnostic_questions(get_content_institution_id(user))
     if not questions:
         return {'error': '暂无可用诊断题，请联系管理员补充题库。'}
     payload = draft(user, 'diagnostic', {'question_ids': [row['id'] for row in questions]}, source)
@@ -80,7 +80,7 @@ def load_claims(user, token):
     if claims.get('user') != user.pk:
         raise PermissionDenied('该草稿不属于当前账号。')
     check_feature(user, claims.get('kind'))
-    if claims.get('scope') != get_content_institution_id():
+    if claims.get('scope') != get_content_institution_id(user):
         raise Conflict('内容范围已变化，请重新准备。')
     return claims
 
@@ -117,12 +117,12 @@ def confirm(user, data):
                 raise Conflict('原提问未完成或已删除，请重新准备草稿。')
         if kind == 'faq':
             from faq_system.models import Question
-            question = Question.objects.create(user=user, content=content, institution_id=get_content_institution_id())
+            question = Question.objects.create(user=user, content=content, institution_id=get_content_institution_id(user))
             result = {'kind': kind, 'ticket_id': question.pk, 'message': '已发布人工答疑问题。', 'link': '/qa'}
         else:
             if actor.has_completed_initial_assessment:
                 raise Conflict('首次诊断已完成，请到诊断页重新评估。')
-            results, scores = grade_diagnostic_answers(answers)
+            results, scores = grade_diagnostic_answers(answers, user=user)
             initialize_memorix_from_diagnostic(actor, scores)
             actor.has_completed_initial_assessment = True
             actor.save(update_fields=['has_completed_initial_assessment'])

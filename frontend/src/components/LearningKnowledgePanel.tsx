@@ -13,12 +13,14 @@ import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 
 interface Belief { mean: number; interval: [number, number]; effective_count: number; independent_count: number; stale_days: number | null; }
 interface KnowledgeNode {
+  builder_block_ids?: number[]; learning_status?: 'unassessed' | 'recheck' | 'review' | 'supported';
   id: string; title: string; outcome: string; prerequisites: string[];
   citation: { resource_id: number; revision: number; quote: string; url: string; title: string; read_at: string; source_kind?: string };
   beliefs?: Record<'apply' | 'transfer', Belief>;
 }
 interface KnowledgeVersion { version_id: number; revision: number; title: string; nodes: KnowledgeNode[]; }
 export interface LearningKnowledge {
+  builder?: { build_id: string };
   algorithm: string; version_id?: number; revision?: number; title?: string;
   path: { version_id: number; targets: string[]; depth: 'apply' | 'transfer' } | null;
   nodes: KnowledgeNode[];

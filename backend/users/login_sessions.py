@@ -23,6 +23,9 @@ class LoginSession(models.Model):
 
     @classmethod
     def issue(cls, user):
+        from .models_workspace import WorkspaceLearner
+        if WorkspaceLearner.objects.filter(user=user).exists():
+            raise ValueError('Workspace learning identities cannot sign in independently.')
         return cls.objects.create(user=user, account_session_version=user.account_session_version)
 
     @classmethod
