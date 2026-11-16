@@ -7,8 +7,16 @@ def workspace_invite_code():
     return secrets.token_hex(8).upper()
 
 
+class EnterpriseAccount(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='enterprise_account')
+    service_ends_on = models.DateField()
+    max_students = models.PositiveIntegerField()
+    is_active = models.BooleanField(default=True)
+
+
 class Workspace(models.Model):
     institution = models.OneToOneField('users.Institution', on_delete=models.PROTECT, related_name='learning_workspace')
+    name = models.CharField(max_length=100, blank=True, default='')
     description = models.CharField(max_length=200, blank=True)
     service_ends_on = models.DateField()
     max_students = models.PositiveIntegerField()
@@ -16,7 +24,7 @@ class Workspace(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.institution.name
+        return self.name or self.institution.name
 
 
 class WorkspaceMembership(models.Model):

@@ -7,7 +7,7 @@ from users.login_sessions import LoginSession
 from rest_framework.test import APIClient
 from courses.models import Course, CourseModule, VideoTranscript, TranscriptSegment
 from users.models import User, Institution
-from users.models_workspace import Workspace, WorkspaceMembership, WorkspaceCourse, WorkspaceInvite, WorkspaceEnrollment
+from users.models_workspace import EnterpriseAccount, Workspace, WorkspaceMembership, WorkspaceCourse, WorkspaceInvite, WorkspaceEnrollment
 
 pytestmark = pytest.mark.django_db
 BASE = '/api/users/workspace/'
@@ -73,6 +73,46 @@ def test_join_is_explicit_idempotent_and_course_scoped(setup_workspace, user, au
     stranger = User.objects.create_user(username='unlisted')
     auth_client.force_authenticate(stranger)
     assert auth_client.post(BASE+'join/', data).status_code == 400
+
+
+def test_workspace_name_is_managed_by_its_admin(setup_workspace, user, auth_client):
+    workspace, owner, course, link, invite, client = setup_workspace
+    payload = {'workspace_id': workspace.pk, 'name': '机构自定学习空间'}
+    assert auth_client.patch(BASE, payload, format='json').status_code == 403
+    response = client.patch(BASE, payload, format='json')
+    assert response.status_code == 200
+    assert response.data['workspace']['name'] == payload['name']
+    assert response.data['workspaces'][0]['name'] == payload['name']
+    assert auth_client.post(BASE+'invite-preview/', {'code': invite.code}).data['name'] == payload['name']
+    assert client.patch(BASE, {**payload, 'name': '  '}, format='json').status_code == 400
+    assert client.patch(BASE, {**payload, 'workspace_id': workspace.pk+100}, format='json').status_code == 400
+    workspace.refresh_from_db()
+    assert workspace.name == payload['name'] and workspace.institution.name == 'Smoke institution'
+
+
+def test_enterprise_customer_creates_only_own_institutions(setup_workspace, user, auth_client):
+    workspace, owner, course, link, invite, client = setup_workspace
+    assert auth_client.post(BASE, {'name': 'My school'}, format='json').status_code == 403
+    enterprise = EnterpriseAccount.objects.create(user=user, service_ends_on=workspace.service_ends_on, max_students=20)
+    response = auth_client.post(BASE, {'name': 'My school', 'max_students': 10000,
+        'service_ends_on': '2099-01-01'}, format='json')
+    assert response.status_code == 201
+    created = Workspace.objects.get(institution__created_by=user)
+    assert created.max_students == 20 and created.service_ends_on == enterprise.service_ends_on
+    assert WorkspaceMembership.objects.get(user=user, workspace=created).role == 'admin'
+    assert auth_client.post(BASE, {'name': 'Second school'}, format='json').status_code == 201
+    assert len(auth_client.get(BASE).data['workspaces']) == 2
+    assert {item['id'] for item in client.get(BASE).data['workspaces']} == {workspace.pk}
+    assert auth_client.patch(BASE, {'workspace_id': workspace.pk, 'name': 'Foreign'}, format='json').status_code == 400
+    workspace.refresh_from_db()
+    assert not workspace.name
+    user.refresh_from_db()
+    from users.permissions import is_platform_admin
+    assert not user.is_staff and not user.is_superuser and not is_platform_admin(user)
+    enterprise.service_ends_on = timezone.localdate()-timedelta(days=1)
+    enterprise.save()
+    assert auth_client.get(BASE).data['enterprise']['can_create'] is False
+    assert auth_client.post(BASE, {'name': 'Expired'}, format='json').status_code == 403
 
 
 def test_pause_revokes_video_transcript_and_course_context(setup_workspace, user, auth_client, tmp_path):
