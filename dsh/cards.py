@@ -8,20 +8,22 @@ INTERNAL_PATH = re.compile(r'/(?:courses|course/[1-9][0-9]*|tests(?:/results/[1-
 
 TASK_PATH = re.compile(r'/xiaoyu\?project=[1-9][0-9]*&learning_task=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
 
+KNOWLEDGE_PATH = re.compile(r'/(?:knowledge-builder(?:/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?\?project=[1-9][0-9]*(?:&create=1)?|xiaoyu\?project=[1-9][0-9]*&learning_view=(?:proposal|knowledge))')
 
-def safe_links(value, *, task_navigation=False):
+
+def safe_links(value, *, task_navigation=False, knowledge_navigation=False):
     if isinstance(value, list):
-        return all(safe_links(item, task_navigation=task_navigation) for item in value)
+        return all(safe_links(item, task_navigation=task_navigation, knowledge_navigation=knowledge_navigation) for item in value)
     if isinstance(value, dict):
         action = value.get('action')
         if isinstance(action, dict):
             if action.get('type') == 'navigate':
-                if not isinstance(action.get('url'), str) or not (INTERNAL_PATH.fullmatch(action['url']) or (task_navigation and TASK_PATH.fullmatch(action['url']))):
+                if not isinstance(action.get('url'), str) or not (INTERNAL_PATH.fullmatch(action['url']) or (task_navigation and TASK_PATH.fullmatch(action['url'])) or (knowledge_navigation and KNOWLEDGE_PATH.fullmatch(action['url']))):
                     return False
             elif action.get('type') != 'reply':
                 return False
-        return all((isinstance(item, str) and bool(INTERNAL_PATH.fullmatch(item) or (task_navigation and TASK_PATH.fullmatch(item))))
-                   if key in {'link', 'href', 'action_link'} else safe_links(item, task_navigation=task_navigation)
+        return all((isinstance(item, str) and bool(INTERNAL_PATH.fullmatch(item) or (task_navigation and TASK_PATH.fullmatch(item)) or (knowledge_navigation and KNOWLEDGE_PATH.fullmatch(item))))
+                   if key in {'link', 'href', 'action_link'} else safe_links(item, task_navigation=task_navigation, knowledge_navigation=knowledge_navigation)
                    for key, item in value.items())
     return True
 
@@ -52,7 +54,7 @@ def tool_cards(events, context):
         meta = data.get('meta')
         visual = meta.get('unimindCard') if isinstance(meta, dict) else None
         if (not failed and isinstance(visual, dict) and visual.get('type') in CARD_TYPES
-                and isinstance(visual.get('payload'), dict) and safe_links(visual, task_navigation=name == 'manage_learning_tasks')
+                and isinstance(visual.get('payload'), dict) and safe_links(visual, task_navigation=name == 'manage_learning_tasks', knowledge_navigation=name in ('manage_learning_knowledge', 'present_learning_visual'))
                 and (visual['type'] != 'learning_experiment' or (name == 'build_learning_experiment'
                      and isinstance(visual['payload'].get('experiment_id'), str)
                      and isinstance(visual['payload'].get('conversation_id'), str)

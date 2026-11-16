@@ -6,7 +6,7 @@ from rest_framework.test import APITestCase
 
 from ai_assistant.models import ConversationProject, LearningKnowledgeVersion, ProjectLearning
 from ai_assistant.services.learning_knowledge import knowledge_state, knowledge_operation
-from ai_assistant.services.learning_tasks import create_task
+from ai_assistant.services.learning_tasks import create_task, task_data
 from ai_assistant.services.dsh_cards import build_tool_card, INTERNAL_PATH
 from ai_assistant.services.project_learning import change_learning
 from knowledge_builder.models import KnowledgeTreeBuild, LearningBlock, BlockEdge
@@ -79,6 +79,14 @@ class KnowledgeBuildLoopSmoke(APITestCase):
             self.assertEqual(current['recommendations'][0]['node_id'], second_id if index in (1, 4) else first_id)
         self.assertEqual(current['builder']['build_id'], str(self.build.pk))
         self.assertEqual(node['citation']['source_kind'], 'generated_graph')
+        task = create_task(self.project, {'version_id': version_id, 'node_id': first_id,
+            'stage_id': plan['stages'][0]['id'], 'title': '开放检查', 'instructions': '请独立作答并说明理由。',
+            'definition': {'prompt': '说明现金流折现的计算过程。', 'response_type': 'explanation',
+                           'criteria': ['PRIVATE_GRADING_ANSWER'], 'reference_answer': 'PRIVATE_REFERENCE'}})
+        visible = task_data(task)
+        self.assertEqual(visible['criteria'], [])
+        self.assertNotIn('PRIVATE_', str(visible))
+
 
     def test_scope_free_chat_conflict_and_reuse(self):
         self.assertEqual(self.propose().status_code, 200)
