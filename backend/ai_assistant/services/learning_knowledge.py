@@ -32,10 +32,12 @@ class NodeInput(serializers.Serializer):
 
 
 class KnowledgeInput(serializers.Serializer):
-    action = serializers.ChoiceField(choices=['search', 'read', 'save', 'prepare', 'probe'])
+    action = serializers.ChoiceField(choices=['search', 'read', 'save', 'prepare', 'probe', 'builds', 'from_build'])
+    build_id = serializers.UUIDField(required=False)
+    block_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), min_length=1, max_length=30, required=False)
     query = serializers.CharField(max_length=200, required=False, allow_blank=True)
     map_id = serializers.IntegerField(min_value=1, required=False)
-    revision = serializers.IntegerField(min_value=1, required=False)
+    revision = serializers.IntegerField(min_value=0, required=False)
     version_id = serializers.IntegerField(min_value=1, required=False)
     title = serializers.CharField(max_length=200, required=False)
     nodes = NodeInput(many=True, max_length=30, allow_empty=False, required=False)
@@ -143,7 +145,8 @@ def validate_path(project, state, plan):
 def version_data(version):
     return {'version_id': version.pk, 'map_id': version.knowledge_map_id, 'revision': version.revision,
             'title': version.snapshot['title'], 'nodes': version.snapshot['nodes'],
-            'relation_notice': '前置关系为教学建议；原文引用支持知识内容，关系尚未独立验证。'}
+            'builder': version.snapshot.get('builder'), 'notice': version.snapshot.get('notice', ''),
+            'relation_notice': version.snapshot.get('notice') or '前置关系为教学建议；原文引用支持知识内容，关系尚未独立验证。'}
 
 
 def _fingerprint(text):
@@ -237,21 +240,34 @@ def knowledge_state(project, state, *, compact=False):
     by_id = {node['id']: node for node in states}
     # Conservative routing heuristic, not a mastery gate or a calibrated probability threshold.
     def ready(node):
+        if version.snapshot.get('builder'):
+            rows = observations.get((node['id'], 'apply'), [])
+            return (len(rows) >= 2 and all(row['outcome'] == 'success' and row['assistance'] == 'independent' for row in rows[-2:])
+                    and (node['beliefs']['apply']['stale_days'] or 0) <= 30)
         estimate = node['beliefs']['apply']
         return estimate['independent_count'] >= 2 and estimate['interval'][0] >= .5
+    for node in states:
+        rows = observations.get((node['id'], 'apply'), [])
+        node['learning_status'] = ('supported' if ready(node) else 'review' if rows and rows[-1]['outcome'] == 'failure'
+                                   else 'recheck' if rows else 'unassessed')
     recommendations = []
     for node in states:
         blockers = [parent for parent in node['prerequisites'] if not ready(by_id[parent])]
         if blockers:
             continue
         mode = 'transfer' if path['depth'] == 'transfer' and ready(node) else 'apply'
+        if version.snapshot.get('builder') and ready(node) and mode == 'apply':
+            continue
         estimate = node['beliefs'][mode]
         coverage = sum(node['id'] in {item['id'] for item in closure(version.snapshot, [target])} for target in path['targets']) / len(path['targets'])
         gap = 1 - estimate['mean']
         score = estimate['information_gain'] * (1 + coverage) * (1 + gap)
+        reason = ('先回看原作答中的缺口，再用更小的任务检查' if node['learning_status'] == 'review' else
+                  '换一道任务检查能否独立完成' if node['learning_status'] == 'recheck' else
+                  '先了解常规应用表现' if mode == 'apply' else '已有常规独立证据，换情境检查候选迁移')
         recommendations.append({'node_id': node['id'], 'title': node['title'], 'mode': mode, 'score': round(score, 6),
             'information_gain': estimate['information_gain'], 'target_coverage': round(coverage, 3), 'gap': round(gap, 3),
-            'reason': ('先了解常规应用表现' if mode == 'apply' else '已有常规独立证据，换情境检查候选迁移') +
+            'reason': reason +
                       ('；证据较早，安排重新检查' if estimate['stale_days'] and estimate['stale_days'] > 30 else '')})
     recommendations.sort(key=lambda row: (-row['score'], row['node_id']))
     used = {row['probe_id'] for row in evidence if 'probe_id' in row}
@@ -259,12 +275,13 @@ def knowledge_state(project, state, *, compact=False):
         kind='probe', message__isnull=False, content__version_id=version.pk).exclude(pk__in=used).order_by('-id')[:3]]
     result = {'algorithm': ALGORITHM_VERSION, 'version_id': version.pk, 'map_id': version.knowledge_map_id,
               'revision': version.revision, 'title': version.snapshot['title'], 'path': path, 'nodes': states,
+              'builder': version.snapshot.get('builder'),
               'recommendations': recommendations[:3], 'probes': probes,
               'excluded_evidence_count': verified['excluded_provenance'] + task_provenance['excluded_provenance'],
               'repeated_question_count': task_provenance['repeated_questions'],
               'notice': '固定参数下的条件表现估计，尚未校准；标准答案比对、模型标准评价与对话判断分别保留。知识归属、帮助声明和迁移任务尚未独立验证，不代表真实掌握概率。'}
     if compact:
-        result['nodes'] = [{'id': node['id'], 'title': node['title'], 'beliefs': node['beliefs']} for node in states]
+        result['nodes'] = [{'id': node['id'], 'title': node['title'], 'beliefs': node['beliefs'], 'learning_status': node['learning_status']} for node in states]
     else:
         result['evidence'] = evidence[-20:][::-1]
     return result
@@ -276,6 +293,13 @@ def knowledge_operation(project, arguments, *, message=None):
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
     action = data['action']
+    if action == 'builds':
+        from .knowledge_build_path import available_builds
+        return {'builds': [{'id': str(build.pk), 'subject': build.subject,
+            'blocks': [{'id': block.pk, 'title': block.short_title} for block in build.blocks.all()],
+            'href': f'/knowledge-builder/{build.pk}?project={project.pk}'}
+            for build in available_builds(project.user)[:20]],
+            'create_href': f'/knowledge-builder?project={project.pk}&create=1'}
     if action == 'search':
         rows = LearningKnowledgeMap.objects.filter(user=project.user, title__icontains=data.get('query', '')).order_by('-pk')[:20]
         return {'maps': [{'id': row.pk, 'title': row.title, 'revision': row.revision,
@@ -283,6 +307,9 @@ def knowledge_operation(project, arguments, *, message=None):
     if action == 'read':
         return version_data(owned_version(project, data.get('version_id')))
     state = _state(project, message)
+    if action == 'from_build':
+        from .knowledge_build_path import prepare_build
+        return prepare_build(project, data, state)
     if action == 'save':
         if not data.get('title') or not data.get('nodes'):
             raise ValidationError('请提供知识地图名称和带来源的知识单元。')

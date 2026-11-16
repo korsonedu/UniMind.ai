@@ -1,0 +1,3 @@
+依据subject识别主导学习问题形态，选择四种archetype之一。公式输入输出链选择formula_derivation_chain，操作鉴别分流选择taskflow_diagnostic_tree，制度机制并列选择institution_mechanism_theory，跨框架案例权衡选择case_synthesis_deduction。
+严格按工具Schema返回结构化结果。输入数据如下。
+{context}

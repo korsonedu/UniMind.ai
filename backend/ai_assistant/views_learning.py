@@ -71,6 +71,6 @@ class ProjectLearningKnowledgeView(APIView):
     def post(self, request, pk):
         from .services.learning_knowledge import knowledge_operation
         project = get_object_or_404(ConversationProject, pk=pk, user=request.user)
-        if request.data.get('action') not in ('save', 'prepare'):
+        if request.data.get('action') not in ('save', 'prepare', 'from_build'):
             raise serializers.ValidationError('实际检查请在学习对话中完成。')
         return Response(knowledge_operation(project, request.data))

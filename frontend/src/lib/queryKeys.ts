@@ -21,4 +21,9 @@ export const queryKeys = {
     detail: (id: number) => ['exams', 'detail', id] as const,
     history: ['exams', 'history'] as const,
   },
+  knowledgeBuilder: {
+    list: (userId: number | undefined) => ['knowledge-builder', 'list', userId] as const,
+    detail: (buildId: string) => ['knowledge-builder', 'detail', buildId] as const,
+    status: (buildId: string) => ['knowledge-builder', 'status', buildId] as const,
+  },
 };
