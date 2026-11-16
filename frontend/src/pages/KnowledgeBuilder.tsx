@@ -282,7 +282,8 @@ export default function KnowledgeBuilder() {
           <Button type="button" variant="outline" onClick={() => setPublicAssetsBuildId(detailQuery.data.id)}>
             {t('公开资产池 & 整树挂载')}
           </Button>
-          <span>{t('已选择 {0} 个目标学习块', { 0: selectedBlocks.size })}</span>
+          <span aria-live="polite">{t('已选择 {0} 个目标学习块', { 0: selectedBlocks.size })}</span>
+          {!!selectedBlocks.size && <Button type="button" variant="ghost" disabled={planning} onClick={() => setSelection({ buildId: activeBuildId, blocks: new Set() })}>{t('清空选择')}</Button>}
           <Button type="button" variant="outline" disabled={!selectedBlocks.size || openingProject || planning || !projectQuery.data?.planning_enabled} onClick={async () => {
             if (!chat.projectId || !projectQuery.data) return;
             setPlanning(true); setPlanningError('');
