@@ -974,7 +974,7 @@ class PlannerToolExecutor(BaseToolExecutor):
         kp_id = question_dict.get('knowledge_point_id')
         if kp_id:
             similar = MemorySystem.query_similar_questions(
-                kp_id, question_dict.get('difficulty_level', 'normal'), question_id
+                kp_id, question_dict.get('difficulty_level', 'normal'), question_id, institution=self.institution
             )
             response['remediation_questions'] = similar.get('questions', [])
 
