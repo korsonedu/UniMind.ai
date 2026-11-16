@@ -447,7 +447,7 @@ def tool_operation(executor, name, arguments):
             data = task_data(task)
             return {key: data[key] for key in ('id', 'title', 'status', 'version_id', 'node_id', 'stage_id')} | {
                 'href': f'/xiaoyu?project={project.pk}&learning_task={task.pk}',
-                'notice': '任务已准备，用户可在本项目学习安排中作答；不得代答或自报成绩。'}
+                'notice': '任务已保存。用户通过任务卡片提交后，评分流程保存原作答与评价并关联知识节点；不等于正式考试成绩。请只简短引导到任务卡片，不重复题目或评分标准，不声称只在对话评分；不得代答或自报成绩。'}
     if name == 'manage_learning_knowledge':
         from .learning_knowledge import knowledge_operation
         return knowledge_operation(project, arguments, message=message)
