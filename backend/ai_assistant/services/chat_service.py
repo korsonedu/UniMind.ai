@@ -92,6 +92,8 @@ class AssistantChatService:
         institution = getattr(tool_executor, 'institution', None)
         system_prompt = cls._build_agent_system_prompt(bot, student_context, memory_context, institution, adaptive_directives, variant_suffix)
 
+        from .language import language_instruction
+        system_prompt += language_instruction(getattr(tool_executor, 'user', None), getattr(tool_executor, 'learning_context', None))
         messages = [{'role': 'system', 'content': system_prompt}]
 
         for msg in history_messages or []:

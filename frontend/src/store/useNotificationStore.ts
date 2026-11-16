@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { create } from 'zustand';
 import { toast } from 'sonner';
 import api from '@/lib/api';
@@ -46,8 +47,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
           (id ? n.id === id : true) ? { ...n, is_read: true } : n
         )
       });
-      if (!id) toast.success('已全部标为已读', {
-        description: '此处“读过”采用宽松定义。',
+      if (!id) toast.success(t('已全部标为已读'), {
+        description: t('此处“读过”采用宽松定义。'),
         classNames: { description: 'italic text-muted-foreground' },
       });
     } catch (e) { console.error('markAsRead failed', e); }

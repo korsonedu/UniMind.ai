@@ -1,3 +1,4 @@
+import { getLocale, t, useLocale } from '@/i18n';
 import { SelectField, SelectOption } from '@/components/ui/select';
 import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -29,6 +30,7 @@ export interface CourseTreeProps {
 }
 
 export function CourseTree({ courses, treeCourses, selectedId, loading, error, query, grouping, filter, tag, status, scope, filtersActive, onResetFilters, onQueryChange, onFilter, onFacet, onSelect, onRetry, extraFilters }: CourseTreeProps) {
+  useLocale();
   const searchId = useId();
   const tagId = useId();
   const statusId = useId();
@@ -43,50 +45,50 @@ export function CourseTree({ courses, treeCourses, selectedId, loading, error, q
     const subject = course.subject_name || course.subject || '待归类学科';
     const modules = subjects.get(subject) || new Map<string, { name: string; order: number; courses: Course[] }>();
     const key = JSON.stringify([subject, course.module ?? null]);
-    const module = modules.get(key) || { name: course.module_name || '待归类模块', order: course.module ? course.module_sort_order || 0 : Infinity, courses: [] };
+    const module = modules.get(key) || { name: course.module_name || t('待归类模块'), order: course.module ? course.module_sort_order || 0 : Infinity, courses: [] };
     module.courses.push(course);
     modules.set(key, module);
     subjects.set(subject, modules);
   });
-  const tags = [...new Set(courses.flatMap(course => course.tags || []))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  const tags = [...new Set(courses.flatMap(course => course.tags || []))].sort((a, b) => a.localeCompare(b, getLocale()));
   const subjectName = (course: Course) => course.subject_name || course.subject || '待归类学科';
   const selectedModule = grouping === 'module' && filter ? courses.find(course => courseGroups(course, 'module').includes(filter)) : undefined;
   const subjectFilter = grouping === 'subject' ? filter : selectedModule ? subjectName(selectedModule) : '';
   const moduleFilter = selectedModule ? courseGroups(selectedModule, 'module')[1] : '';
-  const allSubjects = [...new Set(courses.map(subjectName))].sort((a, b) => a === '待归类学科' ? 1 : b === '待归类学科' ? -1 : a.localeCompare(b, 'zh-CN'));
+  const allSubjects = [...new Set(courses.map(subjectName))].sort((a, b) => a === '待归类学科' ? 1 : b === '待归类学科' ? -1 : a.localeCompare(b, getLocale()));
   const moduleOptions = [...new Map(courses.filter(course => !subjectFilter || subjectName(course) === subjectFilter).map(course => [courseGroups(course, 'module')[1], course])).entries()]
-    .sort(([, left], [, right]) => (left.module ? left.module_sort_order || 0 : Infinity) - (right.module ? right.module_sort_order || 0 : Infinity) || (left.module_name || '').localeCompare(right.module_name || '', 'zh-CN'));
+    .sort(([, left], [, right]) => (left.module ? left.module_sort_order || 0 : Infinity) - (right.module ? right.module_sort_order || 0 : Infinity) || (left.module_name || '').localeCompare(right.module_name || '', getLocale()));
   const toggle = (key: string) => setCollapsed(previous => { const next = new Set(previous); if (next.has(key)) next.delete(key); else next.add(key); return next; });
-  const leaves = (items: Course[]) => items.map(course => <li key={course.id}><button type="button" className="um-course-list-item um-course-tree-leaf" title={`${course.title} · 课程，点击打开`} aria-description="课程，可直接打开" aria-current={selectedId === course.id ? 'page' : undefined} onClick={() => onSelect(course)}><span className="um-course-list-title">{course.title}</span></button></li>);
+  const leaves = (items: Course[]) => items.map(course => <li key={course.id}><button type="button" className="um-course-list-item um-course-tree-leaf" title={t('{0} · 课程，点击打开', { 0: course.title })} aria-description={t('课程，可直接打开')} aria-current={selectedId === course.id ? 'page' : undefined} onClick={() => onSelect(course)}><span className="um-course-list-title">{course.title}</span></button></li>);
   return <div className="um-course-list">
-    <div className="um-course-list-heading"><h2>课程</h2><span className="um-course-muted">{!loading && !error && `${filtersActive || query.trim() ? `${matchingCourses.length} / ` : ''}${courses.length} 门`}</span></div>
+    <div className="um-course-list-heading"><h2>{t('课程')}</h2><span className="um-course-muted">{!loading && !error && t('{0}{1} 门', { 0: filtersActive || query.trim() ? `${matchingCourses.length} / ` : '', 1: courses.length })}</span></div>
     <div className="um-course-directory-tools">
-      <div className="um-course-search"><label htmlFor={searchId} className="sr-only">搜索课程</label><Search size={16} aria-hidden="true" /><input id={searchId} type="search" value={query} onChange={event => onQueryChange(event.target.value)} placeholder="搜索课程" autoComplete="off" /></div>
-      <Popover><PopoverTrigger asChild><button type="button" className="um-course-filter-trigger" data-active={filtersActive || undefined} aria-label={filtersActive ? '筛选课程，已启用' : '筛选课程'} title="筛选课程"><SlidersHorizontal size={18} aria-hidden="true" /></button></PopoverTrigger>
-        <PopoverContent className="um-course-filter-panel" align="start" collisionPadding={12} aria-label="课程筛选">
-          <div className="um-course-filter-heading"><h3>筛选课程</h3><button type="button" className="um-course-text-button" disabled={!filtersActive} onClick={onResetFilters}>重置</button></div>
+      <div className="um-course-search"><label htmlFor={searchId} className="sr-only">{t('搜索课程')}</label><Search size={16} aria-hidden="true" /><input id={searchId} type="search" value={query} onChange={event => onQueryChange(event.target.value)} placeholder={t('搜索课程')} autoComplete="off" /></div>
+      <Popover><PopoverTrigger asChild><button type="button" className="um-course-filter-trigger" data-active={filtersActive || undefined} aria-label={filtersActive ? t('筛选课程，已启用') : t('筛选课程')} title={t('筛选课程')}><SlidersHorizontal size={18} aria-hidden="true" /></button></PopoverTrigger>
+        <PopoverContent className="um-course-filter-panel" align="start" collisionPadding={12} aria-label={t('课程筛选')}>
+          <div className="um-course-filter-heading"><h3>{t('筛选课程')}</h3><button type="button" className="um-course-text-button" disabled={!filtersActive} onClick={onResetFilters}>{t('重置')}</button></div>
           <div className="um-course-facets">
-            <label htmlFor={subjectId}>学科</label><SelectField id={subjectId} value={subjectFilter} onValueChange={value => onFilter(value, 'subject')}><SelectOption value="">全部学科</SelectOption>{allSubjects.map(value => <SelectOption key={value} value={value}>{value}</SelectOption>)}</SelectField>
-            <label htmlFor={moduleId}>模块</label><SelectField id={moduleId} value={moduleFilter} onValueChange={value => onFilter(value || subjectFilter, value ? 'module' : 'subject')}><SelectOption value="">全部模块</SelectOption>{moduleOptions.map(([key, course]) => <SelectOption key={key} value={key}>{!subjectFilter ? `${subjectName(course)} / ` : ''}{course.module_name || '待归类模块'}</SelectOption>)}</SelectField>
-            <label htmlFor={scopeId}>观看范围</label><SelectField id={scopeId} value={scope} onValueChange={value => onFacet('scope', value)}><SelectOption value="all">全部课程</SelectOption><SelectOption value="learning">继续学习</SelectOption><SelectOption value="later">稍后观看</SelectOption></SelectField>
-            <label htmlFor={tagId}>标签筛选</label><SelectField id={tagId} value={tag} onValueChange={value => onFacet('tag', value)}><SelectOption value="">全部标签</SelectOption>{tags.map(value => <SelectOption key={value} value={value}>{value}</SelectOption>)}</SelectField>
-            <label htmlFor={statusId}>学习状态筛选</label><SelectField id={statusId} value={status} onValueChange={value => onFacet('status', value)}><SelectOption value="all">全部状态</SelectOption><SelectOption value="learning">未看完</SelectOption><SelectOption value="finished">已看完</SelectOption><SelectOption value="new">未开始</SelectOption></SelectField>
+            <label htmlFor={subjectId}>{t('学科')}</label><SelectField id={subjectId} value={subjectFilter} onValueChange={value => onFilter(value, 'subject')}><SelectOption value="">{t('全部学科')}</SelectOption>{allSubjects.map(value => <SelectOption key={value} value={value}>{t(value)}</SelectOption>)}</SelectField>
+            <label htmlFor={moduleId}>{t('模块')}</label><SelectField id={moduleId} value={moduleFilter} onValueChange={value => onFilter(value || subjectFilter, value ? 'module' : 'subject')}><SelectOption value="">{t('全部模块')}</SelectOption>{moduleOptions.map(([key, course]) => <SelectOption key={key} value={key}>{!subjectFilter ? `${t(subjectName(course))} / ` : ''}{course.module_name || t('待归类模块')}</SelectOption>)}</SelectField>
+            <label htmlFor={scopeId}>{t('观看范围')}</label><SelectField id={scopeId} value={scope} onValueChange={value => onFacet('scope', value)}><SelectOption value="all">{t('全部课程')}</SelectOption><SelectOption value="learning">{t('继续学习')}</SelectOption><SelectOption value="later">{t('稍后观看')}</SelectOption></SelectField>
+            <label htmlFor={tagId}>{t('标签筛选')}</label><SelectField id={tagId} value={tag} onValueChange={value => onFacet('tag', value)}><SelectOption value="">{t('全部标签')}</SelectOption>{tags.map(value => <SelectOption key={value} value={value}>{t(value)}</SelectOption>)}</SelectField>
+            <label htmlFor={statusId}>{t('学习状态筛选')}</label><SelectField id={statusId} value={status} onValueChange={value => onFacet('status', value)}><SelectOption value="all">{t('全部状态')}</SelectOption><SelectOption value="learning">{t('未看完')}</SelectOption><SelectOption value="finished">{t('已看完')}</SelectOption><SelectOption value="new">{t('未开始')}</SelectOption></SelectField>
             {extraFilters}
           </div>
         </PopoverContent>
       </Popover>
     </div>
-    <nav className="um-course-shortcuts" aria-label="课程快捷导航"><button type="button" aria-current={!selectedId && scope === 'all' && !filter ? 'page' : undefined} onClick={() => { onResetFilters(); onQueryChange(''); }}>学习门户</button></nav>
-    <div className="um-course-list-scroll" aria-busy={loading}>{loading ? <p className="um-course-list-message" role="status">正在加载…</p> : error ? <div className="um-course-list-message"><p role="alert">{error}</p><button type="button" className="um-course-button" onClick={onRetry}>重新加载</button></div> : !subjects.size ? <div className="um-course-list-message"><p>暂无匹配课程</p>{query.trim() && <p className="text-xs italic text-muted-foreground">搜索范围有限，你的求知欲除外。</p>}{query && <button type="button" className="um-course-text-button" onClick={() => onQueryChange('')}>清除搜索</button>}{filtersActive && <button type="button" className="um-course-text-button" onClick={onResetFilters}>重置筛选</button>}</div> : <nav aria-label="课程目录"><ul className="um-course-tree">
-      {[...subjects].sort(([left], [right]) => left === '待归类学科' ? 1 : right === '待归类学科' ? -1 : left.localeCompare(right, 'zh-CN')).map(([subject, modules], subjectIndex) => {
+    <nav className="um-course-shortcuts" aria-label={t('课程快捷导航')}><button type="button" aria-current={!selectedId && scope === 'all' && !filter ? 'page' : undefined} onClick={() => { onResetFilters(); onQueryChange(''); }}>{t('学习门户')}</button></nav>
+    <div className="um-course-list-scroll" aria-busy={loading}>{loading ? <p className="um-course-list-message" role="status">{t('正在加载…')}</p> : error ? <div className="um-course-list-message"><p role="alert">{error}</p><button type="button" className="um-course-button" onClick={onRetry}>{t('重新加载')}</button></div> : !subjects.size ? <div className="um-course-list-message"><p>{t('暂无匹配课程')}</p>{query.trim() && <p className="text-xs italic text-muted-foreground">{t('搜索范围有限，你的求知欲除外。')}</p>}{query && <button type="button" className="um-course-text-button" onClick={() => onQueryChange('')}>{t('清除搜索')}</button>}{filtersActive && <button type="button" className="um-course-text-button" onClick={onResetFilters}>{t('重置筛选')}</button>}</div> : <nav aria-label={t('课程目录')}><ul className="um-course-tree">
+      {[...subjects].sort(([left], [right]) => left === '待归类学科' ? 1 : right === '待归类学科' ? -1 : left.localeCompare(right, getLocale())).map(([subject, modules], subjectIndex) => {
         const key = `subject:${subject}`;
         const expanded = !!query.trim() || !collapsed.has(key);
         const branchId = `${treeId}-${subjectIndex}`;
         const count = [...modules.values()].reduce((sum, module) => sum + module.courses.length, 0);
-        return <li key={key}><div className="um-course-tree-branch"><button type="button" className="um-course-tree-toggle" aria-label={`${expanded ? '收起' : '展开'}${subject}`} aria-expanded={expanded} aria-controls={branchId} disabled={!!query.trim()} onClick={() => toggle(key)}><ChevronRight size={14} /></button><button type="button" className="um-course-tree-label" title={subject} aria-current={!selectedId && grouping === 'subject' && filter === subject ? 'page' : undefined} onClick={() => onFilter(subject, 'subject')}><span>{subject}</span><span>{count}</span></button></div><Collapse open={expanded} id={branchId}><ul>{[...modules].sort(([, a], [, b]) => a.order - b.order || a.name.localeCompare(b.name, 'zh-CN')).map(([moduleKey, module], moduleIndex) => {
+        return <li key={key}><div className="um-course-tree-branch"><button type="button" className="um-course-tree-toggle" aria-label={`${expanded ? t('收起') : t('展开')}${subject}`} aria-expanded={expanded} aria-controls={branchId} disabled={!!query.trim()} onClick={() => toggle(key)}><ChevronRight size={14} /></button><button type="button" className="um-course-tree-label" title={t(subject)} aria-current={!selectedId && grouping === 'subject' && filter === subject ? 'page' : undefined} onClick={() => onFilter(subject, 'subject')}><span>{t(subject)}</span><span>{count}</span></button></div><Collapse open={expanded} id={branchId}><ul>{[...modules].sort(([, a], [, b]) => a.order - b.order || a.name.localeCompare(b.name, getLocale())).map(([moduleKey, module], moduleIndex) => {
           const moduleExpanded = !!query.trim() || !collapsed.has(moduleKey);
           const moduleId = `${branchId}-${moduleIndex}`;
-          return <li key={moduleKey} className="um-course-tree-album"><div className="um-course-tree-branch"><button type="button" className="um-course-tree-toggle" aria-label={`${moduleExpanded ? '收起' : '展开'}${module.name}`} aria-expanded={moduleExpanded} aria-controls={moduleId} disabled={!!query.trim()} onClick={() => toggle(moduleKey)}><ChevronRight size={14} /></button><button type="button" className="um-course-tree-label" title={module.name} aria-current={!selectedId && grouping === 'module' && filter === moduleKey ? 'page' : undefined} onClick={() => onFilter(moduleKey, 'module')}><span>{module.name}</span><span>{module.courses.length}</span></button></div><Collapse open={moduleExpanded} id={moduleId}><ul>{leaves(module.courses)}</ul></Collapse></li>;
+          return <li key={moduleKey} className="um-course-tree-album"><div className="um-course-tree-branch"><button type="button" className="um-course-tree-toggle" aria-label={`${moduleExpanded ? t('收起') : t('展开')}${module.name}`} aria-expanded={moduleExpanded} aria-controls={moduleId} disabled={!!query.trim()} onClick={() => toggle(moduleKey)}><ChevronRight size={14} /></button><button type="button" className="um-course-tree-label" title={t(module.name)} aria-current={!selectedId && grouping === 'module' && filter === moduleKey ? 'page' : undefined} onClick={() => onFilter(moduleKey, 'module')}><span>{t(module.name)}</span><span>{module.courses.length}</span></button></div><Collapse open={moduleExpanded} id={moduleId}><ul>{leaves(module.courses)}</ul></Collapse></li>;
         })}</ul></Collapse></li>;
       })}
     </ul></nav>}</div>

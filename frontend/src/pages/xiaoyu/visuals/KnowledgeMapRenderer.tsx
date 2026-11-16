@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import React, { useMemo, useState } from 'react';
 
 interface KnowledgeNode {
@@ -43,6 +44,7 @@ export const KnowledgeMapRenderer: React.FC<{ payload: KnowledgeMapPayload }> = 
 };
 
 const KnowledgeMapGraph: React.FC<{ payload: KnowledgeMapPayload }> = ({ payload }) => {
+  useLocale();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const positioned = useMemo(() => {
@@ -126,7 +128,7 @@ const KnowledgeMapGraph: React.FC<{ payload: KnowledgeMapPayload }> = ({ payload
         <h3 className="text-[15px] font-semibold tracking-tight text-foreground">{payload.title}</h3>
       )}
 
-      <div className="um-visual-graph-scroll" tabIndex={0} aria-label="知识关系图，可横向滚动"><svg role="group" aria-label={payload.title || '知识关系图'} viewBox={`0 0 ${W} ${H}`} className="um-visual-knowledge-graph">
+      <div className="um-visual-graph-scroll" tabIndex={0} aria-label={t('知识关系图，可横向滚动')}><svg role="group" aria-label={payload.title || t('知识关系图')} viewBox={`0 0 ${W} ${H}`} className="um-visual-knowledge-graph">
         {/* Edges */}
         {edges.map((edge, i) => {
           const s = idToPos.get(edge.from);
@@ -146,12 +148,17 @@ const KnowledgeMapGraph: React.FC<{ payload: KnowledgeMapPayload }> = ({ payload
 
         {/* Nodes */}
         {positioned.map(node => {
+          const latin = !/[\u3400-\u9fff]/.test(node.label);
+          const words = node.label.trim().split(/\s+/);
+          const middle = Math.ceil(words.length / 2);
+          const lines = latin && words.length > 1 ? [words.slice(0, middle).join(' '), words.slice(middle).join(' ')] : [node.label];
+          const limit = latin ? 10 : 6;
           const isHighlight = highlights.includes(node.id);
           const isHovered = hoveredId === node.id;
           return (
             <g
               key={node.id}
-              tabIndex={0} role="img" aria-label={`${node.label}，${node.mastery === undefined ? '暂无掌握度' : `掌握度 ${Math.round(node.mastery * 100)}%`}`}
+              tabIndex={0} role="img" aria-label={`${node.label}，${node.mastery === undefined ? t('暂无掌握度') : t('掌握度 {0}%', { 0: Math.round(node.mastery * 100) })}`}
               onFocus={() => setHoveredId(node.id)} onBlur={() => setHoveredId(null)}
               onMouseEnter={() => setHoveredId(node.id)}
               onMouseLeave={() => setHoveredId(null)}
@@ -165,17 +172,17 @@ const KnowledgeMapGraph: React.FC<{ payload: KnowledgeMapPayload }> = ({ payload
                 strokeWidth={isHovered || isHighlight ? 1.5 : 1}
               />
               <text
-                x={node.x} y={node.y - (node.mastery !== undefined ? 3 : 0)}
+                x={node.x} y={node.y - (lines.length > 1 ? 9 : node.mastery !== undefined ? 3 : 0)}
                 textAnchor="middle"
                 dominantBaseline="central"
-                style={{ fontSize: 11, fontWeight: 500, fill: nodeTextColor(node.mastery) }}
+                style={{ fontSize: latin ? 9 : 11, fontWeight: 500, fill: nodeTextColor(node.mastery) }}
                 className="pointer-events-none select-none"
               >
-                {node.label.length > 6 ? node.label.slice(0, 6) + '..' : node.label}
+                {lines.map((line, index) => <tspan key={index} x={node.x} dy={index ? 11 : 0}>{line.length > limit ? line.slice(0, limit) + '…' : line}</tspan>)}
               </text>
               {node.mastery !== undefined && (
                 <text
-                  x={node.x} y={node.y + 11}
+                  x={node.x} y={node.y + (lines.length > 1 ? 15 : 11)}
                   textAnchor="middle"
                   dominantBaseline="central"
                   style={{ fontSize: 10, fontWeight: 400, fill: nodeTextColor(node.mastery), opacity: 0.85 }}
@@ -189,7 +196,7 @@ const KnowledgeMapGraph: React.FC<{ payload: KnowledgeMapPayload }> = ({ payload
         })}
       </svg></div>
 
-      <div className="um-visual-map-legend"><span>颜色越深，越需复习；节点显示掌握度</span><span>{edges.length} 关联</span></div>
+      <div className="um-visual-map-legend"><span>{t('颜色越深，越需复习；节点显示掌握度')}</span><span>{edges.length} {t('关联')}</span></div>
       {payload.note && (
         <p className="um-visual-note">{payload.note}</p>
       )}

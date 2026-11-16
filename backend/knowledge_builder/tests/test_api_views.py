@@ -335,6 +335,58 @@ def test_intake_institution_isolation(client, user, intake_catalog, settings):
 
 
 @override_settings(ROOT_URLCONF='knowledge_builder.urls')
+def test_intake_workspace_content_and_revoked_access(client, user, intake_catalog, settings):
+    from django.utils import timezone
+    from quizzes.models import KnowledgeEdge, KnowledgePoint, Question, UserKnowledgeState
+    from users.models import Institution
+    from users.models_workspace import Workspace, WorkspaceMembership
+
+    institution = Institution.objects.create(name='机构知识构建')
+    workspace = Workspace.objects.create(
+        institution=institution, service_ends_on=timezone.localdate(), max_students=10,
+    )
+    membership = WorkspaceMembership.objects.create(user=user, workspace=workspace)
+    points = []
+    for index in range(3):
+        point = KnowledgePoint.objects.create(
+            institution=institution, subject='金融431', code=f'W{index}', name=f'机构知识点{index}',
+        )
+        Question.objects.create(
+            institution=institution, knowledge_point=point, text=f'机构题目{index}',
+            options=['正确', '错误'], correct_answer='A',
+        )
+        points.append(point)
+    KnowledgeEdge.objects.create(
+        institution=institution, source=points[0], target=points[1], edge_type='prerequisite',
+    )
+    # Workspace content must resolve independently of the platform content setting.
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = None
+    initial = client.post('/intake/', {'subject': '431'}, format='json')
+    assert initial.status_code == 200
+    assert initial.data['catalog_match']['kp_count'] == 3
+    assert initial.data['catalog_match']['existing_edges'] == [
+        {'source': points[0].name, 'target': points[1].name, 'edge_type': 'prerequisite'},
+    ]
+    questions = initial.data['diagnostic_questions']
+    assert {question['kp_id'] for question in questions} == {point.pk for point in points}
+    payload = dict(subject='431', diagnostic_questions=questions,
+                   diagnostic_answers={question['id']: 'A' for question in questions})
+    graded = client.post('/intake/', payload, format='json')
+    assert graded.status_code == 200
+    assert graded.data['requirements_draft']['baseline_summary']['correct_count'] == 3
+    assert UserKnowledgeState.objects.filter(user=user, knowledge_point__in=points).count() == 3
+    assert not UserKnowledgeState.objects.filter(user=user, knowledge_point__in=intake_catalog[1]).exists()
+
+    membership.is_active = False
+    membership.save(update_fields=['is_active'])
+    unavailable = client.post('/intake/', {'subject': '431'}, format='json')
+    assert unavailable.status_code == 200
+    assert unavailable.data['catalog_match']['matched_subject'] is None
+    assert all(question['source'] == 'ai_probe' for question in unavailable.data['diagnostic_questions'])
+    assert client.post('/intake/', payload, format='json').status_code == 400
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls')
 def test_create_requirements_persist_and_return(client, monkeypatch):
     monkeypatch.setattr('knowledge_builder.views.build_knowledge_tree.delay', lambda *_: None)
     requirements = dict(learning_goal='431应试', scope_inclusions=['公司理财'], baseline_summary={'accuracy': .75}, suggested_entry_topics=['CAPM'])

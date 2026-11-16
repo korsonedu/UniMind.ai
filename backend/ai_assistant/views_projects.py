@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.shortcuts import get_object_or_404
 from rest_framework import generics, serializers
 from rest_framework.exceptions import NotFound, PermissionDenied
 from users.views import IsMember
@@ -131,3 +132,13 @@ def add_project_context(user, conversation_id, history):
         return history
     from .services.project_learning import project_context
     return [{'role': 'user', 'content': project_context(user, conversation_id)}] + history
+
+
+def learning_activity_metadata(request, conversation_id):
+    """Resolve a viewed object through its owned project before adding model context."""
+    raw = request.data.get('learning_activity')
+    if not raw:
+        return {}
+    from .services.project_learning import activity_snapshot
+    conversation = get_object_or_404(Conversation, user=request.user, conversation_id=conversation_id, project__user=request.user)
+    return {'learning_activity': activity_snapshot(conversation.project, raw)}

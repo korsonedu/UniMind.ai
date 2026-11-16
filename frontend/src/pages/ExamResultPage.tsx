@@ -1,3 +1,4 @@
+import { getLocale, t, useLocale } from '@/i18n';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -74,6 +75,7 @@ const statusText: Record<ExamStatus, string> = {
 const isActive = (status: ExamStatus) => status === 'pending' || status === 'grading';
 
 export const ExamResultPage = () => {
+  useLocale();
   const { examId: rawExamId } = useParams<{ examId: string }>();
   const examId = Number(rawExamId);
   const navigate = useNavigate();
@@ -118,16 +120,16 @@ export const ExamResultPage = () => {
   }, [data, filter]);
 
   if (!Number.isFinite(examId)) {
-    return <PageWrapper title="练习结果">
-      {returnToProject && <Link className="text-sm underline" to={returnToProject}>回到学习项目</Link>}<EmptyState title="练习不存在" description="链接缺少有效的练习编号。" /></PageWrapper>;
+    return <PageWrapper title={t('练习结果')}>
+      {returnToProject && <Link className="text-sm underline" to={returnToProject}>{t('回到学习项目')}</Link>}<EmptyState title={t('练习不存在')} description={t('链接缺少有效的练习编号。')} /></PageWrapper>;
   }
 
   if (detail.isLoading) {
     return (
-      <PageWrapper title="练习结果">
+      <PageWrapper title={t('练习结果')}>
         <div className="um-exam-result-state" role="status">
           <CircleNotch size={22} className="um-exam-result-spin" />
-          正在读取练习结果…
+          {t('正在读取练习结果…')}
         </div>
       </PageWrapper>
     );
@@ -135,13 +137,13 @@ export const ExamResultPage = () => {
 
   if (detail.isError || !data) {
     return (
-      <PageWrapper title="练习结果">
+      <PageWrapper title={t('练习结果')}>
         <EmptyState
-          title="结果暂时无法打开"
-          description="请返回习题训练，稍后从最近练习重新进入。"
+          title={t('结果暂时无法打开')}
+          description={t('请返回习题训练，稍后从最近练习重新进入。')}
         />
         <div className="um-exam-result-state-actions">
-          <Button onClick={() => navigate('/tests')}>返回习题训练</Button>
+          <Button onClick={() => navigate('/tests')}>{t('返回习题训练')}</Button>
         </div>
       </PageWrapper>
     );
@@ -163,9 +165,9 @@ export const ExamResultPage = () => {
         failed: 0,
       });
       await queryClient.invalidateQueries({ queryKey: queryKeys.exams.detail(examId) });
-      toast.success('已提交重试');
+      toast.success(t('已提交重试'));
     } catch (error) {
-      toast.error(formatApiErrorToast(error, '提交重试失败'));
+      toast.error(formatApiErrorToast(error, t('提交重试失败')));
     } finally {
       setRetrying(false);
     }
@@ -181,31 +183,31 @@ export const ExamResultPage = () => {
         else next.delete(item.question_id as number);
         return next;
       });
-      toast.success(response.data?.is_mastered ? '已标记掌握' : '已取消掌握');
+      toast.success(response.data?.is_mastered ? t('已标记掌握') : t('已取消掌握'));
     } catch (error) {
-      toast.error(formatApiErrorToast(error, '操作失败'));
+      toast.error(formatApiErrorToast(error, t('操作失败')));
     }
   };
 
   return (
-    <PageWrapper title="练习结果">
-      {returnToProject && <Link className="text-sm underline" to={returnToProject}>回到学习项目</Link>}
+    <PageWrapper title={t('练习结果')}>
+      {returnToProject && <Link className="text-sm underline" to={returnToProject}>{t('回到学习项目')}</Link>}
       <div className="um-exam-result">
         <header className="um-exam-result-header">
           <button type="button" className="um-exam-result-back" onClick={() => navigate('/tests')}>
-            <ArrowLeft size={16} /> 返回习题训练
+            <ArrowLeft size={16} /> {t('返回习题训练')}
           </button>
           <div className="um-exam-result-heading">
             <div>
-              <p className="um-exam-result-kicker">练习结果</p>
-              <h1>这次练得怎么样</h1>
+              <p className="um-exam-result-kicker">{t('练习结果')}</p>
+              <h1>{t('这次练得怎么样')}</h1>
             </div>
             <Badge variant={data.status === 'completed' ? 'apple-green' : data.status === 'failed' ? 'destructive' : 'secondary'}>
-              {statusText[data.status]}
+              {t(statusText[data.status])}
             </Badge>
           </div>
           <p className="um-exam-result-time">
-            {data.created_at ? new Date(data.created_at).toLocaleString('zh-CN', { hour12: false }) : ''}
+            {data.created_at ? new Date(data.created_at).toLocaleString(getLocale(), { hour12: false }) : ''}
           </p>
         </header>
 
@@ -213,8 +215,8 @@ export const ExamResultPage = () => {
           <section className="um-exam-result-banner" role="status">
             <CircleNotch size={18} className="um-exam-result-spin" />
             <div>
-              <strong>正在批改，已完成 {data.graded_count}/{data.total_questions} 题</strong>
-              <span>可以先看已经完成的部分，其余题目会自动补上。</span>
+              <strong>{t('正在批改，已完成')} {data.graded_count}/{data.total_questions} {t('题')}</strong>
+              <span>{t('可以先看已经完成的部分，其余题目会自动补上。')}</span>
             </div>
           </section>
         )}
@@ -222,35 +224,35 @@ export const ExamResultPage = () => {
         {(data.status === 'partial' || data.status === 'failed') && (
           <section className="um-exam-result-banner is-warning" role="status">
             <div>
-              <strong>{data.failed_count} 题还没有完成批改</strong>
-              <span>重试后只批改未完成的题，已完成的结果不会重复计算。</span>
+              <strong>{data.failed_count} {t('题还没有完成批改')}</strong>
+              <span>{t('重试后只批改未完成的题，已完成的结果不会重复计算。')}</span>
             </div>
             {canRetry && (
               <Button size="sm" variant="outline" onClick={retry} disabled={retrying}>
-                <ArrowsClockwise size={14} /> {retrying ? '提交中…' : '重试未完成题'}
+                <ArrowsClockwise size={14} /> {retrying ? t('提交中…') : t('重试未完成题')}
               </Button>
             )}
           </section>
         )}
 
-        <section className="um-exam-result-summary" aria-label="本轮总结">
+        <section className="um-exam-result-summary" aria-label={t('本轮总结')}>
           <div className="um-exam-result-metrics">
-            <div><span>得分</span><strong>{data.max_score ? `${data.total_score} / ${data.max_score}` : '—'}</strong></div>
-            <div><span>{modelEvaluation ? '模型参考得分率' : '正确率'}</span><strong>{data.max_score ? `${data.correct_rate}%` : '—'}</strong></div>
-            <div><span>已批改</span><strong>{data.graded_count} / {data.total_questions}</strong></div>
-            <div><span>未完成</span><strong>{data.failed_count + (data.pending_count ?? 0)}</strong></div>
+            <div><span>{t('得分')}</span><strong>{data.max_score ? `${data.total_score} / ${data.max_score}` : '—'}</strong></div>
+            <div><span>{modelEvaluation ? t('模型参考得分率') : t('正确率')}</span><strong>{data.max_score ? `${data.correct_rate}%` : '—'}</strong></div>
+            <div><span>{t('已批改')}</span><strong>{data.graded_count} / {data.total_questions}</strong></div>
+            <div><span>{t('未完成')}</span><strong>{data.failed_count + (data.pending_count ?? 0)}</strong></div>
           </div>
           <div className="um-exam-result-progress" aria-hidden="true">
             <span style={{ width: `${data.total_questions ? Math.min(100, (data.graded_count / data.total_questions) * 100) : 0}%` }} />
           </div>
-          {modelEvaluation && <p className="text-sm text-muted-foreground">本页包含模型依据标准的参考评价，尚未独立复核，不代表已验证正确或已经掌握。</p>}
-          <p className="um-exam-result-summary-text">{data.summary_text || '完成批改后，这里会显示本轮总结。'}</p>
+          {modelEvaluation && <p className="text-sm text-muted-foreground">{t('本页包含模型依据标准的参考评价，尚未独立复核，不代表已验证正确或已经掌握。')}</p>}
+          <p className="um-exam-result-summary-text">{data.summary_text || t('完成批改后，这里会显示本轮总结。')}</p>
           {data.kp_breakdown.length > 0 && (
             <div className="um-exam-result-kps">
-              <h2>{modelEvaluation ? '按知识点的参考评价' : '知识点表现'}</h2>
+              <h2>{modelEvaluation ? t('按知识点的参考评价') : t('知识点表现')}</h2>
               {data.kp_breakdown.map(item => (
                 <div className="um-exam-result-kp" key={item.kp_id}>
-                  <span>{item.kp_name || '未命名知识点'}</span>
+                  <span>{item.kp_name || t('未命名知识点')}</span>
                   <span className="um-exam-result-kp-track" aria-hidden="true">
                     <i style={{ width: `${Math.max(0, Math.min(100, item.correct_rate))}%` }} />
                   </span>
@@ -261,28 +263,28 @@ export const ExamResultPage = () => {
           )}
         </section>
 
-        <section className="um-exam-result-review" aria-label="逐题复盘">
+        <section className="um-exam-result-review" aria-label={t('逐题复盘')}>
           <div className="um-exam-result-toolbar">
-            <div className="um-exam-result-filters" role="group" aria-label="筛选题目">
-              <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>全部 {data.results.length}</button>
-              <button type="button" aria-pressed={filter === 'wrong'} onClick={() => setFilter('wrong')}>{modelEvaluation ? '需再核对' : '只看错题'} {counts.wrong}</button>
-              <button type="button" aria-pressed={filter === 'pending'} onClick={() => setFilter('pending')}>未完成 {counts.pending}</button>
+            <div className="um-exam-result-filters" role="group" aria-label={t('筛选题目')}>
+              <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>{t('全部')} {data.results.length}</button>
+              <button type="button" aria-pressed={filter === 'wrong'} onClick={() => setFilter('wrong')}>{modelEvaluation ? t('需再核对') : t('只看错题')} {counts.wrong}</button>
+              <button type="button" aria-pressed={filter === 'pending'} onClick={() => setFilter('pending')}>{t('未完成')} {counts.pending}</button>
             </div>
-            <span className="um-exam-result-count">本轮共 {data.total_questions} 题</span>
+            <span className="um-exam-result-count">{t('本轮共')} {data.total_questions} {t('题')}</span>
           </div>
 
           {visibleResults.length === 0 ? (
             <EmptyState
-              title={filter === 'wrong' ? (modelEvaluation ? '没有标记需再核对的项目' : '本轮没有错题') : filter === 'pending' ? '所有题目都已批改' : '还没有逐题结果'}
-              description={filter === 'pending' ? '完成批改后，这里会显示每一题的解析。' : undefined}
+              title={filter === 'wrong' ? (modelEvaluation ? t('没有标记需再核对的项目') : t('本轮没有错题')) : filter === 'pending' ? t('所有题目都已批改') : t('还没有逐题结果')}
+              description={filter === 'pending' ? t('完成批改后，这里会显示每一题的解析。') : undefined}
             />
           ) : (
             <div className="um-exam-result-list">
               {visibleResults.map(item => {
                 const isOpen = !!expanded[item.position];
                 const itemStatus = item.status === 'graded'
-                  ? item.label_source === 'model_rubric_grade' ? '模型参考评价' : item.is_correct ? '正确' : '错误'
-                  : item.status === 'failed' ? '批改失败' : '批改中';
+                  ? item.label_source === 'model_rubric_grade' ? t('模型参考评价') : item.is_correct ? t('正确') : t('错误')
+                  : item.status === 'failed' ? t('批改失败') : t('批改中');
                 return (
                   <article
                     className={`um-exam-result-item is-${item.status}${item.status === 'graded' && !item.is_correct ? ' is-wrong' : ''}`}
@@ -296,8 +298,8 @@ export const ExamResultPage = () => {
                     >
                       <span className="um-exam-result-item-index">{String(item.position).padStart(2, '0')}</span>
                       <span className="um-exam-result-item-title">
-                        <strong>{item.kp_name || '题目'}</strong>
-                        <span>{item.q_type === 'objective' ? '客观题' : (item.subjective_type || '主观题')}</span>
+                        <strong>{item.kp_name || t('题目')}</strong>
+                        <span>{item.q_type === 'objective' ? t('客观题') : (item.subjective_type || t('主观题'))}</span>
                       </span>
                       <span className={`um-exam-result-item-status is-${item.status}`}>
                         {item.status === 'graded' && item.is_correct && <CheckCircle size={14} weight="fill" />}
@@ -313,7 +315,7 @@ export const ExamResultPage = () => {
                       <div className="um-exam-result-item-body">
                         <div className="um-exam-result-question">
                           <MarkdownContent content={processMathContent(item.question_text)} />
-                          {item.label_source === 'model_rubric_grade' && <p className="text-sm text-muted-foreground">模型依据冻结标准的参考评价，尚未独立复核。{item.response_type === 'code' && '代码仅作文本审阅，未经执行。'}</p>}
+                          {item.label_source === 'model_rubric_grade' && <p className="text-sm text-muted-foreground">{t('模型依据冻结标准的参考评价，尚未独立复核。')}{item.response_type === 'code' && t('代码仅作文本审阅，未经执行。')}</p>}
                         </div>
                         {item.options.length > 0 && (
                           <ol className="um-exam-result-options">
@@ -328,29 +330,29 @@ export const ExamResultPage = () => {
                         {item.status === 'graded' && (
                           <>
                             <div className="um-exam-result-answer">
-                              <span>你的答案</span>
-                              <MarkdownContent content={processMathContent(item.user_answer || '（未作答）')} />
+                              <span>{t('你的答案')}</span>
+                              <MarkdownContent content={processMathContent(item.user_answer || t('（未作答）'))} />
                             </div>
                             <div className="um-exam-result-answer is-reference">
-                              <span>参考答案</span>
-                              <MarkdownContent content={processMathContent(item.correct_answer || '暂无')} />
+                              <span>{t('参考答案')}</span>
+                              <MarkdownContent content={processMathContent(item.correct_answer || t('暂无'))} />
                             </div>
                             {item.feedback && (
                               <div className="um-exam-result-answer">
-                                <span>批改反馈</span>
+                                <span>{t('批改反馈')}</span>
                                 <MarkdownContent content={processMathContent(item.feedback)} />
                               </div>
                             )}
                             {item.analysis && (
                               <div className="um-exam-result-answer is-analysis">
-                                <span>解析</span>
+                                <span>{t('解析')}</span>
                                 <MarkdownContent content={processMathContent(item.analysis)} />
                               </div>
                             )}
                             {(item.error_metadata?.reasoning || item.error_metadata?.suggested_focus) && (
                               <div className="um-exam-result-error">
-                                {item.error_metadata.reasoning && <p><strong>错因：</strong>{item.error_metadata.reasoning}</p>}
-                                {item.error_metadata.suggested_focus && <p><strong>建议复习：</strong>{item.error_metadata.suggested_focus}</p>}
+                                {item.error_metadata.reasoning && <p><strong>{t('错因：')}</strong>{item.error_metadata.reasoning}</p>}
+                                {item.error_metadata.suggested_focus && <p><strong>{t('建议复习：')}</strong>{item.error_metadata.suggested_focus}</p>}
                               </div>
                             )}
                             {item.question_id && (
@@ -359,15 +361,15 @@ export const ExamResultPage = () => {
                                 variant="outline"
                                 onClick={() => toggleMastered(item)}
                               >
-                                {mastered.has(item.question_id) ? '已标记掌握' : '标记掌握'}
+                                {mastered.has(item.question_id) ? t('已标记掌握') : t('标记掌握')}
                               </Button>
                             )}
                           </>
                         )}
-                        {item.status === 'pending' && <p className="um-exam-result-pending">这题还在批改中，完成后会自动显示。</p>}
+                        {item.status === 'pending' && <p className="um-exam-result-pending">{t('这题还在批改中，完成后会自动显示。')}</p>}
                         {item.status === 'failed' && (
                           <p className="um-exam-result-pending">
-                            {item.error_metadata?.error || '这题批改未完成，可以回到上方重试。'}
+                            {item.error_metadata?.error || t('这题批改未完成，可以回到上方重试。')}
                           </p>
                         )}
                       </div>

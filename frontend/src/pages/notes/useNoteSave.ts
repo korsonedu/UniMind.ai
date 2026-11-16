@@ -1,10 +1,13 @@
+import { t, useLocale } from '@/i18n';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { noteDraft, notesApi, type Note, type NoteDraft } from '@/lib/notes';
 import { flushOfflineOutbox, offlineCacheSupported, queueNoteSave, removeQueuedNote } from '@/lib/offlineData';
+import { isOfflineDemo, isNativeOffline } from '@/lib/offlineSession';
 import { useAuthStore } from '@/store/useAuthStore';
 
 export function useNoteSave(onSaved: (note: Note) => void) {
+  useLocale();
   const [documentKey, setDocumentKey] = useState(0);
   const [note, setNote] = useState<Note | null>(null);
   const [saving, setSaving] = useState(false);
@@ -43,7 +46,7 @@ export function useNoteSave(onSaved: (note: Note) => void) {
     const work = async () => {
       if (conflict.current) throw new Error('版本冲突，请先保留本地内容，再重新加载。');
       const userId = useAuthStore.getState().user?.id;
-      if (userId && navigator.onLine && offlineCacheSupported()) {
+      if (userId && navigator.onLine && !isNativeOffline() && !isOfflineDemo() && offlineCacheSupported()) {
         const result = await flushOfflineOutbox(userId);
         if (useAuthStore.getState().user?.id !== userId) return;
         result.notes.forEach(syncSaved);
@@ -64,7 +67,7 @@ export function useNoteSave(onSaved: (note: Note) => void) {
       while (current.current && !current.current.deleted_at && JSON.stringify(noteDraft(current.current)) !== saved.current) {
         const snapshot = current.current;
         const signature = JSON.stringify(noteDraft(snapshot));
-        if (!navigator.onLine && await queueLocally(snapshot, signature)) return;
+        if ((!navigator.onLine || isNativeOffline()) && !isOfflineDemo() && await queueLocally(snapshot, signature)) return;
         setStatus('保存中…');
         try {
           const result = await notesApi.save(snapshot);
@@ -100,5 +103,5 @@ export function useNoteSave(onSaved: (note: Note) => void) {
     window.addEventListener('beforeunload', protect);
     return () => window.removeEventListener('beforeunload', protect);
   }, []);
-  return { note, documentKey, dirty, status, error, load, change, flush, syncSaved };
+  return { note, documentKey, dirty, status, error: t(error), load, change, flush, syncSaved };
 }

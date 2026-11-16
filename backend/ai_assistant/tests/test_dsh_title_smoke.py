@@ -1,5 +1,6 @@
 """Title generation through the server DSH structured task."""
 import json
+from pathlib import Path
 import sys
 import uuid
 from unittest.mock import patch
@@ -63,4 +64,4 @@ def test_title_task_uses_fast_single_request(settings, tmp_path, monkeypatch):
         payload = json.loads(process.communicate.call_args.args[0])
         policy = payload['context']['model_policy']
         assert (policy['tier'], policy['model'], policy['max_requests'], policy['max_tokens']) == ('fast', 'title-fast-model', 1, 64)
-        assert '标题' in payload['context']['task_instruction']
+        assert payload['context']['task_instruction'] == (Path(settings.BASE_DIR) / 'prompts/ai_assistant/title_task.txt').read_text()

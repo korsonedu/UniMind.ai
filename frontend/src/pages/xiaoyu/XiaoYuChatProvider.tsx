@@ -1,3 +1,4 @@
+import { getLocale, t, useLocale } from '@/i18n';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -16,11 +17,13 @@ import { XiaoYuChatContext, findAssistantBot, type PageChatHooks } from './xiaoY
  * SSE 流、会话快照和输入草稿仍由 useAgentConversation 持有。
  */
 export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
+  useLocale();
   const location = useLocation();
   const navigate = useNavigate();
   const [openingProject, setOpeningProject] = useState(false);
   const openSequence = useRef(0);
   const restored = useRef<string>('');
+  const recoveryProject = useRef<{ userId: number; projectId: number; conversationId: string } | null>(null);
   const [activated, setActivated] = useState(false);
   const pageHooksRef = useRef<PageChatHooks>({});
   const viewedRef = useRef<string | null>(null);
@@ -46,7 +49,7 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
     onStepDoneEffect: step => pageHooksRef.current.onStepDoneEffect?.(step),
     onAllVisuals: visuals => pageHooksRef.current.onAllVisuals?.(visuals),
     onStepQuestions: questions => pageHooksRef.current.onStepQuestions?.(questions),
-    resetMessage: '已开始新对话',
+    resetMessage: t('已开始新对话'),
   });
   const { conversationId, setBot, setInitialized, setSessions, groupIntoSessions } = chat;
   const userId = useAuthStore(state => state.user?.id);
@@ -68,9 +71,13 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
         const bots: Bot[] = Array.isArray(bRes.data) ? bRes.data : (bRes.data?.results || []);
         const found = findAssistantBot(bots);
         if (!found) {
-          toast.error('未找到小宇 bot');
+          toast.error(t('未找到小宇 bot'));
           return;
         }
+        const saved = readRecovery(recoveryScope(userId, found.id));
+        const lastId = saved.lastConversationId;
+        const lastProject = lastId && saved.conversations[lastId]?.projectId;
+        recoveryProject.current = lastId && lastProject ? { userId, projectId: lastProject, conversationId: lastId } : null;
         setBot(found);
         const hRes = await api.get('/ai/history/', { params: { bot_id: found.id } });
         if (cancelled) return;
@@ -83,7 +90,7 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
           setSessions(groupIntoSessions(allMsgs));
         }
       } catch {
-        if (!cancelled) toast.error('小宇加载失败');
+        if (!cancelled) toast.error(t('小宇加载失败'));
       } finally {
         if (initializingUserIdRef.current === userId) initializingUserIdRef.current = null;
         if (!cancelled) {
@@ -116,13 +123,14 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
 
   const chatRef = useRef(chat);
   useLayoutEffect(() => { chatRef.current = chat; }, [chat]);
-  const openProject = useCallback(async (id: number, explicitConversation?: string, draft?: string) => {
+  const openProject = useCallback(async (id: number, explicitConversation?: string, draft?: string, recoveryInputRevision?: number) => {
     if (!userId || !Number.isSafeInteger(id) || id < 1) return;
+    const language = getLocale();
     const sequence = ++openSequence.current;
     const selectionVersion = chatRef.current.getSelectionVersion();
     setOpeningProject(true);
     try {
-      const { data } = await api.get<ProjectLearning>(`/ai/projects/${id}/learning/`);
+      const { data } = await api.get<ProjectLearning>(`/ai/projects/${id}/learning/`, { headers: { 'Accept-Language': language }, params: explicitConversation ? { conversation_id: explicitConversation } : undefined });
       const current = chatRef.current;
       if (!current.bot || sequence !== openSequence.current || chatRef.current.getSelectionVersion() !== selectionVersion || useAuthStore.getState().user?.id !== userId) return;
       const saved = readRecovery(recoveryScope(userId, current.bot.id));
@@ -132,34 +140,45 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
       const selectedId = explicitConversation || draftEntry?.[0] || data.conversation_id;
       const response = await api.get<Message[]>('/ai/history/', { params: { bot_id: current.bot.id, ...(selectedId ? { conversation_id: selectedId } : {}) } });
       if (sequence !== openSequence.current || chatRef.current.getSelectionVersion() !== selectionVersion || useAuthStore.getState().user?.id !== userId) return;
+      if (recoveryInputRevision !== undefined && chatRef.current.getInputRevision() !== recoveryInputRevision) return;
       const messages = restoreVisualSteps(response.data.filter(m => m.content !== '[Thinking...]').map(m => ({ ...m, visible: true })));
       const sessions = current.groupIntoSessions(messages);
       const candidates = sessions.filter(session => session.projectId === id);
       const target = selectedId ? candidates.find(session => session.conversationId === selectedId) : candidates.at(-1);
-      if (explicitConversation && !target) throw new Error('这段对话不属于当前项目，或已删除。');
+      if (explicitConversation && !target && messages.length) throw new Error(t('这段对话不属于当前项目，或已删除。'));
       if (target) {
         current.setSessions(previous => [...previous.filter(item => item.conversationId !== target.conversationId), target]);
         current.handleLoadSession(target, false, true);
       } else {
         current.handleReset(false);
-        if (draftEntry && !messages.length) current.setConversationId(draftEntry[0]);
+        if (explicitConversation && !messages.length) current.setConversationId(explicitConversation);
+        else if (draftEntry && !messages.length) current.setConversationId(draftEntry[0]);
         current.setProjectId(id);
         if (draftEntry?.[1].draft && !messages.length) current.setInput(draftEntry[1].draft);
         if (draft) current.setInput(draft);
       }
-      queryClient.setQueryData(learningKey(userId, id), data);
+      queryClient.setQueryData(learningKey(userId, id, language), data);
     } catch (error) {
       if (sequence === openSequence.current && chatRef.current.getSelectionVersion() === selectionVersion && useAuthStore.getState().user?.id === userId) {
         const status = (error as { response?: { status?: number } })?.response?.status;
         if (status === 404) {
           if (chatRef.current.projectId === id) chatRef.current.handleReset(false);
         }
-        toast.error(status === 404 ? '这个项目或对话已删除，无法恢复旧安排。' : error instanceof Error ? error.message : '项目暂时无法打开，请重试。');
+        toast.error(status === 404 ? t('这个项目或对话已删除，无法恢复旧安排。') : error instanceof Error ? error.message : t('项目暂时无法打开，请重试。'));
       }
     } finally {
       if (sequence === openSequence.current) setOpeningProject(false);
     }
   }, [userId]);
+
+  useEffect(() => {
+    const target = recoveryProject.current;
+    if (!chat.initialized || location.pathname !== '/xiaoyu' || !target || target.userId !== userId) return;
+    recoveryProject.current = null;
+    const params = new URLSearchParams(location.search);
+    if (params.has('project') || params.has('new') || chat.projectId || chat.input.trim()) return;
+    void openProject(target.projectId, target.conversationId, undefined, chatRef.current.getInputRevision());
+  }, [chat.initialized, chat.projectId, chat.input, userId, location.pathname, location.search, openProject]);
 
   useEffect(() => {
     if (!userId || !chat.initialized) return;
@@ -172,11 +191,13 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
     queueMicrotask(() => {
       if (cancelled) return;
       restored.current = key;
-      void openProject(Number(explicit), params.get('conversation') || undefined);
-      params.delete('project');
-      params.delete('conversation');
-      // Keep course context in its address for the course assistant.
-      if (location.pathname === '/xiaoyu') navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      void openProject(Number(explicit), params.get('conversation') || undefined).then(() => {
+        if (cancelled) return;
+        params.delete('project');
+        params.delete('conversation');
+        // Keep deep-link selections until the target project has received them.
+        if (location.pathname === '/xiaoyu') navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      });
     });
     return () => { cancelled = true; };
   }, [userId, chat.initialized, location.key, location.pathname, location.search, navigate, openProject]);
@@ -194,5 +215,6 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
 
 /** 始终挂载，用户变化只在 Provider 内重置，不重挂路由子树。 */
 export function XiaoYuChatHost() {
+  useLocale();
   return <XiaoYuChatProvider><Outlet /></XiaoYuChatProvider>;
 }

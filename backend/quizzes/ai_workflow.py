@@ -52,7 +52,7 @@ def _calc_elo_change(user_elo: int, score_ratio: float, difficulty: float) -> in
     return int(32 * (score_ratio - expected_score))
 
 
-def _grade_answer(question: Question, user_answer: Any, *, objective_only=False) -> Dict[str, Any]:
+def _grade_answer(question: Question, user_answer: Any, *, objective_only=False, language='zh-CN') -> Dict[str, Any]:
     max_score = question.get_max_score()
     correct_answer = question.correct_answer
     if question.q_type == 'objective':
@@ -61,10 +61,11 @@ def _grade_answer(question: Question, user_answer: Any, *, objective_only=False)
         correct_answer = AIService.normalize_objective_answer(correct_answer, options)
     if objective_only and question.q_type == 'objective':
         correct = bool(user_answer and user_answer == correct_answer)
-        grade_data = {'score': max_score if correct else 0, 'feedback': '作答与标准答案一致。' if correct else '作答与标准答案不一致。',
+        grade_data = {'score': max_score if correct else 0, 'feedback': ('Your answer matches the reference answer.' if correct else 'Your answer does not match the reference answer.') if language == 'en' else ('作答与标准答案一致。' if correct else '作答与标准答案不一致。'),
                       'analysis': question.ai_answer or '', 'memorix_rating': 4 if correct else 1}
     else:
         grade_data = AIService.grade_question(
+            language=language,
             question_text=question.text,
             user_answer=user_answer,
             correct_answer=correct_answer,
@@ -227,6 +228,10 @@ def _create_exam_notification(exam_id: int) -> None:
     else:
         title = '练习批改未完成'
         content = '批改服务暂不可用，请稍后重试。'
+    if exam.ui_language == 'en':
+        title = {'completed': 'Practice grading complete', 'partial': 'Practice partly graded'}.get(exam.status, 'Practice grading incomplete')
+        content = (f'Score: {exam.total_score}/{exam.max_score}. Open your question review.' if exam.status == 'completed'
+                   else f'Graded {exam.graded_count}/{exam.total_questions} questions. Open the results to retry unfinished questions.')
     Notification.objects.create(
         recipient=exam.user,
         ntype='practice_result',
@@ -255,13 +260,13 @@ def _finalize_exam(user_id: int, exam_id: int) -> None:
         failed = counts['failed'] or 0
         if not graded_items and failed:
             exam.status = 'failed'
-            exam.summary = '批改未完成，请稍后重试。'
+            exam.summary = 'Grading did not finish. Try again later.' if exam.ui_language == 'en' else '批改未完成，请稍后重试。'
         elif not graded_items and not failed:
             exam.status = 'failed'
-            exam.summary = '本次练习没有可批改的题目。'
+            exam.summary = 'This practice has no gradable questions.' if exam.ui_language == 'en' else '本次练习没有可批改的题目。'
         elif failed:
             exam.status = 'partial'
-            exam.summary = f'部分题目未完成，已完成 {len(graded_items)} / {exam.total_questions or len(graded_items) + failed} 题。'
+            exam.summary = f'Grading incomplete: {len(graded_items)}/{exam.total_questions} questions completed.' if exam.ui_language == 'en' else f'部分题目未完成，已完成 {len(graded_items)} / {exam.total_questions or len(graded_items) + failed} 题。'
         else:
             exam.status = 'completed'
             exam.summary = ''
@@ -360,9 +365,9 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
                 if learning_task:
                     validate_task_question(learning_task, question)
             if learning_task and question.q_type == 'objective':
-                graded = _grade_answer(question, item.user_answer or '', objective_only=True)
+                graded = _grade_answer(question, item.user_answer or '', objective_only=True, language=exam.ui_language)
             else:
-                graded = _grade_answer(question, item.user_answer or '')
+                graded = _grade_answer(question, item.user_answer or '', language=exam.ui_language)
         except Exception as exc:
             logger.exception('Exam item grading failed: exam_id=%s item_id=%s', exam_id, item.pk)
             _mark_item_failed(item.pk, str(exc))

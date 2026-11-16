@@ -1,0 +1,74 @@
+.um-auth-shell { --auth-bg: #f5f4f0; --auth-surface: #fdfdfb; --auth-ink: #292b28; --auth-muted: #777b72; --auth-line: #e3e5dc; --auth-field: #f5f6f1; --auth-accent: #404c39; position: relative; isolation: isolate; overflow: hidden; min-height: 100dvh; display: flex; flex-direction: column; color: var(--auth-ink); background: radial-gradient(ellipse at 12% 18%, color-mix(in srgb, var(--auth-accent) 9%, transparent), transparent 55%), radial-gradient(ellipse at 90% 90%, #b9a48214, transparent 50%), var(--auth-bg); }
+.um-auth-topbar { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; padding: 30px 44px; }
+.um-auth-wordmark { font-size: 22px; font-weight: 650; letter-spacing: -.055em; }
+.um-auth-wordmark span { color: var(--auth-muted); font-weight: 400; }
+.um-auth-home { display: flex; align-items: center; gap: 8px; color: var(--auth-muted); font-size: 13px; }
+.um-auth-home:hover { color: var(--auth-ink); }
+.um-auth-main { flex: 1; display: grid; place-items: center; padding: 20px 24px 40px; }
+.um-auth-panel { width: min(100%, 448px); padding: 36px 40px 32px; border: 1px solid var(--auth-line); border-radius: 24px; background: var(--auth-surface); box-shadow: 0 16px 56px -32px #414b3433; animation: um-auth-enter .3s ease-out; }
+.um-auth-mark { display: flex; justify-content: center; margin-bottom: 18px; }
+.um-auth-mark img { width: 56px; height: 56px; border-radius: 15px; }
+.um-auth-panel h1 { margin: 0; text-align: center; font-size: 27px; line-height: 1.4; font-weight: 600; letter-spacing: -.04em; color: var(--auth-ink); }
+.um-auth-subtitle { margin: 12px 0 0; text-align: center; font-size: 14px; line-height: 1.6; color: var(--auth-muted); }
+.um-auth-fields { margin-top: 30px; }
+.um-auth-shell .um-auth-fields label { color: var(--auth-ink); font-size: 13px; font-weight: 500; }
+.um-auth-shell .um-auth-fields .um-focus-field { min-width: 0; height: 48px; border: 1px solid var(--auth-line); border-radius: 10px; background: var(--auth-field); padding-inline: 14px; color: var(--auth-ink); box-shadow: none; font-size: 15px; transition: border-color .18s, box-shadow .18s; }
+.um-auth-shell .um-auth-fields .um-focus-field::placeholder { color: var(--auth-muted); opacity: .7; }
+.um-auth-shell .um-auth-fields .um-focus-field:focus-visible { outline: none; border-color: var(--auth-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--auth-accent) 12%, transparent); }
+.um-auth-shell .um-auth-fields [role='checkbox'] { border-color: var(--auth-muted); border-radius: 4px; }
+.um-auth-shell .um-auth-fields [role='checkbox'][data-state='checked'] { border-color: var(--auth-accent); background: var(--auth-accent); color: #fff; }
+.um-auth-tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--auth-line); margin-bottom: 26px; }
+.um-auth-tabs button { position: relative; padding: 0 4px 14px; color: var(--auth-muted); font-size: 13px; transition: color .18s; }
+.um-auth-tabs button[aria-pressed='true'] { color: var(--auth-ink); font-weight: 600; }
+.um-auth-tabs button[aria-pressed='true']::after { content: ''; position: absolute; bottom: -1px; height: 2px; inset-inline: 20px; background: var(--auth-accent); border-radius: 2px; }
+.um-auth-tabs button:hover { color: var(--auth-ink); }
+.um-auth-shell .um-auth-submit { width: 100%; height: 48px; margin-top: 8px; border: 1px solid transparent; border-radius: 10px; background: var(--auth-accent); color: #fff; font-size: 14px; font-weight: 550; }
+.um-auth-shell .um-auth-submit:hover:not(:disabled) { background: color-mix(in srgb, var(--auth-accent) 88%, #000); }
+.um-auth-shell .um-auth-code-button { height: 48px; flex-shrink: 0; padding-inline: 14px; border: 1px solid var(--auth-line); border-radius: 10px; background: transparent; color: var(--auth-ink); font-size: 13px; }
+.um-auth-shell .um-auth-code-button:hover:not(:disabled) { background: var(--auth-field); }
+.um-auth-footer { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--auth-line); text-align: center; }
+.um-auth-shell .um-auth-footer p { font-size: 13px; color: var(--auth-muted); }
+.um-auth-shell .um-auth-footer a { color: var(--auth-ink); font-weight: 550; margin-left: 6px; }
+.um-auth-legal { display: flex; justify-content: center; gap: 15px; padding: 0 24px 26px; font-size: 12px; color: var(--auth-muted); }
+.um-auth-legal a:hover, .um-auth-footer a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.um-auth-shell :is(a, button):focus-visible { outline: 2px solid var(--auth-accent); outline-offset: 4px; }
+.um-auth-native .um-auth-topbar { padding-top: 48px; -webkit-app-region: drag; }
+.um-auth-native .um-auth-wordmark { -webkit-app-region: no-drag; }
+.dark .um-auth-shell { --auth-bg: #1c1e1b; --auth-surface: #252823; --auth-ink: #e9ece4; --auth-muted: #a0a69b; --auth-line: #3c4137; --auth-field: #2c3029; --auth-accent: #657959; }
+@keyframes um-auth-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 560px) {
+  .um-auth-topbar { padding: 24px; }
+  .um-auth-main { padding: 16px 20px 32px; }
+  .um-auth-panel { padding: 30px 24px; border-radius: 20px; }
+  .um-auth-shell .um-auth-fields .um-focus-field { font-size: 16px; }
+}
+@media (max-width: 360px) { .um-auth-main { padding-inline: 12px; } .um-auth-panel { padding-inline: 18px; } }
+@media (prefers-reduced-motion: reduce) { .um-auth-panel { animation: none; } .um-auth-shell * { transition: none !important; } }
+
+.um-auth-shell::before, .um-auth-shell::after { content: ''; position: absolute; z-index: -1; pointer-events: none; width: 760px; height: 760px; border: 1px solid color-mix(in srgb, var(--auth-accent) 8%, transparent); border-radius: 50%; box-shadow: 0 0 0 64px color-mix(in srgb, var(--auth-accent) 2%, transparent), 0 0 0 128px color-mix(in srgb, var(--auth-accent) 2%, transparent); }
+.um-auth-shell::before { top: -460px; left: -300px; }
+.um-auth-shell::after { bottom: -500px; right: -320px; }
+.um-auth-account { display: flex; align-items: center; gap: 14px; padding: 18px; border: 1px solid var(--auth-line); border-radius: 12px; background: var(--auth-field); }
+.um-auth-avatar { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; border-radius: 12px; background: color-mix(in srgb, var(--auth-accent) 10%, var(--auth-surface)); color: var(--auth-ink); font-size: 19px; font-weight: 600; }
+.um-auth-account > div { min-width: 0; }
+.um-auth-account-name { color: var(--auth-ink); font-size: 15px; font-weight: 550; overflow-wrap: anywhere; }
+.um-auth-account-email { margin-top: 3px; color: var(--auth-muted); font-size: 13px; overflow-wrap: anywhere; }
+.um-auth-shell .um-auth-secondary { width: 100%; color: var(--auth-muted); border-radius: 10px; }
+.um-auth-shell .um-auth-secondary:hover { color: var(--auth-ink); background: var(--auth-field); }
+.um-auth-status { color: var(--auth-muted); font-size: 14px; text-align: center; }
+
+.um-auth-topbar button { -webkit-app-region: no-drag; }
+
+/* Keep the redesigned auth form usable inside edge-to-edge Android WebViews. */
+.um-auth-shell { min-height: var(--um-viewport-height, 100dvh); padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px)); padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); }
+.um-auth-server { display: grid; gap: 12px; margin-bottom: 24px; min-width: 0; }
+.um-auth-server > button { min-height: 44px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .um-auth-shell :is(button, a) { min-height: 44px; }
+  .um-auth-shell a { display: inline-flex; align-items: center; }
+  .um-auth-tabs button { min-height: 48px; }
+  .um-auth-shell .um-auth-fields [role='checkbox'] { position: relative; min-height: 20px; }
+  .um-auth-shell .um-auth-fields [role='checkbox']::after { content: ''; position: absolute; inset: -12px; }
+  .um-auth-main, .um-auth-panel, .um-auth-fields { min-width: 0; }
+  .um-auth-fields label { overflow-wrap: anywhere; }
+}

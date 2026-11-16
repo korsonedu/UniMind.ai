@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import React from 'react';
 import { Joyride, STATUS } from 'react-joyride';
 import type { Step, EventData } from 'react-joyride';
@@ -18,6 +19,7 @@ interface GuidedTourProps {
 const BRAND_BLUE = '#0071E3';
 
 const GuidedTour: React.FC<GuidedTourProps> = ({ steps, onDismiss }) => {
+  useLocale();
   const handleEvent = (data: EventData) => {
     if (data.status === STATUS.FINISHED || data.status === STATUS.SKIPPED) {
       onDismiss();
@@ -40,11 +42,11 @@ const GuidedTour: React.FC<GuidedTourProps> = ({ steps, onDismiss }) => {
       }}
       onEvent={handleEvent}
       locale={{
-        back: '上一步',
-        close: '关闭',
-        last: '完成',
-        next: '下一步',
-        nextWithProgress: '下一步 ({current}/{total})',
+        back: t('上一步'),
+        close: t('关闭'),
+        last: t('完成'),
+        next: t('下一步'),
+        nextWithProgress: t('下一步 ({current}/{total})'),
       }}
       styles={{
         tooltip: {

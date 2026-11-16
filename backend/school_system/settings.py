@@ -58,8 +58,10 @@ if IS_PROD and DEBUG:
 
 ALLOWED_HOSTS = _get_list(
     "ALLOWED_HOSTS",
-    default=["127.0.0.1", "localhost", "0.0.0.0", "testserver"] if DEBUG else [],
+    default=["127.0.0.1", "localhost", "0.0.0.0", "testserver"] if DEBUG and not IS_PROD else [],
 )
+if DEBUG and not IS_PROD and _get_bool("DEV_ALLOW_ALL_HOSTS"):
+    ALLOWED_HOSTS = ["*"]
 if IS_PROD and not ALLOWED_HOSTS:
     raise ImproperlyConfigured("ALLOWED_HOSTS must be configured in production.")
 
@@ -116,6 +118,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "school_system.middleware.SecurityHeadersMiddleware",
     "users.accounts.middleware.AccountSessionMiddleware",
+    "core.interface_language.InterfaceLanguageMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -192,15 +195,35 @@ STATICFILES_DIRS = [
 MEDIA_URL = "media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
-CORS_ALLOW_ALL_ORIGINS = _get_bool("CORS_ALLOW_ALL_ORIGINS", default=DEBUG)
+CAPACITOR_ALLOWED_ORIGINS = [
+    "http://localhost",
+    "https://localhost",
+    "capacitor://localhost",
+]
+CORS_ALLOW_ALL_ORIGINS = _get_bool("CORS_ALLOW_ALL_ORIGINS", default=DEBUG and not IS_PROD)
 if IS_PROD and CORS_ALLOW_ALL_ORIGINS:
     raise ImproperlyConfigured("CORS_ALLOW_ALL_ORIGINS must be False in production.")
+CORS_ALLOW_PRIVATE_NETWORK = _get_bool(
+    "CORS_ALLOW_PRIVATE_NETWORK",
+    default=DEBUG and not IS_PROD,
+)
+CORS_ALLOW_CAPACITOR_ORIGINS = _get_bool(
+    "CORS_ALLOW_CAPACITOR_ORIGINS", default=DEBUG and not IS_PROD,
+)
 CORS_ALLOWED_ORIGINS = _get_list("CORS_ALLOWED_ORIGINS")
+if CORS_ALLOW_CAPACITOR_ORIGINS:
+    CORS_ALLOWED_ORIGINS = list(dict.fromkeys([*CORS_ALLOWED_ORIGINS, *CAPACITOR_ALLOWED_ORIGINS]))
 CORS_ALLOWED_ORIGIN_REGEXES = _get_list("CORS_ALLOWED_ORIGIN_REGEXES")
 CORS_ALLOW_CREDENTIALS = _get_bool("CORS_ALLOW_CREDENTIALS", default=True)
 CSRF_TRUSTED_ORIGINS = _get_list("CSRF_TRUSTED_ORIGINS", [
     "http://localhost:5173", "http://127.0.0.1:5173",
-] if DEBUG else [])
+] if DEBUG and not IS_PROD else [])
+WS_ALLOWED_ORIGINS = _get_list(
+    "WS_ALLOWED_ORIGINS",
+    [*CAPACITOR_ALLOWED_ORIGINS, "http://localhost:5173", "http://127.0.0.1:5173"] if DEBUG and not IS_PROD else [],
+)
+if CORS_ALLOW_CAPACITOR_ORIGINS:
+    WS_ALLOWED_ORIGINS = list(dict.fromkeys([*WS_ALLOWED_ORIGINS, *CAPACITOR_ALLOWED_ORIGINS]))
 
 # The account rollout is opt-in. No credentials are stored in the frontend.
 ACCOUNT_ENABLED = _get_bool("ACCOUNT_ENABLED")
@@ -388,7 +411,7 @@ CHANNEL_LAYERS = {
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
 CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_IMPORTS = ('notifications.tasks_reminder', 'ai_assistant.tasks_learning')
+CELERY_IMPORTS = ('notifications.tasks_reminder', 'ai_assistant.tasks_learning', 'users.workspaces.tasks')
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE

@@ -1,5 +1,6 @@
+import { t, useLocale } from '@/i18n';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowClockwise, Plus, Spinner } from '@phosphor-icons/react';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -12,7 +13,6 @@ import {
 } from '@/lib/knowledgeBuilderApi';
 import type { BuildArchetype, BuildStatus, BuildSummary } from '@/types/knowledgeBuilder';
 import { KnowledgeIntakeWizard } from '@/components/KnowledgeIntakeWizard';
-import { ProjectLearningContent } from '@/components/ProjectLearningPanel';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { knowledgeBuildPlanningPrompt } from '@/lib/knowledgeBuildPlanning';
 import { KnowledgeBuilderGraph } from '@/components/KnowledgeBuilderGraph';
@@ -54,16 +54,16 @@ function extractApiError(error: unknown): string {
     if (data && typeof data.error === 'string') return data.error;
   }
   if (error instanceof Error && error.message) return error.message;
-  return '请求失败，请稍后重试。';
+  return t('请求失败，请稍后重试。');
 }
 
 export default function KnowledgeBuilder() {
+  useLocale();
   const { buildId: paramBuildId } = useParams<{ buildId?: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const projectTab = searchParams.get('tab') === 'project';
   const { chat, openingProject } = useXiaoYuChat();
-  const [selectedBlocks, setSelectedBlocks] = useState<Set<number>>(new Set());
   const [studyBlockId, setStudyBlockId] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const userId = useAuthStore(s => s.user?.id);
@@ -92,7 +92,14 @@ export default function KnowledgeBuilder() {
   }, [paramBuildId, defaultBuildId, navigate, projectTab, searchParams]);
 
   const activeBuildId = paramBuildId ?? defaultBuildId;
-  useEffect(() => { setSelectedBlocks(new Set()); }, [activeBuildId]);
+  const [selection, setSelection] = useState<{ buildId: string | null; blocks: Set<number> }>(() => ({
+    buildId: activeBuildId,
+    blocks: new Set(),
+  }));
+  if (selection.buildId !== activeBuildId) {
+    setSelection({ buildId: activeBuildId, blocks: new Set() });
+  }
+  const selectedBlocks = selection.blocks;
 
   const selectedFromList = useMemo(
     () => (activeBuildId ? builds.find(b => b.id === activeBuildId) ?? null : null),
@@ -140,7 +147,7 @@ export default function KnowledgeBuilder() {
       setNewArchetype('auto');
       setFormError(null);
       void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBuilder.list(userId) });
-      navigate(`/knowledge-builder/${encodeURIComponent(created.id)}`);
+      navigate({ pathname: `/knowledge-builder/${encodeURIComponent(created.id)}`, search: searchParams.toString() });
     },
     onError: err => {
       setFormError(extractApiError(err));
@@ -150,7 +157,7 @@ export default function KnowledgeBuilder() {
   const buildPicker = (
     <div className="kb-subject-picker">
       <select
-        aria-label="选择知识结构图谱"
+        aria-label={t('选择知识结构图谱')}
         className="kb-subject-select"
         value={activeBuildId ?? ''}
         onChange={e => {
@@ -164,7 +171,7 @@ export default function KnowledgeBuilder() {
         {builds.map(b => (
           <option key={b.id} value={b.id}>
             {b.subject}
-            {b.status !== 'COMPLETED' ? ` · ${STATUS_LABEL[b.status]}` : ''}
+            {b.status !== 'COMPLETED' ? ` · ${t(STATUS_LABEL[b.status])}` : ''}
           </option>
         ))}
       </select>
@@ -181,7 +188,7 @@ export default function KnowledgeBuilder() {
       }}
     >
       <Plus size={14} weight="bold" aria-hidden="true" />
-      新建学科
+      {t('新建学科')}
     </button>
   );
 
@@ -189,23 +196,23 @@ export default function KnowledgeBuilder() {
     <Dialog open={createOpen} onOpenChange={setCreateOpen}>
       <DialogContent className="sm:max-w-[900px] max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>新建知识结构图谱</DialogTitle>
+          <DialogTitle>{t('新建知识结构图谱')}</DialogTitle>
           <DialogDescription>
-            先明确学习需求与基础，再生成知识原子、学习块与完整前置关系。也可以跳过问答直接构建。
+            {t('先明确学习需求与基础，再生成知识原子、学习块与完整前置关系。也可以跳过问答直接构建。')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-1.5">
             <label htmlFor="kb-new-subject" className="text-sm font-medium text-foreground">
-              学科 / 科目名称
+              {t('学科 / 科目名称')}
             </label>
             <Input
               id="kb-new-subject"
               disabled={createMutation.isPending}
               value={newSubject}
               onChange={e => setNewSubject(e.target.value)}
-              placeholder="例如：公司理财 · 资本结构 / 基金从业《私募股权》"
+              placeholder={t('例如：公司理财 · 资本结构 / 基金从业《私募股权》')}
               maxLength={120}
               autoFocus
             />
@@ -213,7 +220,7 @@ export default function KnowledgeBuilder() {
 
           <div className="space-y-1.5">
             <label htmlFor="kb-new-archetype" className="text-sm font-medium text-foreground">
-              学科结构范式
+              {t('学科结构范式')}
             </label>
             <select
               id="kb-new-archetype"
@@ -223,7 +230,7 @@ export default function KnowledgeBuilder() {
             >
               {ARCHETYPE_OPTIONS.map(opt => (
                 <option key={opt.value} value={opt.value}>
-                  {opt.label}
+                  {t(opt.label)}
                 </option>
               ))}
             </select>
@@ -246,12 +253,17 @@ export default function KnowledgeBuilder() {
     </Dialog>
   );
 
-  const workspaceTabs = <nav className="kb-workspace-tabs" aria-label="知识结构视图" role="tablist">
-    <button type="button" role="tab" aria-selected={!projectTab} onClick={() => setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete('tab'); return next; })}>学科知识结构图谱</button>
-    <button type="button" role="tab" aria-selected={projectTab} onClick={() => setSearchParams(previous => { const next = new URLSearchParams(previous); next.set('tab', 'project'); return next; })}>小宇项目知识路径（知识关系）</button>
+  const workspaceTabs = <nav className="kb-workspace-tabs" aria-label={t('知识结构视图')} role="tablist">
+    <button type="button" role="tab" aria-selected={!projectTab} onClick={() => setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete('tab'); return next; })}>{t('学科知识结构图谱')}</button>
+    <button type="button" role="tab" aria-selected={projectTab} onClick={() => setSearchParams(previous => { const next = new URLSearchParams(previous); next.set('tab', 'project'); return next; })}>{t('小宇项目知识路径（知识关系）')}</button>
   </nav>;
 
-  if (projectTab) return <div className="kb-unified-workspace">{workspaceTabs}<div className="kb-project-view"><ProjectLearningContent knowledgeOnly /></div>{createModal}</div>;
+  if (projectTab) {
+    const params = new URLSearchParams(searchParams);
+    params.delete('tab');
+    params.set('learning_view', 'knowledge');
+    return <Navigate to={`/xiaoyu?${params}`} replace />;
+  }
 
   // Render full 431 v3 interactive graph when completed detail data is ready.
   if (effectiveSummary?.status === 'COMPLETED' && detailQuery.data) {
@@ -259,16 +271,16 @@ export default function KnowledgeBuilder() {
       <div className="kb-unified-workspace">
         {workspaceTabs}
         <div className="kb-plan-toolbar">
-          <span>已选择 {selectedBlocks.size} 个目标学习块</span>
+          <span>{t('已选择 {0} 个目标学习块', { 0: selectedBlocks.size })}</span>
           <Button type="button" variant="outline" disabled={!selectedBlocks.size || openingProject} onClick={() => {
             chat.setInput(knowledgeBuildPlanningPrompt(detailQuery.data, selectedBlocks));
             navigate({ pathname: '/xiaoyu', search: searchParams.toString() });
-          }}>带入小宇学习项目规划路径</Button>
+          }}>{t('带入小宇学习项目规划路径')}</Button>
           {!!detailQuery.data.requirements && Object.keys(detailQuery.data.requirements).length > 0 && <details className="kb-requirements-summary">
-            <summary>本次构建需求 · {String(detailQuery.data.requirements.learning_goal || '自定义学习需求')}</summary>
-            <p>重点模块：{Array.isArray(detailQuery.data.requirements.scope_inclusions) ? detailQuery.data.requirements.scope_inclusions.join('、') : '未指定'}</p>
-            <p>深度：{String(detailQuery.data.requirements.depth_preference || '未指定')}</p>
-            <p>推荐入口：{Array.isArray(detailQuery.data.requirements.suggested_entry_topics) ? detailQuery.data.requirements.suggested_entry_topics.join('、') : '未指定'}</p>
+            <summary>{t('本次构建需求 · {0}', { 0: String(detailQuery.data.requirements.learning_goal || t('自定义学习需求')) })}</summary>
+            <p>{t('重点模块：')}{Array.isArray(detailQuery.data.requirements.scope_inclusions) ? detailQuery.data.requirements.scope_inclusions.join('、') : t('未指定')}</p>
+            <p>{t('深度：')}{String(detailQuery.data.requirements.depth_preference || t('未指定'))}</p>
+            <p>{t('推荐入口：')}{Array.isArray(detailQuery.data.requirements.suggested_entry_topics) ? detailQuery.data.requirements.suggested_entry_topics.join('、') : t('未指定')}</p>
             <p>{String((detailQuery.data.requirements.baseline_summary as Record<string, unknown> | undefined)?.entry_strategy || '')}</p>
           </details>}
         </div>
@@ -278,7 +290,12 @@ export default function KnowledgeBuilder() {
           headerLeftSlot={buildPicker}
           headerRightSlot={createButton}
           selectedBlockIds={selectedBlocks}
-          onToggleBlockSelection={id => setSelectedBlocks(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; })}
+          onToggleBlockSelection={id => setSelection(current => {
+            const blocks = new Set(current.blocks);
+            if (blocks.has(id)) blocks.delete(id);
+            else blocks.add(id);
+            return { buildId: activeBuildId, blocks };
+          })}
           onStudyBlock={setStudyBlockId}
         />
         {detailQuery.data.blocks.filter(block => block.id === studyBlockId).map(block => <BlockStudyDialog
@@ -296,10 +313,10 @@ export default function KnowledgeBuilder() {
     <div className="kb-unified-workspace">{workspaceTabs}<div className="kb-workspace">
       <header className="kb-header">
         <div className="kb-brand">
-          {builds.length > 0 || effectiveSummary ? buildPicker : <strong>学科知识结构图谱</strong>}
+          {builds.length > 0 || effectiveSummary ? buildPicker : <strong>{t('学科知识结构图谱')}</strong>}
           {effectiveSummary && (
             <p className="kb-status">
-              状态：{STATUS_LABEL[effectiveSummary.status]}
+              {t('状态：')}{t(STATUS_LABEL[effectiveSummary.status])}
               {effectiveSummary.current_stage ? ` · ${effectiveSummary.current_stage}` : ''}
             </p>
           )}
@@ -311,51 +328,52 @@ export default function KnowledgeBuilder() {
         {listQuery.isLoading || (activeBuildId && !effectiveSummary && statusQuery.isLoading) ? (
           <div className="kb-state-card">
             <Spinner size={28} className="animate-spin mx-auto mb-3 opacity-80" />
-            <h2>正在载入知识结构列表…</h2>
-            <p>正在同步已构建完成的学科知识块与依赖关系。</p>
+            <h2>{t('正在载入知识结构列表…')}</h2>
+            <p>{t('正在同步已构建完成的学科知识块与依赖关系。')}</p>
           </div>
         ) : listQuery.isError ? (
           <div className="kb-state-card">
-            <h2>无法获取知识结构列表</h2>
+            <h2>{t('无法获取知识结构列表')}</h2>
             <p>{extractApiError(listQuery.error)}</p>
             <Button type="button" onClick={() => void listQuery.refetch()}>
               <ArrowClockwise size={15} className="mr-1.5" />
-              重试
+              {t('重试')}
             </Button>
           </div>
         ) : !activeBuildId || !effectiveSummary ? (
           <div className="kb-state-card">
-            <h2>还没有可用的学科知识结构</h2>
-            <p>点击右上角“新建学科”，即可为任意科目自动构建结构化 431 知识图谱。</p>
+            <h2>{t('还没有可用的学科知识结构')}</h2>
+            <p>{t('点击右上角“新建学科”，即可为任意科目自动构建结构化 431 知识图谱。')}</p>
             <Button type="button" onClick={() => setCreateOpen(true)}>
               <Plus size={15} className="mr-1.5" />
-              立即新建学科
+              {t('立即新建学科')}
             </Button>
           </div>
         ) : effectiveSummary.status === 'PENDING' || effectiveSummary.status === 'RUNNING' ? (
           <div className="kb-state-card">
             <Spinner size={28} className="animate-spin mx-auto mb-3 opacity-80" />
-            <h2>正在构建《{effectiveSummary.subject}》</h2>
+            <h2>{t('正在构建《{0}》', { 0: effectiveSummary.subject })}</h2>
             <p>
-              当前阶段：{effectiveSummary.current_stage || '等待后台任务启动'}（每 3 秒自动刷新进度）
+              {t('当前阶段：{0}（每 3 秒自动刷新进度）', { 0: effectiveSummary.current_stage || t('等待后台任务启动') })}
             </p>
             {effectiveSummary.stats && Object.keys(effectiveSummary.stats).length > 0 && (
               <p className="text-xs">
-                已生成：
-                {effectiveSummary.stats.module_count ?? 0} 模块 ·{' '}
-                {effectiveSummary.stats.atom_count ?? 0} 原子 ·{' '}
-                {effectiveSummary.stats.block_count ?? 0} 块
+                {t('已生成：{0} 模块 · {1} 原子 · {2} 块', {
+                  0: effectiveSummary.stats.module_count ?? 0,
+                  1: effectiveSummary.stats.atom_count ?? 0,
+                  2: effectiveSummary.stats.block_count ?? 0,
+                })}
               </p>
             )}
             <Button type="button" variant="outline" onClick={() => void statusQuery.refetch()}>
               <ArrowClockwise size={15} className="mr-1.5" />
-              立即刷新状态
+              {t('立即刷新状态')}
             </Button>
           </div>
         ) : effectiveSummary.status === 'FAILED' ? (
           <div className="kb-state-card">
-            <h2>《{effectiveSummary.subject}》构建失败</h2>
-            <p>{effectiveSummary.error_message || '后台构建流水线未能正常完成，请重新发起构建。'}</p>
+            <h2>{t('《{0}》构建失败', { 0: effectiveSummary.subject })}</h2>
+            <p>{effectiveSummary.error_message || t('后台构建流水线未能正常完成，请重新发起构建。')}</p>
             <Button
               type="button"
               onClick={() => {
@@ -364,23 +382,23 @@ export default function KnowledgeBuilder() {
                 setCreateOpen(true);
               }}
             >
-              重新构建该科目
+              {t('重新构建该科目')}
             </Button>
           </div>
         ) : detailQuery.isError ? (
           <div className="kb-state-card">
-            <h2>加载图谱详情失败</h2>
+            <h2>{t('加载图谱详情失败')}</h2>
             <p>{extractApiError(detailQuery.error)}</p>
             <Button type="button" onClick={() => void detailQuery.refetch()}>
               <ArrowClockwise size={15} className="mr-1.5" />
-              重新加载
+              {t('重新加载')}
             </Button>
           </div>
         ) : (
           <div className="kb-state-card">
             <Spinner size={28} className="animate-spin mx-auto mb-3 opacity-80" />
-            <h2>正在展开《{effectiveSummary.subject}》结构图…</h2>
-            <p>正在获取学习块、步骤与跨块接口点数据。</p>
+            <h2>{t('正在展开《{0}》结构图…', { 0: effectiveSummary.subject })}</h2>
+            <p>{t('正在获取学习块、步骤与跨块接口点数据。')}</p>
           </div>
         )}
       </div>

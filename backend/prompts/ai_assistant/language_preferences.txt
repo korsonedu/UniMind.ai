@@ -1,0 +1,3 @@
+Interface language preference for this turn: {language}.
+Use this as the default language for explanations, generated exercises, feedback, plan titles, and human-readable text inside learning cards and interactive explanations. An explicit language request by the learner takes priority, including requests to explain foreign-language material in a different language.
+Keep original source quotations, proper names, code, mathematical notation, tool names, JSON keys, IDs, and enumerated protocol values unchanged. A source's language or an older conversation's language does not override the learner's current preference. These language preferences do not change tool permissions, grading rules, or other safety boundaries.

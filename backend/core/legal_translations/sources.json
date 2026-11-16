@@ -1,0 +1,10 @@
+{
+  "terms": {
+    "version": "2.0",
+    "sha256": "267210efa7a2e0c5e7a3c005ed7c5be4e521e3744ae18cdcc0d98b8fb22b8a4c"
+  },
+  "privacy": {
+    "version": "2.0",
+    "sha256": "916faac3c36acabc43c95458865c9082706d2577962d0ba3bf1c404c777f390a"
+  }
+}

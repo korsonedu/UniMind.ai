@@ -30,6 +30,7 @@ class User(AbstractUser):
     allow_broadcast = models.BooleanField(default=True)
     show_others_broadcast = models.BooleanField(default=True)
     bio = models.TextField(blank=True, null=True)
+    preferred_language = models.CharField(max_length=5, choices=(('zh-CN', '简体中文'), ('en', 'English')), blank=True, default='')
     is_member = models.BooleanField(default=False, verbose_name="是否会员")
     email_verified = models.BooleanField(default=False, verbose_name="邮箱已验证")
     account_session_version = models.PositiveIntegerField(default=0, editable=False)
@@ -683,3 +684,4 @@ from .models_learning import (
     AIAddonProduct, AIAddonGrant, WeeklyAIUsage, AIUsageReservation,
 )
 from .login_sessions import LoginSession
+from .models_workspace import Workspace, WorkspaceMembership, WorkspaceCourse, WorkspaceInvite, WorkspaceEnrollment

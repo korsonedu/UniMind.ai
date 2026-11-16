@@ -11,7 +11,7 @@ from django.db.models import Case, F, When
 from rest_framework.exceptions import ValidationError
 
 from ai_engine import config
-from core.utils import get_content_institution_id
+from core.utils import apply_institution_filter
 from quizzes.models import KnowledgeEdge, KnowledgePoint, Question, UserKnowledgeState
 from . import prompts
 from .archetypes import PROFILES
@@ -29,8 +29,7 @@ def _score(value):
 
 
 def inspect_subject_context(subject: str, user=None) -> dict:
-    inst_id = get_content_institution_id()
-    points = KnowledgePoint.objects.filter(institution_id=inst_id)
+    points = apply_institution_filter(KnowledgePoint.objects.all(), user)
     subjects = sorted(filter(None, points.order_by().values_list('subject', flat=True).distinct()))
     needle = _normalized(subject)
     matched = next((s for s in subjects if _normalized(s) == needle), None)
@@ -48,7 +47,9 @@ def inspect_subject_context(subject: str, user=None) -> dict:
         modules.sort(key=lambda m: (('sub', 'ch', 'sec').index(m['level']), m['order'], m['id']))
         info['existing_modules'] = [{k: m[k] or '' for k in ('code', 'name', 'level')} for m in modules[:12]]
         info['kp_count'] = points.filter(level='kp').count()
-        edges = KnowledgeEdge.objects.filter(institution_id=inst_id, source__in=points, target__in=points)
+        edges = apply_institution_filter(
+            KnowledgeEdge.objects.filter(source__in=points, target__in=points), user,
+        )
         info['edge_count'] = edges.count()
         seed_edges = (edges.filter(is_active=True).exclude(edge_type='contains')
                       .exclude(target__parent_id=F('source_id')).exclude(source__parent_id=F('target_id'))
@@ -57,7 +58,7 @@ def inspect_subject_context(subject: str, user=None) -> dict:
         info['existing_edges'] = [dict(source=e.source.name, target=e.target.name, edge_type=e.edge_type) for e in seed_edges]
         if user is not None and user.is_authenticated:
             states = list(UserKnowledgeState.objects.filter(
-                user=user, knowledge_point__institution_id=inst_id, knowledge_point__subject=matched,
+                user=user, knowledge_point__in=points,
             ).select_related('knowledge_point').order_by('knowledge_point_id'))
             scores = [_score(s.mastery_score) for s in states]
             info.update(assessed_kp_count=len(states), avg_mastery=round(sum(scores) / len(scores), 2) if scores else 0.0,
@@ -128,13 +129,14 @@ def _chapter(kp, parents):
     return kp.pk
 
 
-def build_diagnostic_questions(subject, matched_subject, existing_modules, self_report, ai_payload=None):
-    inst_id = get_content_institution_id()
+def build_diagnostic_questions(subject, matched_subject, existing_modules, self_report, ai_payload=None, user=None):
     selected, remaining, chapters = [], [], set()
     if matched_subject:
-        parents = {p.pk: p for p in KnowledgePoint.objects.filter(institution_id=inst_id, subject=matched_subject)}
-        bank = Question.objects.filter(institution_id=inst_id, q_type='objective',
-            knowledge_point__institution_id=inst_id, knowledge_point__subject=matched_subject).select_related('knowledge_point').order_by('id')
+        points = apply_institution_filter(KnowledgePoint.objects.filter(subject=matched_subject), user)
+        parents = {p.pk: p for p in points}
+        bank = apply_institution_filter(
+            Question.objects.filter(q_type='objective', knowledge_point__in=points), user,
+        ).select_related('knowledge_point').order_by('id')
         for q in bank.iterator():
             item = _bank_question(q)
             if item is None:
@@ -158,7 +160,7 @@ def build_diagnostic_questions(subject, matched_subject, existing_modules, self_
             if len(selected) == 4:
                 break
     if len(selected) < 3:
-        probes = json.loads((Path(prompts.PROMPT_DIR) / 'diagnostic_probes.json').read_text())
+        probes = json.loads((Path(prompts.PROMPT_DIR) / 'diagnostic_probes.json').read_text(encoding='utf-8'))
         family = 'finance' if any(t in subject + (matched_subject or '') for t in ('431', '金融', '理财')) else 'computing' if any(t in subject + (matched_subject or '') for t in ('408', '计算机')) else 'general'
         for raw in probes[family]:
             item = _normalize_question({**raw, 'stem': raw['stem'].replace('{subject}', subject)})
@@ -194,14 +196,15 @@ def _entry_strategy(gaps, known):
 
 
 def evaluate_diagnostic_answers(user, questions, answers: dict, self_report: str = '') -> dict:
-    inst_id = get_content_institution_id()
+    points = apply_institution_filter(KnowledgePoint.objects.all(), user)
     results, known, gaps = [], [], []
     with transaction.atomic():
         for question in questions:
             q = question
             if q.get('source') == 'question_bank':
-                bank = Question.objects.filter(institution_id=inst_id, knowledge_point__institution_id=inst_id,
-                    pk=q.get('question_id'), q_type='objective').select_related('knowledge_point').first()
+                bank = apply_institution_filter(
+                    Question.objects.filter(knowledge_point__in=points, pk=q.get('question_id'), q_type='objective'), user,
+                ).select_related('knowledge_point').first()
                 if bank is None:
                     raise ValidationError({'diagnostic_questions': '题目已不可用，请重新生成。'})
                 q = _bank_question(bank)
@@ -294,7 +297,7 @@ def inquire_requirements(user, payload: dict) -> dict:
         cards = [c for c in cards if c['dimension'] != 'scope']
         cards.insert(1, _default_cards(subject, catalog)[1])
     questions = _verified_questions(subject, payload['diagnostic_questions']) if payload.get('diagnostic_questions') else build_diagnostic_questions(
-        subject, catalog['matched_subject'], catalog['existing_modules'], self_report, ai)
+        subject, catalog['matched_subject'], catalog['existing_modules'], self_report, ai, user=user)
     if payload.get('diagnostic_answers') and not payload.get('diagnostic_questions'):
         raise ValidationError({'diagnostic_questions': '请提交本次摸底题目。'})
     baseline = evaluate_diagnostic_answers(user, questions, payload.get('diagnostic_answers', {}), self_report)

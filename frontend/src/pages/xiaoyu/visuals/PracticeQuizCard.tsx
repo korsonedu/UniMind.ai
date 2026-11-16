@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useContext, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
@@ -62,6 +63,7 @@ interface SubmittedPractice {
 }
 
 export function PracticeQuizCard({ payload, onResult }: { payload: PracticePayload; onResult?: () => void }) {
+  useLocale();
   const userId = useAuthStore(state => state.user?.id);
   const storageKey = `unimind:inline-practice:${userId}:${payload.practice_id}`;
   const [draft, setDraft] = useState<Draft>(() => {
@@ -159,79 +161,80 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
         answers: questions.map(item => ({ question_id: item.id, answer: draft.answers[item.id] })),
       });
       const examId = Number(data.exam_id);
-      if (!Number.isInteger(examId) || examId <= 0) throw new Error('未收到练习结果编号，请重试提交。');
+      if (!Number.isInteger(examId) || examId <= 0) throw new Error(t('未收到练习结果编号，请重试提交。'));
       setDraft(previous => ({ ...previous, examId }));
       useExamActivityStore.getState().start({ examId, total: questions.length, href: learningUrl(`/tests/results/${examId}`, payload.project_id || null, payload.conversation_id) });
     } catch (failure) {
-      setError(formatApiErrorToast(failure, '提交失败，请重试。'));
+      setError(formatApiErrorToast(failure, t('提交失败，请重试。')));
     } finally { inFlight.current = false; setSubmitting(false); }
   };
 
   if (!question) return null;
 
-  return <section className="um-inline-practice" aria-label={payload.title || '随堂练习'}
+  return <section data-single-question={questions.length === 1 || undefined} className="um-inline-practice" aria-label={payload.title || t('随堂练习')}
     onFocusCapture={event => {
       if (!(event.target as HTMLElement).closest('[data-practice-toggle]')) activate();
     }}>
     <header className="um-inline-practice-header">
-      <div><span className="um-inline-practice-caption">{payload.response_type ? '开放成果' : '随堂练习'} · {questions.length} 项</span><h3>{payload.title || '随堂练习'}</h3></div>
+      <div><span className="um-inline-practice-caption">{payload.response_type ? t('开放成果') : t('随堂练习')} · {questions.length} {t('项')}</span><h3>{payload.title || t('随堂练习')}</h3></div>
       {!locked && <button type="button" data-practice-toggle className="um-inline-practice-text-button" onClick={() => {
         if (active) setActive(false); else activate();
-      }}>{active ? '暂停练习' : '开始／继续'}</button>}
+      }}>{active ? t('暂停练习') : t('开始／继续')}</button>}
     </header>
-    <div className="um-inline-practice-progress"><span>答题进度</span><span role="status">{answeredCount}/{questions.length}</span></div>
+    <div className="um-inline-practice-progress"><span>{t('答题进度')}</span><span role="status">{answeredCount}/{questions.length}</span></div>
     <div className="um-inline-practice-segments" aria-hidden="true">{questions.map(item => <span key={item.id} data-complete={!!draft.answers[item.id]?.trim()} />)}</div>
-    <nav className="um-inline-practice-nav" aria-label="切换练习题目">{questions.map((item, position) => <button type="button" key={item.id}
-      aria-label={`第 ${position + 1} 题${draft.answers[item.id]?.trim() ? '，已答' : '，未答'}`}
+    <nav className="um-inline-practice-nav" aria-label={t('切换练习题目')}>{questions.map((item, position) => <button type="button" key={item.id}
+      aria-label={t('第 {0} 题{1}', { 0: position + 1, 1: draft.answers[item.id]?.trim() ? t('，已答') : t('，未答') })}
       aria-current={position === index ? 'step' : undefined} data-answered={!!draft.answers[item.id]?.trim()}
       onClick={() => setDraft(previous => ({ ...previous, index: position }))}>{position + 1}</button>)}</nav>
     <article className="um-inline-practice-question">
-      <p className="um-inline-practice-caption">第 {index + 1} 题{question.kp_name && ` · ${question.kp_name}`}</p>
+      <p className="um-inline-practice-caption">{t('第')} {index + 1} {t('题')}{question.kp_name && ` · ${question.kp_name}`}</p>
       <MarkdownContent content={processMathContent(question.text)} />
-      {question.q_type === 'objective' ? <div className="um-inline-practice-options" role="group" aria-label="选择答案">
+      {question.q_type === 'objective' ? <div className="um-inline-practice-options" role="group" aria-label={t('选择答案')}>
         {normalizeOptions(question.options).map((option: string, optionIndex: number) => <button type="button" key={optionIndex}
           disabled={locked} aria-pressed={draft.answers[question.id] === option}
           onClick={() => setDraft(previous => ({ ...previous, answers: { ...previous.answers, [question.id]: option } }))}>
           <span>{String.fromCharCode(65 + optionIndex)}</span><MarkdownContent content={processMathContent(option)} />
         </button>)}
-      </div> : <textarea className="um-inline-practice-input" aria-label="本题答案" placeholder={payload.response_type === 'code' ? '粘贴代码，并说明思路、预期行为与已知结果…' : '写下你的解释、分析或计算过程…'} maxLength={payload.learning_task_id ? 20000 : undefined} spellCheck={payload.response_type !== 'code'} disabled={locked}
+      </div> : <textarea className="um-inline-practice-input" aria-label={t('本题答案')} placeholder={payload.response_type === 'code' ? t('粘贴代码，并说明思路、预期行为与已知结果…') : t('写下你的解释、分析或计算过程…')} maxLength={payload.learning_task_id ? 20000 : undefined} spellCheck={payload.response_type !== 'code'} disabled={locked}
         value={draft.answers[question.id] || ''} onChange={event => setDraft(previous => ({ ...previous,
           answers: { ...previous.answers, [question.id]: event.target.value } }))} />}
     </article>
     <details className="um-inline-practice-notes" key={question.id}>
-      <summary>本题草稿{draft.notes[question.id] ? ' · 已记录' : ''}</summary>
-      <textarea className="um-inline-practice-input" aria-label="本题草稿" placeholder="仅保存在此浏览器，不参与评分。"
+      <summary>{t('本题草稿')}{draft.notes[question.id] ? t(' · 已记录') : ''}</summary>
+      <textarea className="um-inline-practice-input" aria-label={t('本题草稿')} placeholder={t('仅保存在此浏览器，不参与评分。')}
         value={draft.notes[question.id] || ''} onChange={event => setDraft(previous => ({ ...previous,
           notes: { ...previous.notes, [question.id]: event.target.value } }))} />
     </details>
-    {draft.examId && <section className="um-inline-practice-result" aria-label="练习批改结果" aria-live="polite">
-      {!result ? <p>{detail.isError ? '暂时无法读取结果。' : '正在读取批改结果…'}{detail.isError && <button type="button" onClick={() => void detail.refetch()}>重试</button>}</p>
+    {draft.examId && <section className="um-inline-practice-result" aria-label={t('练习批改结果')} aria-live="polite">
+      {!result ? <p>{detail.isError ? t('暂时无法读取结果。') : t('正在读取批改结果…')}{detail.isError && <button type="button" onClick={() => void detail.refetch()}>{t('重试')}</button>}</p>
         : <>
-          <p className="um-inline-practice-score">{isActiveExamStatus(result.status) ? `批改中 · ${result.graded_count}/${result.total_questions} 题`
-            : `${result.status === 'partial' || result.status === 'failed' ? '批改未全部完成 · ' : modelResult ? '模型参考评分 · ' : '本次得分 · '}${result.total_score}/${result.max_score}`}</p>
+          <p className="um-inline-practice-score">{isActiveExamStatus(result.status) ? t('批改中 · {0}/{1} 题', { 0: result.graded_count, 1: result.total_questions })
+            : `${result.status === 'partial' || result.status === 'failed' ? t('批改未全部完成 · ') : modelResult ? t('模型参考评分 · ') : t('本次得分 · ')}${result.total_score}/${result.max_score}`}</p>
           {graded ? <>
-            <p>本题 {itemResult.score}/{itemResult.max_score} 分</p>
-            {payload.learning_task_id && <p className="um-inline-practice-caption">{modelEvaluation ? '模型依据任务标准评价，尚未独立复核。' : '按标准答案比对评分。'}{payload.response_type === 'code' && '代码仅作文本审阅，未执行或验证测试结果。'}</p>}
-            {itemResult.correct_answer && <div><span className="um-inline-practice-caption">参考答案</span><MarkdownContent content={processMathContent(itemResult.correct_answer)} /></div>}
+            <p>{t('本题')} {itemResult.score}/{itemResult.max_score} {t('分')}</p>
+            {payload.learning_task_id && <p className="um-inline-practice-caption">{modelEvaluation ? t('模型依据任务标准评价，尚未独立复核。') : t('按标准答案比对评分。')}{payload.response_type === 'code' && t('代码仅作文本审阅，未执行或验证测试结果。')}</p>}
+            {itemResult.correct_answer && <div><span className="um-inline-practice-caption">{t('参考答案')}</span><MarkdownContent content={processMathContent(itemResult.correct_answer)} /></div>}
             {itemResult.feedback && <MarkdownContent content={processMathContent(itemResult.feedback)} />}
-            {itemResult.analysis && <div><span className="um-inline-practice-caption">解析</span><MarkdownContent content={processMathContent(itemResult.analysis)} /></div>}
-          </> : <p>{itemResult?.status === 'failed' ? '本题批改未完成，可在逐题复盘中重试。' : '本题正在批改，请稍候。'}</p>}
-          <Link className="um-inline-practice-text-button" to={learningUrl(`/tests/results/${draft.examId}`, payload.project_id || null, payload.conversation_id)}>打开逐题复盘</Link>
+            {itemResult.analysis && <div><span className="um-inline-practice-caption">{t('解析')}</span><MarkdownContent content={processMathContent(itemResult.analysis)} /></div>}
+          </> : <p>{itemResult?.status === 'failed' ? t('本题批改未完成，可在逐题复盘中重试。') : t('本题正在批改，请稍候。')}</p>}
+          <Link className="um-inline-practice-text-button" to={learningUrl(`/tests/results/${draft.examId}`, payload.project_id || null, payload.conversation_id)}>{t('打开逐题复盘')}</Link>
         </>}
     </section>}
-    {payload.learning_task_id && <label className="um-inline-practice-assistance">本次作答获得了哪些帮助？
-      <select aria-label="本次作答帮助程度" disabled={locked} value={draft.assistance} onChange={event => setDraft(previous => ({ ...previous, assistance: event.target.value }))}>
-        <option value="unknown">尚未说明</option><option value="independent">独立作答</option><option value="hint">获得提示</option><option value="guided">逐步引导完成</option>
+    {payload.learning_task_id && <label className="um-inline-practice-assistance">{t('本次作答获得了哪些帮助？')}
+      <select aria-label={t('本次作答帮助程度')} disabled={locked} value={draft.assistance} onChange={event => setDraft(previous => ({ ...previous, assistance: event.target.value }))}>
+        <option value="unknown">{t('尚未说明')}</option><option value="independent">{t('独立作答')}</option><option value="hint">{t('获得提示')}</option><option value="guided">{t('逐步引导完成')}</option>
       </select>
     </label>}
+    {payload.learning_task_id && draft.assistance === 'unknown' && <p className="um-learning-muted">{t('本次成绩会保存；帮助程度尚未说明，暂不计入独立表现。')}</p>}
     {error && <p className="um-inline-practice-error" role="alert">{error}</p>}
-    {!draft.examId && submission.isPending && <p>正在读取提交状态…</p>}
-    {!draft.examId && submission.isError && <p role="alert">暂时无法读取提交状态。<button type="button" onClick={() => void submission.refetch()}>重试读取</button></p>}
+    {!draft.examId && submission.isPending && <p>{t('正在读取提交状态…')}</p>}
+    {!draft.examId && submission.isError && <p role="alert">{t('暂时无法读取提交状态。')}<button type="button" onClick={() => void submission.refetch()}>{t('重试读取')}</button></p>}
     <footer className="um-inline-practice-footer">
-      <div><button type="button" className="um-inline-practice-nav-button" disabled={index === 0} onClick={() => setDraft(previous => ({ ...previous, index: index - 1 }))}><CaretLeft size={14} aria-hidden="true" />上一题</button>
-        <button type="button" className="um-inline-practice-nav-button" disabled={index === questions.length - 1} onClick={() => setDraft(previous => ({ ...previous, index: index + 1 }))}>下一题<CaretRight size={14} aria-hidden="true" /></button></div>
+      <div><button type="button" className="um-inline-practice-nav-button" disabled={index === 0} onClick={() => setDraft(previous => ({ ...previous, index: index - 1 }))}><CaretLeft size={14} aria-hidden="true" />{t('上一题')}</button>
+        <button type="button" className="um-inline-practice-nav-button" disabled={index === questions.length - 1} onClick={() => setDraft(previous => ({ ...previous, index: index + 1 }))}>{t('下一题')}<CaretRight size={14} aria-hidden="true" /></button></div>
       {!draft.examId && <button type="button" className="um-inline-practice-submit" disabled={submitting || recovering || answeredCount !== questions.length}
-        onClick={() => void submit()}>{submitting ? '提交中…' : draft.submitted ? '重试提交' : '提交批改'}</button>}
+        onClick={() => void submit()}>{submitting ? t('提交中…') : draft.submitted ? t('重试提交') : t('提交批改')}</button>}
     </footer>
   </section>;
 }

@@ -1,10 +1,15 @@
+import { getLocale, t } from '@/i18n';
 import axios from 'axios';
+import { Preferences } from '@capacitor/preferences';
+import { DEMO_USER, isOfflineDemo, isNativeOffline, setNativeOffline, OFFLINE_MESSAGE } from './offlineSession';
+import { getServerOrigin } from './serverConfig';
 import { toast } from 'sonner';
 import { getLoginPath } from './routing';
+import { getApiBaseUrl, getRegisteredAuthToken, isNativePlatform } from './serverConfig';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
-  withCredentials: true,
+  baseURL: getApiBaseUrl(),
+  withCredentials: !isNativePlatform(),
   timeout: 30000,
 });
 
@@ -26,8 +31,43 @@ export function setPreviewInstitutionId(id: number | null) { _previewInstitution
 export function getPreviewInstitutionId() { return _previewInstitutionId; }
 
 api.interceptors.request.use(async (config) => {
-  // Auth via httpOnly cookie (CookieTokenAuthentication) — no Authorization header needed
-  if (!['get', 'head', 'options'].includes(config.method?.toLowerCase() || 'get')) {
+  if (!config.headers.has('Accept-Language')) config.headers.set('Accept-Language', getLocale());
+  const native = isNativePlatform();
+  if (native && isOfflineDemo()) {
+    config.adapter = async request => {
+      const path = (request.url || '').replace(/^\/api/, '').split('?')[0];
+      const method = request.method?.toUpperCase() || 'GET';
+      let data: unknown;
+      if (path === '/users/me/' && method === 'GET') data = { ...DEMO_USER, nickname: t(DEMO_USER.nickname), bio: t(DEMO_USER.bio) };
+      else if (path === '/users/institution/me/features/') data = { features: ['ai.assistant','quiz.exam','knowledge.graph','full.report'], is_platform_admin: false, institution: null };
+      else if (path === '/users/learning/access/') data = { is_course_student: false, ai_usage: { used: 0, limit: 0, remaining: 0, base_remaining: 0, addon_remaining: 0, configured: true, unlimited: false }, addons: [] };
+      else if (path === '/notifications/unread-count/') data = { count: 0 };
+      else if (['/notifications/','/users/plans/','/users/online/'].includes(path)) data = [];
+      else {
+        try { data = await (await import('./offlineDemoApi')).demoRequest(method, path, typeof request.data === 'string' ? JSON.parse(request.data) : request.data, request.params); } catch (error) { if (error instanceof Error && error.message === t(OFFLINE_MESSAGE)) toast.info(t(OFFLINE_MESSAGE), { id: 'offline-action' }); throw error; }
+      }
+      return { data, status: 200, statusText: 'OK', headers: {}, config: request };
+    };
+    config.headers.delete('Authorization');
+    return config;
+  }
+  if (native && isNativeOffline() && !['get','head','options'].includes(config.method || 'get')) { toast.info(t(OFFLINE_MESSAGE), { id: 'offline-action' }); throw new Error(t(OFFLINE_MESSAGE)); }
+  if (native && (config.method || 'get') === 'get' && /^\/(users\/me\/|users\/institution\/me\/features\/|notes\/)/.test(config.url || '')) config.timeout = Math.min(config.timeout || 5000, 5000);
+  config.baseURL = getApiBaseUrl();
+  config.withCredentials = !native;
+
+  if (native) {
+    config.withXSRFToken = false;
+    config.headers.delete('X-CSRFToken');
+    // Native Capacitor builds authenticate via Authorization Token without cookies to skip CSRF enforcement.
+    const token = getRegisteredAuthToken();
+    if (token) {
+      config.headers.set('Authorization', `Token ${token}`);
+    } else {
+      config.headers.delete('Authorization');
+    }
+  } else if (!['get', 'head', 'options'].includes(config.method?.toLowerCase() || 'get')) {
+    // Web/Electron authenticate via httpOnly cookie (CookieTokenAuthentication) + CSRF.
     config.headers.set('X-CSRFToken', await getCsrfToken());
   }
   // Attach preview institution ID for backend filtering
@@ -38,11 +78,34 @@ api.interceptors.request.use(async (config) => {
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  async (response) => {
+    if (isNativePlatform() && !isOfflineDemo()) {
+      setNativeOffline(false);
+      const id = JSON.parse(localStorage.getItem('auth-storage') || '{}').state?.user?.id;
+      if (id > 0 && ['/users/me/','/users/institution/me/features/'].includes(response.config.url || '')) {
+        await Preferences.set({ key: `unimind:identity:${getServerOrigin()}:${id}:${response.config.url}`, value: JSON.stringify(response.data) }).catch(() => { toast.info(t('本地缓存保存失败，当前在线会话仍可使用'), { id: 'offline-cache-write' }); });
+      }
+    }
+    return response;
+  },
   async (error) => {
-    if (error.response?.status === 401 && error.config?.url !== '/users/login/' && error.config?.url !== '/users/login-by-code/') {
+    if (isNativePlatform() && !isOfflineDemo() && !error.response && !axios.isCancel(error)) {
+      setNativeOffline(true);
+      const id = JSON.parse(localStorage.getItem('auth-storage') || '{}').state?.user?.id;
+      if (id > 0 && ['/users/me/','/users/institution/me/features/'].includes(error.config?.url || '')) {
+        const { value } = await Preferences.get({ key: `unimind:identity:${getServerOrigin()}:${id}:${error.config.url}` });
+        if (value && error.config.url !== '/users/me/') return { data: JSON.parse(value), status: 200, statusText: 'Offline cache', headers: {}, config: error.config };
+      }
+      return Promise.reject(error);
+    }
+    if (!isOfflineDemo() && error.response?.status === 401 && error.config?.url !== '/users/login/' && error.config?.url !== '/users/login-by-code/') {
       localStorage.removeItem('auth-storage');
       window.dispatchEvent(new Event('auth:logout'));
+      if (isNativePlatform()) {
+        // Let the queued Preferences removal finish before a full-page redirect.
+        const { flushNativeToken } = await import('@/store/useAuthStore');
+        await flushNativeToken().catch(() => {});
+      }
       // The root identity check renders Landing or the login redirect itself.
       if (error.config?.url !== '/users/me/'
         && !['/', '/login', '/register', '/verify-code', '/account-callback'].includes(window.location.pathname)) {
@@ -65,10 +128,10 @@ api.interceptors.response.use(
       await new Promise(r => setTimeout(r, delay));
       return api(config);
     }
-    if (axios.isAxiosError(error) && error.code === 'ERR_NETWORK') {
-      toast.error('网络连接失败', {
+    if (!isOfflineDemo() && !isNativeOffline() && navigator.onLine && axios.isAxiosError(error) && error.code === 'ERR_NETWORK') {
+      toast.error(t('网络连接失败'), {
         id: 'network-connection-error',
-        description: '再试一次，反正时间是一种幻觉。——《银河搭车客指南》',
+        description: t('再试一次，反正时间是一种幻觉。——《银河搭车客指南》'),
         classNames: { description: 'italic text-muted-foreground' },
       });
     }
@@ -92,13 +155,34 @@ export async function streamFetch(
   signal?: AbortSignal,
   extraHeaders?: Record<string, string>,
 ): Promise<{ url: string; init: RequestInit }> {
+  if (isOfflineDemo() || isNativeOffline()) { toast.info(t(OFFLINE_MESSAGE)); throw new Error(t(OFFLINE_MESSAGE)); }
+  const native = isNativePlatform();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'X-CSRFToken': await getCsrfToken(),
-    ...extraHeaders,
+    'Accept-Language': getLocale(),
   };
 
-  let urlPath = path.startsWith('/') ? path : `/${path}`;
+  if (native) {
+    const token = getRegisteredAuthToken();
+    if (token) {
+      headers['Authorization'] = `Token ${token}`;
+    }
+  } else {
+    headers['X-CSRFToken'] = await getCsrfToken();
+  }
+  Object.assign(headers, extraHeaders);
+
+  let urlPath = /^https?:\/\//i.test(path) ? path : path.startsWith('/') ? path : `/${path}`;
+  if (native && /^https?:\/\//i.test(path) && new URL(path).origin !== getServerOrigin()) {
+    throw new Error('Streaming requests must use the configured server origin');
+  }
+  if (!/^https?:\/\//i.test(path)) {
+    const apiBase = getApiBaseUrl().replace(/\/$/, '');
+    const relativePath = urlPath === '/api' || urlPath.startsWith('/api/')
+      ? urlPath.replace(/^\/api(?=\/|$)/, '')
+      : urlPath;
+    urlPath = `${apiBase}${relativePath}`;
+  }
   if (_previewInstitutionId) {
     const sep = urlPath.includes('?') ? '&' : '?';
     urlPath = `${urlPath}${sep}preview_institution=${_previewInstitutionId}`;
@@ -109,7 +193,7 @@ export async function streamFetch(
     init: {
       method: 'POST',
       headers,
-      credentials: 'include',
+      credentials: native ? 'omit' : 'include',
       body: body ? JSON.stringify(body) : undefined,
       signal,
     },

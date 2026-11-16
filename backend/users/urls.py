@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 from .views_activity import LearningSessionView
 from .views_learning import (LearningCatalogView, MyLearningAccessView, LearningProductAdminView,
                              LearningProductDetailView, LearningGrantAdminView, LearningGrantDetailView)
@@ -29,6 +29,7 @@ from .views_sso import SSOAuthorizeView, SSOCallbackView
 from .accounts import desktop
 
 urlpatterns = [
+    path('workspace/', include('users.workspaces.urls')),
     path('learning/catalog/', LearningCatalogView.as_view(), name='learning-catalog'),
     path('learning/access/', MyLearningAccessView.as_view(), name='learning-access'),
     path('learning/products/', LearningProductAdminView.as_view(), name='learning-product-admin'),

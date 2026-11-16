@@ -134,6 +134,7 @@ class QuizExam(models.Model):
         ('failed', '批改失败'),
     ]
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='exams')
+    ui_language = models.CharField(max_length=5, default='zh-CN', choices=[('zh-CN', '简体中文'), ('en', 'English')])
     total_score = models.FloatField(default=0)
     max_score = models.FloatField(default=0)
     elo_change = models.IntegerField(default=0)

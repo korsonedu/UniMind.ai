@@ -210,6 +210,34 @@ test('adaptKnowledgeTree resolves root domains, sorted steps, interface jumps, a
   assert.equal(b2.steps[0].dependencies[0].fromAtomName, '合格投资者门槛');
 });
 
+test('adaptKnowledgeTree translates fixed labels and preserves authored content and default Chinese', () => {
+  const tree = makeSampleTree();
+  tree.modules = [];
+  tree.interfaces[0].interface_role = 'prerequisite_handoff';
+  const labels: Record<string, string> = {
+    '入口': 'Entry',
+    '先修前置': 'Prerequisite',
+    '通用模块': 'General module',
+    '目标：': 'Goal: ',
+    '易错点：': 'Common mistakes: ',
+    '约 {0} 分钟': 'About {0} minutes',
+  };
+  const translated = adaptKnowledgeTree(tree, source => labels[source] ?? source);
+  const first = translated.blockById.get(10)!;
+  assert.deepEqual(first.shapeTags, ['Entry']);
+  assert.equal(first.domainTitle, 'General module');
+  assert.equal(first.shortTitle, tree.blocks[0].short_title);
+  assert.equal(first.steps[0].atoms[0].tooltip,
+    'Goal: 掌握PE基金核心特征\nconcept · understand · About 10 minutes\nCommon mistakes: 混同公募');
+  assert.equal(translated.blockById.get(20)!.steps[0].dependencies[0].role, 'Prerequisite');
+
+  const original = adaptKnowledgeTree(tree).blockById.get(10)!;
+  assert.deepEqual(original.shapeTags, ['入口']);
+  assert.equal(original.domainTitle, '通用模块');
+  assert.equal(original.steps[0].atoms[0].tooltip,
+    '目标：掌握PE基金核心特征\nconcept · understand · 约 10 分钟\n易错点：混同公募');
+});
+
 test('computeColumnLayout reduces edge crossings via barycenter and clears pad when block is open', () => {
   const tree = makeSampleTree();
   // Create 2 blocks on layer 1 (B1, B1b) and 2 blocks on layer 2 (B2, B2b) intentionally crossed.

@@ -287,13 +287,13 @@ class AIService:
     @classmethod
     def grade_question(cls, question_text, user_answer, correct_answer,
                        q_type, max_score, grading_points=None, rubric=None,
-                       options=None, subjective_type='主观题') -> Dict[str, Any]:
+                       options=None, subjective_type='主观题', language='zh-CN') -> Dict[str, Any]:
         gen = QuestionGenerator(cls)
         return gen.grade_question(
             question_text=question_text, user_answer=user_answer,
             correct_answer=correct_answer, q_type=q_type,
             max_score=max_score, grading_points=grading_points,
-            rubric=rubric, options=options, subjective_type=subjective_type,
+            rubric=rubric, options=options, subjective_type=subjective_type, language=language,
         )
 
     @classmethod

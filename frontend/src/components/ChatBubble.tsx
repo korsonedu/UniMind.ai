@@ -1,3 +1,5 @@
+import { ProtectedImage } from '@/components/ProtectedImage';
+import { t, useLocale } from '@/i18n';
 import { NoteAttachments } from '@/pages/notes/NoteMentions';
 import React, { useState, useCallback } from 'react';
 import { Sparkle, ThumbsUp, ThumbsDown } from '@phosphor-icons/react';
@@ -60,6 +62,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
   native = false,
   markdownComponents,
 }) => {
+  useLocale();
   const [feedback, setFeedback] = useState<boolean | null | undefined>(msg.feedback);
   const [feedbackSource, setFeedbackSource] = useState({ id: msg.id, feedback: msg.feedback });
   if (feedbackSource.id !== msg.id || feedbackSource.feedback !== msg.feedback) {
@@ -93,7 +96,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
       {!isUser && !compact && !native && (
         <div className={cn("h-6 w-6 rounded-full overflow-hidden shrink-0 mt-0.5", botAvatar ? "" : `bg-gradient-to-br ${botGradient} flex items-center justify-center`)}>
           {botAvatar ? (
-            <img src={botAvatar} alt="" className="w-full h-full object-cover" />
+            <ProtectedImage src={botAvatar} alt="" className="w-full h-full object-cover" />
           ) : (
             <Sparkle className="h-3 w-3 text-white" />
           )}
@@ -154,8 +157,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
                 ? "text-green-500"
                 : "text-muted-foreground/30 hover:text-green-500/70",
             )}
-            title="有帮助"
-            aria-label="有帮助"
+            title={t('有帮助')}
+            aria-label={t('有帮助')}
             aria-pressed={feedback === true}
           >
             <ThumbsUp className="h-3 w-3" weight={feedback === true ? "fill" : "regular"} />
@@ -168,8 +171,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
                 ? "text-red-400"
                 : "text-muted-foreground/30 hover:text-red-400/70",
             )}
-            title="不满意"
-            aria-label="不满意"
+            title={t('不满意')}
+            aria-label={t('不满意')}
             aria-pressed={feedback === false}
           >
             <ThumbsDown className="h-3 w-3" weight={feedback === false ? "fill" : "regular"} />

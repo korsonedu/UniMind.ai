@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +15,7 @@ interface GiphyPickerProps {
 }
 
 export const GiphyPicker: React.FC<GiphyPickerProps> = ({ onGifSent }) => {
+  useLocale();
   const [giphySearch, setGiphySearch] = useState('');
   const [giphyResults, setGiphyResults] = useState<{ id: string; title: string; images: { fixed_height: { url: string }; fixed_height_small: { url: string }; original: { url: string } } }[]>([]);
   const [isGiphyLoading, setIsGiphyLoading] = useState(false);
@@ -52,13 +54,13 @@ export const GiphyPicker: React.FC<GiphyPickerProps> = ({ onGifSent }) => {
   return (
     <Popover onOpenChange={(open) => open && giphyResults.length === 0 && fetchGiphy('')}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="选择 GIF">
+        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label={t('选择 GIF')}>
           <FileVideo className="h-5 w-5" />
         </Button>
       </PopoverTrigger>
       <PopoverContent side="top" className="w-80 p-3 rounded-2xl border-border shadow-lg space-y-3 bg-card z-[var(--z-dropdown)]">
         <Input
-          placeholder="搜索 GIPHY..."
+          placeholder={t('搜索 GIPHY...')}
           value={giphySearch}
           onChange={e => { setGiphySearch(e.target.value); fetchGiphy(e.target.value); }}
           className="h-9 text-xs rounded-xl bg-muted border-none text-foreground placeholder:opacity-50 focus-visible:ring-1 focus-visible:ring-primary/20"

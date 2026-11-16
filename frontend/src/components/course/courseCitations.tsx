@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import type { Components } from 'react-markdown';
 import { formatDuration } from '@/lib/utils';
 
@@ -19,8 +20,8 @@ export function courseCitationComponents(context: unknown, courseId: number, onS
           : undefined;
         if (!segment) return <span>{children}</span>;
         return <button type="button" className="text-primary underline underline-offset-2" title={segment.text}
-          aria-label={`回看讲稿 ${formatDuration(segment.start_time)}`} onClick={() => onSeek(segment.start_time)}>
-          讲稿 {formatDuration(segment.start_time)}
+          aria-label={t('回看讲稿 {0}', { 0: formatDuration(segment.start_time) })} onClick={() => onSeek(segment.start_time)}>
+          {t('讲稿 {0}', { 0: formatDuration(segment.start_time) })}
         </button>;
       }
       if (href?.startsWith('/course/') && href.includes('?t=')) {
@@ -31,8 +32,8 @@ export function courseCitationComponents(context: unknown, courseId: number, onS
           : undefined;
         if (!frame) return <span>{children}</span>;
         return <button type="button" className="text-primary underline underline-offset-2"
-          aria-label={`回看画面 ${formatDuration(frame.video_seconds)}`} onClick={() => onSeek(frame.video_seconds)}>
-          画面 {formatDuration(frame.video_seconds)}
+          aria-label={t('回看画面 {0}', { 0: formatDuration(frame.video_seconds) })} onClick={() => onSeek(frame.video_seconds)}>
+          {t('画面 {0}', { 0: formatDuration(frame.video_seconds) })}
         </button>;
       }
       return <a href={href} title={title} target={target} rel={rel}>{children}</a>;

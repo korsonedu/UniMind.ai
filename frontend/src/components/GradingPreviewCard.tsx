@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import React, { useReducer, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,15 +42,16 @@ function editsReducer(state: EditsState, action: EditAction): EditsState {
 }
 
 export function GradingPreviewCard({ payload }: { payload: Record<string, unknown> }) {
+  useLocale();
   const assignmentId = payload.assignment_id as number;
-  const title = (payload.title as string) || `练习 #${assignmentId}`;
+  const title = (payload.title as string) || t('练习 #{0}', { 0: assignmentId });
   const submissions = (payload.submissions || []) as SubmissionEntry[];
 
   const [edits, dispatch] = useReducer(editsReducer, {});
   const [confirming, setConfirming] = useState(false);
 
   if (!submissions.length) {
-    return <p className="text-muted-foreground text-sm">暂无待评分提交</p>;
+    return <p className="text-muted-foreground text-sm">{t('暂无待评分提交')}</p>;
   }
 
   const handleConfirm = async () => {
@@ -74,9 +76,9 @@ export function GradingPreviewCard({ payload }: { payload: Record<string, unknow
         message: `confirm_grades ${JSON.stringify({ assignment_id: assignmentId, edits: editList })}`,
         bot_id: 0,
       });
-      toast.success('成绩已确认');
+      toast.success(t('成绩已确认'));
     } catch {
-      toast.error('确认失败');
+      toast.error(t('确认失败'));
     } finally {
       setConfirming(false);
     }
@@ -88,9 +90,9 @@ export function GradingPreviewCard({ payload }: { payload: Record<string, unknow
         message: `bulk_grade_submissions ${JSON.stringify({ assignment_id: assignmentId, action: 'reject' })}`,
         bot_id: 0,
       });
-      toast.success('已驳回 AI 评分');
+      toast.success(t('已驳回 AI 评分'));
     } catch {
-      toast.error('驳回失败');
+      toast.error(t('驳回失败'));
     }
   };
 
@@ -98,7 +100,7 @@ export function GradingPreviewCard({ payload }: { payload: Record<string, unknow
     <div className="um-visual-grading space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold">{title}</h3>
-        <span className="text-xs text-muted-foreground">{submissions.length} 份提交</span>
+        <span className="text-xs text-muted-foreground">{submissions.length} {t('份提交')}</span>
       </div>
 
       <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -112,7 +114,7 @@ export function GradingPreviewCard({ payload }: { payload: Record<string, unknow
               </div>
               <p className="text-xs text-muted-foreground line-clamp-2">{sub.question_preview}</p>
               <div className="flex items-center gap-2">
-                <label className="text-[10px] text-muted-foreground w-8">分数</label>
+                <label className="text-[10px] text-muted-foreground w-8">{t('分数')}</label>
                 <Input
                   type="number"
                   min={0}
@@ -125,7 +127,7 @@ export function GradingPreviewCard({ payload }: { payload: Record<string, unknow
                 />
                 <Textarea
                   className="h-7 text-xs rounded-lg flex-1 resize-none"
-                  placeholder={sub.ai_feedback || '评语'}
+                  placeholder={sub.ai_feedback || t('评语')}
                   defaultValue={edit?.feedback ?? ''}
                   onChange={(e) =>
                     dispatch({ type: 'set_feedback', submission_id: sub.submission_id, feedback: e.target.value })
@@ -140,11 +142,9 @@ export function GradingPreviewCard({ payload }: { payload: Record<string, unknow
 
       <div className="flex items-center gap-2 pt-2">
         <Button size="sm" className="rounded-xl" onClick={handleConfirm} disabled={confirming}>
-          全部确认
-        </Button>
+          {t('全部确认')}</Button>
         <Button size="sm" variant="outline" className="rounded-xl" onClick={handleReject}>
-          全部驳回
-        </Button>
+          {t('全部驳回')}</Button>
       </div>
     </div>
   );

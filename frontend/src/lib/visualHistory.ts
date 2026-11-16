@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
 import type { AgentStep } from '@/types/toolRun';
 
@@ -35,7 +36,7 @@ export function restoreVisualSteps<T extends VisualMetadataMessage>(messages: T[
 
     const restored = { ...message };
     const title = visuals[0].payload?.title;
-    const label = (typeof title === 'string' ? title : undefined) || '可视化';
+    const label = (typeof title === 'string' ? title : undefined) || t('可视化');
 
     if (restored.toolStep) {
       if (restored.toolStep.status === 'succeeded') {

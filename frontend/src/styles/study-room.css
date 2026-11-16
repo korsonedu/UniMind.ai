@@ -221,3 +221,9 @@
     animation-duration: 0ms !important;
   }
 }
+
+@media (max-width: 767px) {
+  .um-study-composer { padding-right: 54px; }
+  .um-study-send { width: 44px; height: 44px; }
+  .um-study-input-tools button { min-width: 44px; min-height: 44px; }
+}

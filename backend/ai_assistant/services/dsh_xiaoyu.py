@@ -11,11 +11,13 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 
 from ai_assistant.models import AIChatMessage, Conversation
+from ai_assistant.services.language import request_language
 from ai_assistant.services.title_generator import sync_generate_title
 from ai_assistant.services.memory_service import extract_memories_async
-from ai_assistant.views_projects import save_new_conversation_project
+from ai_assistant.views_projects import save_new_conversation_project, learning_activity_metadata
 from notes.context import prepare_note_context, conversation_uses_notes
 from notes.awareness import note_message_metadata
+from core.interface_language import ui_text, error_text
 from users.learning import confirm_ai_call, finish_ai_call, release_ai_call
 from users.models import AIUsageReservation
 from .dsh_runtime import DshUnavailable, run_site_action, site_request_lock, quota_write_lock
@@ -92,7 +94,7 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
             session_id = previous.metadata.get('dsh_session_id') if previous else None
             current = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=conversation_id,
                 role='user', content=message,
-                metadata=note_message_metadata(notes, sources, request.data.get('note_selection', '')))
+                metadata={**note_message_metadata(notes, sources, request.data.get('note_selection', '')), **learning_activity_metadata(request, conversation_id), 'ui_language': request_language(request)})
             if course_context:
                 current.metadata['course_context'] = course_context
                 current.save(update_fields=['metadata'])
@@ -116,7 +118,7 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                 title = Conversation.objects.get(user=user, conversation_id=conversation_id).title
                 needs_title = not title
                 if not title:
-                    title = ' '.join(message.split())[:15]
+                    title = ' '.join(message.split())[:80 if request_language(request) == 'en' else 15]
                 Conversation.objects.filter(user=user, conversation_id=conversation_id).update(title=title, updated_at=timezone.now())
                 payload = {'done': True, 'full_content': result['content'], 'message_id': answer.pk,
                     'user_message': user_event, 'conversation_title': title, 'metadata': metadata,
@@ -198,9 +200,13 @@ def response(request, bot, conversation_id, message, *, course_context=None):
                 round_number = event.get('step', round_number)
                 event = {'type': 'text_reset'}
             elif event['type'] == 'error':
-                event = {'done': True, 'is_error': True, 'full_content': event['error']}
+                event = {'done': True, 'is_error': True, 'full_content': ui_text(event['error'], request_language(request))}
             elif event['type'] != 'user_message':
                 continue
+            if event.get('type') == 'step':
+                event['label'] = ui_text(event.get('label', ''), request_language(request))
+                if event.get('error'):
+                    event['error'] = error_text(event['error'], request_language(request))
             yield ('data: ' + json.dumps(event, ensure_ascii=False) + '\n\n').encode()
 
     result = StreamingHttpResponse(events(), content_type='text/event-stream')

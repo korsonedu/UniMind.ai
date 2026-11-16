@@ -1,3 +1,4 @@
+import { ProtectedImage } from './ProtectedImage';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import type { PluggableList } from 'unified';
 import remarkMath from 'remark-math';
@@ -32,7 +33,7 @@ export function MarkdownContent({
       <ReactMarkdown
         remarkPlugins={[remarkMath, remarkGfm, ...(extraRemarkPlugins || [])]}
         rehypePlugins={[rehypeKatex, ...(extraRehypePlugins || [])]}
-        components={components}
+        components={{ img: input => { const props = { ...input }; delete props.node; return <ProtectedImage {...props} />; }, ...components }}
       >
         {content}
       </ReactMarkdown>

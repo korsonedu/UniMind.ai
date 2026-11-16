@@ -5,6 +5,7 @@ import re
 import zipfile
 from urllib.parse import quote
 from django.http import HttpResponse
+from core.interface_language import ui_text
 from .links import rewrite_note_links
 from .models import Note, Notebook
 from .access import notebook_ids
@@ -15,7 +16,7 @@ def filename(name, pk):
     suffix = f'-{pk}'
     # Reserve four bytes for .zip (also enough for .md) on 255-byte filesystems.
     name = name.encode('utf-8')[:255 - 4 - len(suffix.encode('utf-8'))].decode('utf-8', errors='ignore').rstrip(' .')
-    return f'{name or "未命名"}{suffix}'
+    return f'{name or ui_text("未命名")}{suffix}'
 
 
 def notebook_paths(user):

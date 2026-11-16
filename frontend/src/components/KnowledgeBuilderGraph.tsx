@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import type { BaselineSummary, KnowledgeTreeBuildDetail } from '@/types/knowledgeBuilder';
@@ -244,8 +245,9 @@ export function KnowledgeBuilderGraph({
   onToggleBlockSelection,
   onStudyBlock,
 }: KnowledgeBuilderGraphProps) {
+  const locale = useLocale();
   const uid = useId().replace(/:/g, '');
-  const adapted = useMemo(() => adaptKnowledgeTree(tree), [tree]);
+  const adapted = useMemo(() => adaptKnowledgeTree(tree, locale === 'en' ? t : undefined), [tree, locale]);
   const topicGroups = useMemo(() => {
     const baseline = tree.requirements?.baseline_summary as Partial<BaselineSummary> | undefined;
     return [
@@ -263,7 +265,7 @@ export function KnowledgeBuilderGraph({
       const matched = group.topics.filter(topic => normalizedNames.some(name =>
         name.includes(topic.normalized) || topic.normalized.includes(name)));
       return matched.length ? <span key={group.kind} className={`kb-badge kb-badge--${group.kind}`}
-        title={`匹配主题：${matched.map(topic => topic.name).join('、')}`}>{group.label}</span> : null;
+        title={t('匹配主题：{0}', { 0: matched.map(topic => topic.name).join('、') })}>{t(group.label)}</span> : null;
     });
   };
 
@@ -564,7 +566,7 @@ export function KnowledgeBuilderGraph({
         <div className="kb-brand">
           {headerLeftSlot}
           <p className="kb-status">
-            {adapted.blocks.length} 个知识块 · {adapted.atomCount} 个原子 · {adapted.retainedUniCount} 条精选单向 + {adapted.retainedBiCount} 条双向（候选 {adapted.totalEdgeCount}）
+            {t('{0} 个知识块 · {1} 个原子 · {2} 条精选单向 + {3} 条双向（候选 {4}）', { 0: adapted.blocks.length, 1: adapted.atomCount, 2: adapted.retainedUniCount, 3: adapted.retainedBiCount, 4: adapted.totalEdgeCount })}
           </p>
         </div>
 
@@ -574,20 +576,20 @@ export function KnowledgeBuilderGraph({
             className={edgeMode === 'retained' ? 'active' : undefined}
             onClick={() => setEdgeMode('retained')}
           >
-            主干精选 ({adapted.retainedCount})
+            {t('主干精选 ({0})', { 0: adapted.retainedCount })}
           </button>
           <button
             type="button"
             className={edgeMode === 'all' ? 'active' : undefined}
             onClick={() => setEdgeMode('all')}
           >
-            全量候选 ({adapted.totalEdgeCount})
+            {t('全量候选 ({0})', { 0: adapted.totalEdgeCount })}
           </button>
           <button type="button" onClick={openEntryOnly} disabled={adapted.entryBlockId === null}>
-            展开入口块
+            {t('展开入口块')}
           </button>
           <button type="button" onClick={collapseAll} disabled={openIds.size === 0}>
-            收起全部
+            {t('收起全部')}
           </button>
           {headerRightSlot}
         </div>
@@ -600,9 +602,9 @@ export function KnowledgeBuilderGraph({
             {dom.title}
           </span>
         ))}
-        <span>—→ 主干单向依赖</span>
-        <span>- - ↔ 双向强关联</span>
-        <span className="kb-tip">拖动画布 · 悬停块或连线聚焦上下游 · 点击块卡片原地展开</span>
+        <span>{t('—→ 主干单向依赖')}</span>
+        <span>{t('- - ↔ 双向强关联')}</span>
+        <span className="kb-tip">{t('拖动画布 · 悬停块或连线聚焦上下游 · 点击块卡片原地展开')}</span>
       </div>
 
       <div
@@ -666,8 +668,8 @@ export function KnowledgeBuilderGraph({
                 .filter(Boolean)
                 .join(' ');
 
-              const ttTitle = `${edge.fromCode} ${isBi ? '↔' : '→'} ${edge.toCode}${isEx ? '（候选未入主干）' : ''}`;
-              const ttBody = edge.rationale || edge.exclusionReason || '跨块先修推理连线';
+              const ttTitle = `${edge.fromCode} ${isBi ? '↔' : '→'} ${edge.toCode}${isEx ? t('（候选未入主干）') : ''}`;
+              const ttBody = edge.rationale || edge.exclusionReason || t('跨块先修推理连线');
 
               return (
                 <g
@@ -699,7 +701,7 @@ export function KnowledgeBuilderGraph({
 
             return (
               <div key={col.layer} className="kb-column" style={colStyle}>
-                <div className="kb-level">第 {col.layer} 层</div>
+                <div className="kb-level">{t('第 {0} 层', { 0: col.layer })}</div>
 
                 {col.blocks.map(block => {
                   const progress = tree.block_progress?.find(item => item.block === block.id);
@@ -732,7 +734,7 @@ export function KnowledgeBuilderGraph({
                       onMouseLeave={() => setHoveredBlockId(curr => (curr === block.id ? null : curr))}
                     >
                       {onToggleBlockSelection && <label className="kb-select-block"><input type="checkbox" checked={selectedBlockIds?.has(block.id) ?? false}
-                        onChange={() => onToggleBlockSelection(block.id)} />加入项目目标</label>}
+                        onChange={() => onToggleBlockSelection(block.id)} />{t('加入项目目标')}</label>}
                       <button
                         type="button"
                         className="kb-toggle"
@@ -744,8 +746,8 @@ export function KnowledgeBuilderGraph({
                         </span>
                         <strong>{block.shortTitle}</strong>
                         <small>
-                          {block.code} · {block.steps.length} 步 · {block.coreCount} 必学
-                          {block.extensionCount > 0 ? ` + ${block.extensionCount} 拓展` : ''}
+                          {t('{0} · {1} 步 · {2} 必学', { 0: block.code, 1: block.steps.length, 2: block.coreCount })}
+                          {block.extensionCount > 0 ? t(' + {0} 拓展', { 0: block.extensionCount }) : ''}
                         </small>
                         <span className="kb-badges">
                           <span className="kb-cardtype">{block.domainTitle}</span>
@@ -768,7 +770,7 @@ export function KnowledgeBuilderGraph({
                             ))}
                           </div>
                           <div className="kb-hint">
-                            悬停知识点可查看学习目标与易错点；实线框为必学原子，虚线框为拓展延伸；点击黄色先修接口可跳转定位
+                            {t('悬停知识点可查看学习目标与易错点；实线框为必学原子，虚线框为拓展延伸；点击黄色先修接口可跳转定位')}
                           </div>
 
                           <div
@@ -795,8 +797,8 @@ export function KnowledgeBuilderGraph({
                                 </defs>
                                 {innerResult.wires.map(wire => {
                                   const isContrast = wire.kind === 'contrast';
-                                  const wireTitle = `${wire.fromName} ${isContrast ? '↔' : '→'} ${wire.toName}（${isContrast ? '对比关联' : '步骤推进'}）`;
-                                  const wireBody = wire.reason || '同块知识原子逻辑串联';
+                                  const wireTitle = `${wire.fromName} ${isContrast ? '↔' : '→'} ${wire.toName} (${isContrast ? t('对比关联') : t('步骤推进')})`;
+                                  const wireBody = wire.reason || t('同块知识原子逻辑串联');
                                   return (
                                     <g
                                       key={wire.key}
@@ -829,7 +831,7 @@ export function KnowledgeBuilderGraph({
                                 </h3>
 
                                 {step.branchCondition ? (
-                                  <div className="kb-branch">分支条件：{step.branchCondition}</div>
+                                  <div className="kb-branch">{t('分支条件：{0}', { 0: step.branchCondition })}</div>
                                 ) : null}
 
                                 {step.dependencies.map(dep => (
@@ -840,7 +842,7 @@ export function KnowledgeBuilderGraph({
                                     title={dep.explanation || undefined}
                                     onClick={() => jumpToBlock(dep.sourceBlockId)}
                                   >
-                                    🔗 需要先会：{dep.sourceBlockCode} · {dep.fromAtomName}
+                                    {t('🔗 需要先会：{0} · {1}', { 0: dep.sourceBlockCode, 1: dep.fromAtomName })}
                                     {dep.role ? `（${dep.role}）` : ''} →
                                   </button>
                                 ))}
@@ -855,8 +857,8 @@ export function KnowledgeBuilderGraph({
                                     >
                                       <div>{item.atom.name}</div>
                                       <span className="kb-badges">{renderTopicBadges([item.atom.name])}</span>
-                                      {progress?.weak_atom_ids.includes(item.atom.id) ? <span className="kb-badge kb-badge--weak">待强化</span> : progress?.mastered_atom_ids.includes(item.atom.id) ? <span className="kb-badge kb-badge--mastered">已掌握</span> : null}
-                                      {item.isInterfacePoint ? <b>◆ 跨块接口点</b> : null}
+                                      {progress?.weak_atom_ids.includes(item.atom.id) ? <span className="kb-badge kb-badge--weak">{t('待强化')}</span> : progress?.mastered_atom_ids.includes(item.atom.id) ? <span className="kb-badge kb-badge--mastered">{t('已掌握')}</span> : null}
+                                      {item.isInterfacePoint ? <b>{t('◆ 跨块接口点')}</b> : null}
                                     </div>
                                   ))}
                                 </div>
@@ -865,10 +867,10 @@ export function KnowledgeBuilderGraph({
                           </div>
 
                           <div className="kb-summary">
-                            <strong>本块回答主线串联</strong>
-                            <p>{block.narrativeSummary || '暂无主线串联说明'}</p>
+                            <strong>{t('本块回答主线串联')}</strong>
+                            <p>{block.narrativeSummary || t('暂无主线串联说明')}</p>
                             <p className="kb-orphan">
-                              原子覆盖检查：本块共 {block.totalAtoms} 个知识原子（必学 {block.coreCount} · 拓展 {block.extensionCount}），分 {block.steps.length} 步展开。
+                              {t('原子覆盖检查：本块共 {0} 个知识原子（必学 {1} · 拓展 {2}），分 {3} 步展开。', { 0: block.totalAtoms, 1: block.coreCount, 2: block.extensionCount, 3: block.steps.length })}
                             </p>
                           </div>
                         </div>

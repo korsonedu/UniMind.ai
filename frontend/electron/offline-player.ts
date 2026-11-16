@@ -68,12 +68,13 @@ export const playerScript = String.raw`(() => {
   const video = document.querySelector('video');
   if (!video) return;
   const message = document.getElementById('sync-status');
+  const labels = JSON.parse(video.dataset.playerMessages);
   let previous = null, watched = 0, focused = 0, started = Date.now(), lastSave = Date.now(), chain = Promise.resolve();
   let statusTimer, statusAttempts = 0, closed = false;
   const showStatus = state => {
     clearTimeout(statusTimer);
     if (closed) return;
-    message.textContent = state.error || (state.pending ? '离线记录已保存，待联网同步（' + state.pending + '）' : '学习记录已同步');
+    message.textContent = state.error || (state.pending ? labels.pending.replace('{0}', String(state.pending)) : labels.complete);
     if (state.pending) statusTimer = setTimeout(refreshStatus, statusAttempts++ < 60 ? (navigator.onLine ? 2000 : 5000) : 30000);
   };
   const refreshStatus = async () => {
@@ -118,10 +119,10 @@ export const playerScript = String.raw`(() => {
     }).catch(error => {
       const code = typeof error?.code === 'string' && /^[a-z_]+$/.test(error.code) ? error.code : 'local_fetch_failed';
       console.warn('[UniMind offline checkpoint]', code, typeof error?.status === 'number' ? error.status : '');
-      if (['login_required', 'login_credential_changed', 'player_identity_changed'].includes(code)) message.textContent = '登录状态已失效，请重新登录后再打开课程。';
-      else if (code === 'course_unavailable_or_changed') message.textContent = '课程授权或视频已变更，请联网重新下载后播放。';
-      else if (code === 'local_checkpoint_write_failed') message.textContent = '本地记录未保存，请检查磁盘剩余空间后重试。';
-      else message.textContent = '本地记录未保存，请重新打开课程后重试。';
+      if (['login_required', 'login_credential_changed', 'player_identity_changed'].includes(code)) message.textContent = labels.login;
+      else if (code === 'course_unavailable_or_changed') message.textContent = labels.changed;
+      else if (code === 'local_checkpoint_write_failed') message.textContent = labels.disk;
+      else message.textContent = labels.retry;
     });
   };
   const resumePosition = () => { const position = Number(video.dataset.position); if (position > 0 && position < video.duration) video.currentTime = position; baseline(); };

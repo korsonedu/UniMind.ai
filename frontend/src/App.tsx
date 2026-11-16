@@ -1,5 +1,9 @@
+import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
+import { OfflineTrialPage } from '@/components/OfflineTrialPage';
+import { getLocale, t, useLocale } from '@/i18n';
+import { saveLanguagePreference } from '@/lib/languagePreference';
 import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation } from 'react-router-dom';
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { registerSW } from 'virtual:pwa-register';
 import axios from 'axios';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -17,7 +21,10 @@ import { useInstitutionStore } from './store/useInstitutionStore';
 import { FeatureGuard } from './components/FeatureGuard';
 import { Loading } from '@/components/Loading';
 import api from '@/lib/api';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
+import { App as NativeApp } from '@capacitor/app';
+import { keepNativeSession, isNativeOffline, isOfflineDemo, subscribeOffline } from '@/lib/offlineSession';
+import { isNativePlatform } from '@/lib/serverConfig';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { XiaoYuChatHost } from './pages/xiaoyu/XiaoYuChatProvider';
 
@@ -28,6 +35,7 @@ const Landing = lazy(() => import('./pages/Landing').then(module => ({ default: 
 const CourseCenter = lazy(() => import('./pages/CourseCenter').then(module => ({ default: module.CourseCenter })));
 const TestLadder = lazy(() => import('./pages/TestLadder').then(module => ({ default: module.TestLadder })));
 const StudyRoom = lazy(() => import('./pages/StudyRoom').then(module => ({ default: module.StudyRoom })));
+const InstitutionManagement = lazy(() => import('./pages/InstitutionManagement'));
 const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })));
 const Login = lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
 const DesktopAuthorize = lazy(() => import('./pages/DesktopAuthorize').then(module => ({ default: module.DesktopAuthorize })));
@@ -65,12 +73,12 @@ const PricingPage = lazy(() => import('./pages/Pricing'));
 import { Skeleton } from '@/components/ui/skeleton';
 
 const PageLoader = () => (
-  <div className="min-h-dvh w-full flex items-center justify-center bg-background">
+  <div data-workspace-loader className="fixed inset-0 z-50 flex items-center justify-center bg-background">
     <div className="w-full max-w-6xl mx-auto px-6 md:px-8 py-12 space-y-8">
       {/* Header skeleton */}
       <div className="space-y-3 max-w-lg">
         <Skeleton className="h-8 w-64 rounded-lg" />
-        <Skeleton className="h-4 w-96 rounded-md" />
+        <Skeleton className="h-4 w-96 max-w-full rounded-md" />
       </div>
       {/* Card grid skeleton */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -92,7 +100,7 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
   const location = useLocation();
   useEffect(() => {
     // PWA push subscription — deferred to avoid blocking render
-    if (user) {
+    if (user && !isNativePlatform()) {
       if (!serviceWorkerRegistered) {
         serviceWorkerRegistered = true;
         registerSW({ immediate: true });
@@ -136,29 +144,40 @@ const legacyRoutes = [
 ];
 
 const RootRedirect = () => {
+  useLocale();
 
   const storeUser = useAuthStore(s => s.user);
   const setAuth = useAuthStore(s => s.setAuth);
   const logout = useAuthStore(s => s.logout);
-  const hasHydrated = useAuthStore.persist.hasHydrated();
+  const tokenHydrated = useAuthStore(s => s.tokenHydrated);
+  const nativeToken = useAuthStore(s => s.token);
+  const demoActive = useAuthStore(s => s.demoActive);
+  const hasHydrated = useAuthStore.persist.hasHydrated() && tokenHydrated;
   const location = useLocation();
   const [offlineAccess, setOfflineAccess] = useState<{ userId: number; error: unknown } | null>(null);
 
   const { data: userData, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.user.me,
     queryFn: ({ signal }) => api.get('/users/me/', { signal }).then(r => r.data),
-    enabled: hasHydrated,
+    enabled: hasHydrated && !demoActive && (!isNativePlatform() || !!nativeToken),
     retry: false,
   });
 
   // Sync auth store with query result
   useEffect(() => {
-    if (userData && !isError) setAuth(userData, null);
-  }, [userData, isError, setAuth]);
+    if (userData && !isError && !demoActive) {
+      setAuth(userData);
+      if (userData.preferred_language === '') {
+        const language = getLocale();
+        void saveLanguagePreference(language, userData.id).catch(() => {});
+      }
+    }
+  }, [userData, isError, setAuth, demoActive]);
 
   // A network failure may keep the desktop offline session; only a 401 logs out.
   useEffect(() => {
-    if (!isError) return;
+    if (!isError || demoActive) return;
+    if (keepNativeSession(isNativePlatform(), false, !!storeUser, !!nativeToken, axios.isAxiosError(error) ? error.response?.status : undefined)) return;
     const status = axios.isAxiosError(error) ? error.response?.status : undefined;
     const desktop = window.unimindDesktop;
     if (status === 401 || !desktop || !storeUser) {
@@ -173,28 +192,61 @@ const RootRedirect = () => {
       else logout({ preserveDesktop: true });
     }).catch(() => { if (active) logout({ preserveDesktop: true }); });
     return () => { active = false; };
-  }, [isError, error, logout, storeUser]);
+  }, [isError, error, logout, storeUser, nativeToken, demoActive]);
 
   // Anonymous visitors see the landing immediately; /users/me/ keeps validating in the background.
-  const anonymousLanding = hasHydrated && !storeUser && location.pathname === '/' && !window.unimindDesktop;
+  const anonymousLanding = hasHydrated && !storeUser && location.pathname === '/' && !window.unimindDesktop && !isNativePlatform();
 
-  if (!hasHydrated || (isLoading && !anonymousLanding)) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
+  if (hasHydrated && demoActive) return <Outlet />;
+  if (hasHydrated && isError && keepNativeSession(isNativePlatform(), demoActive, !!storeUser, !!nativeToken, axios.isAxiosError(error) ? error.response?.status : undefined)) return <Outlet />;
+  if (hasHydrated && isNativePlatform() && !nativeToken) return <Navigate to={getLoginPath(location.pathname + location.search + location.hash)} replace />;
+
+  if (!hasHydrated || (isLoading && !anonymousLanding)) return <Loading message={t('正在验证登录状态…')} fullScreen size="lg" />;
 
   if (userData && !isError) {
-    if (storeUser?.id !== userData.id) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
+    if (storeUser?.id !== userData.id) return <Loading message={t('正在验证登录状态…')} fullScreen size="lg" />;
     return <Outlet />;
   }
 
   if (isError && window.unimindDesktop && storeUser && !(axios.isAxiosError(error) && error.response?.status === 401)) {
     if (offlineAccess?.userId === storeUser.id && offlineAccess.error === error) return <Outlet />;
-    return <Loading message="正在确认离线访问权限…" fullScreen size="lg" />;
+    return <Loading message={t('正在确认离线访问权限…')} fullScreen size="lg" />;
   }
 
   if (location.pathname !== '/') return <Navigate to={getLoginPath(location.pathname + location.search + location.hash)} replace />;
-  if (window.unimindDesktop) return <Navigate to="/login" replace />;
+  if (window.unimindDesktop || isNativePlatform()) return <Navigate to="/login" replace />;
 
   return <Suspense fallback={<div className="min-h-dvh bg-[#080b0f]" aria-hidden="true" />}><Landing /></Suspense>;
 };
+
+// Keep the initial workspace hidden until its configuration and chat are ready.
+const WorkspaceEntry = () => {
+  const { pathname } = useLocation();
+  const { chat, activate } = useXiaoYuChat();
+  const { loading, hasFeature, fetchFeatures } = useInstitutionStore();
+  const [entered, setEntered] = useState(false);
+  const needsChat = pathname === '/xiaoyu' && hasFeature('ai.assistant');
+  const waiting = loading || (needsChat && !chat.initialized);
+
+  useEffect(() => {
+    if (useInstitutionStore.getState().loading) void fetchFeatures();
+  }, [fetchFeatures]);
+  useEffect(() => {
+    if (!loading && needsChat) activate();
+  }, [loading, needsChat, activate]);
+  const reveal = useCallback((node: HTMLDivElement | null) => {
+    if (node) setEntered(true);
+  }, []);
+
+  return <RequireAuth>
+    {!entered && <PageLoader />}
+    <Suspense fallback={entered ? <PageLoader /> : null}>
+      {(entered || !waiting) && <div className="contents" ref={reveal}><MainLayout /></div>}
+    </Suspense>
+  </RequireAuth>;
+};
+
+const workspacePage = (Component: React.ComponentType) => <ErrorBoundary><Component /></ErrorBoundary>;
 
 const lazyPage = (Component: React.ComponentType) => (
   <ErrorBoundary>
@@ -214,38 +266,41 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <HomeRedirect /> },
       {
-        element: <RequireAuth><Suspense fallback={<PageLoader />}><MainLayout /></Suspense></RequireAuth>,
+        element: <WorkspaceEntry />,
         children: [
-          { path: "courses", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{lazyPage(CourseCenter)}</FeatureGuard> },
+          { path: "courses", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{workspacePage(CourseCenter)}</FeatureGuard> },
           {
-            element: lazyPage(CommunityLayout),
+            element: workspacePage(CommunityLayout),
             children: [
-              { path: "community", element: lazyPage(CommunityEntry) },
-              { path: "qa", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{lazyPage(QASystem)}</FeatureGuard> },
-              { path: "qa/:id", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{lazyPage(QuestionDetail)}</FeatureGuard> },
-              { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}>{lazyPage(StudyRoom)}</FeatureGuard> },
+              { path: "community", element: workspacePage(CommunityEntry) },
+              { path: "qa", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{workspacePage(QASystem)}</FeatureGuard> },
+              { path: "qa/:id", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{workspacePage(QuestionDetail)}</FeatureGuard> },
+              { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}>{workspacePage(StudyRoom)}</FeatureGuard> },
             ],
           },
-          { path: "tests", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestLadder)}</FeatureGuard> },
-          { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestSessionPage)}</FeatureGuard> },
-          { path: "tests/results/:examId", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(ExamResultPage)}</FeatureGuard> },
-          { path: "tests/history", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(ExamHistoryPage)}</FeatureGuard> },
-          { path: "notes", element: lazyPage(NotesPage) },
-          { path: "notes/:id", element: lazyPage(NotesPage) },
-          { path: "knowledge-tree", element: <FeatureGuard feature="ai.assistant">{lazyPage(ProjectKnowledge)}</FeatureGuard> },
-          { path: "knowledge-builder", element: <FeatureGuard feature="ai.assistant">{lazyPage(KnowledgeBuilder)}</FeatureGuard> },
-          { path: "knowledge-builder/:buildId", element: <FeatureGuard feature="ai.assistant">{lazyPage(KnowledgeBuilder)}</FeatureGuard> },
-          { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant">{lazyPage(XiaoYu)}</FeatureGuard> },
-          { path: "xiaoyu/practice/:sessionId", element: <FeatureGuard feature="ai.assistant">{lazyPage(PracticeSession)}</FeatureGuard> },
-          { path: "settings", element: lazyPage(Settings) },
-          { path: "billing", element: lazyPage(BillingPage) },
-          { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{lazyPage(CourseCenter)}</FeatureGuard> },
-          { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{lazyPage(WrongQuestionReviewPage)}</FeatureGuard> },
-          { path: "achievements", element: lazyPage(Achievements) },
+          { path: "tests", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{workspacePage(TestLadder)}</FeatureGuard> },
+          { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{workspacePage(TestSessionPage)}</FeatureGuard> },
+          { path: "tests/results/:examId", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{workspacePage(ExamResultPage)}</FeatureGuard> },
+          { path: "tests/history", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{workspacePage(ExamHistoryPage)}</FeatureGuard> },
+          { path: "notes", element: workspacePage(NotesPage) },
+          { path: "notes/:id", element: workspacePage(NotesPage) },
+          { path: "practice", element: <RequireAuth><OfflineTrialPage /></RequireAuth> },
+          { path: "calendar", element: <RequireAuth><OfflineTrialPage calendar /></RequireAuth> },
+          { path: "knowledge-tree", element: <FeatureGuard feature="ai.assistant">{workspacePage(ProjectKnowledge)}</FeatureGuard> },
+          { path: "knowledge-builder", element: <FeatureGuard feature="ai.assistant">{workspacePage(KnowledgeBuilder)}</FeatureGuard> },
+          { path: "knowledge-builder/:buildId", element: <FeatureGuard feature="ai.assistant">{workspacePage(KnowledgeBuilder)}</FeatureGuard> },
+          { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant">{workspacePage(XiaoYu)}</FeatureGuard> },
+          { path: "xiaoyu/practice/:sessionId", element: <FeatureGuard feature="ai.assistant">{workspacePage(PracticeSession)}</FeatureGuard> },
+          { path: "settings", element: workspacePage(Settings) },
+          { path: "settings/institution", element: workspacePage(InstitutionManagement) },
+          { path: "billing", element: workspacePage(BillingPage) },
+          { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{workspacePage(CourseCenter)}</FeatureGuard> },
+          { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{workspacePage(WrongQuestionReviewPage)}</FeatureGuard> },
+          { path: "achievements", element: workspacePage(Achievements) },
 
-          { path: "report-card", element: <FeatureGuard feature={FEATURES.FULL_REPORT}>{lazyPage(ReportCard)}</FeatureGuard> },
+          { path: "report-card", element: <FeatureGuard feature={FEATURES.FULL_REPORT}>{workspacePage(ReportCard)}</FeatureGuard> },
 
-          { path: "*", element: lazyPage(NotFound) },
+          { path: "*", element: workspacePage(NotFound) },
         ],
       },
     ],
@@ -277,11 +332,39 @@ function StudyRoomWsBridge() {
   const enabled = !!user && (
     isPlatformAdmin || features.includes(FEATURES.STUDY_ROOM)
   );
-  useStudyRoomWs(enabled);
+  const nativeOffline = useSyncExternalStore(subscribeOffline, isNativeOffline);
+  useStudyRoomWs(enabled && !nativeOffline && !isOfflineDemo());
   return null;
 }
 
 function App() {
+  const hydrated = useAuthStore(state => state.tokenHydrated);
+  useLocale();
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    let lastBack = 0;
+    const listener = NativeApp.addListener('backButton', () => {
+      if (document.fullscreenElement) { void document.exitFullscreen(); return; }
+      const active = document.activeElement;
+      const keyboardOpen = document.querySelector('.um-app-shell[data-keyboard-open="true"]')
+        || (window.visualViewport && window.innerHeight - window.visualViewport.height > 140);
+      if (keyboardOpen && active instanceof HTMLElement && active.matches('input, textarea, [contenteditable="true"]')) { active.blur(); return; }
+      const dialog = [...document.querySelectorAll<HTMLElement>('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]')].at(-1);
+      if (dialog) {
+        dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        return;
+      }
+      const close = document.querySelector<HTMLButtonElement>('[data-native-back-close]');
+      if (close) { close.click(); return; }
+      const route = router.state.location.pathname;
+      if (route !== HOME_PATH && route !== '/login' && window.history.state?.idx > 0) { void router.navigate(-1); return; }
+      if (Date.now() - lastBack < 2000) { void NativeApp.exitApp(); return; }
+      lastBack = Date.now();
+      toast(t('再按一次返回键退出 UniMind'), { id: 'android-back-exit', duration: 2000 });
+    });
+    return () => { void listener.then(handle => handle.remove()); };
+  }, []);
+  if (!hydrated) return <Loading message={t('正在恢复登录状态…')} fullScreen />;
   return (
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>

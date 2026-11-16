@@ -1,4 +1,4 @@
-from core.utils import apply_institution_filter, get_content_institution_id
+from core.utils import apply_institution_filter, get_content_institution_id, get_user_content_institution_id
 from rest_framework.permissions import BasePermission
 
 from .models import Course
@@ -6,6 +6,10 @@ from .models import Course
 
 def has_full_course_access(user):
     from users.learning import is_course_student
+    from users.workspaces.access import membership_for, workspace_active, active_course_ids
+    member = membership_for(user)
+    if member:
+        return workspace_active(member) and (member.role == 'admin' or active_course_ids(member).exists())
     from users.permissions import is_platform_admin
     return bool(user and user.is_authenticated and user.is_active and
                 (is_platform_admin(user) or is_course_student(user)))
@@ -20,6 +24,10 @@ class HasFullCourseAccess(BasePermission):
 
 def visible_courses(request):
     """课程学员可读本平台全课，注册学生仅可读明确开放的模块。"""
+    from users.workspaces.access import membership_for, active_course_ids
+    member = membership_for(request.user)
+    if member:
+        return Course.objects.filter(is_published=True, pk__in=active_course_ids(member))
     courses = apply_institution_filter(Course.objects.filter(is_published=True), request.user, request)
     if not has_full_course_access(request.user):
         courses = courses.filter(module__is_public=True, module__institution_id=get_content_institution_id())
@@ -31,7 +39,7 @@ def course_list_queryset(queryset, request):
     from .models import CourseTagRelation, VideoProgress
 
     relations = CourseTagRelation.objects.filter(
-        tag__institution_id=get_content_institution_id(),
+        tag__institution_id=get_user_content_institution_id(request.user),
     ).select_related('tag').annotate(
         tag_course_count=Count('tag__course_relations', filter=Q(
             tag__course_relations__course__in=visible_courses(request),

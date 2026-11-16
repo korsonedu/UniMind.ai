@@ -1,3 +1,4 @@
+import { getLocale, t, useLocale } from '@/i18n';
 import { useEffect, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CaretRight } from '@phosphor-icons/react';
@@ -17,6 +18,7 @@ const percent = (value: number | null | undefined) => value == null ? '—' : `$
 const shortDate = (value: string) => `${Number(value.slice(5, 7))}/${Number(value.slice(8, 10))}`;
 
 export function MemoryRetentionTrend() {
+  useLocale();
   const titleId = useId();
   const descriptionId = useId();
   const detailsId = useId();
@@ -48,24 +50,24 @@ export function MemoryRetentionTrend() {
   const y = (value: number) => 16 + (1 - Math.max(0, Math.min(1, value))) * 160;
   const path = (key: 'predicted' | 'actual') => series.map((point, index) => `${index ? 'L' : 'M'} ${x(point)} ${y(point[key])}`).join(' ');
 
-  return <section className="um-memory-trend um-portal-card" aria-label="记忆保持趋势">
-    <header className="um-course-section-heading"><div><h2>记忆保持趋势</h2><p>Memorix-Field · 近 {curve?.window_days || 90} 天的复习记录</p></div><button type="button" className="um-course-text-button" disabled={loading} onClick={() => { setLoading(true); setVersion(value => value + 1); }}>{loading ? '读取中…' : '刷新'}</button></header>
-    {loading ? <p role="status" className="um-memory-empty">正在读取记忆趋势…</p> : error ? <p role="alert" className="um-memory-empty">记忆趋势加载失败，请刷新重试。</p> : !series.length ? <div className="um-memory-empty"><p>完成几轮复习后，你可以在这里看到记忆保持的变化。</p><Link to="/tests">开始练习</Link></div> : <>
-      <dl className="um-memory-metrics"><div><dt>预计记住的程度</dt><dd>{percent(curve?.metrics.avg_predicted)}</dd></div><div><dt>实际回忆表现</dt><dd>{percent(curve?.metrics.avg_actual)}</dd></div><div><dt>复习记录</dt><dd>{curve?.metrics.review_count}<small> 次</small></dd></div></dl>
-      <p className="um-memory-explainer">上方为期间平均值。实线是系统预测的记忆保持程度，虚线是复习时成功回忆的比例，只统计有复习记录的日期。</p>
+  return <section className="um-memory-trend um-portal-card" aria-label={t('记忆保持趋势')}>
+    <header className="um-course-section-heading"><div><h2>{t('记忆保持趋势')}</h2><p>{t('Memorix-Field · 近')} {curve?.window_days || 90} {t('天的复习记录')}</p></div><button type="button" className="um-course-text-button" disabled={loading} onClick={() => { setLoading(true); setVersion(value => value + 1); }}>{loading ? t('读取中…') : t('刷新')}</button></header>
+    {loading ? <p role="status" className="um-memory-empty">{t('正在读取记忆趋势…')}</p> : error ? <p role="alert" className="um-memory-empty">{t('记忆趋势加载失败，请刷新重试。')}</p> : !series.length ? <div className="um-memory-empty"><p>{t('完成几轮复习后，你可以在这里看到记忆保持的变化。')}</p><Link to="/tests">{t('开始练习')}</Link></div> : <>
+      <dl className="um-memory-metrics"><div><dt>{t('预计记住的程度')}</dt><dd>{percent(curve?.metrics.avg_predicted)}</dd></div><div><dt>{t('实际回忆表现')}</dt><dd>{percent(curve?.metrics.avg_actual)}</dd></div><div><dt>{t('复习记录')}</dt><dd>{curve?.metrics.review_count}<small> {t('次')}</small></dd></div></dl>
+      <p className="um-memory-explainer">{t('上方为期间平均值。实线是系统预测的记忆保持程度，虚线是复习时成功回忆的比例，只统计有复习记录的日期。')}</p>
       <div className="um-memory-chart"><svg viewBox="0 0 768 212" role="img" aria-labelledby={`${titleId} ${descriptionId}`}>
-        <title id={titleId}>记忆保持趋势</title><desc id={descriptionId}>{`${first.date} 至 ${last.date}，预计记住的程度平均 ${percent(curve?.metrics.avg_predicted)}，实际回忆表现平均 ${percent(curve?.metrics.avg_actual)}。详细日期和数值可在下方详情查看。`}</desc>
+        <title id={titleId}>{t('记忆保持趋势')}</title><desc id={descriptionId}>{t('{0} 至 {1}，预计记住的程度平均 {2}，实际回忆表现平均 {3}。详细日期和数值可在下方详情查看。', { 0: first.date, 1: last.date, 2: percent(curve?.metrics.avg_predicted), 3: percent(curve?.metrics.avg_actual) })}</desc>
         {[1, .5, 0].map(value => <g key={value}><line x1="44" x2="752" y1={y(value)} y2={y(value)} className="um-memory-gridline" /><text x="32" y={y(value) + 4} textAnchor="end">{value * 100}%</text></g>)}
         <path d={path('predicted')} fill="none" className="um-memory-predicted" strokeWidth="2.5" /><path d={path('actual')} fill="none" className="um-memory-actual" strokeWidth="2.5" strokeDasharray="5 4" />
-        {series.map(point => <g key={point.date}><title>{`${point.date}，预计 ${percent(point.predicted)}，实际 ${percent(point.actual)}，复习 ${point.count} 次`}</title><circle cx={x(point)} cy={y(point.predicted)} r="3" className="um-memory-predicted-dot" /><circle cx={x(point)} cy={y(point.actual)} r="3" className="um-memory-actual-dot" /></g>)}
+        {series.map(point => <g key={point.date}><title>{t('{0}，预计 {1}，实际 {2}，复习 {3} 次', { 0: point.date, 1: percent(point.predicted), 2: percent(point.actual), 3: point.count })}</title><circle cx={x(point)} cy={y(point.predicted)} r="3" className="um-memory-predicted-dot" /><circle cx={x(point)} cy={y(point.actual)} r="3" className="um-memory-actual-dot" /></g>)}
         <text x={x(first)} y="203" textAnchor={series.length === 1 ? 'middle' : 'start'}>{shortDate(first.date)}</text>{series.length > 1 && <text x={x(last)} y="203" textAnchor="end">{shortDate(last.date)}</text>}
       </svg></div>
-      <div className="um-memory-legend"><span><i />预计记住的程度</span><span><i />实际回忆表现</span></div>
-      <div className="um-memory-details"><button type="button" className="um-memory-details-toggle" aria-expanded={expanded} aria-controls={detailsId} onClick={() => setExpanded(value => !value)}><CaretRight size={13} className="um-disclosure-chevron" />{expanded ? '收起数据与算法更新' : '查看数据与算法更新'}</button><Collapse open={expanded} id={detailsId}>
-        <p>最近更新：{curve?.profile.last_optimized_at ? new Date(curve.profile.last_optimized_at).toLocaleString('zh-CN') : '尚未更新'}。算法根据你的复习记录调整预测，更新改善率表示预测误差的变化。</p>
-        <dl><div><dt>预测误差（RMSE）</dt><dd>{curve?.metrics.rmse ?? '—'}</dd></div><div><dt>平均绝对误差（MAE）</dt><dd>{curve?.metrics.mae ?? '—'}</dd></div></dl>
-        <div className="um-memory-table"><table><caption>每日复习数据</caption><thead><tr><th scope="col">日期</th><th scope="col">预计</th><th scope="col">实际</th><th scope="col">次数</th></tr></thead><tbody>{series.map(point => <tr key={point.date}><th scope="row">{point.date}</th><td>{percent(point.predicted)}</td><td>{percent(point.actual)}</td><td>{point.count}</td></tr>)}</tbody></table></div>
-        <h3>最近算法更新</h3>{historyError ? <p role="alert">更新记录加载失败，请刷新重试。</p> : !history.length ? <p>暂无更新记录</p> : <ul>{history.slice(0, 3).map(item => <li key={item.id}><span>{item.accepted ? '已采用' : '未采用'} · 预测误差改善 {(item.improvement_ratio * 100).toFixed(2)}%</span><span>{item.reviews_used} 次复习 · {new Date(item.created_at).toLocaleString('zh-CN')}</span></li>)}</ul>}
+      <div className="um-memory-legend"><span><i />{t('预计记住的程度')}</span><span><i />{t('实际回忆表现')}</span></div>
+      <div className="um-memory-details"><button type="button" className="um-memory-details-toggle" aria-expanded={expanded} aria-controls={detailsId} onClick={() => setExpanded(value => !value)}><CaretRight size={13} className="um-disclosure-chevron" />{expanded ? t('收起数据与算法更新') : t('查看数据与算法更新')}</button><Collapse open={expanded} id={detailsId}>
+        <p>{t('最近更新：')}{curve?.profile.last_optimized_at ? new Date(curve.profile.last_optimized_at).toLocaleString(getLocale()) : t('尚未更新')}{t('。算法根据你的复习记录调整预测，更新改善率表示预测误差的变化。')}</p>
+        <dl><div><dt>{t('预测误差（RMSE）')}</dt><dd>{curve?.metrics.rmse ?? '—'}</dd></div><div><dt>{t('平均绝对误差（MAE）')}</dt><dd>{curve?.metrics.mae ?? '—'}</dd></div></dl>
+        <div className="um-memory-table"><table><caption>{t('每日复习数据')}</caption><thead><tr><th scope="col">{t('日期')}</th><th scope="col">{t('预计')}</th><th scope="col">{t('实际')}</th><th scope="col">{t('次数')}</th></tr></thead><tbody>{series.map(point => <tr key={point.date}><th scope="row">{point.date}</th><td>{percent(point.predicted)}</td><td>{percent(point.actual)}</td><td>{point.count}</td></tr>)}</tbody></table></div>
+        <h3>{t('最近算法更新')}</h3>{historyError ? <p role="alert">{t('更新记录加载失败，请刷新重试。')}</p> : !history.length ? <p>{t('暂无更新记录')}</p> : <ul>{history.slice(0, 3).map(item => <li key={item.id}><span>{item.accepted ? t('已采用') : t('未采用')} {t('· 预测误差改善')} {(item.improvement_ratio * 100).toFixed(2)}%</span><span>{item.reviews_used} {t('次复习 ·')} {new Date(item.created_at).toLocaleString(getLocale())}</span></li>)}</ul>}
       </Collapse></div>
     </>}
   </section>;

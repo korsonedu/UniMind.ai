@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import DOMPurify from 'dompurify';
@@ -11,11 +12,14 @@ interface LegalDoc {
   title: string;
   content: string;
   effective_date: string;
+  reference_translation?: { language: string; source_version: string; title: string; content: string };
 }
 
 export default function Legal() {
+  const locale = useLocale();
   const location = useLocation();
   const docType = location.pathname.includes('privacy') ? 'privacy' : 'terms';
+  const [showOriginal, setShowOriginal] = useState(false);
   const [doc, setDoc] = useState<LegalDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -29,40 +33,44 @@ export default function Legal() {
   useEffect(() => {
     api.get(`/legal/${docType}/`)
       .then(r => { setDoc(r.data); setError(''); })
-      .catch(() => setError('文档加载失败'))
+      .catch(() => setError(t('文档加载失败')))
       .finally(() => setLoading(false));
   }, [docType]);
 
   if (loading) {
     return (
-      <PageWrapper title="加载中...">
-        <div className="max-w-3xl mx-auto py-12 text-center text-muted-foreground">加载中...</div>
+      <PageWrapper title={t('加载中...')}>
+        <div className="max-w-3xl mx-auto py-12 text-center text-muted-foreground">{t('加载中...')}</div>
       </PageWrapper>
     );
   }
 
   if (error || !doc) {
     return (
-      <PageWrapper title="错误">
+      <PageWrapper title={t('错误')}>
         <div className="max-w-3xl mx-auto py-12 text-center text-muted-foreground">
-          {error || '文档不存在'}
-          <div className="mt-4"><Link to="/" className="text-primary underline">返回首页</Link></div>
+          {error || t('文档不存在')}
+          <div className="mt-4"><Link to="/" className="text-primary underline">{t('返回首页')}</Link></div>
         </div>
       </PageWrapper>
     );
   }
 
+  const reference = locale === 'en' ? doc.reference_translation : undefined;
+  const translated = !!reference && !showOriginal;
   return (
-    <PageWrapper title={doc.title}>
+    <PageWrapper title={translated ? reference!.title : t(doc.title)}>
       <article className="prose prose-slate max-w-3xl mx-auto py-8">
+        {locale === 'en' && <p className="text-muted-foreground">{translated ? t('英文参考译文，来源于发布版本 {0}，不替换原文。', { 0: reference!.source_version }) : t('正文按发布时的原语言展示。')}</p>}
+        {reference && <button type="button" className="text-primary underline" onClick={() => setShowOriginal(value => !value)}>{translated ? t('查看发布原文') : t('查看英文参考译文')}</button>}
         <p className="text-muted-foreground">
-          版本：{doc.version} &nbsp;|&nbsp; 生效日期：{doc.effective_date}
+          {t('版本：')}{doc.version} {' | '}{t('生效日期：')}{doc.effective_date}
         </p>
-        <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(doc.content) }} />
+        <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(translated ? reference!.content : doc.content) }} />
         <div className="mt-8 pt-4 border-t text-sm text-muted-foreground">
-          <Link to="/privacy" className={docType === 'privacy' ? 'font-bold' : 'underline'}>隐私政策</Link>
+          <Link to="/privacy" className={docType === 'privacy' ? 'font-bold' : 'underline'}>{t('隐私政策')}</Link>
           {' · '}
-          <Link to="/terms" className={docType === 'terms' ? 'font-bold' : 'underline'}>用户协议</Link>
+          <Link to="/terms" className={docType === 'terms' ? 'font-bold' : 'underline'}>{t('用户协议')}</Link>
         </div>
       </article>
     </PageWrapper>

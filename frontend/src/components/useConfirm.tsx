@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useState, useCallback } from 'react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -14,6 +15,7 @@ interface ConfirmOptions {
 }
 
 export function useConfirm() {
+  useLocale();
   const [state, setState] = useState<{
     open: boolean;
     options: ConfirmOptions;
@@ -50,18 +52,18 @@ export function useConfirm() {
     <AlertDialog open={state.open} onOpenChange={(open) => { if (!open) handleCancel(); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{state.options.title ?? '确认操作'}</AlertDialogTitle>
+          <AlertDialogTitle>{state.options.title ?? t('确认操作')}</AlertDialogTitle>
           <AlertDialogDescription>{state.options.description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={handleCancel}>
-            {state.options.cancelText ?? '取消'}
+            {state.options.cancelText ?? t('取消')}
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={handleConfirm}
             className={state.options.variant === 'destructive' ? 'bg-red-500 hover:bg-red-600' : ''}
           >
-            {state.options.confirmText ?? '确认'}
+            {state.options.confirmText ?? t('确认')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

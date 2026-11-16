@@ -1,3 +1,5 @@
+import { isOfflineDemo, isNativeOffline } from '@/lib/offlineSession';
+import { getLocale, t, useLocale } from '@/i18n';
 import { SelectField, SelectOption } from '@/components/ui/select';
 import { WorkspaceToolbar } from '@/components/WorkspaceToolbar';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -32,6 +34,7 @@ function filterCachedNotes(notes: Note[], filters: { query: string; folder: stri
 }
 
 export default function NotesPage() {
+  useLocale();
   const { id } = useParams();
   const navigate = useNavigate();
   const userId = useAuthStore(state => state.user?.id);
@@ -71,12 +74,12 @@ export default function NotesPage() {
   const reload = useCallback(() => setRefresh(value => value + 1), []);
   useEffect(() => {
     let active = true;
-    if (!navigator.onLine && userId && offlineCacheSupported()) {
+    if ((!navigator.onLine || isNativeOffline()) && !isOfflineDemo() && userId && offlineCacheSupported()) {
       void loadOfflineCache(userId).then(cached => {
         if (!active) return;
         // The cache is already on disk; applying it after the async read is the offline path.
         if (cached) { setNotebooks(cached.notebooks); setTags(cached.tags); setOfflineMode(true); setListError(''); }
-        else setListError('离线，且没有本地缓存。');
+        else setListError(t('离线，且没有本地缓存。'));
       });
       return () => { active = false; };
     }
@@ -89,7 +92,7 @@ export default function NotesPage() {
       const cached = userId ? await loadOfflineCache(userId) : null;
       if (!active) return;
       if (cached) { setNotebooks(cached.notebooks); setTags(cached.tags); setOfflineMode(true); setListError(''); }
-      else setListError('笔记目录加载失败，请刷新重试。');
+      else setListError(t('笔记目录加载失败，请刷新重试。'));
     });
     return () => { active = false; };
   }, [refresh, userId]);
@@ -97,16 +100,16 @@ export default function NotesPage() {
     if (!userId || !offlineCacheSupported()) return;
     let active = true;
     const sync = async () => {
-      if (!navigator.onLine) return;
+      if (!navigator.onLine || isNativeOffline() || isOfflineDemo()) return;
       try {
         await window.unimindDesktop?.syncIdentity();
         if (!active) return;
         const result = await flushOfflineOutbox(userId);
         if (!active) return;
-        if (result.cacheError) toast.error('本地缓存更新失败，请保持页面打开后重试。');
+        if (result.cacheError) toast.error(t('本地缓存更新失败，请保持页面打开后重试。'));
         if (result.synced || result.conflicts) {
           result.notes.forEach(syncSaved);
-          if (result.conflicts) toast.info(`${result.conflicts} 条离线修改已保存为副本。`);
+          if (result.conflicts) toast.info(t('{0} 条离线修改已保存为副本。', { 0: result.conflicts }));
           reload();
         }
       } catch { /* keep queued for the next online event */ }
@@ -122,12 +125,12 @@ export default function NotesPage() {
   }
   useEffect(() => {
     const controller = new AbortController();
-    if (!navigator.onLine && userId && offlineCacheSupported()) {
+    if ((!navigator.onLine || isNativeOffline()) && !isOfflineDemo() && userId && offlineCacheSupported()) {
       void loadOfflineCache(userId).then(cached => {
         if (controller.signal.aborted) return;
         // The cache is already on disk; applying it after the async read is the offline path.
         if (cached) { setItems(filterCachedNotes(cached.notes, { query, folder, tag, view })); setOfflineMode(true); setListError(''); }
-        else setListError('离线，且没有本地缓存。');
+        else setListError(t('离线，且没有本地缓存。'));
       }).finally(() => { if (!controller.signal.aborted) setListLoading(false); });
       return () => controller.abort();
     }
@@ -147,7 +150,7 @@ export default function NotesPage() {
         const cached = userId ? await loadOfflineCache(userId) : null;
         if (controller.signal.aborted) return;
         if (cached) { setItems(filterCachedNotes(cached.notes, { query, folder, tag, view })); setOfflineMode(true); setListError(''); }
-        else setListError('搜索失败，请重试。');
+        else setListError(t('搜索失败，请重试。'));
       }).finally(() => { if (!controller.signal.aborted) setListLoading(false); });
     }, query ? 220 : 0);
     return () => { clearTimeout(timer); controller.abort(); };
@@ -159,12 +162,12 @@ export default function NotesPage() {
   useEffect(() => {
     if (!id) return;
     const controller = new AbortController();
-    if (!navigator.onLine && userId && offlineCacheSupported()) {
+    if ((!navigator.onLine || isNativeOffline()) && !isOfflineDemo() && userId && offlineCacheSupported()) {
       void getCachedNote(userId, Number(id)).then(cached => {
         if (controller.signal.aborted) return;
         // The cache is already on disk; applying it after the async read is the offline path.
         if (cached) { load(cached); setOfflineMode(true); setMobileView('editor'); }
-        else { load(null); setPageError('离线，且没有本地缓存。'); }
+        else { load(null); setPageError(t('离线，且没有本地缓存。')); }
       }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
       return () => controller.abort();
     }
@@ -183,15 +186,15 @@ export default function NotesPage() {
       const cached = userId ? await getCachedNote(userId, Number(id)) : null;
       if (controller.signal.aborted) return;
       if (cached) { load(cached); setOfflineMode(true); setMobileView('editor'); }
-      else { load(null); setPageError('笔记不存在、不可访问或加载失败。'); }
+      else { load(null); setPageError(t('笔记不存在、不可访问或加载失败。')); }
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [id, load, userId]);
   const run = async (work: () => Promise<void>) => {
     if (busy || blocker.state !== 'unblocked') return;
-    if (offlineMode) { toast.error('离线时暂不支持新建、删除或移动笔记，请联网后重试。'); return; }
+    if (offlineMode) { toast.error(t('离线时暂不支持新建、删除或移动笔记，请联网后重试。')); return; }
     setBusy(true);
-    try { await flush(); await work(); } catch (cause) { toast.error(cause instanceof Error ? cause.message : '操作失败，请重试。'); } finally { if (mounted.current) setBusy(false); }
+    try { await flush(); await work(); } catch (cause) { toast.error(cause instanceof Error ? cause.message : t('操作失败，请重试。')); } finally { if (mounted.current) setBusy(false); }
   };
   const open = (target: number) => { navigate(`/notes/${target}`); setMobileView('editor'); };
   const createNote = () => void run(async () => {
@@ -205,11 +208,11 @@ export default function NotesPage() {
     if (newNoteRequested.current || id) return;
     if (new URLSearchParams(window.location.search).get('new') !== '1') return;
     newNoteRequested.current = true;
-    if (!navigator.onLine) { toast.error('离线时暂不能新建笔记，请联网后重试。'); return; }
+    if (!navigator.onLine && !isOfflineDemo()) { toast.error(t('离线时暂不能新建笔记，请联网后重试。')); return; }
     const timer = window.setTimeout(() => createNoteRef.current(), 0);
     return () => window.clearTimeout(timer);
   }, [id]);
-  const createNotebook = () => setDialog({ title: '新建笔记本', initialValue: '', confirmText: '创建', onConfirm: name => void run(async () => {
+  const createNotebook = () => setDialog({ title: t('新建笔记本'), initialValue: '', confirmText: t('创建'), onConfirm: name => void run(async () => {
     const book = await notesApi.createNotebook(name, folder && folder !== 'unfiled' ? Number(folder) : null);
     setFolder(String(book.id)); setView('all'); reload();
   }) });
@@ -229,7 +232,7 @@ export default function NotesPage() {
   const removeNote = (target = note) => {
     if (!target) return;
     const permanent = !!target.deleted_at;
-    setDialog({ title: permanent ? '永久删除笔记？' : '移入回收站？', description: permanent ? '删除后无法恢复。' : undefined, confirmText: permanent ? '永久删除' : '移入回收站', destructive: true, onConfirm: () => void run(async () => {
+    setDialog({ title: permanent ? t('永久删除笔记？') : t('移入回收站？'), description: permanent ? t('删除后无法恢复。') : undefined, confirmText: permanent ? t('永久删除') : t('移入回收站'), destructive: true, onConfirm: () => void run(async () => {
       await notesApi.remove(target.id, permanent);
       if (target.id === note?.id) { load(null); navigate('/notes'); setMobileView('directory'); }
       reload();
@@ -247,61 +250,61 @@ export default function NotesPage() {
   };
   const tree = (parent: number | null, depth = 0): React.ReactNode => notebooks.filter(book => book.parent === parent).map(book => <div key={book.id}>
     <div className={`notes-tree-row ${folder === String(book.id) ? 'is-active' : ''}`} style={{ paddingLeft: `${depth * 14}px` }}>
-      <button aria-label={`${collapsed.has(book.id) ? '展开' : '折叠'} ${book.name}`} className="notes-tree-toggle" onClick={() => setCollapsed(old => { const next = new Set(old); if (next.has(book.id)) next.delete(book.id); else next.add(book.id); return next; })}>{notebooks.some(child => child.parent === book.id) ? collapsed.has(book.id) ? '›' : '⌄' : '·'}</button>
+      <button aria-label={`${collapsed.has(book.id) ? t('展开') : t('折叠')} ${book.name}`} className="notes-tree-toggle" onClick={() => setCollapsed(old => { const next = new Set(old); if (next.has(book.id)) next.delete(book.id); else next.add(book.id); return next; })}>{notebooks.some(child => child.parent === book.id) ? collapsed.has(book.id) ? '›' : '⌄' : '·'}</button>
       <button onClick={() => { setFolder(String(book.id)); if (view === 'trash') setView('all'); }}><NotebookIcon size={15} /><span>{book.name}</span></button>
     </div>{notebooks.some(child => child.parent === book.id) && <Collapse open={!collapsed.has(book.id)}><div>{tree(book.id, depth + 1)}</div></Collapse>}
   </div>);
   const orderedItems = [...items].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   return <div className={`notes-workspace notes-mobile-${mobileView}`} data-directory-hidden={directoryHidden}>
-    <nav className="notes-mobile-tabs" aria-label="笔记视图"><button aria-label="目录" title="目录" aria-pressed={mobileView === 'directory'} onClick={() => { setMobileView('directory'); setDirectoryHidden(false); }}><Folders size={20} /></button><button aria-label="笔记" title="笔记" aria-pressed={mobileView === 'editor'} disabled={!note} onClick={() => { setMobileView('editor'); setDirectoryHidden(true); }}><NotePencil size={20} /></button></nav>
-    <aside className="notes-directory" aria-label="笔记目录" inert={directoryHidden || undefined}>
-      <header className="notes-directory-header"><h1>我的笔记</h1><div><button aria-label="新建笔记本" title="新建笔记本" disabled={busy} onClick={createNotebook}><FolderPlus size={20} /></button><button aria-label="新建笔记" title="新建笔记" disabled={busy} onClick={createNote}><FilePlus size={20} /></button></div></header>
-      <label className="notes-search"><MagnifyingGlass size={17} /><input aria-label="搜索全部笔记标题和正文" placeholder="搜索标题、正文" value={query} onChange={e => setQuery(e.target.value)} /></label>
-      <div className="notes-quickviews">{(['all', 'recent', 'favorite', 'trash'] as const).map(value => <button key={value} aria-label={({ all: '全部', recent: '最近', favorite: '收藏', trash: '回收站' })[value]} title={({ all: '全部', recent: '最近', favorite: '收藏', trash: '回收站' })[value]} aria-pressed={view === value} onClick={() => setView(value)}>{({ all: <Stack size={19} />, recent: <ClockCounterClockwise size={19} />, favorite: <Star size={19} />, trash: <Trash size={19} /> })[value]}</button>)}</div>
-      <div className="notes-tree"><button className={`notes-tree-root ${folder === '' ? 'is-active' : ''}`} onClick={() => setFolder('')}>所有笔记本</button><button className={`notes-tree-root ${folder === 'unfiled' ? 'is-active' : ''}`} onClick={() => setFolder('unfiled')}>未分类</button>{tree(null)}</div>
+    <nav className="notes-mobile-tabs" aria-label={t('笔记视图')}><button aria-label={t('目录')} title={t('目录')} aria-pressed={mobileView === 'directory'} onClick={() => { setMobileView('directory'); setDirectoryHidden(false); }}><Folders size={20} /></button><button aria-label={t('笔记')} title={t('笔记')} aria-pressed={mobileView === 'editor'} disabled={!note} onClick={() => { setMobileView('editor'); setDirectoryHidden(true); }}><NotePencil size={20} /></button></nav>
+    <aside className="notes-directory" aria-label={t('笔记目录')} inert={directoryHidden || undefined}>
+      <header className="notes-directory-header"><h1>{t('我的笔记')}</h1><div><button aria-label={t('新建笔记本')} title={t('新建笔记本')} disabled={busy} onClick={createNotebook}><FolderPlus size={20} /></button><button aria-label={t('新建笔记')} title={t('新建笔记')} disabled={busy} onClick={createNote}><FilePlus size={20} /></button></div></header>
+      <label className="notes-search"><MagnifyingGlass size={17} /><input aria-label={t('搜索全部笔记标题和正文')} placeholder={t('搜索标题、正文')} value={query} onChange={e => setQuery(e.target.value)} /></label>
+      <div className="notes-quickviews">{(['all', 'recent', 'favorite', 'trash'] as const).map(value => <button key={value} aria-label={({ all: t('全部'), recent: t('最近'), favorite: t('收藏'), trash: t('回收站') })[value]} title={({ all: t('全部'), recent: t('最近'), favorite: t('收藏'), trash: t('回收站') })[value]} aria-pressed={view === value} onClick={() => setView(value)}>{({ all: <Stack size={19} />, recent: <ClockCounterClockwise size={19} />, favorite: <Star size={19} />, trash: <Trash size={19} /> })[value]}</button>)}</div>
+      <div className="notes-tree"><button className={`notes-tree-root ${folder === '' ? 'is-active' : ''}`} onClick={() => setFolder('')}>{t('所有笔记本')}</button><button className={`notes-tree-root ${folder === 'unfiled' ? 'is-active' : ''}`} onClick={() => setFolder('unfiled')}>{t('未分类')}</button>{tree(null)}</div>
       {selectedNotebook && <details className="notes-book-actions"><summary>{selectedNotebook.name}</summary><div className="notes-book-toolbar">
-        <button aria-label="重命名笔记本" title="重命名" disabled={busy} onClick={() => setDialog({ title: '笔记本名称', initialValue: selectedNotebook.name, onConfirm: name => void run(() => changeNotebook({ name })) })}><PencilSimple size={18} /></button>
-        <SelectField aria-label="移动笔记本到" value={selectedNotebook.parent ?? ''} disabled={busy} onValueChange={value => void run(() => changeNotebook({ parent: value ? Number(value) : null }))}><SelectOption value="">根目录</SelectOption>{notebooks.filter(book => !descendants(selectedNotebook.id, book)).map(book => <SelectOption key={book.id} value={book.id}>{notebookPath(book.id, notebooks)}</SelectOption>)}</SelectField>
-        <button aria-label="导出笔记本" title="导出 ZIP" disabled={busy} onClick={() => void run(() => notesApi.export('notebooks', selectedNotebook.id))}><Export size={18} /></button>
-        <button aria-label="删除笔记本" title="删除笔记本" className="notes-danger" disabled={busy} onClick={() => setDialog({ title: '删除笔记本？', description: '笔记和子目录移到上一级。', confirmText: '删除', destructive: true, onConfirm: () => void run(async () => { await notesApi.removeNotebook(selectedNotebook.id); setFolder(selectedNotebook.parent ? String(selectedNotebook.parent) : ''); if (note?.notebook === selectedNotebook.id) load(await notesApi.get(note.id)); reload(); }) })}><Trash size={18} /></button>
+        <button aria-label={t('重命名笔记本')} title={t('重命名')} disabled={busy} onClick={() => setDialog({ title: t('笔记本名称'), initialValue: selectedNotebook.name, onConfirm: name => void run(() => changeNotebook({ name })) })}><PencilSimple size={18} /></button>
+        <SelectField aria-label={t('移动笔记本到')} value={selectedNotebook.parent ?? ''} disabled={busy} onValueChange={value => void run(() => changeNotebook({ parent: value ? Number(value) : null }))}><SelectOption value="">{t('根目录')}</SelectOption>{notebooks.filter(book => !descendants(selectedNotebook.id, book)).map(book => <SelectOption key={book.id} value={book.id}>{notebookPath(book.id, notebooks)}</SelectOption>)}</SelectField>
+        <button aria-label={t('导出笔记本')} title={t('导出 ZIP')} disabled={busy} onClick={() => void run(() => notesApi.export('notebooks', selectedNotebook.id))}><Export size={18} /></button>
+        <button aria-label={t('删除笔记本')} title={t('删除笔记本')} className="notes-danger" disabled={busy} onClick={() => setDialog({ title: t('删除笔记本？'), description: t('笔记和子目录移到上一级。'), confirmText: t('删除'), destructive: true, onConfirm: () => void run(async () => { await notesApi.removeNotebook(selectedNotebook.id); setFolder(selectedNotebook.parent ? String(selectedNotebook.parent) : ''); if (note?.notebook === selectedNotebook.id) load(await notesApi.get(note.id)); reload(); }) })}><Trash size={18} /></button>
       </div></details>}
-      <div className="notes-filters"><SelectField aria-label="按标签筛选" value={tag} onValueChange={value => setTag(value)}><SelectOption value="">所有标签</SelectOption>{tags.map(label => <SelectOption key={label.id} value={label.name}>{label.name}</SelectOption>)}</SelectField></div>
-      {(query || folder || tag || view !== 'all') && <button aria-label="清除筛选" title="清除筛选" className="notes-clear-filters" onClick={() => { setQuery(''); setFolder(''); setTag(''); setView('all'); }}><FunnelX size={16} /></button>}
-      <div className="notes-list-heading"><span>{view === 'trash' ? '回收站' : selectedNotebook?.name || '笔记'}</span><small>{listLoading ? '加载中…' : `${items.length} 篇`}</small></div>
-      {offlineMode && <p className="mx-4 mt-2 rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground" role="status">离线模式：显示本地缓存，笔记修改会在联网后同步。</p>}
-      {listError && <p className="notes-error" role="alert">{listError}<button onClick={reload}>重试</button></p>}
+      <div className="notes-filters"><SelectField aria-label={t('按标签筛选')} value={tag} onValueChange={value => setTag(value)}><SelectOption value="">{t('所有标签')}</SelectOption>{tags.map(label => <SelectOption key={label.id} value={label.name}>{label.name}</SelectOption>)}</SelectField></div>
+      {(query || folder || tag || view !== 'all') && <button aria-label={t('清除筛选')} title={t('清除筛选')} className="notes-clear-filters" onClick={() => { setQuery(''); setFolder(''); setTag(''); setView('all'); }}><FunnelX size={16} /></button>}
+      <div className="notes-list-heading"><span>{view === 'trash' ? t('回收站') : selectedNotebook?.name || t('笔记')}</span><small>{listLoading ? t('加载中…') : t('{0} 篇', { 0: items.length })}</small></div>
+      {offlineMode && <p className="mx-4 mt-2 rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground" role="status">{t('离线模式：显示本地缓存，笔记修改会在联网后同步。')}</p>}
+      {listError && <p className="notes-error" role="alert">{listError}<button onClick={reload}>{t('重试')}</button></p>}
       <div className="notes-list" aria-busy={listLoading}>{orderedItems.map(item => <ContextMenu key={item.id}>
-        <ContextMenuTrigger asChild><button className={item.id === note?.id ? 'is-active' : ''} onClick={() => open(item.id)}><strong>{item.is_favorite && '☆ '}{item.title || '未命名笔记'}</strong><span>{item.content.replace(/[#*`>[\]]/g, '').slice(0, 60) || '还没有正文'}</span><small>{new Date(item.updated_at).toLocaleDateString()} · {notebookPath(item.notebook, notebooks)}</small></button></ContextMenuTrigger>
+        <ContextMenuTrigger asChild><button className={item.id === note?.id ? 'is-active' : ''} onClick={() => open(item.id)}><strong>{item.is_favorite && '☆ '}{item.title || t('未命名笔记')}</strong><span>{item.content.replace(/[#*`>[\]]/g, '').slice(0, 60) || t('还没有正文')}</span><small>{new Date(item.updated_at).toLocaleDateString(getLocale())} · {notebookPath(item.notebook, notebooks)}</small></button></ContextMenuTrigger>
         <ContextMenuContent>
-          <ContextMenuItem disabled={busy} onSelect={() => open(item.id)}><NotePencil size={16} />打开笔记</ContextMenuItem>
+          <ContextMenuItem disabled={busy} onSelect={() => open(item.id)}><NotePencil size={16} />{t('打开笔记')}</ContextMenuItem>
           {!item.deleted_at && <>
-            <ContextMenuItem disabled={busy || offlineMode} onSelect={() => setDialog({ title: '笔记名称', initialValue: item.title, onConfirm: title => updateNote(item, { title }) })}><PencilSimple size={16} />重命名</ContextMenuItem>
-            <ContextMenuItem disabled={busy || offlineMode} onSelect={() => updateNote(item, { is_favorite: !item.is_favorite })}><Star size={16} />{item.is_favorite ? '取消收藏' : '收藏'}</ContextMenuItem>
-            <ContextMenuSub><ContextMenuSubTrigger disabled={busy || offlineMode}><Folders size={16} />移动到笔记本</ContextMenuSubTrigger><ContextMenuSubContent>
-              <ContextMenuItem disabled={item.notebook === null} onSelect={() => updateNote(item, { notebook: null })}>未分类</ContextMenuItem>
+            <ContextMenuItem disabled={busy || offlineMode} onSelect={() => setDialog({ title: t('笔记名称'), initialValue: item.title, onConfirm: title => updateNote(item, { title }) })}><PencilSimple size={16} />{t('重命名')}</ContextMenuItem>
+            <ContextMenuItem disabled={busy || offlineMode} onSelect={() => updateNote(item, { is_favorite: !item.is_favorite })}><Star size={16} />{item.is_favorite ? t('取消收藏') : t('收藏')}</ContextMenuItem>
+            <ContextMenuSub><ContextMenuSubTrigger disabled={busy || offlineMode}><Folders size={16} />{t('移动到笔记本')}</ContextMenuSubTrigger><ContextMenuSubContent>
+              <ContextMenuItem disabled={item.notebook === null} onSelect={() => updateNote(item, { notebook: null })}>{t('未分类')}</ContextMenuItem>
               {notebooks.map(book => <ContextMenuItem key={book.id} disabled={item.notebook === book.id} onSelect={() => updateNote(item, { notebook: book.id })}>{notebookPath(book.id, notebooks)}</ContextMenuItem>)}
             </ContextMenuSubContent></ContextMenuSub>
           </>}
-          <ContextMenuItem disabled={busy || offlineMode} onSelect={() => void run(() => notesApi.export('items', item.id))}><Export size={16} />导出笔记</ContextMenuItem>
-          {item.deleted_at && <ContextMenuItem disabled={busy || offlineMode} onSelect={() => void run(async () => { const restored = await notesApi.restore(item.id); if (note?.id === item.id) load(restored); setView('all'); reload(); })}><ArrowCounterClockwise size={16} />恢复笔记</ContextMenuItem>}
+          <ContextMenuItem disabled={busy || offlineMode} onSelect={() => void run(() => notesApi.export('items', item.id))}><Export size={16} />{t('导出笔记')}</ContextMenuItem>
+          {item.deleted_at && <ContextMenuItem disabled={busy || offlineMode} onSelect={() => void run(async () => { const restored = await notesApi.restore(item.id); if (note?.id === item.id) load(restored); setView('all'); reload(); })}><ArrowCounterClockwise size={16} />{t('恢复笔记')}</ContextMenuItem>}
           <ContextMenuSeparator />
-          <ContextMenuItem disabled={busy || offlineMode} className="text-destructive focus:text-destructive" onSelect={() => removeNote(item)}><Trash size={16} />{item.deleted_at ? '永久删除' : '移入回收站'}</ContextMenuItem>
+          <ContextMenuItem disabled={busy || offlineMode} className="text-destructive focus:text-destructive" onSelect={() => removeNote(item)}><Trash size={16} />{item.deleted_at ? t('永久删除') : t('移入回收站')}</ContextMenuItem>
         </ContextMenuContent>
-      </ContextMenu>)}{!listLoading && !items.length && !listError && <p className="notes-empty">{view === 'trash' ? '回收站是空的。' : '没有匹配的笔记。'}{view !== 'trash' && <button onClick={createNote}>写一篇新笔记</button>}</p>}</div>
+      </ContextMenu>)}{!listLoading && !items.length && !listError && <p className="notes-empty">{view === 'trash' ? t('回收站是空的。') : t('没有匹配的笔记。')}{view !== 'trash' && <button onClick={createNote}>{t('写一篇新笔记')}</button>}</p>}</div>
     </aside>
     <main className="notes-main" aria-busy={loading}>
       <WorkspaceToolbar className="notes-note-header">
-        <button className="um-agent-icon-button" aria-label="切换笔记目录" onClick={() => { const hidden = window.matchMedia('(max-width:900px)').matches ? mobileView === 'directory' : !directoryHidden; setDirectoryHidden(hidden); setMobileView(hidden ? 'editor' : 'directory'); }}><SidebarSimple size={18} /></button>
-        <WorkspaceTrail title={note?.title || (note ? '未命名笔记' : '全部笔记')} crumbs={[{ label: '笔记', to: '/notes' }, ...(note ? [{ label: notebookPath(note.notebook, notebooks) }] : [])]} />
-        <div><span aria-live="polite" className="notes-save-status">{note ? `${status}${dirty && status === '已保存' ? ' · 未保存' : ''}` : ''}</span>{note && !pageError && <><button aria-label="导出笔记" title="导出笔记" disabled={busy} onClick={() => void run(() => notesApi.export('items', note.id))}><Export size={19} /></button>{note.deleted_at && <button aria-label="恢复笔记" title="恢复笔记" disabled={busy} onClick={() => void run(async () => { load(await notesApi.restore(note.id)); setView('all'); reload(); })}><ArrowCounterClockwise size={19} /></button>}<button aria-label={note.deleted_at ? '永久删除' : '移入回收站'} title={note.deleted_at ? '永久删除' : '移入回收站'} disabled={busy} className="notes-danger" onClick={() => removeNote()}><Trash size={19} /></button></>}</div>
+        <button className="um-agent-icon-button" aria-label={t('切换笔记目录')} onClick={() => { const hidden = window.matchMedia('(max-width:900px)').matches ? mobileView === 'directory' : !directoryHidden; setDirectoryHidden(hidden); setMobileView(hidden ? 'editor' : 'directory'); }}><SidebarSimple size={18} /></button>
+        <WorkspaceTrail title={note?.title || (note ? t('未命名笔记') : t('全部笔记'))} crumbs={[{ label: t('笔记'), to: '/notes' }, ...(note ? [{ label: notebookPath(note.notebook, notebooks) }] : [])]} />
+        <div><span aria-live="polite" className="notes-save-status">{note ? `${t(status)}${dirty && status === '已保存' ? t(' · 未保存') : ''}` : ''}</span>{note && !pageError && <><button aria-label={t('导出笔记')} title={t('导出笔记')} disabled={busy} onClick={() => void run(() => notesApi.export('items', note.id))}><Export size={19} /></button>{note.deleted_at && <button aria-label={t('恢复笔记')} title={t('恢复笔记')} disabled={busy} onClick={() => void run(async () => { load(await notesApi.restore(note.id)); setView('all'); reload(); })}><ArrowCounterClockwise size={19} /></button>}<button aria-label={note.deleted_at ? t('永久删除') : t('移入回收站')} title={note.deleted_at ? t('永久删除') : t('移入回收站')} disabled={busy} className="notes-danger" onClick={() => removeNote()}><Trash size={19} /></button></>}</div>
       </WorkspaceToolbar>
-      {loading && <div className="notes-loading">正在打开笔记…</div>}
-      {pageError && <div className="notes-empty" role="alert">{pageError}<button onClick={() => navigate('/notes')}>返回目录</button></div>}
+      {loading && <div className="notes-loading">{t('正在打开笔记…')}</div>}
+      {pageError && <div className="notes-empty" role="alert">{pageError}<button onClick={() => navigate('/notes')}>{t('返回目录')}</button></div>}
       {note && !pageError ? <>
-        {error && <div className="notes-save-error" role="alert"><p>{error}</p><button aria-label="重试保存" title="重试保存" onClick={() => void flush().catch(() => {})}><ArrowClockwise size={18} /></button><button aria-label="下载本地内容" title="下载本地内容" onClick={downloadLocal}><DownloadSimple size={18} /></button><button aria-label="重新加载远端" title="重新加载远端" onClick={() => setDialog({ title: '重新加载笔记？', description: '本地尚未保存的修改将被丢弃。', destructive: true, confirmText: '重新加载', onConfirm: () => { void notesApi.get(note.id).then(load).catch(() => toast.error('加载失败，本地内容已保留。')); } })}><ArrowCounterClockwise size={18} /></button></div>}
-        {note.deleted_at && <p className="notes-trash-banner">已移入回收站</p>}
+        {error && <div className="notes-save-error" role="alert"><p>{error}</p><button aria-label={t('重试保存')} title={t('重试保存')} onClick={() => void flush().catch(() => {})}><ArrowClockwise size={18} /></button><button aria-label={t('下载本地内容')} title={t('下载本地内容')} onClick={downloadLocal}><DownloadSimple size={18} /></button><button aria-label={t('重新加载远端')} title={t('重新加载远端')} onClick={() => setDialog({ title: t('重新加载笔记？'), description: t('本地尚未保存的修改将被丢弃。'), destructive: true, confirmText: t('重新加载'), onConfirm: () => { void notesApi.get(note.id).then(load).catch(() => toast.error(t('加载失败，本地内容已保留。'))); } })}><ArrowCounterClockwise size={18} /></button></div>}
+        {note.deleted_at && <p className="notes-trash-banner">{t('已移入回收站')}</p>}
         <div className="notes-writing-surface" inert={loading || busy || undefined}><NoteEditor key={`${note.id}:${documentKey}`} note={note} notebooks={notebooks} onChange={change} onOpen={open} /></div>
-      </> : !loading && !pageError && <div className="notes-welcome"><NotebookIcon size={34} weight="thin" /><button onClick={createNote}>写一篇笔记</button></div>}
+      </> : !loading && !pageError && <div className="notes-welcome"><NotebookIcon size={34} weight="thin" /><button onClick={createNote}>{t('写一篇笔记')}</button></div>}
     </main>
     <NoteAISettings onboarding />
     {dialog && <NoteDialog {...dialog} onClose={() => setDialog(null)} />}

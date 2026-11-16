@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import api from './api';
 
 export interface Notebook { id: number; name: string; parent: number | null; position: number }
@@ -19,7 +20,7 @@ export const notesApi = {
   lookup: (params: { q?: string; ids?: string } = {}, signal?: AbortSignal) => api.get<NoteSummary[]>('/notes/lookup/', { params, signal }).then(r => r.data),
   list: (params: Record<string, string> = {}, signal?: AbortSignal) => api.get<Note[]>('/notes/items/', { params, signal }).then(r => r.data),
   get: (id: number, signal?: AbortSignal) => api.get<Note>(`/notes/items/${id}/`, { signal }).then(r => r.data),
-  create: (notebook: number | null, draft: Partial<NoteDraft> = {}) => api.post<Note>('/notes/items/', { title: '未命名笔记', notebook, ...draft }, writeConfig).then(r => r.data),
+  create: (notebook: number | null, draft: Partial<NoteDraft> = {}) => api.post<Note>('/notes/items/', { title: t('未命名笔记'), notebook, ...draft }, writeConfig).then(r => r.data),
   saveCourseReply: (messageId: number) => api.post<Note>(`/notes/course-replies/${messageId}/`, {}, writeConfig).then(r => r.data),
   save: (note: Note) => api.patch<Note>(`/notes/items/${note.id}/`, { ...noteDraft(note), version: note.version }, writeConfig).then(r => r.data),
   remove: (id: number, permanent = false) => api.delete(`/notes/items/${id}/`, { ...writeConfig, params: permanent ? { permanent: '1' } : {} }),
@@ -51,5 +52,5 @@ export function notebookPath(id: number | null, notebooks: Notebook[]): string {
     if (!item) break;
     parts.unshift(item.name); id = item.parent;
   }
-  return parts.join(' / ') || '未分类';
+  return parts.join(' / ') || t('未分类');
 }

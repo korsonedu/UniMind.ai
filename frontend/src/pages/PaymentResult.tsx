@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ const POLL_INITIAL = 2000;
 const MAX_ATTEMPTS = 30;
 
 export function PaymentResult() {
+  useLocale();
   const navigate = useNavigate();
   const [orderId] = useState(() => sessionStorage.getItem('last_order_id'));
   const [status, setStatus] = useState<'checking' | 'paid' | 'failed'>(() => orderId ? 'checking' : 'failed');
@@ -65,8 +67,8 @@ export function PaymentResult() {
             <div className="space-y-5">
               <Spinner className="h-8 w-8 animate-spin text-white/[0.10] mx-auto" />
               <div className="space-y-2">
-                <h3 className="text-[15px] font-extrabold text-white/50 tracking-tight">确认支付状态</h3>
-                <p className="text-[12px] text-white/15 font-semibold">正在查询支付结果&hellip;</p>
+                <h3 className="text-[15px] font-extrabold text-white/50 tracking-tight">{t('确认支付状态')}</h3>
+                <p className="text-[12px] text-white/15 font-semibold">{t('正在查询支付结果&hellip;')}</p>
               </div>
             </div>
           )}
@@ -81,12 +83,12 @@ export function PaymentResult() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-[15px] font-extrabold text-white/80 tracking-tight">支付成功</h3>
-                <p className="text-[12px] text-white/20 font-semibold">学习权益已开通</p>
+                <h3 className="text-[15px] font-extrabold text-white/80 tracking-tight">{t('支付成功')}</h3>
+                <p className="text-[12px] text-white/20 font-semibold">{t('学习权益已开通')}</p>
               </div>
               <Button variant="apple" className="h-10 px-6 rounded-xl text-[13px] font-extrabold gap-2 bg-background text-foreground hover:bg-white/90 shadow-lg shadow-white/5"
                 onClick={() => navigate('/billing', { replace: true })}>
-                查看学习服务与账单 <ArrowRight className="h-3.5 w-3.5" />
+                {t('查看学习服务与账单')}<ArrowRight className="h-3.5 w-3.5" />
               </Button>
             </div>
           )}
@@ -97,20 +99,17 @@ export function PaymentResult() {
                 <XCircle className="h-7 w-7 text-amber-400/40" />
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-[15px] font-extrabold text-white/50 tracking-tight">支付未完成</h3>
+                <h3 className="text-[15px] font-extrabold text-white/50 tracking-tight">{t('支付未完成')}</h3>
                 <p className="text-[12px] text-white/15 font-semibold leading-relaxed">
-                  暂未确认支付成功，请在账单中查看最新状态。
-                </p>
+                  {t('暂未确认支付成功，请在账单中查看最新状态。')}</p>
               </div>
               <div className="space-y-2">
                 <Button variant="apple" className="w-full h-10 rounded-xl text-[13px] font-extrabold bg-background text-foreground hover:bg-white/90"
                   onClick={() => navigate('/billing', { replace: true })}>
-                  返回学习服务与账单
-                </Button>
+                  {t('返回学习服务与账单')}</Button>
                 <Button variant="outline" className="w-full h-10 rounded-xl text-[13px] font-extrabold border-background/[0.06] text-white/30 hover:text-white/60 hover:bg-white/[0.03] gap-2"
                   onClick={() => navigate('/', { replace: true })}>
-                  <House className="h-3.5 w-3.5" /> 返回首页
-                </Button>
+                  <House className="h-3.5 w-3.5" /> {t('返回首页')}</Button>
               </div>
             </div>
           )}

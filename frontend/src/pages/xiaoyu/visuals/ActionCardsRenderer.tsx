@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PlayCircle, Pen, ArrowCounterClockwise, BookOpen, TrendUp, Calendar, FileText, ArrowRight, CheckCircle } from '@phosphor-icons/react';
@@ -85,6 +86,7 @@ async function loadCompletionStatus(): Promise<Record<string, boolean>> {
 }
 
 export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({ payload }) => {
+  useLocale();
   const navigate = useNavigate();
   const { onReply, projectId, conversationId } = useAgentReply();
   const cards = (payload.cards || []).filter(c => c.title);
@@ -405,8 +407,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
                     </span>
                     {isCompleted && (
                       <span className="text-[10px] font-medium text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
-                        已完成
-                      </span>
+                        {t('已完成')}</span>
                     )}
                   </div>
                   <p className="text-[12px] text-foreground/40 leading-relaxed line-clamp-2">
@@ -418,7 +419,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
                       ? 'text-emerald-600/50'
                       : 'text-foreground/30 group-hover:text-foreground/50',
                   )}>
-                    {isCompleted ? '再次练习' : card.action.label}
+                    {isCompleted ? t('再次练习') : card.action.label}
                     <ArrowRight className="h-2.5 w-2.5 transition-transform group-hover:translate-x-0.5" />
                   </div>
                 </div>
@@ -436,7 +437,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && inputValue.trim()) handleInputSend(replyCards[0]); }}
-            placeholder={replyCards[0]?.action.label || '输入内容...'}
+            placeholder={replyCards[0]?.action.label || t('输入内容...')}
             disabled={chosenUrl !== null}
             className={cn(
               'flex-1 px-3 py-2 rounded-lg border text-sm bg-transparent',
@@ -450,8 +451,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
             disabled={!inputValue.trim() || chosenUrl !== null}
             className="px-4 py-2 rounded-lg border border-border/60 text-sm font-bold hover:border-foreground/20 hover:bg-muted/30 transition-colors disabled:opacity-30 disabled:pointer-events-none"
           >
-            发送
-          </button>
+            {t('发送')}</button>
         </div>
       )}
 
@@ -461,7 +461,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
           onClick={handleMultiConfirm}
           className="w-full py-2 rounded-lg border border-foreground/20 text-sm font-bold hover:bg-muted/30 transition-colors"
         >
-          确认 ({multiSelected.size})
+          {t('确认 (')}{multiSelected.size})
         </button>
       )}
     </div>

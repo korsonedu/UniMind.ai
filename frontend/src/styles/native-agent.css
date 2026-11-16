@@ -14,6 +14,9 @@
 .um-agent-directory-content .um-agent-sessions { width: var(--um-directory-content-width); }
 .um-agent-directory-toggle { display: inline-flex; }
 .um-agent-workspace[data-directory-hidden='true'] .um-agent-toolbar-new { display: inline-flex; }
+.um-agent-work-panels { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.um-agent-conversation { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.um-agent-activity[hidden] { display: none; }
 .um-agent-main { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .um-agent-toolbar { position: absolute; top: 0; left: 0; right: 0; z-index: 10; min-height: var(--um-height-header); padding: 5px 24px; display: flex; justify-content: space-between; gap: 12px; align-items: center; background: transparent; pointer-events: none; }
 .um-agent-toolbar button, .um-agent-toolbar-actions { pointer-events: auto; }

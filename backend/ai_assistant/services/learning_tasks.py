@@ -276,7 +276,10 @@ def task_data(task):
     due = UserQuestionStatus.objects.filter(user_id=task.project.user_id, question_id__in=task.question_ids,
         reps__gt=0).order_by('next_review_at').values_list('next_review_at', flat=True).first() if exam and authorized and not task.definition else None
     status = ('processing' if exam.status in ('pending', 'grading') else exam.status) if exam else 'ready'
+    state = ProjectLearning.objects.get(project=task.project)
+    current = task.knowledge_version_id == (state.plan.get('knowledge_path') or {}).get('version_id') and any(stage['id'] == task.stage_id for stage in state.plan.get('stages', []))
     return {
+        'is_current': current,
         'id': str(task.pk), 'learning_task_id': str(task.pk), 'practice_id': str(task.pk),
         'project_id': task.project_id, 'version_id': task.knowledge_version_id,
         'node_id': task.node_id, 'stage_id': task.stage_id, 'title': task.title,

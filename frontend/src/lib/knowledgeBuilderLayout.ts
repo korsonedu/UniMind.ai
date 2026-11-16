@@ -171,40 +171,46 @@ const INTERFACE_ROLE_LABELS: Record<string, string> = {
   mechanism_input: '机制输入',
 };
 
-function formatInterfaceRole(role: string): string {
+type TranslateLabel = (source: string) => string;
+
+function formatInterfaceRole(role: string, translate: TranslateLabel): string {
   const key = role.trim();
-  return INTERFACE_ROLE_LABELS[key] ?? key;
+  return INTERFACE_ROLE_LABELS[key] ? translate(INTERFACE_ROLE_LABELS[key]) : key;
 }
 
-function buildShapeTags(shape: BlockNodeShape, isEntry: boolean): string[] {
+function buildShapeTags(shape: BlockNodeShape, isEntry: boolean, translate: TranslateLabel): string[] {
   const tags: string[] = [];
-  if (isEntry || shape.entry) tags.push('入口');
-  if (shape.overview) tags.push('总览');
-  if (shape.merge) tags.push('多路汇合');
-  if (shape.end) tags.push('终局应用');
+  if (isEntry || shape.entry) tags.push(translate('入口'));
+  if (shape.overview) tags.push(translate('总览'));
+  if (shape.merge) tags.push(translate('多路汇合'));
+  if (shape.end) tags.push(translate('终局应用'));
   return tags;
 }
 
-function buildStructureType(steps: { step_role: string }[], shapeTags: string[]): string {
+function buildStructureType(steps: { step_role: string }[], shapeTags: string[], translate: TranslateLabel): string {
   const roles = [...new Set(steps.map(s => s.step_role.trim()).filter(Boolean))];
   if (roles.length >= 2) return `${roles[0]}＋${roles[1]}`;
   if (roles.length === 1) return roles[0];
   if (shapeTags.length > 0) return shapeTags.join(' · ');
-  return '知识结构块';
+  return translate('知识结构块');
 }
 
-function buildAtomTooltip(atom: TreeAtomPoint): string {
-  const lines = [`目标：${atom.goal_statement}`];
+function buildAtomTooltip(atom: TreeAtomPoint, translate: TranslateLabel): string {
+  const lines = [`${translate('目标：')}${atom.goal_statement}`];
   if (atom.goal_type || atom.cognitive_level || atom.granularity_minutes) {
-    lines.push(`${atom.goal_type} · ${atom.cognitive_level} · 约 ${atom.granularity_minutes} 分钟`);
+    const duration = translate('约 {0} 分钟').replace('{0}', String(atom.granularity_minutes));
+    lines.push(`${atom.goal_type} · ${atom.cognitive_level} · ${duration}`);
   }
   if (atom.common_misconceptions?.length) {
-    lines.push(`易错点：${atom.common_misconceptions.join('；')}`);
+    lines.push(`${translate('易错点：')}${atom.common_misconceptions.join('；')}`);
   }
   return lines.join('\n');
 }
 
-export function adaptKnowledgeTree(tree: KnowledgeTreeBuildDetail): AdaptedKnowledgeTree {
+export function adaptKnowledgeTree(
+  tree: KnowledgeTreeBuildDetail,
+  translate: TranslateLabel = source => source,
+): AdaptedKnowledgeTree {
   const { rootOfModuleId, rootColorById, orderedRoots } = resolveRootModuleMap(tree.modules);
   const atomById = new Map(tree.atoms.map(a => [a.id, a]));
   const rawBlockById = new Map(tree.blocks.map(b => [b.id, b]));
@@ -250,7 +256,7 @@ export function adaptKnowledgeTree(tree: KnowledgeTreeBuildDetail): AdaptedKnowl
       sourceBlockTitle: sourceBlock.short_title,
       fromAtomName: fromAtom.name,
       toAtomName: toAtom.name,
-      role: formatInterfaceRole(ifc.interface_role),
+      role: formatInterfaceRole(ifc.interface_role, translate),
       explanation: ifc.bridge_explanation,
     });
     incomingInterfacesByToAtom.set(toAtom.id, list);
@@ -295,7 +301,7 @@ export function adaptKnowledgeTree(tree: KnowledgeTreeBuildDetail): AdaptedKnowl
               atom,
               membership: sa.membership_type,
               isInterfacePoint: interfaceAtomIds.has(atom.id),
-              tooltip: buildAtomTooltip(atom),
+              tooltip: buildAtomTooltip(atom, translate),
             };
           })
           .filter((item): item is AdaptedAtomItem => item !== null);
@@ -328,7 +334,7 @@ export function adaptKnowledgeTree(tree: KnowledgeTreeBuildDetail): AdaptedKnowl
         dominantRoot = null;
       }
 
-      const shapeTags = buildShapeTags(block.node_shape ?? {}, block.is_entry_block);
+      const shapeTags = buildShapeTags(block.node_shape ?? {}, block.is_entry_block, translate);
       return {
         id: block.id,
         code: block.code,
@@ -340,9 +346,9 @@ export function adaptKnowledgeTree(tree: KnowledgeTreeBuildDetail): AdaptedKnowl
         isEntry: block.is_entry_block,
         nodeShape: block.node_shape ?? {},
         shapeTags,
-        structureType: buildStructureType(sortedSteps, shapeTags),
+        structureType: buildStructureType(sortedSteps, shapeTags, translate),
         domainId: dominantRoot ? dominantRoot.id : null,
-        domainTitle: dominantRoot ? dominantRoot.title : '通用模块',
+        domainTitle: dominantRoot ? dominantRoot.title : translate('通用模块'),
         color: dominantRoot ? (rootColorById.get(dominantRoot.id) ?? DEFAULT_BLOCK_COLOR) : DEFAULT_BLOCK_COLOR,
         coreCount,
         extensionCount,

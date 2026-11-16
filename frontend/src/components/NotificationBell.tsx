@@ -1,3 +1,4 @@
+import { getLocale, t, useLocale } from '@/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
@@ -30,6 +31,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export const NotificationBell = () => {
+  useLocale();
   const { notifications, unreadCount, fetchNotifications, markAsRead, clearAll } = useNotificationStore();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
@@ -64,7 +66,7 @@ export const NotificationBell = () => {
       for (const item of latest) {
         const kind = item.ntype === 'qa_reply' ? 'qa' : 'learning';
         const route = supportsCategories && item.link && /^\/(?:xiaoyu|courses|notes|qa|tests)(?:[/?#]|$)/.test(item.link) ? item.link : '/xiaoyu';
-        notifyDesktop({ kind, title: item.title, body: '打开 UniMind 查看通知。', route });
+        notifyDesktop({ kind, title: item.title, body: t('打开 UniMind 查看通知。'), route });
       }
     }).catch(() => { /* The notification center remains available if polling fails. */ });
     return () => { active = false; };
@@ -110,7 +112,7 @@ export const NotificationBell = () => {
   return (
     <DropdownMenu open={isOpen} onOpenChange={handleOpen} modal={false}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="um-app-notification-button h-9 w-9 text-muted-foreground hover:bg-muted hover:text-foreground relative" aria-label={unreadCount ? `通知，${unreadCount} 条未读` : '通知'}>
+        <Button variant="ghost" size="icon" className="um-app-notification-button h-9 w-9 text-muted-foreground hover:bg-muted hover:text-foreground relative" aria-label={unreadCount ? t('通知，{0} 条未读', { 0: unreadCount }) : t('通知')}>
           <Bell className="h-4 w-4" />
           {unreadCount > 0 && (
             <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-red-500 border-2 border-background" />
@@ -119,7 +121,7 @@ export const NotificationBell = () => {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="um-app-notifications w-80 p-2 z-[var(--z-dropdown)]">
         <DropdownMenuLabel className="flex items-center justify-between px-3 py-2">
-          <span className="text-[13px] font-semibold text-muted-foreground">{`通知中心 (${unreadCount})`}</span>
+          <span className="text-[13px] font-semibold text-muted-foreground">{t('通知中心 ({0})', { 0: unreadCount })}</span>
           <div className="flex gap-1">
             {unreadCount > 0 && (
                 <Button
@@ -128,8 +130,7 @@ export const NotificationBell = () => {
                 onClick={(e) => { e.stopPropagation(); markAsRead(); }}
                 className="h-6 px-2 text-xs font-medium text-primary gap-1 hover:bg-accent rounded-lg"
                 >
-                已读
-                </Button>
+                {t('已读')}</Button>
             )}
             <Button
               variant="ghost"
@@ -137,13 +138,12 @@ export const NotificationBell = () => {
               onClick={(e) => { e.stopPropagation(); setShowClearAlert(true); }}
               className="h-6 px-2 text-[11px] font-bold text-red-600 gap-1 hover:bg-red-50 rounded-lg"
             >
-              清除
-            </Button>
+              {t('清除')}</Button>
           </div>
         </DropdownMenuLabel>
         <ScrollArea className="h-80">
           {notifications.length === 0 ? (
-            <EmptyState icon={Bell} title="暂无消息通知" description="银河系暂时没有发来新消息。——《银河搭车客指南》" className="py-6 [&>p:last-child]:italic" />
+            <EmptyState icon={Bell} title={t('暂无消息通知')} description={t('银河系暂时没有发来新消息。——《银河搭车客指南》')} className="py-6 [&>p:last-child]:italic" />
           ) : (
             <div className="p-1 space-y-0.5">
               {notifications.map(notif => (
@@ -164,7 +164,7 @@ export const NotificationBell = () => {
                       <p className="text-[13px] font-medium text-foreground leading-tight">{notif.title}</p>
                       <p className="text-[12px] font-medium text-muted-foreground leading-relaxed mt-1 break-words whitespace-pre-wrap">{notif.content}</p>
                       <p className="text-xs text-muted-foreground mt-1.5">
-                        {new Date(notif.created_at).toLocaleString('zh-CN', {month: '2-digit', day: '2-digit', hour: '2-digit', minute:'2-digit'})}
+                        {new Date(notif.created_at).toLocaleString(getLocale(), {month: '2-digit', day: '2-digit', hour: '2-digit', minute:'2-digit'})}
                       </p>
                     </div>
                   </div>
@@ -178,19 +178,17 @@ export const NotificationBell = () => {
       <AlertDialog open={showClearAlert} onOpenChange={setShowClearAlert}>
         <AlertDialogContent className="rounded-[2rem] border-none shadow-2xl bg-card">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">确认清除所有通知？</AlertDialogTitle>
+            <AlertDialogTitle className="text-lg font-bold">{t('确认清除所有通知？')}</AlertDialogTitle>
             <AlertDialogDescription className="text-xs font-medium text-muted-foreground">
-              此操作将永久删除你的所有历史通知记录，不可恢复。
-            </AlertDialogDescription>
+              {t('此操作将永久删除你的所有历史通知记录，不可恢复。')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
-            <AlertDialogCancel className="rounded-xl font-bold h-10 text-xs">取消</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-xl font-bold h-10 text-xs">{t('取消')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => { clearAll(); setIsOpen(false); }}
               className="rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold h-10 text-xs"
             >
-              确认清除
-            </AlertDialogAction>
+              {t('确认清除')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

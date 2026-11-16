@@ -9,7 +9,8 @@ from quizzes.models import ExamQuestionResult, KnowledgePoint, Question, QuizExa
 from users.models import CourseStudentStatus, Institution, User
 
 
-def grade_ok(question, answer):
+def grade_ok(question, answer, *, language='zh-CN'):
+    assert language == 'zh-CN'
     max_score = question.get_max_score()
     return {
         'score': max_score,
@@ -137,10 +138,10 @@ class ExamAsyncTests(APITestCase):
         exam = QuizExam.objects.get(pk=response.data['exam_id'])
         original_elo = self.user.elo_score
 
-        def fail_second(question, answer):
+        def fail_second(question, answer, *, language='zh-CN'):
             if question.pk == self.subjective.pk:
                 raise RuntimeError('模型暂不可用')
-            return grade_ok(question, answer)
+            return grade_ok(question, answer, language=language)
 
         with patch('quizzes.ai_workflow._grade_answer', side_effect=fail_second), \
                 patch('quizzes.ai_workflow._apply_memorix_status'), \

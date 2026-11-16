@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { DshActionCard, type ActionPayload } from './DshActionCard';
 import { Link } from 'react-router-dom';
 import { InlineVisualCard } from '@/components/InlineVisualCard';
@@ -8,6 +9,7 @@ export type DshCard = VisualData & { tool: string };
 type Question = { id?: number; text: string; kp_name?: string; options?: string[] | Record<string, string>; answer?: string };
 
 export function DshToolCard({ card }: { card: DshCard }) {
+  useLocale();
   if (card.type === 'diagnostic_quiz' || card.type === 'faq_draft') return <DshActionCard payload={card.payload as unknown as ActionPayload} />;
   if (card.type === 'question_preview') {
     const questions = card.payload.questions as Question[];
@@ -17,11 +19,11 @@ export function DshToolCard({ card }: { card: DshCard }) {
         <p className="text-xs text-muted-foreground">{question.kp_name} {question.id ? `· #${question.id}` : ''}</p>
         <p className="whitespace-pre-wrap">{question.text}</p>
         {question.options && Object.entries(question.options).map(([key, value]) => <p key={key} className="text-foreground/60">{Array.isArray(question.options) ? String.fromCharCode(65 + Number(key)) : key}．{String(value)}</p>)}
-        {question.answer && <details><summary className="cursor-pointer text-xs text-muted-foreground">参考答案</summary><p className="whitespace-pre-wrap pt-2">{question.answer}</p></details>}
+        {question.answer && <details><summary className="cursor-pointer text-xs text-muted-foreground">{t('参考答案')}</summary><p className="whitespace-pre-wrap pt-2">{question.answer}</p></details>}
       </div>)}
-      {!questions.length && <p className="text-sm text-muted-foreground">暂无匹配题目。</p>}
-      <p className="text-xs text-muted-foreground/80">只读题目预览；作答与批改请进入习题训练。</p>
-      <Link to="/tests" className="inline-block text-xs underline underline-offset-4">进入习题训练 →</Link>
+      {!questions.length && <p className="text-sm text-muted-foreground">{t('暂无匹配题目。')}</p>}
+      <p className="text-xs text-muted-foreground/80">{t('只读题目预览；作答与批改请进入习题训练。')}</p>
+      <Link to="/tests" className="inline-block text-xs underline underline-offset-4">{t('进入习题训练 →')}</Link>
     </div></div></div>;
   }
   if (card.type === 'practice_quiz' || card.type === 'learning_experiment') return <InlineVisualCard visual={card} />;

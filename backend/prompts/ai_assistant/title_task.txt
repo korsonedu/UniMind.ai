@@ -1,0 +1,1 @@
+Generate a concise conversation title from the first user and assistant exchange. Follow the title language and length limits in the task input. Return only the title, without quotes or a prefix.

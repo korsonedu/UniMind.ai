@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { isAxiosError } from 'axios';
 import { formatApiErrorToast } from '@/lib/apiError';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -38,6 +39,7 @@ interface DiagnosticResult {
 }
 
 export function DiagnosticTest() {
+  useLocale();
   const navigate = useNavigate();
   const updateUser = useAuthStore(s => s.updateUser);
   const [phase, setPhase] = useState<Phase>('welcome');
@@ -75,7 +77,7 @@ export function DiagnosticTest() {
       setPhase('results');
     } catch (err: unknown) {
       submittedRef.current = false;
-      toast.error(formatApiErrorToast(err, '提交失败'));
+      toast.error(formatApiErrorToast(err, t('提交失败')));
     } finally {
       setLoading(false);
     }
@@ -102,10 +104,10 @@ export function DiagnosticTest() {
       setPhase('testing');
     } catch (err: unknown) {
       if (isAxiosError<{ status: string }>(err) && err.response?.data?.status === 'already_completed') {
-        toast.info('诊断已完成，你可以直接开始练习');
+        toast.info(t('诊断已完成，你可以直接开始练习'));
         navigate('/tests');
       } else {
-        toast.error(formatApiErrorToast(err, '生成诊断题失败'));
+        toast.error(formatApiErrorToast(err, t('生成诊断题失败')));
       }
     } finally {
       setLoading(false);
@@ -127,11 +129,11 @@ export function DiagnosticTest() {
       submittedRef.current = false;
     } catch (err: unknown) {
       if (isAxiosError<{ status: string }>(err) && err.response?.data?.status === 'already_completed') {
-        toast.info('您已完成诊断评估');
+        toast.info(t('您已完成诊断评估'));
         navigate('/tests');
         return;
       }
-      toast.error(formatApiErrorToast(err, '生成重评估失败'));
+      toast.error(formatApiErrorToast(err, t('生成重评估失败')));
     } finally {
       setLoading(false);
     }
@@ -153,10 +155,9 @@ export function DiagnosticTest() {
           <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
             <Brain className="w-10 h-10 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight mb-3">诊断测试</h1>
+          <h1 className="text-3xl font-bold tracking-tight mb-3">{t('诊断测试')}</h1>
           <p className="text-muted-foreground mb-10 leading-relaxed">
-            通过 10 道题快速了解你的知识掌握情况，小宇会据此为你推荐练习方向。
-          </p>
+            {t('通过 10 道题快速了解你的知识掌握情况，小宇会据此为你推荐练习方向。')}</p>
 
           <div className="flex justify-center gap-8 mb-10">
             <div className="text-center">
@@ -164,7 +165,7 @@ export function DiagnosticTest() {
                 <Hash className="w-4 h-4" />
               </div>
               <div className="text-2xl font-bold">10</div>
-              <div className="text-xs text-muted-foreground">道题</div>
+              <div className="text-xs text-muted-foreground">{t('道题')}</div>
             </div>
             <div className="w-px bg-border" />
             <div className="text-center">
@@ -172,7 +173,7 @@ export function DiagnosticTest() {
                 <Clock className="w-4 h-4" />
               </div>
               <div className="text-2xl font-bold">5</div>
-              <div className="text-xs text-muted-foreground">分钟</div>
+              <div className="text-xs text-muted-foreground">{t('分钟')}</div>
             </div>
             <div className="w-px bg-border" />
             <div className="text-center">
@@ -180,13 +181,12 @@ export function DiagnosticTest() {
                 <Brain className="w-4 h-4" />
               </div>
               <div className="text-2xl font-bold">AI</div>
-              <div className="text-xs text-muted-foreground">智能分析</div>
+              <div className="text-xs text-muted-foreground">{t('智能分析')}</div>
             </div>
           </div>
 
           <Button className="w-full rounded-full py-6 text-base" size="lg" onClick={startDiagnostic}>
-            开始测试
-            <ArrowRight className="w-5 h-5 ml-2" />
+            {t('开始测试')}<ArrowRight className="w-5 h-5 ml-2" />
           </Button>
         </div>
       </div>
@@ -203,8 +203,7 @@ export function DiagnosticTest() {
         {/* Reassessment banner */}
         {isReassessment && (
           <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-sm rounded-xl px-4 py-3 mb-4 text-center">
-            重新评估中 — 本次评估聚焦你之前的薄弱知识点
-          </div>
+            {t('重新评估中 — 本次评估聚焦你之前的薄弱知识点')}</div>
         )}
 
         {/* Header */}
@@ -248,7 +247,7 @@ export function DiagnosticTest() {
             ) : (
               <textarea
                 className="w-full p-4 border border-border/50 rounded-xl min-h-[140px] resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                placeholder="输入你的答案..."
+                placeholder={t('输入你的答案...')}
                 value={answers[currentIndex] || ''}
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setAnswers(prev => ({ ...prev, [currentIndex]: e.target.value }))}
               />
@@ -265,16 +264,14 @@ export function DiagnosticTest() {
             onClick={() => setCurrentIndex(i => i - 1)}
           >
             <ArrowLeft className="w-4 h-4 mr-1" />
-            上一题
-          </Button>
+            {t('上一题')}</Button>
           {currentIndex < questions.length - 1 ? (
             <Button className="rounded-full" onClick={() => setCurrentIndex(i => i + 1)}>
-              下一题
-              <ArrowRight className="w-4 h-4 ml-1" />
+              {t('下一题')}<ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           ) : (
             <Button className="rounded-full" onClick={handleSubmit} disabled={loading}>
-              {loading ? '提交中...' : '提交答卷'}
+              {loading ? t('提交中...') : t('提交答卷')}
             </Button>
           )}
         </div>
@@ -292,24 +289,21 @@ export function DiagnosticTest() {
           <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
             <CheckCircle className="w-10 h-10 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight mb-2">诊断完成</h1>
+          <h1 className="text-3xl font-bold tracking-tight mb-2">{t('诊断完成')}</h1>
           <div className="text-5xl font-bold mt-4 mb-2">{accuracy}%</div>
           <p className="text-muted-foreground mb-4">
-            {`答对 ${result.total_score} / ${result.total_questions} 题`}
+            {t('答对 {0} / {1} 题', { 0: result.total_score, 1: result.total_questions })}
           </p>
           <Button onClick={handleReassess} variant="outline" className="rounded-full">
-            重新评估（聚焦弱项）
-          </Button>
+            {t('重新评估（聚焦弱项）')}</Button>
         </div>
 
         <div className="flex gap-3">
           <Button className="flex-1 rounded-full py-6 text-base" size="lg" onClick={() => navigate('/')}>
             <House className="w-5 h-5 mr-2" />
-            回到首页
-          </Button>
+            {t('回到首页')}</Button>
           <Button className="flex-1 rounded-full py-6 text-base" size="lg" variant="outline" onClick={() => navigate('/tests')}>
-            开始练习
-            <ArrowRight className="w-5 h-5 ml-2" />
+            {t('开始练习')}<ArrowRight className="w-5 h-5 ml-2" />
           </Button>
         </div>
       </div>

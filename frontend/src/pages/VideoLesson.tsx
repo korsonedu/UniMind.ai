@@ -1,3 +1,6 @@
+import { useProtectedMedia } from '@/hooks/useProtectedMedia';
+import { ProtectedMediaLink } from '@/components/ProtectedMediaLink';
+import { t, useLocale } from '@/i18n';
 import { useSystemStore, type ExperiencePreferences } from '@/store/useSystemStore';
 import type { Course } from '@/types/api';
 import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
@@ -5,6 +8,7 @@ import { createPortal, flushSync } from 'react-dom';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Play, Pause, Star, FileText, Download, ArrowsOut, ArrowsIn, ClosedCaptioning, SpeakerHigh, SpeakerX } from '@phosphor-icons/react';
 import api from '@/lib/api';
+import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { OutlinePanel } from '@/components/course/OutlinePanel';
 import { SubtitlesOverlay } from '@/components/course/SubtitlesOverlay';
@@ -29,6 +33,8 @@ interface VideoLessonProps {
 }
 
 export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, favoritePending = false, onFavoriteChange }) => {
+  useLocale();
+  const hasCourseCatalog = useInstitutionStore(state => state.hasCourseCatalog);
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const linkedPosition = searchParams.get('t');
@@ -39,6 +45,19 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoContainerRef = useRef<HTMLDivElement | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
+  const renewedPlayback = useRef<{ time: number; playing: boolean } | null>(null);
+  const media = useProtectedMedia(course?.video_file, () => {
+    const video = videoRef.current;
+    if (video?.readyState) renewedPlayback.current = { time: video.currentTime, playing: !video.paused };
+  });
+  const poster = useProtectedMedia(course?.cover_image);
+  const renewVideoTicket = async () => {
+    const video = videoRef.current;
+    if (!video || !media.crossOrigin || renewedPlayback.current) return;
+    renewedPlayback.current = { time: video.currentTime, playing: !video.paused };
+    const result = await media.refresh();
+    if (result.isError) { renewedPlayback.current = null; toast.error(t('视频授权更新失败，请重新打开课程')); }
+  };
   const [loading, setLoading] = useState(true);
   const [hasAwarded, setHasAwarded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -72,7 +91,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
       if (offlineReady) await desktop.openOfflineCourse(courseId);
       else useDesktopStore.setState({ state: await desktop.downloadCourse(courseId) });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '离线课程操作失败，请重试。');
+      toast.error(error instanceof Error ? error.message : t('离线课程操作失败，请重试。'));
     } finally {
       setOfflinePending(false);
     }
@@ -241,8 +260,8 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
       const res = await api.post(`/courses/${courseId}/progress/`, { is_finished: true });
       if (res.data.elo_added > 0) {
         setHasAwarded(true);
-        toast.success(`观看完成！奖励 ${res.data.elo_added} ELO`, {
-          description: `当前 ELO: ${res.data.new_score}`
+        toast.success(t('观看完成！奖励 {0} ELO', { 0: res.data.elo_added }), {
+          description: t('当前 ELO: {0}', { 0: res.data.new_score })
         });
         const me = await api.get('/users/me/');
         updateUser(me.data);
@@ -268,6 +287,13 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     video.playbackRate = playbackRate;
     const dur = video.duration || 0;
     setDuration(dur);
+    const restored = renewedPlayback.current;
+    if (restored) {
+      renewedPlayback.current = null;
+      video.currentTime = restored.time;
+      if (restored.playing) void video.play().catch(() => toast(t('点击播放继续观看')));
+      return;
+    }
     if (Number.isFinite(dur) && dur > 0) api.post(`/courses/${courseId}/progress/`, { duration: dur }).catch(() => {});
     if (linkedSeconds !== null && Number.isFinite(linkedSeconds) && linkedSeconds >= 0 && linkedSeconds < dur) {
       video.currentTime = linkedSeconds;
@@ -279,7 +305,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     if (p && !p.is_finished && p.last_position > 10 && dur > 0 && p.last_position < dur - 10) {
       video.currentTime = p.last_position;
       setCurrentTime(p.last_position);
-      toast.info('已从上次位置继续播放');
+      toast.info(t('已从上次位置继续播放'));
     }
   };
 
@@ -300,15 +326,15 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   if (loading) return (
     <div className="um-lesson um-lesson-state" role="status">
       <div className="h-10 w-10 border-4 border-border border-t-primary rounded-full animate-spin" />
-      <p>正在加载课程…</p>
+      <p>{t('正在加载课程…')}</p>
     </div>
   );
 
-  if (!course) return <div className="um-lesson um-lesson-state">课程未找到</div>;
+  if (!course) return <div className="um-lesson um-lesson-state">{t('课程未找到')}</div>;
 
   return (
     <div className="um-lesson um-lesson-unified" style={{ '--um-video-aspect-ratio': videoAspectRatio } as React.CSSProperties}>
-      <section className="um-lesson-view" aria-label="视频与课程信息">
+      <section className="um-lesson-view" aria-label={t('视频与课程信息')}>
         <div className="um-lesson-stage">
         <div
           ref={videoContainerRef}
@@ -330,41 +356,43 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
               onResize={handleVideoResize}
               onPlay={() => { setIsPlaying(true); scheduleHideControls(); }}
               onPause={() => {
+                if (renewedPlayback.current) return;
                 setIsPlaying(false);
                 setShowControls(true);
                 // 暂停时补存进度，避免最后 10 秒内的位置丢失
                 api.post(`/courses/${courseId}/progress/`, { position: videoRef.current?.currentTime ?? 0 }).catch(() => {});
               }}
               onClick={() => { if (videoRef.current?.paused) void videoRef.current.play(); else videoRef.current?.pause(); }}
-              src={course.video_file}
+              src={media.src || undefined}
+              onError={() => void renewVideoTicket()}
               className="um-lesson-video"
               preload="metadata"
-              poster={course.cover_image || undefined}
+              poster={poster.src || undefined}
             />
             <SubtitlesOverlay courseId={courseId} videoRef={videoRef} visible={subtitlesVisible} />
             <div className="um-lesson-controls" data-visible={showControls || !isPlaying || undefined}>
-              <input className="um-lesson-progress" type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime, duration)} onChange={handleSeek} disabled={!duration} aria-label="播放进度" aria-valuetext={`${formatTime(currentTime)} / ${formatTime(duration)}`} />
+              <input className="um-lesson-progress" type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime, duration)} onChange={handleSeek} disabled={!duration} aria-label={t('播放进度')} aria-valuetext={`${formatTime(currentTime)} / ${formatTime(duration)}`} />
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-medium text-white/70 tabular-nums">{formatTime(currentTime)} / {formatTime(duration)}</span>
                 <div className="flex items-center gap-0.5">
                   <button
                     onClick={() => { if (videoRef.current?.paused) void videoRef.current.play(); else videoRef.current?.pause(); }}
                     className="rounded-md p-1.5 text-white/70 hover:text-white transition-colors"
-                    aria-label={isPlaying ? '暂停' : '播放'}
-                    title={isPlaying ? '暂停' : '播放'}
+                    aria-label={isPlaying ? t('暂停') : t('播放')}
+                    title={isPlaying ? t('暂停') : t('播放')}
                   >
                     {isPlaying ? <Pause className="h-[18px] w-[18px]" /> : <Play className="h-[18px] w-[18px]" />}
                   </button>
-                  <button onClick={toggleMute} className="rounded-md p-1.5 text-white/70 hover:text-white transition-colors" aria-label={isMuted ? '取消静音' : '静音'} title={isMuted ? '取消静音' : '静音'}>
+                  <button onClick={toggleMute} className="rounded-md p-1.5 text-white/70 hover:text-white transition-colors" aria-label={isMuted ? t('取消静音') : t('静音')} title={isMuted ? t('取消静音') : t('静音')}>
                     {isMuted ? <SpeakerX className="h-[18px] w-[18px]" /> : <SpeakerHigh className="h-[18px] w-[18px]" />}
                   </button>
-                  <button onClick={cycleSpeed} className="rounded-md px-1.5 py-1 text-xs font-bold text-white/70 hover:text-white transition-colors min-w-[32px] text-center" aria-label="播放速度" title="播放速度">
+                  <button onClick={cycleSpeed} className="rounded-md px-1.5 py-1 text-xs font-bold text-white/70 hover:text-white transition-colors min-w-[32px] text-center" aria-label={t('播放速度')} title={t('播放速度')}>
                     {playbackRate}x
                   </button>
-                  <button onClick={() => setExperience({ videoSubtitles: !subtitlesVisible })} className={`rounded-md p-1.5 transition-colors ${subtitlesVisible ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`} aria-label={subtitlesVisible ? '关闭字幕' : '开启字幕'} title={subtitlesVisible ? '关闭字幕' : '开启字幕'}>
+                  <button onClick={() => setExperience({ videoSubtitles: !subtitlesVisible })} className={`rounded-md p-1.5 transition-colors ${subtitlesVisible ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`} aria-label={subtitlesVisible ? t('关闭字幕') : t('开启字幕')} title={subtitlesVisible ? t('关闭字幕') : t('开启字幕')}>
                     <ClosedCaptioning className="h-[18px] w-[18px]" />
                   </button>
-                  <button onClick={toggleFullscreen} className="rounded-md p-1.5 text-white/70 hover:text-white transition-colors" aria-label={isFullscreen ? '退出全屏' : '全屏'} title={isFullscreen ? '退出全屏' : '全屏'}>
+                  <button onClick={toggleFullscreen} className="rounded-md p-1.5 text-white/70 hover:text-white transition-colors" aria-label={isFullscreen ? t('退出全屏') : t('全屏')} title={isFullscreen ? t('退出全屏') : t('全屏')}>
                     {isFullscreen ? <ArrowsIn className="h-[18px] w-[18px]" /> : <ArrowsOut className="h-[18px] w-[18px]" />}
                   </button>
                 </div>
@@ -372,52 +400,52 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
             </div>
             </>
           ) : (
-            <div className="um-lesson-no-video"><Play size={32} weight="light" /><p>暂无视频</p></div>
+            <div className="um-lesson-no-video"><Play size={32} weight="light" /><p>{t('暂无视频')}</p></div>
           )}
         </div>
         </div>
         <header className="um-lesson-heading">
-          <div><p className="um-lesson-module">{[course.subject_name, course.module_name].filter(Boolean).join(' / ') || '待归类'}</p><h1>{course.title}</h1></div>
+          <div><p className="um-lesson-module">{[course.subject_name, course.module_name].filter(Boolean).join(' / ') || t('待归类')}</p><h1>{course.title}</h1></div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {window.unimindDesktop && course.video_file && (
               <button className="um-lesson-favorite" disabled={offlinePending || offlineDownload?.status === 'downloading'} onClick={() => void handleOffline()} title={offlineDownload?.error}>
                 {offlineReady ? <Play size={18} /> : <Download size={18} />}
                 {offlineDownload?.status === 'downloading'
-                  ? `下载中${offlineDownload.totalBytes > 0 ? ` ${Math.min(100, Math.floor(offlineDownload.receivedBytes / offlineDownload.totalBytes * 100))}%` : '…'}`
-                  : offlineReady ? '离线播放' : offlineDownload?.status === 'paused' ? '继续下载' : offlineDownload?.status === 'failed' ? '重试下载' : offlineDownload ? '重新下载' : '下载课程'}
+                  ? t('下载中{0}', { 0: offlineDownload.totalBytes > 0 ? ` ${Math.min(100, Math.floor(offlineDownload.receivedBytes / offlineDownload.totalBytes * 100))}%` : '…' })
+                  : offlineReady ? t('离线播放') : offlineDownload?.status === 'paused' ? t('继续下载') : offlineDownload?.status === 'failed' ? t('重试下载') : offlineDownload ? t('重新下载') : t('下载课程')}
               </button>
             )}
             {offlineDownload?.status === 'downloading' && window.unimindDesktop?.pauseDownload && <button className="um-lesson-favorite" disabled={offlinePending} onClick={async () => {
               setOfflinePending(true);
               try { useDesktopStore.setState({ state: await window.unimindDesktop!.pauseDownload!(courseId) }); }
-              catch (error) { toast.error(error instanceof Error ? error.message : '暂停失败，请重试。'); }
+              catch (error) { toast.error(error instanceof Error ? error.message : t('暂停失败，请重试。')); }
               finally { setOfflinePending(false); }
-            }}><Pause size={18} />暂停下载</button>}
-            <button className="um-lesson-favorite" disabled={favoritePending || !onFavoriteChange} onClick={onFavoriteChange} aria-pressed={isFavorite}><Star size={18} weight={isFavorite ? 'fill' : 'regular'} />{isFavorite ? '已收藏' : '收藏'}</button>
+            }}><Pause size={18} />{t('暂停下载')}</button>}
+            <button className="um-lesson-favorite" disabled={favoritePending || !onFavoriteChange} onClick={onFavoriteChange} aria-pressed={isFavorite}><Star size={18} weight={isFavorite ? 'fill' : 'regular'} />{hasCourseCatalog ? (isFavorite ? t('已收藏') : t('收藏')) : (isFavorite ? t('已保存') : t('保存课程'))}</button>
           </div>
         </header>
         <section className="um-lesson-intro" aria-labelledby="lesson-intro-heading">
-          <h2 id="lesson-intro-heading">课程简介</h2>
-          <div className="um-lesson-description"><p>{course.description || '暂无课程简介'}</p></div>
+          <h2 id="lesson-intro-heading">{t('课程简介')}</h2>
+          <div className="um-lesson-description"><p>{course.description || t('暂无课程简介')}</p></div>
         </section>
       </section>
-      {sidebarHost && createPortal(<aside className="um-course-sidebar-content" aria-label="课程侧栏">
+      {sidebarHost && createPortal(<aside className="um-course-sidebar-content" aria-label={t('课程侧栏')}>
         <div id="sidebar-panel-chat" role="tabpanel" aria-labelledby="sidebar-tab-chat" className="um-course-sidebar-chat" hidden={sidebarView !== 'chat'}>
           <CourseChatPanel key={`${userId}:${courseId}`} courseId={courseId} videoRef={videoRef}
             mode="sidebar" visible={sidebarVisible && sidebarView === 'chat'} onSeek={seekTo} />
         </div>
         <div id="sidebar-panel-outline" role="tabpanel" aria-labelledby="sidebar-tab-outline" className="um-course-info" hidden={sidebarView !== 'outline'}>
         <section className="um-lesson-outline-section" aria-labelledby="lesson-outline-heading">
-          <h2 id="lesson-outline-heading">课程大纲</h2>
-          {course.ai_outline_enabled !== false ? <OutlinePanel courseId={courseId} videoRef={videoRef} /> : <p className="um-lesson-empty">本课程暂无大纲</p>}
+          <h2 id="lesson-outline-heading">{t('课程大纲')}</h2>
+          {course.ai_outline_enabled !== false ? <OutlinePanel courseId={courseId} videoRef={videoRef} /> : <p className="um-lesson-empty">{t('本课程暂无大纲')}</p>}
         </section>
         </div>
         <div id="sidebar-panel-materials" role="tabpanel" aria-labelledby="sidebar-tab-materials" className="um-course-info" hidden={sidebarView !== 'materials'}>
         <section className="um-lesson-resources" aria-labelledby="lesson-resources-heading">
-          <h2 id="lesson-resources-heading">课程资料</h2>
-          {course.courseware && <a href={course.courseware} download target="_blank" rel="noopener noreferrer"><FileText size={18} /><span>教学课件</span><Download size={16} /></a>}
-          {course.reference_materials && <a href={course.reference_materials} download target="_blank" rel="noopener noreferrer"><FileText size={18} /><span>参考资料</span><Download size={16} /></a>}
-          {!course.courseware && !course.reference_materials && <p className="um-lesson-empty">暂无课程资料</p>}
+          <h2 id="lesson-resources-heading">{t('课程资料')}</h2>
+          {course.courseware && <ProtectedMediaLink href={course.courseware} download target="_blank" rel="noopener noreferrer"><FileText size={18} /><span>{t('教学课件')}</span><Download size={16} /></ProtectedMediaLink>}
+          {course.reference_materials && <ProtectedMediaLink href={course.reference_materials} download target="_blank" rel="noopener noreferrer"><FileText size={18} /><span>{t('参考资料')}</span><Download size={16} /></ProtectedMediaLink>}
+          {!course.courseware && !course.reference_materials && <p className="um-lesson-empty">{t('暂无课程资料')}</p>}
         </section>
         </div>
       </aside>, sidebarHost)}

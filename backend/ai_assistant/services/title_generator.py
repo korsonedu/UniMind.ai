@@ -4,6 +4,7 @@ Called inline from SSE view after first assistant response completes.
 Uses the server DSH task when enabled; otherwise keeps the legacy model path.
 """
 import logging
+from pathlib import Path
 
 from django.conf import settings
 
@@ -11,12 +12,14 @@ from ai_service import AIService
 
 logger = logging.getLogger(__name__)
 
-TITLE_MAX_CHARS = 15
+TITLE_MAX_CHARS = 80
 
 
 def _fallback_title(user_msg):
     """Deterministic short title when the DSH task is unavailable."""
-    return ' '.join(str(getattr(user_msg, 'content', '') or '').split())[:TITLE_MAX_CHARS]
+    from .language import message_language
+    limit = TITLE_MAX_CHARS if message_language(user_msg) == 'en' else 15
+    return ' '.join(str(getattr(user_msg, 'content', '') or '').split())[:limit]
 
 
 def _generate_title_via_dsh(prompt):
@@ -46,10 +49,14 @@ def sync_generate_title(conversation_id, user_id, bot_id, *, expected_title=''):
         if not user_msg or not assistant_msg:
             return None
 
+        from .language import message_language
+        english = message_language(user_msg) == 'en'
+        instruction = (Path(settings.BASE_DIR) / 'prompts/ai_assistant/title_generation.txt').read_text()
+        instruction = instruction.replace('{language}', 'English' if english else 'Simplified Chinese').replace('{limit}', '8 words and 80 characters' if english else '15 characters')
         prompt = (
             f"用户: {user_msg.content[:300]}\n"
             f"助手: {assistant_msg.content[:300]}\n\n"
-            "为以上对话生成一个简短标题（≤15个字），直接输出标题，不要引号、不要前缀。"
+            f"{instruction}"
         )
 
         if getattr(settings, 'UNIMIND_DSH_TITLE_ENABLED', False) or getattr(settings, 'UNIMIND_DSH_GENERATION_ENABLED', False):
@@ -61,12 +68,13 @@ def sync_generate_title(conversation_id, user_id, bot_id, *, expected_title=''):
         else:
             ai = AIService()
             result = ai.simple_chat_text(
-                system_prompt="你是标题生成器。为对话生成简短标题（≤15字），直接输出标题。",
+                system_prompt=instruction,
                 user_prompt=prompt,
                 operation='assistant.chat.title',
             )
-            title = result.strip()[:120] if result else ''
+            title = result.strip() if result else ''
 
+        title = title[:TITLE_MAX_CHARS if english else 15]
         if title:
             conversation, _ = Conversation.objects.get_or_create(
                 conversation_id=conversation_id, user_id=user_id, defaults={'bot_id': bot_id},

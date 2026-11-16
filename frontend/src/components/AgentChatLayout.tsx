@@ -1,3 +1,4 @@
+import { getLocale, t, useLocale } from '@/i18n';
 import { useNoteMentions } from '@/pages/notes/useNoteMentions';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useSystemStore } from '@/store/useSystemStore';
@@ -23,7 +24,7 @@ import type { Icon } from '@phosphor-icons/react';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
 import { AgentReplyContext } from '@/pages/xiaoyu/visuals/agentReplyContext';
 import { TaskList } from '@/components/TaskList';
-import { NativeAgentShell } from '@/components/NativeAgentShell';
+import { NativeAgentShell, type AgentWorkspace } from '@/components/NativeAgentShell';
 import { useConversationProjects, type ConversationProjectControls } from '@/hooks/useConversationProjects';
 import { Link } from 'react-router-dom';
 import { useChatUnreadStore } from '@/store/useChatUnreadStore';
@@ -54,6 +55,7 @@ export interface RightPanelProps {
 }
 
 export interface AgentChatLayoutProps {
+  workspace?: AgentWorkspace;
   appearance?: 'native';
   // Skills
   skills: Skill[];
@@ -143,12 +145,13 @@ export interface AgentChatLayoutProps {
 // ── Component ──
 
 export default function AgentChatLayout(props: AgentChatLayoutProps) {
+  useLocale();
   const sendShortcut = useSystemStore(state => state.sendShortcut);
   const shouldSend = (event: React.KeyboardEvent<HTMLTextAreaElement>) => event.key === 'Enter' && !event.shiftKey
     && (sendShortcut === 'enter' || event.ctrlKey || event.metaKey);
   const {
     skills, typewriterWords, chatPlaceholder,
-    landingTitle, landingDescription, skillTooltip = '技能',
+    landingTitle, landingDescription, skillTooltip = t('技能'),
     botDisplayName,
     getExtraPayload, beforeSend, enableNoteMentions = false, contextPanel, onDone, onSendReady,
     extractVisualFromStep,
@@ -162,7 +165,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     inputTourClass,
     sidebar,
     onSessionsReady,
-    appearance,
+    appearance, workspace,
   } = props;
 
   const setPageHeader = useSystemStore(state => state.setPageHeader);
@@ -385,11 +388,11 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   const quotaLow = aiUsage && !aiUsage.unlimited && aiUsage.remaining !== null && aiUsage.remaining > 0 && aiUsage.remaining <= 5;
   const quotaHint = appearance === 'native' && <>
     <p aria-live="polite" className={cn('mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 text-[11px] leading-5 text-muted-foreground', quotaLow && 'text-amber-700')}>
-      {quotaError ? <span>AI 额度暂时无法读取，请稍后查看。</span> : !aiUsage ? <span>正在读取 AI 额度…</span> : aiUsage.unlimited ? <span>AI 问答不限次数</span> : <>
-        <span>{aiUsage.configured ? `本周 AI 剩余 ${aiUsage.base_remaining} 次` : '基础周额度待配置'}{aiUsage.addon_remaining > 0 && ` · 加量剩余 ${aiUsage.addon_remaining} 次`}{quotaLow && ' · 额度不多了'}</span>
-        {quotaExhausted && aiUsage.configured && <span>{learningReset(aiUsage.resets_at)}（上海时间）恢复基础额度</span>}
-        {(quotaExhausted || !aiUsage.configured) && <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => setContactOpen(true)}>联系我们</button>}
-        {(quotaExhausted || quotaLow) && <Link to="/pricing" className="underline underline-offset-2 hover:text-foreground">按需 AI 加量</Link>}
+      {quotaError ? <span>{t('AI 额度暂时无法读取，请稍后查看。')}</span> : !aiUsage ? <span>{t('正在读取 AI 额度…')}</span> : aiUsage.unlimited ? <span>{t('AI 问答不限次数')}</span> : <>
+        <span>{aiUsage.configured ? t('本周 AI 剩余 {0} 次', { 0: aiUsage.base_remaining }) : t('基础周额度待配置')}{aiUsage.addon_remaining > 0 && t(' · 加量剩余 {0} 次', { 0: aiUsage.addon_remaining })}{quotaLow && t(' · 额度不多了')}</span>
+        {quotaExhausted && aiUsage.configured && <span>{learningReset(aiUsage.resets_at)}{t('恢复基础额度')}</span>}
+        {(quotaExhausted || !aiUsage.configured) && <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => setContactOpen(true)}>{t('联系我们')}</button>}
+        {(quotaExhausted || quotaLow) && <Link to="/pricing" className="underline underline-offset-2 hover:text-foreground">{t('按需 AI 加量')}</Link>}
       </>}
     </p>
     <ContactAdminModal open={contactOpen} onOpenChange={setContactOpen} />
@@ -404,34 +407,34 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
   if (!hasConversation && appearance === 'native') {
     return <TooltipProvider delayDuration={300}>
-      <NativeAgentShell native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || '新对话'}>
+      <NativeAgentShell workspace={workspace} native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || t('新对话')}>
         {contextPanel?.({ bot, conversationId })}
         <div className="um-agent-landing">
-          <section className="um-agent-start" aria-label="开始对话">
-            <h2 className="um-agent-start-title">{selectedProjectName ? <>我们要在 <Popover open={projectPickerOpen} onOpenChange={open => { setProjectPickerOpen(open); if (!open) setProjectQuery(''); }}>
-              <PopoverTrigger asChild><button className="um-agent-project-picker-trigger" aria-label={`切换项目，当前为${selectedProjectName}`}>{selectedProjectName}</button></PopoverTrigger>
+          <section className="um-agent-start" aria-label={t('开始对话')}>
+            <h2 className="um-agent-start-title">{selectedProjectName ? <>{t('我们要在')} <Popover open={projectPickerOpen} onOpenChange={open => { setProjectPickerOpen(open); if (!open) setProjectQuery(''); }}>
+              <PopoverTrigger asChild><button className="um-agent-project-picker-trigger" aria-label={t('切换项目，当前为{0}', { 0: selectedProjectName })}>{selectedProjectName}</button></PopoverTrigger>
               <PopoverContent side="top" align="center" sideOffset={12} className="um-native-agent um-native-menu um-agent-project-picker" onCloseAutoFocus={event => { event.preventDefault(); nativeInputRef.current?.focus(); }}>
-                <label className="um-agent-project-picker-search"><MagnifyingGlass size={16} /><input autoFocus aria-label="搜索项目" placeholder="搜索项目" value={projectQuery} onChange={event => setProjectQuery(event.target.value)} /></label>
-                <div className="um-agent-project-picker-list" role="group" aria-label="切换学习项目">{projectControls.projects.filter(project => project.name.toLowerCase().includes(projectQuery.trim().toLowerCase())).map(project => <button key={project.id} aria-pressed={project.id === projectId} onClick={() => selectNewProject(project.id)}><Folder size={16} /><span>{project.name}</span>{project.id === projectId && <Check size={16} />}</button>)}</div>
-                {!projectControls.projects.some(project => project.name.toLowerCase().includes(projectQuery.trim().toLowerCase())) && <p className="um-agent-project-picker-empty">没有匹配的项目</p>}
-                <button className="um-agent-project-picker-none" onClick={() => selectNewProject(null)}>自由对话</button>
+                <label className="um-agent-project-picker-search"><MagnifyingGlass size={16} /><input autoFocus aria-label={t('搜索项目')} placeholder={t('搜索项目')} value={projectQuery} onChange={event => setProjectQuery(event.target.value)} /></label>
+                <div className="um-agent-project-picker-list" role="group" aria-label={t('切换学习项目')}>{projectControls.projects.filter(project => project.name.toLowerCase().includes(projectQuery.trim().toLowerCase())).map(project => <button key={project.id} aria-pressed={project.id === projectId} onClick={() => selectNewProject(project.id)}><Folder size={16} /><span>{project.name}</span>{project.id === projectId && <Check size={16} />}</button>)}</div>
+                {!projectControls.projects.some(project => project.name.toLowerCase().includes(projectQuery.trim().toLowerCase())) && <p className="um-agent-project-picker-empty">{t('没有匹配的项目')}</p>}
+                <button className="um-agent-project-picker-none" onClick={() => selectNewProject(null)}>{t('自由对话')}</button>
               </PopoverContent>
-            </Popover> 中做些什么？</> : contextPanel ? landingTitle : '我们要做些什么？'}</h2>
+            </Popover> {t('中做些什么？')}</> : contextPanel ? landingTitle : t('我们要做些什么？')}</h2>
             <div className="w-full max-w-[680px]">
             <div data-tour={inputTourClass} className="um-agent-composer">
               {noteMentions.panel}
               <textarea ref={nativeInputRef} value={input} onChange={event => { setInput(event.target.value); noteMentions.updateQuery(event.target.value, event.target.selectionStart); }}
                 onCompositionStart={() => setIsComposition(true)} onCompositionEnd={() => setIsComposition(false)}
                 onKeyDown={event => { if (noteMentions.onKeyDown(event, isComposing)) return; if (shouldSend(event) && !isComposing && !event.nativeEvent.isComposing && !loading && input.trim() && bot) { event.preventDefault(); doSend(input); } }}
-                placeholder={chatPlaceholder} aria-label={`和${botDisplayName}对话`} disabled={loading || !bot} />
+                placeholder={chatPlaceholder} aria-label={t('和{0}对话', { 0: botDisplayName })} disabled={loading || !bot} />
               <footer>
                 <Popover open={skillOpen} onOpenChange={setSkillOpen}>
-                  <PopoverTrigger asChild><button className="um-agent-button um-agent-task-trigger" aria-label="快捷任务" disabled={loading || !bot}><Plus size={16} />快捷任务</button></PopoverTrigger>
+                  <PopoverTrigger asChild><button className="um-agent-button um-agent-task-trigger" aria-label={t('快捷任务')} disabled={loading || !bot}><Plus size={16} />{t('快捷任务')}</button></PopoverTrigger>
                   <PopoverContent align="start" side="top" className="um-native-menu w-56 p-1 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto" onCloseAutoFocus={event => { event.preventDefault(); nativeInputRef.current?.focus(); }}>
                     {skills.map(skill => <button key={skill.label} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted text-left" onClick={() => handleSkillSelect(skill.prompt)}><skill.icon size={16} />{skill.label}</button>)}
                   </PopoverContent>
                 </Popover>
-                <button className="um-agent-button um-agent-button-primary um-agent-send" disabled={loading || !input.trim() || !bot} onClick={() => doSend(input)} aria-label="发送消息"><ArrowUp size={18} /></button>
+                <button className="um-agent-button um-agent-button-primary um-agent-send" disabled={loading || !input.trim() || !bot} onClick={() => doSend(input)} aria-label={t('发送消息')}><ArrowUp size={18} /></button>
               </footer>
             </div>
             {quotaHint}
@@ -520,7 +523,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     <PopoverTrigger asChild>
                       <button className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 rounded-full px-3 py-0.5 bg-muted/50 hover:bg-muted">
                         <ClockCounterClockwise className="h-3.5 w-3.5" />
-                        {sessions.length} 个历史对话
+                        {sessions.length} {t('个历史对话')}
                       </button>
                     </PopoverTrigger>
                     <PopoverContent align="start" side="top" className="w-72 p-1.5 rounded-lg border-border/60 shadow-lg max-h-64 overflow-y-auto">
@@ -532,8 +535,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                               className="flex-1 flex flex-col gap-0.5 text-left min-w-0">
                               <span className="text-[12px] font-medium truncate">{session.label}</span>
                               <span className="text-[10px] text-muted-foreground/50">
-                                {session.messages.length} 条消息
-                                {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                                {session.messages.length} {t('条消息')}
+                                {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
                               </span>
                             </button>
                             {onDeleteSession && (
@@ -569,7 +572,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (layout === 'inline') {
     return (
       <TooltipProvider delayDuration={300}>
-        <NativeAgentShell native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || '新对话'}>
+        <NativeAgentShell workspace={workspace} native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || t('新对话')}>
           {contextPanel?.({ bot, conversationId })}
 
           <div className={cn("flex-1 min-w-0 flex flex-col bg-white", appearance === 'native' && 'um-agent-chat-body')}>
@@ -586,7 +589,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
               <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
                 <PopoverTrigger asChild>
                   <button className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0 rounded-full px-2.5 py-0.5 bg-muted/50 hover:bg-muted">
-                    {sessions.length} 个对话
+                    {sessions.length} {t('个对话')}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="start" side="bottom" className="w-56 p-1 rounded-lg border-border/60 shadow-lg max-h-52 overflow-y-auto">
@@ -598,8 +601,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                           className="flex-1 flex flex-col gap-0.5 text-left min-w-0">
                           <span className="text-[11px] font-medium truncate">{session.label}</span>
                           <span className="text-[10px] text-muted-foreground/55">
-                            {session.messages.length} 条消息
-                            {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                            {session.messages.length} {t('条消息')}
+                            {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
                           </span>
                         </button>
                         {onDeleteSession && session.id !== activeSessionId && (
@@ -617,7 +620,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             <button onClick={() => wrappedReset()}
               className="shrink-0 rounded-full px-3 py-1 text-[11px] font-medium bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
               <Plus className="h-3 w-3" />
-              新对话
+              {t('新对话')}
             </button>
           </div>
 
@@ -698,7 +701,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   onCompositionEnd={() => setIsComposition(false)}
                   onKeyDown={e => { if (noteMentions.onKeyDown(e, isComposing)) return; if (shouldSend(e) && !isComposing && !e.nativeEvent.isComposing && !loading && input.trim() && bot) { e.preventDefault(); doSend(input); } }}
                   placeholder={chatPlaceholder}
-                  aria-label={`和${botDisplayName}对话`}
+                  aria-label={t('和{0}对话', { 0: botDisplayName })}
                   autoComplete="off"
                   className="w-full bg-transparent border-none resize-none text-sm px-4 py-2 placeholder:text-muted-foreground/55 focus:outline-none min-h-[36px]"
                   disabled={loading}
@@ -708,7 +711,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <PopoverTrigger asChild>
-                          <button aria-label="快捷任务" className={cn("p-1.5 rounded-lg transition-colors", skillOpen ? "text-primary/60" : "text-muted-foreground/55 hover:text-foreground/70 hover:bg-muted")}>
+                          <button aria-label={t('快捷任务')} className={cn("p-1.5 rounded-lg transition-colors", skillOpen ? "text-primary/60" : "text-muted-foreground/55 hover:text-foreground/70 hover:bg-muted")}>
                             <Plus className="h-4 w-4" />
                           </button>
                         </PopoverTrigger>
@@ -739,7 +742,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     </Tooltip>
                   )}
                   <div className="flex-1" />
-                  <Button aria-label="发送消息" onClick={() => doSend(input)} disabled={loading || !input.trim() || !bot} size="icon"
+                  <Button aria-label={t('发送消息')} onClick={() => doSend(input)} disabled={loading || !input.trim() || !bot} size="icon"
                     className="um-agent-send rounded-full h-9 w-9 bg-primary text-primary-foreground shadow-none um-motion-control active:scale-[0.98] transition-[color,background-color,border-color,opacity,transform,scale] duration-150 shrink-0 hover:opacity-90">
                     {loading ? <Spinner className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
                   </Button>
@@ -795,7 +798,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
               <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
                 <PopoverTrigger asChild>
                   <button className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0 rounded-full px-2.5 py-0.5 bg-muted/50 hover:bg-muted">
-                    {sessions.length} 个对话
+                    {sessions.length} {t('个对话')}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="start" side="bottom" className="w-56 p-1 rounded-lg border-border/60 shadow-lg max-h-52 overflow-y-auto">
@@ -807,8 +810,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                           className="flex-1 flex flex-col gap-0.5 text-left min-w-0">
                           <span className="text-[11px] font-medium truncate">{session.label}</span>
                           <span className="text-[10px] text-muted-foreground/55">
-                            {session.messages.length} 条消息
-                            {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                            {session.messages.length} {t('条消息')}
+                            {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
                           </span>
                         </button>
                         {onDeleteSession && session.id !== activeSessionId && (
@@ -826,7 +829,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             <Button variant="ghost" size="sm" onClick={() => wrappedReset()}
               className="rounded text-muted-foreground/40 hover:text-foreground/60 gap-0.5 px-1.5 h-5 shrink-0">
               <ArrowCounterClockwise className="h-2.5 w-2.5" />
-              <span className="text-[9px] font-medium">新对话</span>
+              <span className="text-[9px] font-medium">{t('新对话')}</span>
             </Button>
           </div>
 

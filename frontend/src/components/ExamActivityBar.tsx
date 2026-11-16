@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/i18n';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, CircleNotch, WarningCircle, XCircle } from '@phosphor-icons/react';
@@ -11,17 +12,17 @@ import '@/styles/exam-activity.css';
 
 const copyFor = (activity: ExamActivity) => {
   if (isActiveExamStatus(activity.status)) {
-    const progress = activity.total ? `已批 ${activity.graded}/${activity.total} 题` : '正在批改';
-    return { title: '正在批改', meta: progress };
+    const progress = activity.total ? t('已批 {0}/{1} 题', { 0: activity.graded, 1: activity.total }) : t('正在批改');
+    return { title: t('正在批改'), meta: progress };
   }
   if (activity.status === 'completed') {
-    const score = activity.maxScore ? `得分 ${activity.totalScore ?? 0}/${activity.maxScore}` : '';
-    return { title: '评估完成，查看复盘', meta: score };
+    const score = activity.maxScore ? t('得分 {0}/{1}', { 0: activity.totalScore ?? 0, 1: activity.maxScore }) : '';
+    return { title: t('评估完成，查看复盘'), meta: score };
   }
   if (activity.status === 'partial') {
-    return { title: '部分完成，查看复盘', meta: `${activity.failed} 题待重试` };
+    return { title: t('部分完成，查看复盘'), meta: t('{0} 题待重试', { 0: activity.failed }) };
   }
-  return { title: '批改未完成，查看', meta: '可进入结果页重试' };
+  return { title: t('批改未完成，查看'), meta: t('可进入结果页重试') };
 };
 
 const iconFor = (activity: ExamActivity) => {
@@ -34,6 +35,7 @@ const iconFor = (activity: ExamActivity) => {
 };
 
 export const ExamActivityBar = () => {
+  useLocale();
   const navigate = useNavigate();
   const activities = useExamActivityStore(state => state.activities);
   const pruneExpired = useExamActivityStore(state => state.pruneExpired);
@@ -54,7 +56,7 @@ export const ExamActivityBar = () => {
   };
 
   return (
-    <section className="exam-activity-bar" aria-label="练习批改状态" aria-live="polite" role="status">
+    <section className="exam-activity-bar" aria-label={t('练习批改状态')} aria-live="polite" role="status">
       {visible.map((activity) => {
         const copy = copyFor(activity);
         const progress = activity.total
@@ -82,7 +84,7 @@ export const ExamActivityBar = () => {
           </button>
         );
       })}
-      {hidden > 0 && <span className="exam-activity-more">还有 {hidden} 条练习状态</span>}
+      {hidden > 0 && <span className="exam-activity-more">{t('还有 {0} 条练习状态', { 0: hidden })}</span>}
     </section>
   );
 };

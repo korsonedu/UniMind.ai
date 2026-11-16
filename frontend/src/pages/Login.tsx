@@ -1,13 +1,18 @@
+import { queryClient } from '@/lib/queryClient';
+import { queryKeys } from '@/lib/queryKeys';
+import { t, useLocale } from '@/i18n';
 import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AuthLayout } from '@/components/AuthLayout';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, flushNativeToken } from '@/store/useAuthStore';
 import { Warning, Spinner } from '@phosphor-icons/react';
 
 import api from '@/lib/api';
+import { isNativePlatform } from '@/lib/serverConfig';
+import { ServerConfigControl } from '@/components/ServerConfigControl';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { getReturnTo } from '@/lib/routing';
 import { DesktopLogin } from './DesktopLogin';
@@ -17,6 +22,7 @@ type LoginTab = 'password' | 'code';
 export const Login: React.FC = () => window.unimindDesktop ? <DesktopLogin /> : <WebLogin />;
 
 const WebLogin: React.FC = () => {
+  useLocale();
   const [tab, setTab] = useState<LoginTab>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,11 +34,12 @@ const WebLogin: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnTo = getReturnTo(searchParams.get('next'));
+  const nativePlatform = isNativePlatform();
 
   useEffect(() => {
     const { user } = useAuthStore.getState();
-    if (user) navigate(returnTo, { replace: true });
-  }, [navigate, returnTo]);
+    if (user && (!nativePlatform || useAuthStore.getState().token)) navigate(returnTo, { replace: true });
+  }, [navigate, returnTo, nativePlatform]);
 
   const getInstitutionSlug = (): string => {
     const fromParam = searchParams.get('institution');
@@ -65,11 +72,14 @@ const WebLogin: React.FC = () => {
       const response = await api.post('/users/login/', { username: email, password });
       const user = response.data.user;
       const token = response.data.token;
+      await queryClient.cancelQueries({ queryKey: queryKeys.user.me });
+      queryClient.setQueryData(queryKeys.user.me, user);
       setAuth(user, token);
+      await flushNativeToken();
       await fetchFeatures();
       navigate(returnTo, { replace: true });
     } catch (err: unknown) {
-      setError(formatApiErrorToast(err, '登录失败'));
+      setError(formatApiErrorToast(err, t('登录失败')));
     } finally {
       setLoading(false);
     }
@@ -80,7 +90,7 @@ const WebLogin: React.FC = () => {
   const handleSendCode = async () => {
     if (!email.trim()) return;
     if (!isValidEmail(email)) {
-      setError('请输入有效的邮箱地址');
+      setError(t('请输入有效的邮箱地址'));
       return;
     }
     setSendingCode(true);
@@ -92,56 +102,40 @@ const WebLogin: React.FC = () => {
       params.set('purpose', 'login_by_code');
       navigate(`/verify-code?${params}`);
     } catch (err: unknown) {
-      setError(formatApiErrorToast(err, '发送失败，请稍后重试'));
+      setError(formatApiErrorToast(err, t('发送失败，请稍后重试')));
       setSendingCode(false);
     }
   };
 
   return (
     <AuthLayout
-      title="欢迎回来"
+      title={t('欢迎回来')}
       footer={
         tab === 'password' ? (
           <p className="text-sm text-[#6E6E73] dark:text-white/40">
-            没有账号？
+            {t('没有账号？')}
             <Link
               to={`/register?${registerParams}`}
               className="text-[#1D1D1F] dark:text-white font-medium hover:underline ml-1"
             >
-              注册
+              {t('注册')}
             </Link>
           </p>
         ) : undefined
       }
     >
-      {/* Tab switcher */}
-      <div className="flex rounded-xl bg-[#F5F5F7] dark:bg-white/[0.06] p-1 mb-6">
-        <button
-          type="button"
-          onClick={() => { setTab('password'); setError(''); }}
-          className={`
-            flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-[180ms]
-            ${tab === 'password'
-              ? 'bg-white dark:bg-white/[0.12] text-[#1D1D1F] dark:text-white shadow-sm'
-              : 'text-[#8E8E93] dark:text-white/30 hover:text-[#6E6E73] dark:hover:text-white/50'
-            }
-          `}
-        >
-          密码登录
-        </button>
-        <button
-          type="button"
-          onClick={() => { setTab('code'); setError(''); }}
-          className={`
-            flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-[180ms]
-            ${tab === 'code'
-              ? 'bg-white dark:bg-white/[0.12] text-[#1D1D1F] dark:text-white shadow-sm'
-              : 'text-[#8E8E93] dark:text-white/30 hover:text-[#6E6E73] dark:hover:text-white/50'
-            }
-          `}
-        >
-          验证码登录 / 注册
-        </button>
+      {nativePlatform && <div className="um-auth-server">
+        <ServerConfigControl variant="pill" onOriginChanged={() => setError('')} />
+        <Button type="button" variant="outline" className="w-full min-h-11" onClick={() => {
+          void useAuthStore.getState().enterDemo().then(() => {
+            queryClient.clear();
+            navigate('/xiaoyu', { replace: true });
+          }).catch(() => setError(t('无法保存离线试用状态，请重试')));
+        }}>{t('离线试用（无需连接服务器）')}</Button>
+      </div>}
+      <div className="um-auth-tabs" aria-label={t('登录方式')}>
+        <button type="button" aria-pressed={tab === 'password'} onClick={() => { setTab('password'); setError(''); }}>{t('密码登录')}</button>
+        <button type="button" aria-pressed={tab === 'code'} onClick={() => { setTab('code'); setError(''); }}>{t('验证码登录 / 注册')}</button>
       </div>
 
       {/* Error banner */}
@@ -155,7 +149,7 @@ const WebLogin: React.FC = () => {
       {/* Shared email field */}
       <div className="space-y-1.5 mb-4">
         <label htmlFor="login-email" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
-          邮箱
+          {t('邮箱')}
         </label>
         <Input
           id="login-email"
@@ -175,12 +169,12 @@ const WebLogin: React.FC = () => {
         <form onSubmit={handlePasswordLogin} className="space-y-4">
           <div className="space-y-1.5">
             <label htmlFor="login-password" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
-              密码
+              {t('密码')}
             </label>
             <Input
               id="login-password"
               type="password"
-              placeholder="输入密码"
+              placeholder={t('输入密码')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
@@ -192,10 +186,10 @@ const WebLogin: React.FC = () => {
 
           <Button
             type="submit"
-            className="w-full h-12 rounded-xl font-semibold tracking-tight text-[15px]"
+            className="um-auth-submit"
             disabled={loading}
           >
-            {loading ? '登录中...' : '登录'}
+            {loading ? t('登录中...') : t('登录')}
           </Button>
         </form>
       )}
@@ -205,12 +199,11 @@ const WebLogin: React.FC = () => {
         <div className="space-y-1.5">
           <Button
             type="button"
-            variant="outline"
-            className="w-full h-12 rounded-xl font-medium"
+            className="um-auth-submit"
             disabled={sendingCode || !email.trim()}
             onClick={handleSendCode}
           >
-            {sendingCode ? <Spinner className="h-4 w-4 animate-spin" /> : '发送验证码'}
+            {sendingCode ? <Spinner className="h-4 w-4 animate-spin" /> : t('发送验证码')}
           </Button>
         </div>
       )}
