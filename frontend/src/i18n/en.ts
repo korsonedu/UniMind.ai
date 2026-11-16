@@ -1,5 +1,18 @@
 // English messages keyed by their Chinese source text.
 const en: Record<string, string> = {
+  "课程 Workspace": "Course Workspace",
+  "个人空间": "Personal space",
+  "查看 AI 额度": "View AI allowance",
+  "AI 问答不限次": "Unlimited AI questions",
+  "AI 基础额度待配置": "Base AI allowance not configured",
+  "和小宇一起探索个人学习项目": "Explore personal learning projects with XiaoYu",
+  "课程、资料与课程小宇": "Courses, materials and course XiaoYu",
+  "查看或加入机构学习服务": "View or join an institution",
+  "当前空间": "Current space",
+  "个人小宇与课程小宇共用账号额度": "Personal and course XiaoYu share your account allowance",
+  "个人空间与课程 Workspace 共用以下账号额度，切换空间不会重置用量。": "Personal space and Course Workspace share this account allowance. Switching spaces does not reset usage.",
+  "切换空间，当前为{0}": "Switch space, currently {0}",
+  "AI 剩余 {0} 次": "{0} AI questions remaining",
   "偏好保存失败，请重试。": "Could not save preferences. Please try again.",
   "设置分类": "Settings categories",
   "练习提醒": "Practice reminders",

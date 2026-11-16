@@ -28,6 +28,7 @@ import { useExamActivity } from '@/hooks/useExamActivity';
 import '@/styles/app-shell.css';
 import NotesSidebar from '@/pages/notes/NotesSidebar';
 import { SavedCoursesPanel } from '@/components/course/SavedCoursesPanel';
+import { SpaceSwitcher } from '@/components/SpaceSwitcher';
 import { SidebarHome } from '@/components/SidebarHome';
 import { SidebarResizeHandle } from '@/components/SidebarResizeHandle';
 import { useDesktopStore } from '@/lib/desktop';
@@ -61,7 +62,7 @@ export const MainLayout: React.FC = () => {
   const tourSteps = TOUR_STEPS.map(step => ({ ...step, title: t(step.title), content: t(step.content) }));
   const location = useLocation();
   const { chat: projectChat } = useXiaoYuChat();
-  const routeFor = (path: string) => ['/courses', '/notes', '/knowledge-tree', '/xiaoyu'].includes(path)
+  const routeFor = (path: string) => ['/notes', '/knowledge-tree', '/xiaoyu'].includes(path)
     ? learningUrl(path, projectChat.projectId, projectChat.activeSessionId !== null ? projectChat.conversationId : undefined) : path;
   const navigationType = useNavigationType();
   const historyIndex: number = window.history.state?.idx ?? 0;
@@ -244,6 +245,7 @@ export const MainLayout: React.FC = () => {
   return <TooltipProvider delayDuration={0}>
     <div className="um-app-shell flex flex-col h-dvh bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground" data-nav-history={historyIndex > 0 || historyIndex < historyEnd ? 'true' : undefined}>
       <header className="um-window-toolbar" aria-label={t('工作区功能区')}>
+        <SpaceSwitcher personalPath={routeFor('/xiaoyu')} />
         <div className="um-window-navigation"><button aria-label={t('返回')} title={t('返回')} disabled={historyIndex <= 0} onClick={() => navigate(-1)}><ArrowLeft size={17} /></button><button aria-label={t('前进')} title={t('前进')} disabled={historyIndex >= historyEnd} onClick={() => navigate(1)}><ArrowRight size={17} /></button></div>
         <div className="um-window-workspace" ref={setToolbarHost}>{!hasWorkspaceToolbar && <><button className="um-agent-icon-button" aria-label={t('切换导航栏')} onClick={() => setRailHidden(old => !old)}><SidebarSimple size={18} /></button><WorkspaceTrail title={pageTitle || t('学习空间')} crumbs={[]} /></>}</div>
         {workspaceHeader}
