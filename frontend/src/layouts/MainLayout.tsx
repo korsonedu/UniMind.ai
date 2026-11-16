@@ -316,7 +316,7 @@ export const MainLayout: React.FC = () => {
         </div>
       </main>
       {sidebarVisible && <button className="um-notes-mobile-backdrop" aria-label={t('收起右侧栏')} onClick={closeNotes} />}
-      {sidebarVisible && !isMobile && <SidebarResizeHandle width={sidebarWidth} onChange={setSidebarWidth} onCommit={saveSidebarWidth} />}
+      {sidebarVisible && !isMobile && <SidebarResizeHandle width={sidebarWidth} onChange={setSidebarWidth} onCommit={saveSidebarWidth} onCollapse={closeNotes} />}
       <div id="um-right-panel" className="um-notes-sidebar-host um-unified-sidebar" data-open={sidebarVisible} aria-hidden={!sidebarVisible} inert={!sidebarVisible} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); closeNotes(); } }}>
         <header className="um-right-panel-header">
           <button type="button" className="um-agent-icon-button" aria-label={t('工具入口')} aria-pressed={activeSidebarView === 'home'} onClick={() => selectSidebarView('home')}><SquaresFour size={18} /></button>
