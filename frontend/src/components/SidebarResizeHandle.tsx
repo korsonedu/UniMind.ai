@@ -1,8 +1,8 @@
 import { t, useLocale } from '@/i18n';
 import { useRef } from 'react';
 
-export function SidebarResizeHandle({ width, onChange, onCommit }: {
-  width: number; onChange: (width: number) => void; onCommit: (width: number) => void;
+export function SidebarResizeHandle({ width, onChange, onCommit, onCollapse }: {
+  width: number; onChange: (width: number) => void; onCommit: (width: number) => void; onCollapse: () => void;
 }) {
   useLocale();
   const start = useRef({ x: 0, width: 0 });
@@ -20,12 +20,19 @@ export function SidebarResizeHandle({ width, onChange, onCommit }: {
       event.currentTarget.setPointerCapture(event.pointerId);
     }}
     onPointerMove={event => {
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) onChange(clamp(start.current.width + start.current.x - event.clientX));
+      if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+      const next = start.current.width + start.current.x - event.clientX;
+      if (next <= 160) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+        onCollapse();
+      } else onChange(clamp(next));
     }}
     onPointerUp={event => {
       if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-      onCommit(clamp(start.current.width + start.current.x - event.clientX));
+      const next = start.current.width + start.current.x - event.clientX;
       event.currentTarget.releasePointerCapture(event.pointerId);
+      if (next <= 160) onCollapse();
+      else onCommit(clamp(next));
     }}
     onPointerCancel={event => {
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
