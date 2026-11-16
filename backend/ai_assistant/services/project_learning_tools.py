@@ -86,7 +86,7 @@ PROJECT_LEARNING_TOOLS.append(tool('manage_learning_knowledge',
 
 
 PROJECT_LEARNING_TOOLS.append(tool('manage_learning_tasks',
-    '管理当前项目通用学习任务：list读取实际进展与teaching_guidance；read读取已评分原作答与标准后复盘；create从授权题库选题，或为本人项目原创开放任务。普通阶段计划可先诊断，无需先建地图；有地图须绑定当前版本节点。解释、计算、推理、案例与代码文本均可评价，但代码未运行不能称为验证通过。模型评分尚未独立复核。错误先补救，有帮助完成再换题独立检查；不代用户作答，不传入分数。',
+    '管理当前项目通用学习任务：list读取实际进展与teaching_guidance；read读取已评分原作答与标准后复盘；create从授权题库选题，或为本人项目原创开放任务（系统满分10分，不自行声明其他总分或分项分值）。普通阶段计划可先诊断，无需先建地图；有地图须绑定当前版本节点。解释、计算、推理、案例与代码文本均可评价，但代码未运行不能称为验证通过。模型评分尚未独立复核。错误先补救，有帮助完成再换题独立检查；不代用户作答，不传入分数。',
     obj({'action': {'type': 'string', 'enum': ['list', 'read', 'create']},
          'task_id': text('read时填写任务UUID'), 'version_id': {'type': 'integer'}, 'node_id': text(),
          'stage_id': text('当前计划阶段编号'), 'title': text(), 'instructions': text('讲解、非原题示例与作答要求，不能泄露任务参考解答'),
