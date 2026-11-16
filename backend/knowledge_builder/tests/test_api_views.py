@@ -344,6 +344,9 @@ def test_intake_workspace_content_and_revoked_access(client, user, intake_catalo
         institution=institution, service_ends_on=timezone.localdate(), max_students=10,
     )
     membership = WorkspaceMembership.objects.create(user=user, workspace=workspace)
+    from users.workspaces.identity import select_learner
+    user = select_learner(user, str(workspace.pk))
+    client.force_authenticate(user)
     points = []
     for index in range(3):
         point = KnowledgePoint.objects.create(
@@ -378,10 +381,8 @@ def test_intake_workspace_content_and_revoked_access(client, user, intake_catalo
     membership.is_active = False
     membership.save(update_fields=['is_active'])
     unavailable = client.post('/intake/', {'subject': '431'}, format='json')
-    assert unavailable.status_code == 200
-    assert unavailable.data['catalog_match']['matched_subject'] is None
-    assert all(question['source'] == 'ai_probe' for question in unavailable.data['diagnostic_questions'])
-    assert client.post('/intake/', payload, format='json').status_code == 400
+    assert unavailable.status_code == 403
+    assert client.post('/intake/', payload, format='json').status_code == 403
 
 
 @override_settings(ROOT_URLCONF='knowledge_builder.urls')
