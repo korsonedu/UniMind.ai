@@ -10,7 +10,7 @@ from xml.etree import ElementTree
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from ai_engine import config
 from ai_service import AIService
@@ -37,8 +37,13 @@ def _assignments(block):
 def _courses(user):
     from types import SimpleNamespace
     from courses.access import visible_courses
+    from courses.models import Course
     # Use the same workspace grants as the course page.
-    return visible_courses(SimpleNamespace(user=user, query_params={})).select_related('knowledge_point').order_by('pk')
+    try:
+        return visible_courses(SimpleNamespace(user=user, query_params={})).select_related('knowledge_point').order_by('pk')
+    except PermissionDenied:
+        # Public catalog links remain usable when no curriculum partition is configured.
+        return Course.objects.none()
 
 
 def _normalized(text):

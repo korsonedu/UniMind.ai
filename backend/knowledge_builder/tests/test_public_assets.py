@@ -383,7 +383,7 @@ def test_import_free_marketplace_only_and_owner_access(tree, user, auth_client):
     assert auth_client.post(path, {'marketplace_listing_id': free.pk}, format='json').status_code == 404
 
 
-@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID=None)
+@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
 def test_album_import_preserves_all_published_episodes(tree, auth_client):
     from courses.models import Album, Course, CourseModule
     album = Album.objects.create(name='微积分主线课')
@@ -403,7 +403,7 @@ def test_album_import_preserves_all_published_episodes(tree, auth_client):
     assert tree.block_resources.count() == 3
 
 
-@override_settings(UNIMIND_CONTENT_INSTITUTION_ID=None)
+@override_settings(UNIMIND_CONTENT_INSTITUTION_ID='global')
 def test_pipeline_reuses_imported_three_tracks_and_marketplace(
         tree, user, monkeypatch, isolated_public_catalog):
     from ai_engine.ai_service import AIService
