@@ -1,5 +1,5 @@
 import { t, useLocale } from '@/i18n';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Buildings, CaretDown, Check, User } from '@phosphor-icons/react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -26,9 +26,9 @@ export function SpaceSwitcher({ personalPath }: { personalPath: string }) {
   const courseRoute = pathname === '/courses' || pathname.startsWith('/course/') || pathname === '/settings/institution';
   const personalRoute = ['/xiaoyu', '/notes', '/knowledge-tree'].some(path => pathname === path || pathname.startsWith(`${path}/`));
   const [selection, setSelection] = useState({ userId, courses: courseRoute });
-  useEffect(() => {
-    setSelection(previous => courseRoute || personalRoute || previous.userId !== userId ? { userId, courses: courseRoute } : previous);
-  }, [courseRoute, personalRoute, userId]);
+  if (selection.userId !== userId || ((courseRoute || personalRoute) && selection.courses !== courseRoute)) {
+    setSelection({ userId, courses: courseRoute });
+  }
   const inCourses = courseRoute || (!personalRoute && selection.userId === userId && selection.courses);
   const courseName = workspace?.workspace?.name || t('课程 Workspace');
   const usage = access?.ai_usage;
