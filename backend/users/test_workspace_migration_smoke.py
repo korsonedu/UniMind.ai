@@ -9,6 +9,7 @@ from users.login_sessions import LoginSession
 from courses.models import Course,VideoProgress,VideoTranscript
 from notes.models import Note,Notebook
 from ai_assistant.models import AIChatMessage,Bot
+from faq_system.models import Question as Discussion
 
 pytestmark=pytest.mark.django_db
 
@@ -25,6 +26,8 @@ def test_legacy_institution_migration_preserves_records_and_closes_personal_cour
     note=Note.objects.create(user=student,notebook=book,title='Original note',content='Keep this')
     bot=Bot.objects.create(name='小宇',bot_type='planner')
     message=AIChatMessage.objects.create(user=student,bot=bot,role='user',content='Original message')
+    discussion=Discussion.objects.create(user=student,institution=inst,content='Old question')
+    discussion.likes.add(student)
     args={'institution':inst.pk,'owner':owner.username,'members':[owner.username,student.username]}
     call_command('migrate_institution_workspace',**args,stdout=io.StringIO())
     assert not Workspace.objects.exists()
@@ -35,10 +38,13 @@ def test_legacy_institution_migration_preserves_records_and_closes_personal_cour
     learner=WorkspaceLearner.objects.get(account=student,workspace=ws).user
     progress.refresh_from_db();note.refresh_from_db();message.refresh_from_db();book.refresh_from_db()
     assert {progress.user_id,note.user_id,message.user_id,book.user_id}=={learner.pk}
+    discussion.refresh_from_db();assert discussion.user_id==learner.pk
+    assert list(discussion.likes.values_list('pk',flat=True))==[learner.pk]
     assert progress.last_position==90 and note.notebook_id==book.pk and note.content=='Keep this'
     client=APIClient();client.cookies['auth_token']=LoginSession.issue(student).key
-    assert client.get('/api/courses/').status_code==403
-    assert client.get(f'/api/courses/{course.pk}/transcript/').status_code==403
+    assert client.get('/api/courses/').status_code==200
+    assert client.get('/api/users/institution/me/features/').data['has_course_catalog'] is False
+    assert client.get(f'/api/courses/{course.pk}/transcript/').status_code==404
     assert client.get('/api/ai/history/').data==[]
     assert not Note.objects.filter(user=student).exists()
     client.credentials(HTTP_X_UNIMIND_WORKSPACE=str(ws.pk))
