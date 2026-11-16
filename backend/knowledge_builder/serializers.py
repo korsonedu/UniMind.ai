@@ -91,12 +91,67 @@ class StepSerializer(serializers.ModelSerializer):
         fields = ('id', 'step_index', 'step_title', 'step_role', 'branch_condition', 'intra_lines', 'step_atoms')
 
 
+class BlockResourceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.BlockResource
+        fields = ('id', 'block', 'step', 'atom', 'source_kind', 'title', 'url', 'excerpt', 'course_id', 'library_resource_id', 'created_at')
+
+
+class UserBlockProgressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.UserBlockProgress
+        fields = ('block', 'status', 'best_accuracy', 'last_accuracy', 'core_passed', 'attempt_count', 'mastered_atom_ids', 'weak_atom_ids', 'last_quiz_result', 'completed_at', 'updated_at')
+
+
+class AttachBlockResourceSerializer(serializers.Serializer):
+    url = serializers.URLField(required=False, max_length=1000)
+    course_id = serializers.IntegerField(required=False, min_value=1)
+    library_resource_id = serializers.IntegerField(required=False, min_value=1)
+    step_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    atom_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    save_to_library = serializers.BooleanField(default=False)
+
+    def validate_url(self, value):
+        if not value.startswith('https://'):
+            raise serializers.ValidationError('请提供公开 HTTPS 链接。')
+        return value
+
+    class Meta:
+        fields = ('url', 'course_id', 'library_resource_id', 'step_id', 'atom_id', 'save_to_library')
+
+
+class BlockQuizRequestSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=('generate', 'submit'), default='generate')
+    mode = serializers.ChoiceField(choices=('objective', 'challenge'), default='objective')
+    retest = serializers.BooleanField(default=False)
+    questions = serializers.ListField(child=serializers.DictField(), required=False, allow_empty=False)
+    answers = serializers.DictField(child=serializers.CharField(allow_blank=True, max_length=20000), required=False)
+
+    def validate(self, attrs):
+        if attrs['action'] == 'submit' and not {'questions', 'answers'} <= attrs.keys():
+            raise serializers.ValidationError('请提交完整检测题目和答案。')
+        return attrs
+
+    class Meta:
+        fields = ('action', 'mode', 'retest', 'questions', 'answers')
+
+
 class BlockSerializer(serializers.ModelSerializer):
     steps = StepSerializer(many=True, read_only=True)
+    resources = BlockResourceSerializer(many=True, read_only=True)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        user_id = request.user.pk if request and request.user.is_authenticated else None
+        visible_ids = {row.pk for row in instance.resources.all()
+                       if row.source_kind != 'library' or user_id is not None and row.created_by_id == user_id}
+        data['resources'] = [row for row in data['resources'] if row['id'] in visible_ids]
+        return data
 
     class Meta:
         model = models.LearningBlock
-        fields = ('id', 'code', 'short_title', 'narrative_summary', 'layer', 'contraction_group', 'is_entry_block', 'node_shape', 'order', 'steps')
+        fields = ('id', 'code', 'short_title', 'narrative_summary', 'layer', 'contraction_group', 'is_entry_block', 'node_shape', 'order', 'steps', 'resources')
 
 
 class BlockEdgeSerializer(serializers.ModelSerializer):
@@ -118,6 +173,13 @@ class FullKnowledgeTreeSerializer(BuildSummarySerializer):
     blocks = BlockSerializer(many=True, read_only=True)
     block_edges = BlockEdgeSerializer(many=True, read_only=True)
     interfaces = InterfaceSerializer(source='cross_block_interfaces', many=True, read_only=True)
+    block_progress = serializers.SerializerMethodField()
+
+    def get_block_progress(self, instance):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return []
+        return UserBlockProgressSerializer(instance.user_block_progress.filter(user=request.user), many=True).data
 
     class Meta(BuildSummarySerializer.Meta):
-        fields = (*BuildSummarySerializer.Meta.fields, 'modules', 'atoms', 'atom_edges', 'blocks', 'block_edges', 'interfaces')
+        fields = (*BuildSummarySerializer.Meta.fields, 'modules', 'atoms', 'atom_edges', 'blocks', 'block_edges', 'interfaces', 'block_progress')

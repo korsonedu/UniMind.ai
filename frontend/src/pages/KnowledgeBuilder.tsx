@@ -16,6 +16,7 @@ import { ProjectLearningContent } from '@/components/ProjectLearningPanel';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { knowledgeBuildPlanningPrompt } from '@/lib/knowledgeBuildPlanning';
 import { KnowledgeBuilderGraph } from '@/components/KnowledgeBuilderGraph';
+import { BlockStudyDialog } from '@/components/BlockStudyDialog';
 import {
   Dialog,
   DialogContent,
@@ -63,6 +64,7 @@ export default function KnowledgeBuilder() {
   const projectTab = searchParams.get('tab') === 'project';
   const { chat, openingProject } = useXiaoYuChat();
   const [selectedBlocks, setSelectedBlocks] = useState<Set<number>>(new Set());
+  const [studyBlockId, setStudyBlockId] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const userId = useAuthStore(s => s.user?.id);
 
@@ -277,7 +279,14 @@ export default function KnowledgeBuilder() {
           headerRightSlot={createButton}
           selectedBlockIds={selectedBlocks}
           onToggleBlockSelection={id => setSelectedBlocks(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; })}
+          onStudyBlock={setStudyBlockId}
         />
+        {detailQuery.data.blocks.filter(block => block.id === studyBlockId).map(block => <BlockStudyDialog
+          key={`${detailQuery.data.id}:${block.id}`} tree={detailQuery.data} block={block}
+          progress={detailQuery.data.block_progress?.find(progress => progress.block === block.id)}
+          onClose={() => setStudyBlockId(null)}
+          onChanged={() => { void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBuilder.detail(detailQuery.data.id) }); }}
+        />)}
         {createModal}
       </div>
     );

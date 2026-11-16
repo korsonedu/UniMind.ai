@@ -20,6 +20,7 @@ interface KnowledgeBuilderGraphProps {
   headerRightSlot?: ReactNode;
   selectedBlockIds?: ReadonlySet<number>;
   onToggleBlockSelection?: (id: number) => void;
+  onStudyBlock?: (id: number) => void;
 }
 
 interface TooltipState {
@@ -241,6 +242,7 @@ export function KnowledgeBuilderGraph({
   headerRightSlot,
   selectedBlockIds,
   onToggleBlockSelection,
+  onStudyBlock,
 }: KnowledgeBuilderGraphProps) {
   const uid = useId().replace(/:/g, '');
   const adapted = useMemo(() => adaptKnowledgeTree(tree), [tree]);
@@ -700,6 +702,8 @@ export function KnowledgeBuilderGraph({
                 <div className="kb-level">第 {col.layer} 层</div>
 
                 {col.blocks.map(block => {
+                  const progress = tree.block_progress?.find(item => item.block === block.id);
+                  const resourceCount = tree.blocks.find(item => item.id === block.id)?.resources?.length ?? 0;
                   const isOpen = openIds.has(block.id);
                   const isHighlighted = highlightedBlockIds.has(block.id) || flashBlockId === block.id;
                   const isDimmed = hasHoverFocus && !isHighlighted;
@@ -745,9 +749,13 @@ export function KnowledgeBuilderGraph({
                         </small>
                         <span className="kb-badges">
                           <span className="kb-cardtype">{block.domainTitle}</span>
+                          {progress?.status === 'COMPLETED' && <span className="kb-badge kb-badge--mastered">已完成 ✓</span>}
+                          {progress?.status === 'NEEDS_REVIEW' && <span className="kb-badge kb-badge--weak">待强化 · {Math.round(progress.last_accuracy * 100)}%</span>}
+                          <span className="kb-badge">📚 {resourceCount}</span>
                           {renderTopicBadges([block.shortTitle, ...block.steps.flatMap(step => step.atoms.map(item => item.atom.name))])}
                         </span>
                       </button>
+                      {onStudyBlock && <button type="button" className="kb-study-open" aria-label={`${block.shortTitle}：学习资源 & 闯关检测`} onClick={() => onStudyBlock(block.id)}>资源 & 闯关</button>}
 
                       {isOpen && (
                         <div className="kb-panel">
@@ -843,10 +851,11 @@ export function KnowledgeBuilderGraph({
                                       key={item.atom.id}
                                       data-point={item.atom.code}
                                       title={item.tooltip}
-                                      className={item.membership === 'extension' ? 'kb-point ext' : 'kb-point'}
+                                      className={`kb-point${item.membership === 'extension' ? ' ext' : ''}${progress?.weak_atom_ids.includes(item.atom.id) ? ' kb-point--weak' : ''}`}
                                     >
                                       <div>{item.atom.name}</div>
                                       <span className="kb-badges">{renderTopicBadges([item.atom.name])}</span>
+                                      {progress?.weak_atom_ids.includes(item.atom.id) ? <span className="kb-badge kb-badge--weak">待强化</span> : progress?.mastered_atom_ids.includes(item.atom.id) ? <span className="kb-badge kb-badge--mastered">已掌握</span> : null}
                                       {item.isInterfacePoint ? <b>◆ 跨块接口点</b> : null}
                                     </div>
                                   ))}

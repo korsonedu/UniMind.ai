@@ -2,9 +2,11 @@ from django.conf import settings
 from rest_framework.exceptions import PermissionDenied
 
 
-def get_content_institution_id():
+def get_content_institution_id(*, required=True):
     """单平台内容边界必须显式配置，不从操作者或历史机构猜测。"""
     value = getattr(settings, 'UNIMIND_CONTENT_INSTITUTION_ID', None)
+    if value in (None, '') and not required:
+        return None
     if value == 'global':
         return None
     try:

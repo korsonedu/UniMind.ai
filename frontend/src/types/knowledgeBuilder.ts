@@ -104,6 +104,7 @@ export interface BlockNodeShape {
 }
 
 export interface LearningBlock {
+  resources?: BlockResourceItem[];
   id: number;
   code: string;
   short_title: string;
@@ -140,6 +141,7 @@ export interface CrossBlockInterface {
 }
 
 export interface KnowledgeTreeBuildDetail extends BuildSummary {
+  block_progress?: UserBlockProgressItem[];
   modules: TreeModule[];
   atoms: TreeAtomPoint[];
   atom_edges: TreeAtomEdge[];
@@ -187,4 +189,41 @@ export interface IntakeResponsePayload {
   subject: string; mode: IntakeMode; catalog_match: CatalogMatchSummary; needs_diagnostic: boolean;
   cards: IntakeCard[]; diagnostic_questions: DiagnosticProbeQuestion[]; assistant_reply: string;
   requirements_draft: RequirementsDraft; ready_to_build: boolean;
+}
+
+export type BlockQuizMode = 'objective' | 'challenge';
+export interface BlockResourceItem {
+  id: number; block: number; step: number | null; atom: number | null;
+  source_kind: 'course' | 'library' | 'web'; title: string; url: string; excerpt: string;
+  course_id: number | null; library_resource_id: number | null; created_at: string;
+}
+export interface BlockResourcePayload {
+  url?: string; course_id?: number; library_resource_id?: number;
+  step_id?: number | null; atom_id?: number | null; save_to_library?: boolean;
+}
+export interface BlockResourcesResponse {
+  resources: BlockResourceItem[];
+  internal_candidates: (BlockResourcePayload & { source_kind: 'course' | 'library'; title: string; url: string; excerpt: string })[];
+  web_candidates: { title: string; url: string; summary: string }[];
+}
+export interface UserBlockProgressItem {
+  block: number; status: 'UNSTARTED' | 'LEARNING' | 'NEEDS_REVIEW' | 'COMPLETED';
+  best_accuracy: number; last_accuracy: number; core_passed: boolean; attempt_count: number;
+  mastered_atom_ids: number[]; weak_atom_ids: number[]; last_quiz_result: BlockQuizSubmitResult | Record<string, never>;
+  completed_at: string | null; updated_at: string;
+}
+export interface BlockQuizQuestion {
+  id: string; atom_id: number; atom_code: string; atom_name: string;
+  membership_type: 'core' | 'extension'; q_type: 'objective' | 'subjective';
+  subjective_type?: 'short' | 'calculate' | ''; stem: string; options: Record<string, string>;
+  signed_payload: string; assessment_hint?: string;
+}
+export interface BlockQuizSubmitResult {
+  block_id: number; status: UserBlockProgressItem['status']; block_completed: boolean;
+  core_passed: boolean; accuracy: number; best_accuracy: number; attempt_count: number;
+  mastered_atom_ids: number[]; weak_atom_ids: number[]; weak_atoms: { id: number; code: string; name: string }[];
+  results: { id: string; atom_id: number; atom_code: string; atom_name: string; membership_type: 'core' | 'extension';
+    q_type: 'objective' | 'subjective'; user_answer: string; passed: boolean; score_ratio: number;
+    correct_answer: string; explanation: string; feedback: string }[];
+  recommended_resources: BlockResourceItem[]; summary_message: string;
 }

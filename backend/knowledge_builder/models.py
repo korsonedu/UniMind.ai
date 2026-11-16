@@ -146,3 +146,52 @@ class CrossBlockInterface(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['block_edge', 'from_atom', 'to_atom'], name='kb_interface_unique')]
+
+
+class BlockResource(models.Model):
+    class SourceKind(models.TextChoices):
+        COURSE = 'course', 'course'
+        LIBRARY = 'library', 'library'
+        WEB = 'web', 'web'
+
+    build = models.ForeignKey(KnowledgeTreeBuild, on_delete=models.CASCADE, related_name='block_resources')
+    block = models.ForeignKey(LearningBlock, on_delete=models.CASCADE, related_name='resources')
+    step = models.ForeignKey(BlockStep, null=True, blank=True, on_delete=models.SET_NULL, related_name='resources')
+    atom = models.ForeignKey(TreeAtomPoint, null=True, blank=True, on_delete=models.SET_NULL, related_name='resources')
+    source_kind = models.CharField(max_length=24, choices=SourceKind.choices, default=SourceKind.WEB)
+    title = models.CharField(max_length=200)
+    url = models.CharField(max_length=1000)
+    excerpt = models.TextField(blank=True)
+    course_id = models.PositiveIntegerField(null=True, blank=True)
+    library_resource_id = models.PositiveIntegerField(null=True, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_block_resources')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('id',)
+
+
+class UserBlockProgress(models.Model):
+    class Status(models.TextChoices):
+        UNSTARTED = 'UNSTARTED', 'UNSTARTED'
+        LEARNING = 'LEARNING', 'LEARNING'
+        NEEDS_REVIEW = 'NEEDS_REVIEW', 'NEEDS_REVIEW'
+        COMPLETED = 'COMPLETED', 'COMPLETED'
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='knowledge_block_progress')
+    build = models.ForeignKey(KnowledgeTreeBuild, on_delete=models.CASCADE, related_name='user_block_progress')
+    block = models.ForeignKey(LearningBlock, on_delete=models.CASCADE, related_name='user_progress')
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.UNSTARTED)
+    best_accuracy = models.FloatField(default=0.0)
+    last_accuracy = models.FloatField(default=0.0)
+    core_passed = models.BooleanField(default=False)
+    attempt_count = models.PositiveIntegerField(default=0)
+    mastered_atom_ids = models.JSONField(default=list)
+    weak_atom_ids = models.JSONField(default=list)
+    seen_question_hashes = models.JSONField(default=list)
+    last_quiz_result = models.JSONField(default=dict)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'block'], name='kb_user_block_progress_unique')]

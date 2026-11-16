@@ -1,6 +1,7 @@
 """Requirement-aware six-stage knowledge tree construction with atomic publication."""
 import heapq
 import json
+import logging
 from itertools import combinations
 
 import numpy as np
@@ -720,6 +721,12 @@ def run_build(build_id, progress=None):
                        'step_count':sum(len(p['steps']) for p in plans.values()),
                        'interface_count':sum(len(v) for v in interfaces.values())}
         _persist(build,modules,atoms,edges,blocks,graph,plans,interfaces)
+        try:
+            from .block_study import auto_mount_internal_resources
+            with transaction.atomic():
+                auto_mount_internal_resources(build)
+        except Exception:
+            logging.getLogger(__name__).exception('Initial resource matching failed for build %s', build.pk)
         return build
     except Exception as exc:
         # This is the single orchestration boundary. Preserve the original exception.
