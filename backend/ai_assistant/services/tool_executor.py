@@ -217,7 +217,10 @@ class BaseToolExecutor:
         self._permitted_tool_names = None
         self._permitted_tool_definitions = {}
         from core.utils import get_content_institution
-        self.institution = get_content_institution(user)
+        from users.workspaces.access import membership_for
+        from users.learning import is_course_student
+        from users.permissions import is_platform_admin
+        self.institution = get_content_institution(user) if (membership_for(user) or is_platform_admin(user) or is_course_student(user)) else None
         self.on_step = None  # 由 views 注入，用于工具内部发进度事件
         self._current_call_id: str | None = None  # 由 service.py 注入，用于进度事件携带正确 call_id
         self.tool_call_log: list = []     # MUTAR 轨迹：工具调用序列

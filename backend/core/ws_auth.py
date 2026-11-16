@@ -127,8 +127,13 @@ class TokenAuthMiddleware(BaseMiddleware):
         else:
             ticket = _extract_ticket_from_scope(scope)
             user, token_key = await consume_ws_ticket(ticket) if ticket else (None, "")
-            if user:
-                user = await get_user_from_token(token_key, space)
+            if user and space != 'personal':
+                from users.workspaces.identity import select_learner
+                from rest_framework.exceptions import PermissionDenied
+                try:
+                    user = await database_sync_to_async(select_learner)(user, space)
+                except PermissionDenied:
+                    user = None
         scope["user"] = user or AnonymousUser()
         if not scope['user'].is_authenticated:
             return await super().__call__(scope, receive, send)
