@@ -508,7 +508,7 @@ class UpdatePasswordView(generics.UpdateAPIView):
             record_security_event('password_change', request=request, user=user, detail='authenticated_change')
             # 删除所有旧 token，使泄露的 token 失效，创建新 token 保持登录
             new_token = LoginSession.issue(user)
-            resp = Response({'status': 'ok'})
+            resp = Response({'status': 'ok', 'token': new_token.key}, headers={'Cache-Control': 'no-store'})
             is_secure = getattr(settings, 'IS_PROD', False)
             resp.set_cookie(
                 'auth_token', new_token.key,

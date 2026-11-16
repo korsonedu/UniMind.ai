@@ -7,10 +7,12 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AuthLayout } from '@/components/AuthLayout';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, flushNativeToken } from '@/store/useAuthStore';
 import { Warning, Spinner } from '@phosphor-icons/react';
 
 import api from '@/lib/api';
+import { isNativePlatform } from '@/lib/serverConfig';
+import { ServerConfigControl } from '@/components/ServerConfigControl';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { getReturnTo } from '@/lib/routing';
 import { DesktopLogin } from './DesktopLogin';
@@ -32,11 +34,12 @@ const WebLogin: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnTo = getReturnTo(searchParams.get('next'));
+  const nativePlatform = isNativePlatform();
 
   useEffect(() => {
     const { user } = useAuthStore.getState();
-    if (user) navigate(returnTo, { replace: true });
-  }, [navigate, returnTo]);
+    if (user && (!nativePlatform || useAuthStore.getState().token)) navigate(returnTo, { replace: true });
+  }, [navigate, returnTo, nativePlatform]);
 
   const getInstitutionSlug = (): string => {
     const fromParam = searchParams.get('institution');
@@ -72,6 +75,7 @@ const WebLogin: React.FC = () => {
       await queryClient.cancelQueries({ queryKey: queryKeys.user.me });
       queryClient.setQueryData(queryKeys.user.me, user);
       setAuth(user, token);
+      await flushNativeToken();
       await fetchFeatures();
       navigate(returnTo, { replace: true });
     } catch (err: unknown) {
@@ -120,6 +124,15 @@ const WebLogin: React.FC = () => {
         ) : undefined
       }
     >
+      {nativePlatform && <div className="um-auth-server">
+        <ServerConfigControl variant="pill" onOriginChanged={() => setError('')} />
+        <Button type="button" variant="outline" className="w-full min-h-11" onClick={() => {
+          void useAuthStore.getState().enterDemo().then(() => {
+            queryClient.clear();
+            navigate('/xiaoyu', { replace: true });
+          }).catch(() => setError(t('无法保存离线试用状态，请重试')));
+        }}>{t('离线试用（无需连接服务器）')}</Button>
+      </div>}
       <div className="um-auth-tabs" aria-label={t('登录方式')}>
         <button type="button" aria-pressed={tab === 'password'} onClick={() => { setTab('password'); setError(''); }}>{t('密码登录')}</button>
         <button type="button" aria-pressed={tab === 'code'} onClick={() => { setTab('code'); setError(''); }}>{t('验证码登录 / 注册')}</button>

@@ -1,3 +1,4 @@
+import { useProtectedMedia } from '@/hooks/useProtectedMedia'
 import * as React from "react"
 import * as AvatarPrimitive from "@radix-ui/react-avatar"
 
@@ -21,13 +22,17 @@ Avatar.displayName = AvatarPrimitive.Root.displayName
 const AvatarImage = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Image>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
->(({ className, ...props }, ref) => (
+>(({ className, src, ...props }, ref) => {
+  const media = useProtectedMedia(src);
+  return (
   <AvatarPrimitive.Image
+    src={media.src || undefined}
+    crossOrigin={media.crossOrigin}
     ref={ref}
     className={cn("aspect-square h-full w-full", className)}
     {...props}
   />
-))
+)})
 AvatarImage.displayName = AvatarPrimitive.Image.displayName
 
 const AvatarFallback = React.forwardRef<

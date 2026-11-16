@@ -142,3 +142,19 @@
   .iw-course-line { flex-direction:column; gap:5px; } .iw-join-form { padding:18px; } .iw-join-form>div { flex-direction:column; } .iw-join-form input { width:100%; }
 }
 @media(prefers-reduced-motion:reduce) { .iw-spin { animation:none; } }
+
+@media (max-width: 767px) {
+  .iw-management, .iw-management-body, .iw-panel, .iw-settings { min-width: 0; max-width: 100%; }
+  .iw-management-heading > div, .iw-panel-heading > div { min-width: 0; overflow-wrap: anywhere; }
+  .iw-topbar { flex-wrap: wrap; }
+  .iw-topbar > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+  .iw-panel-heading { flex-wrap: wrap; gap: 16px; }
+  .iw-tabs { overscroll-behavior-x: contain; }
+  .iw-table-wrap { max-width: 100%; overscroll-behavior-x: contain; }
+  .iw-management :is(button, input), .iw-dialog :is(button, input), .iw-topbar > a { min-height: 44px; }
+  .iw-row-actions button { min-width: 44px; }
+  .iw-dialog .iw-course-check { min-height: 44px; }
+  .iw-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .iw-dialog :is(input, textarea), .iw-settings input { min-width: 0; font-size: 16px; }
+  .iw-dialog form footer, .iw-dialog-actions { flex-wrap: wrap; }
+}

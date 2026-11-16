@@ -1,3 +1,4 @@
+import { ProtectedImage } from '@/components/ProtectedImage';
 import { t, useLocale } from '@/i18n';
 import { NoteAttachments } from '@/pages/notes/NoteMentions';
 import React, { useState, useCallback } from 'react';
@@ -95,7 +96,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
       {!isUser && !compact && !native && (
         <div className={cn("h-6 w-6 rounded-full overflow-hidden shrink-0 mt-0.5", botAvatar ? "" : `bg-gradient-to-br ${botGradient} flex items-center justify-center`)}>
           {botAvatar ? (
-            <img src={botAvatar} alt="" className="w-full h-full object-cover" />
+            <ProtectedImage src={botAvatar} alt="" className="w-full h-full object-cover" />
           ) : (
             <Sparkle className="h-3 w-3 text-white" />
           )}

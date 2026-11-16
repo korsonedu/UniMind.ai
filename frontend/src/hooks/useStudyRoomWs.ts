@@ -1,9 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useStudyRoomStore } from '@/store/useStudyRoomStore';
 
-const WS_BASE =
-  import.meta.env?.VITE_WS_URL ||
-  (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host;
+import api from '@/lib/api';
+import { getWsBaseUrl, isNativePlatform } from '@/lib/serverConfig';
+import { toast } from 'sonner';
+import { t } from '@/i18n';
 
 const RECONNECT_DELAY_MS = 2000;
 const MAX_RECONNECT_DELAY_MS = 30000;
@@ -27,6 +28,7 @@ export function useStudyRoomWs(enabled: boolean) {
   const reconnectTimerRef = useRef<number | null>(null);
   const heartbeatTimerRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
+  const generationRef = useRef(0);
 
   // ── Send helper ──
   const send = useCallback((msg: object) => {
@@ -42,7 +44,8 @@ export function useStudyRoomWs(enabled: boolean) {
   }, [send, setSendWsMessage]);
 
   // ── Connect ──
-  const connect = useCallback(function connectSocket() {
+  const connect = useCallback(async function connectSocket() {
+    const generation = ++generationRef.current;
     if (!mountedRef.current || !enabled) return;
 
     // Clean up existing connection
@@ -52,7 +55,23 @@ export function useStudyRoomWs(enabled: boolean) {
       wsRef.current = null;
     }
 
-    const ws = new WebSocket(`${WS_BASE}/ws/study-room/`);
+    let url = `${getWsBaseUrl()}/ws/study-room/`;
+    try {
+      if (isNativePlatform()) {
+        const { data } = await api.post('/ws-ticket/');
+        url += `?ticket=${encodeURIComponent(data.ticket)}`;
+      }
+    } catch {
+      if (!mountedRef.current || generation !== generationRef.current) return;
+      setWsConnected(false);
+      toast.error(t('自习室连接中断，正在重新连接'), { id: 'study-ws-reconnect' });
+      const delay = reconnectDelayRef.current;
+      reconnectDelayRef.current = Math.min(delay * 1.5, MAX_RECONNECT_DELAY_MS);
+      reconnectTimerRef.current = window.setTimeout(() => { void connectSocket(); }, delay);
+      return;
+    }
+    if (!mountedRef.current || generation !== generationRef.current) return;
+    const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -142,6 +161,7 @@ export function useStudyRoomWs(enabled: boolean) {
     }
     return () => {
       mountedRef.current = false;
+      generationRef.current += 1;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
       if (wsRef.current) {

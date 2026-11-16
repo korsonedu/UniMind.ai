@@ -58,3 +58,17 @@
 .um-auth-status { color: var(--auth-muted); font-size: 14px; text-align: center; }
 
 .um-auth-topbar button { -webkit-app-region: no-drag; }
+
+/* Keep the redesigned auth form usable inside edge-to-edge Android WebViews. */
+.um-auth-shell { min-height: var(--um-viewport-height, 100dvh); padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px)); padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); }
+.um-auth-server { display: grid; gap: 12px; margin-bottom: 24px; min-width: 0; }
+.um-auth-server > button { min-height: 44px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .um-auth-shell :is(button, a) { min-height: 44px; }
+  .um-auth-shell a { display: inline-flex; align-items: center; }
+  .um-auth-tabs button { min-height: 48px; }
+  .um-auth-shell .um-auth-fields [role='checkbox'] { position: relative; min-height: 20px; }
+  .um-auth-shell .um-auth-fields [role='checkbox']::after { content: ''; position: absolute; inset: -12px; }
+  .um-auth-main, .um-auth-panel, .um-auth-fields { min-width: 0; }
+  .um-auth-fields label { overflow-wrap: anywhere; }
+}

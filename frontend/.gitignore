@@ -34,3 +34,16 @@ electron/release-macos-preview
 *.njsproj
 *.sln
 *.sw?
+
+# Capacitor Android generated files
+.gradle/
+**/build/
+**/local.properties
+android/.gradle/
+android/**/build/
+android/local.properties
+android/app/src/main/assets/public/
+releases/*.apk
+releases/test-artifacts/
+.npm-cache/
+._*

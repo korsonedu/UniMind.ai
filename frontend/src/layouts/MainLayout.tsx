@@ -1,7 +1,8 @@
+import { isNativeOffline, subscribeOffline, setNativeOffline } from '@/lib/offlineSession';
 import { t, useLocale } from '@/i18n';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { learningUrl } from '@/lib/projectLearning';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useSyncExternalStore, useCallback, useRef } from 'react';
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Link, useLocation, Outlet, useNavigate, useNavigationType } from 'react-router-dom';
 
@@ -138,6 +139,30 @@ export const MainLayout: React.FC = () => {
   const isMobileImmersivePage = isMobile && ((location.pathname.startsWith('/tests/session') && hasFeature('quiz.exam')) || (location.pathname.startsWith('/xiaoyu/practice') && hasFeature('ai.assistant')));
   const isMobileVideoPage = isMobile && location.pathname.startsWith('/course/') && hasFeature('course.video');
   const hideMobileBottomNav = isMobile && (isMobileImmersivePage || isMobileVideoPage || (location.pathname === '/study' && hasFeature('study.room')));
+  const shellRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!isMobile || !window.visualViewport) return;
+    const viewport = window.visualViewport;
+    const shell = shellRef.current;
+    const syncViewport = () => {
+      // The visual viewport shrinks for the browser keyboard before layout dvh does.
+      if (!shell || viewport.scale !== 1) return;
+      shell.style.setProperty('--um-viewport-height', `${viewport.height}px`);
+      const editing = document.activeElement?.matches('input, textarea, [contenteditable="true"]');
+      shell.dataset.keyboardOpen = String(Boolean(editing && window.innerHeight - viewport.height > 150));
+    };
+    syncViewport();
+    viewport.addEventListener('resize', syncViewport);
+    document.addEventListener('focusin', syncViewport);
+    document.addEventListener('focusout', syncViewport);
+    return () => {
+      viewport.removeEventListener('resize', syncViewport);
+      document.removeEventListener('focusin', syncViewport);
+      document.removeEventListener('focusout', syncViewport);
+      shell?.style.removeProperty('--um-viewport-height');
+      if (shell) delete shell.dataset.keyboardOpen;
+    };
+  }, [isMobile]);
   const isTourPage = location.pathname === '/xiaoyu';
   if (showTour && !isTourPage) { setShowTour(false); setPendingTourDismiss(true); }
   const xiaoyuVisible = location.pathname === '/xiaoyu';
@@ -241,14 +266,17 @@ export const MainLayout: React.FC = () => {
     </DropdownMenu>
   </div> : null;
 
+  const nativeOffline = useSyncExternalStore(subscribeOffline, isNativeOffline);
+  const demoActive = useAuthStore(state => state.demoActive);
   return <TooltipProvider delayDuration={0}>
-    <div className="um-app-shell flex flex-col h-dvh bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground" data-nav-history={historyIndex > 0 || historyIndex < historyEnd ? 'true' : undefined}>
+    <div ref={shellRef} data-mobile-nav-hidden={hideMobileBottomNav} className="um-app-shell flex flex-col h-dvh bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground" data-nav-history={historyIndex > 0 || historyIndex < historyEnd ? 'true' : undefined}>
       <header className="um-window-toolbar" aria-label={t('工作区功能区')}>
         <div className="um-window-navigation"><button aria-label={t('返回')} title={t('返回')} disabled={historyIndex <= 0} onClick={() => navigate(-1)}><ArrowLeft size={17} /></button><button aria-label={t('前进')} title={t('前进')} disabled={historyIndex >= historyEnd} onClick={() => navigate(1)}><ArrowRight size={17} /></button></div>
-        <div className="um-window-workspace" ref={setToolbarHost}>{!hasWorkspaceToolbar && <><button className="um-agent-icon-button" aria-label={t('切换导航栏')} onClick={() => setRailHidden(old => !old)}><SidebarSimple size={18} /></button><WorkspaceTrail title={pageTitle || t('学习空间')} crumbs={[]} /></>}</div>
+        <div className="um-window-workspace" ref={setToolbarHost}>{!hasWorkspaceToolbar && <><button className="um-agent-icon-button hidden md:inline-flex" aria-label={t('切换导航栏')} onClick={() => setRailHidden(old => !old)}><SidebarSimple size={18} /></button><WorkspaceTrail title={pageTitle || t('学习空间')} crumbs={[]} /></>}</div>
         {workspaceHeader}
-        {sidebarAvailable && <button id="um-notes-toggle" type="button" className="um-right-sidebar-toggle um-agent-icon-button" aria-label={t('切换右侧栏')} title={sidebarVisible ? t('收起右侧栏') : t('展开右侧栏')} aria-expanded={sidebarVisible} aria-controls="um-right-panel" onClick={() => { setNotesOpen(value => !value); }}><SidebarSimple size={19} style={{ transform: 'scaleX(-1)' }} /></button>}
+        {sidebarAvailable && <button id="um-notes-toggle" data-native-back-close={sidebarVisible ? true : undefined} type="button" className="um-right-sidebar-toggle um-agent-icon-button" aria-label={t('切换右侧栏')} title={sidebarVisible ? t('收起右侧栏') : t('展开右侧栏')} aria-expanded={sidebarVisible} aria-controls="um-right-panel" onClick={() => { setNotesOpen(value => !value); }}><SidebarSimple size={19} style={{ transform: 'scaleX(-1)' }} /></button>}
       </header>
+      {(nativeOffline || demoActive) && <div role="status" className="flex shrink-0 items-center justify-between gap-2 bg-amber-50 text-amber-950 px-3 py-1 text-xs"><span>{demoActive ? t('离线试用 · 数据仅保存在本机') : t('离线缓存 · 已使用本地离线缓存')}</span><button type="button" className="min-h-11 underline shrink-0" onClick={() => { if (demoActive) { void useAuthStore.getState().exitDemo().then(() => { queryClient.clear(); navigate('/login', { replace: true }); }); } else { setNativeOffline(false); navigate('/settings'); void queryClient.invalidateQueries(); } }}>{demoActive ? t('连接服务器 / 退出试用') : t('重新连接 / 服务器设置')}</button></div>}
       <div className="um-window-body flex flex-1 min-h-0 overflow-hidden">
       <aside data-tour="sidebar" aria-label={t('应用导航')} className={cn('um-app-rail relative flex-col p-1.5 z-0 shrink-0 hidden md:flex w-[58px]', railHidden && 'md:hidden')}>
         <div className="um-app-brand flex justify-center"><Link to="/xiaoyu" className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', location.pathname.startsWith('/xiaoyu') && 'bg-primary/10')} aria-label={t('小宇')} title={t('小宇')} aria-current={location.pathname.startsWith('/xiaoyu') ? 'page' : undefined}>
@@ -268,9 +296,9 @@ export const MainLayout: React.FC = () => {
       </aside>
       <div className="um-window-panes" data-notes-open={sidebarVisible} style={{ '--um-notes-width': `${sidebarWidth}px` } as React.CSSProperties}>
       <main inert={isMobile && sidebarVisible} className={cn('um-app-main flex-1 min-w-0 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background',
-        isMobileImmersivePage || isMobileStudyPage ? 'overflow-hidden pb-0' : isIntegratedWorkspace ? hideMobileBottomNav ? 'overflow-hidden pb-0' : 'overflow-hidden pb-[calc(61px+env(safe-area-inset-bottom))] md:pb-0' : 'overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0')}>
+        isMobileImmersivePage || isMobileStudyPage ? 'overflow-hidden pb-0' : isIntegratedWorkspace ? hideMobileBottomNav ? 'overflow-hidden pb-0' : 'overflow-hidden pb-[calc(61px+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] md:pb-0' : 'overflow-y-auto pb-[calc(61px+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] md:pb-0')}>
         <ExamActivityBar />
-        <div className={cn('um-app-page-content flex-1 w-full relative min-h-0', isMobileImmersivePage || isMobileStudyPage ? 'px-0 py-0 h-full overflow-hidden' : isMobileVideoPage ? 'px-0 py-0' : !isIntegratedWorkspace && 'px-4 py-4 md:px-8 md:py-6', isMobile && !hideMobileBottomNav && !isIntegratedWorkspace && 'pb-20')}>
+        <div className={cn('um-app-page-content flex-1 w-full relative min-h-0', isMobileImmersivePage || isMobileStudyPage ? 'px-0 py-0 h-full overflow-hidden' : isMobileVideoPage ? 'px-0 py-0' : !isIntegratedWorkspace && 'px-4 py-4 md:px-8 md:py-6')}>
           <WorkspaceToolbarHostContext.Provider value={{ host: toolbarHost, enabled: hasWorkspaceToolbar }}>
             <WorkspaceActiveContext.Provider value={xiaoyuVisible}>
               <NotesSidebarContext.Provider value={{ open: notesVisible, close: closeNotes, setAvailable: setNotesAvailable }}>
@@ -310,8 +338,8 @@ export const MainLayout: React.FC = () => {
       </div>
       </div>
       </div>
-      <nav className={cn('md:hidden fixed bottom-0 inset-x-0 z-[var(--z-dropdown)] border-t border-border bg-card/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]', hideMobileBottomNav && 'hidden')}>
-        <div className="um-app-mobile-links flex items-center justify-around px-1 py-2">{visibleNavItems.map(item => canEnter(item) ? <Link key={item.to} to={routeFor(item.to)} aria-current={isActive(item) ? 'page' : undefined} className={cn('relative flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-lg transition-colors min-h-[44px] min-w-[40px]', isActive(item) ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}>{isActive(item) && <span className="absolute top-0 inset-x-3 h-0.5 bg-primary rounded-full" />}{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></Link> : <span key={item.to} role="link" aria-disabled="true" aria-label={t('{0}，暂未开通', { 0: item.label })} className="flex flex-col items-center justify-center gap-0.5 py-1 px-1 min-h-[44px] min-w-[40px] text-muted-foreground opacity-40 cursor-not-allowed">{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></span>)}</div>
+      <nav className={cn('um-app-mobile-nav md:hidden fixed bottom-0 inset-x-0 z-[var(--z-dropdown)] border-t border-border bg-card/95 backdrop-blur-xl pb-[var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px))]', hideMobileBottomNav && 'hidden')}>
+        <div className="um-app-mobile-links flex items-center justify-start px-1 py-2">{visibleNavItems.map(item => canEnter(item) ? <Link key={item.to} to={routeFor(item.to)} aria-current={isActive(item) ? 'page' : undefined} className={cn('relative flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-lg transition-colors min-h-[44px] min-w-[44px] whitespace-nowrap shrink-0', isActive(item) ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}>{isActive(item) && <span className="absolute top-0 inset-x-3 h-0.5 bg-primary rounded-full" />}{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></Link> : <span key={item.to} role="link" aria-disabled="true" aria-label={t('{0}，暂未开通', { 0: item.label })} className="flex flex-col items-center justify-center gap-0.5 py-1 px-1 min-h-[44px] min-w-[44px] whitespace-nowrap shrink-0 text-muted-foreground opacity-40 cursor-not-allowed">{item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></span>)}</div>
       </nav>
       <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}><AlertDialogContent className="rounded-lg border-border bg-card"><AlertDialogHeader><AlertDialogTitle>{t('确认退出登录？')}</AlertDialogTitle><AlertDialogDescription>{t('退出后需要重新登录才能访问学习记录和课程。')}{pendingLearningRecords > 0 && t(' 当前还有 {0} 条离线学习记录未同步，退出会清除这些记录，建议先返回桌面设置联网同步。', { 0: pendingLearningRecords })}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t('返回')}</AlertDialogCancel><AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch { /* Local logout remains available. */ } await queryClient.cancelQueries(); queryClient.clear(); logout(); navigate('/login', { replace: true }); }}>{t('确认退出')}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       {showTour && isTourPage && <GuidedTour steps={tourSteps} onDismiss={handleTourDismiss} />}

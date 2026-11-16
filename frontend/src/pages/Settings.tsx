@@ -16,11 +16,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { getLearningReminderSettings, updateLearningReminderSetting } from '@/lib/learningReminders';
 import { useInstitutionStore, FEATURES } from '@/store/useInstitutionStore';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, flushNativeToken } from '@/store/useAuthStore';
 import { useSystemStore, DEFAULT_EXPERIENCE, type ExperiencePreferences } from '@/store/useSystemStore';
 import { ArrowCounterClockwise, FloppyDisk, CreditCard, ArrowRight, MagnifyingGlass, UserCircle, Palette, Notebook, Database, DownloadSimple, SlidersHorizontal, Bell, Keyboard, HardDrives, ArrowLeft, X, ChatCircle, GraduationCap, Buildings } from '@phosphor-icons/react';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import api from '@/lib/api';
+import { getServerOrigin, isNativePlatform, SERVER_ORIGIN_CHANGED_EVENT } from '@/lib/serverConfig';
+import { ServerConfigControl } from '@/components/ServerConfigControl';
 import { queryClient } from '@/lib/queryClient';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -50,6 +52,9 @@ export const Settings: React.FC = () => {
   const user = useAuthStore(state => state.user);
   const desktopState = useDesktopStore(state => state.state);
   const updateUser = useAuthStore(state => state.updateUser);
+  const setAuth = useAuthStore(state => state.setAuth);
+  const nativePlatform = isNativePlatform();
+  const [serverOrigin, setServerOriginState] = useState(getServerOrigin);
   const [params, setParams] = useSearchParams();
   const requestedSection = params.get('section') || 'general';
   const section = ['profile', 'security'].includes(requestedSection) ? 'account' : ['chat', 'desktop'].includes(requestedSection) ? 'general' : requestedSection;
@@ -74,6 +79,12 @@ export const Settings: React.FC = () => {
 
   useEffect(() => { setPageHeader(t("设置"), ''); return () => setPageHeader('', ''); }, [setPageHeader, locale]);
   useEffect(() => { contentRef.current?.scrollTo({ top: 0 }); }, [current?.id]);
+  useEffect(() => {
+    if (!nativePlatform) return;
+    const sync = () => setServerOriginState(getServerOrigin());
+    window.addEventListener(SERVER_ORIGIN_CHANGED_EVENT, sync);
+    return () => window.removeEventListener(SERVER_ORIGIN_CHANGED_EVENT, sync);
+  }, [nativePlatform]);
 
   useEffect(() => {
     if (current?.id !== 'account') return;
@@ -120,7 +131,12 @@ export const Settings: React.FC = () => {
     if (busy) return;
     setBusy('password');
     try {
-      await api.patch('/users/me/password/', { old_password: passwords.old, new_password: passwords.new });
+      const { data } = await api.patch('/users/me/password/', { old_password: passwords.old, new_password: passwords.new });
+      if (nativePlatform && typeof data?.token === 'string' && data.token && user) {
+        setAuth(user, data.token);
+        await flushNativeToken();
+        void queryClient.invalidateQueries({ queryKey: ['native-media'] });
+      }
       setEditing(null); toast.success(t("密码已更新")); setPasswords({ old: '', new: '' });
     } catch (error) { toast.error(formatApiErrorToast(error, t("密码更新失败，请核对后重试。"))); }
     finally { setBusy(null); }
@@ -209,6 +225,13 @@ export const Settings: React.FC = () => {
           <footer className="um-settings-footer"><Button type="button" variant="outline" onClick={() => { setTheme('system'); setExperience({ readingSize: DEFAULT_EXPERIENCE.readingSize, density: DEFAULT_EXPERIENCE.density, reduceMotion: DEFAULT_EXPERIENCE.reduceMotion }); toast.success(t("已恢复外观默认设置")); }}><ArrowCounterClockwise size={16} />{t("恢复外观默认")}</Button></footer>
         </>}
         {current?.id === 'general' && <>
+          {nativePlatform && <>
+            <h3 className="um-settings-group-title">{t('服务器连接')}</h3>
+            <section className="um-settings-group" aria-label={t('服务器连接')}>
+              <div className="um-settings-row"><span>{t('当前服务器')}</span><span className="um-settings-value font-mono">{serverOrigin}</span></div>
+              <div className="um-settings-row um-settings-server"><p>{t('仅此设备生效。修改服务器地址会清空当前登录态和本地请求缓存。')}</p><ServerConfigControl variant="outline" label={t('更改服务器地址')} onOriginChanged={setServerOriginState} /></div>
+            </section>
+          </>}
           <h3 className="um-settings-group-title">{t("对话")}</h3>
           <section className="um-settings-group">
             <div className="um-settings-row"><div><label htmlFor="settings-send-shortcut">{t("发送消息")}</label></div><SelectField id="settings-send-shortcut" value={sendShortcut} onValueChange={value => setExperience({ sendShortcut: value as ExperiencePreferences['sendShortcut'] })}><SelectOption value="enter">{t("Enter 发送")}</SelectOption><SelectOption value="modifier-enter">{t("⌘ / Ctrl+Enter 发送")}</SelectOption></SelectField></div>

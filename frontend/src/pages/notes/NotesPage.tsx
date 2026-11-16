@@ -1,3 +1,4 @@
+import { isOfflineDemo, isNativeOffline } from '@/lib/offlineSession';
 import { getLocale, t, useLocale } from '@/i18n';
 import { SelectField, SelectOption } from '@/components/ui/select';
 import { WorkspaceToolbar } from '@/components/WorkspaceToolbar';
@@ -73,7 +74,7 @@ export default function NotesPage() {
   const reload = useCallback(() => setRefresh(value => value + 1), []);
   useEffect(() => {
     let active = true;
-    if (!navigator.onLine && userId && offlineCacheSupported()) {
+    if ((!navigator.onLine || isNativeOffline()) && !isOfflineDemo() && userId && offlineCacheSupported()) {
       void loadOfflineCache(userId).then(cached => {
         if (!active) return;
         // The cache is already on disk; applying it after the async read is the offline path.
@@ -99,7 +100,7 @@ export default function NotesPage() {
     if (!userId || !offlineCacheSupported()) return;
     let active = true;
     const sync = async () => {
-      if (!navigator.onLine) return;
+      if (!navigator.onLine || isNativeOffline() || isOfflineDemo()) return;
       try {
         await window.unimindDesktop?.syncIdentity();
         if (!active) return;
@@ -124,7 +125,7 @@ export default function NotesPage() {
   }
   useEffect(() => {
     const controller = new AbortController();
-    if (!navigator.onLine && userId && offlineCacheSupported()) {
+    if ((!navigator.onLine || isNativeOffline()) && !isOfflineDemo() && userId && offlineCacheSupported()) {
       void loadOfflineCache(userId).then(cached => {
         if (controller.signal.aborted) return;
         // The cache is already on disk; applying it after the async read is the offline path.
@@ -161,7 +162,7 @@ export default function NotesPage() {
   useEffect(() => {
     if (!id) return;
     const controller = new AbortController();
-    if (!navigator.onLine && userId && offlineCacheSupported()) {
+    if ((!navigator.onLine || isNativeOffline()) && !isOfflineDemo() && userId && offlineCacheSupported()) {
       void getCachedNote(userId, Number(id)).then(cached => {
         if (controller.signal.aborted) return;
         // The cache is already on disk; applying it after the async read is the offline path.
@@ -207,7 +208,7 @@ export default function NotesPage() {
     if (newNoteRequested.current || id) return;
     if (new URLSearchParams(window.location.search).get('new') !== '1') return;
     newNoteRequested.current = true;
-    if (!navigator.onLine) { toast.error(t('离线时暂不能新建笔记，请联网后重试。')); return; }
+    if (!navigator.onLine && !isOfflineDemo()) { toast.error(t('离线时暂不能新建笔记，请联网后重试。')); return; }
     const timer = window.setTimeout(() => createNoteRef.current(), 0);
     return () => window.clearTimeout(timer);
   }, [id]);

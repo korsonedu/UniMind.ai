@@ -1,3 +1,4 @@
+import { ProtectedImage } from '@/components/ProtectedImage';
 import { t, useLocale } from '@/i18n';
 import { memo, useContext, useEffect, useRef, useState, type RefObject } from 'react';
 import { ArrowUp, ArrowCounterClockwise, ArrowsOut, ArrowsIn, Clock, NotePencil, Sparkle, ClockCounterClockwise, X } from '@phosphor-icons/react';
@@ -290,12 +291,12 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
 function CourseVisualPreview({ visual }: { visual: CourseVisual }) {
   useLocale();
   return <details className="um-course-visual">
-    <summary><img src={visual.current.image} alt={t('提问画面缩略图')} />{t('画面')} {formatDuration(visual.current.video_seconds)} {t('· 查看原图')}</summary>
+    <summary><ProtectedImage src={visual.current.image} alt={t('提问画面缩略图')} />{t('画面')} {formatDuration(visual.current.video_seconds)} {t('· 查看原图')}</summary>
     <div className="um-course-visual-content">
-      <img src={visual.current.image} alt={t('提问时的完整画面 {0}', { 0: formatDuration(visual.current.video_seconds) })} />
+      <ProtectedImage src={visual.current.image} alt={t('提问时的完整画面 {0}', { 0: formatDuration(visual.current.video_seconds) })} />
       {visual.previous && <>
         <p>{t('此前画面')} {formatDuration(visual.previous.video_seconds)}</p>
-        <img src={visual.previous.image} alt={t('此前的完整画面 {0}', { 0: formatDuration(visual.previous.video_seconds) })} />
+        <ProtectedImage src={visual.previous.image} alt={t('此前的完整画面 {0}', { 0: formatDuration(visual.previous.video_seconds) })} />
       </>}
     </div>
   </details>;

@@ -7,7 +7,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { AuthLayout } from '@/components/AuthLayout';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, flushNativeToken } from '@/store/useAuthStore';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { Warning, Spinner } from '@phosphor-icons/react';
 
@@ -51,6 +51,7 @@ export const VerifyCode: React.FC = () => {
       await queryClient.cancelQueries({ queryKey: queryKeys.user.me });
       queryClient.setQueryData(queryKeys.user.me, user);
       setAuth(user, token);
+      await flushNativeToken();
       await fetchFeatures();
       navigate(returnTo, { replace: true });
     } catch (err: unknown) {

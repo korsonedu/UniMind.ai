@@ -1,3 +1,4 @@
+import { ProtectedImage } from '@/components/ProtectedImage';
 import { t, useLocale } from '@/i18n';
 import React from 'react';
 import { Button } from '@/components/ui/button';
@@ -124,7 +125,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
                       content={processMathContent(msg.content)}
                       extraRemarkPlugins={[remarkSoftBreaks]}
                       components={{
-                        img: (input) => { const props = { ...input }; delete props.node; return <img {...props} loading="lazy" alt={props.alt || 'image'} className="max-w-[130px] md:max-w-[200px] rounded-lg my-0.5 cursor-zoom-in hover:opacity-90 transition-opacity" onClick={() => window.open(props.src || '', '_blank', 'noopener,noreferrer')}/>; },
+                        img: (input) => { const props = { ...input }; delete props.node; return <ProtectedImage {...props} loading="lazy" alt={props.alt || 'image'} className="max-w-[130px] md:max-w-[200px] rounded-lg my-0.5 cursor-zoom-in hover:opacity-90 transition-opacity" onClick={event => window.open(event.currentTarget.currentSrc, '_blank', 'noopener,noreferrer')}/>; },
                         p: (input) => { const props = { ...input }; delete props.node; return <p {...props} className="m-0 leading-normal w-fit" />; },
                         div: (input) => { const props = { ...input }; delete props.node; return <div {...props} className="w-fit" />; },
                         br: () => <br />

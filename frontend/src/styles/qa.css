@@ -115,3 +115,11 @@
 @media (prefers-reduced-motion: reduce) {
   .um-qa * { transition-duration: 0ms !important; animation-duration: 0ms !important; }
 }
+
+@media(max-width:767px){
+  .um-qa-submit,.um-qa-search{min-height:44px}
+  .um-qa-toolbar{min-width:0}
+  .um-qa-toolbar>div{max-width:100%}
+}
+
+@media(max-width:767px){.um-qa-attachment-image>a{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px}.um-qa-thread a.inline-flex{min-height:44px}}

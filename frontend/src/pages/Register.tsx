@@ -9,6 +9,8 @@ import { AuthLayout } from '@/components/AuthLayout';
 import { Warning } from '@phosphor-icons/react';
 
 import api from '@/lib/api';
+import { isNativePlatform } from '@/lib/serverConfig';
+import { ServerConfigControl } from '@/components/ServerConfigControl';
 import { useAuthStore } from '@/store/useAuthStore';
 import { getReturnTo } from '@/lib/routing';
 
@@ -28,11 +30,12 @@ export const Register: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnTo = getReturnTo(searchParams.get('next'));
+  const nativePlatform = isNativePlatform();
 
   useEffect(() => {
     const { user } = useAuthStore.getState();
-    if (user) navigate(returnTo, { replace: true });
-  }, [navigate, returnTo]);
+    if (user && (!nativePlatform || useAuthStore.getState().token)) navigate(returnTo, { replace: true });
+  }, [navigate, returnTo, nativePlatform]);
   useEffect(() => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
@@ -111,6 +114,7 @@ export const Register: React.FC = () => {
         </p>
       }
     >
+      {nativePlatform && <div className="um-auth-server"><ServerConfigControl variant="pill" onOriginChanged={() => setError('')} /></div>}
       {/* Referral banner */}
       {refCode && (
         <div className="rounded-xl bg-blue-50 dark:bg-blue-950/25 border border-blue-200 dark:border-blue-800/40 px-4 py-3 mb-5 text-sm text-blue-700 dark:text-blue-400">
