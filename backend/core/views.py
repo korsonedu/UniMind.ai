@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from users.permissions import IsPlatformAdmin
+from core.authentication import CookieTokenAuthentication
 from core.models import LegalDocument
 from django.middleware.csrf import get_token
 
@@ -14,6 +15,45 @@ class CsrfTokenView(APIView):
 
     def get(self, request):
         return Response({'csrf_token': get_token(request)}, headers={'Cache-Control': 'no-store'})
+
+
+class WsTicketView(APIView):
+    """POST /api/ws-ticket/ — 签发一次性短时 WebSocket 连接凭证（30 秒有效）。"""
+    authentication_classes = [CookieTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from core.ws_auth import WS_TICKET_TTL, issue_ws_ticket
+
+        ticket = issue_ws_ticket(request.user, request.auth)
+        return Response(
+            {'ticket': ticket, 'expires_in': WS_TICKET_TTL},
+            headers={'Cache-Control': 'no-store'},
+        )
+
+
+class MediaTicketView(APIView):
+    """POST /api/media-ticket/ — 签发短时媒体访问令牌（300 秒有效，绑定用户与媒体路径）。"""
+    authentication_classes = [CookieTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from urllib.parse import quote
+        from school_system.media_serve import MEDIA_TICKET_TTL, issue_media_ticket
+
+        raw_path = request.data.get('path') if isinstance(request.data, dict) else None
+        issued = issue_media_ticket(request.user, raw_path)
+        if issued is None:
+            return Response({'error': '无效的媒体路径'}, status=400)
+        ticket, media_path = issued
+        return Response(
+            {
+                'ticket': ticket,
+                'expires_in': MEDIA_TICKET_TTL,
+                'path': f'/media/{quote(media_path, safe="/")}',
+            },
+            headers={'Cache-Control': 'no-store'},
+        )
 
 
 # ──────────────────────────────────────────────

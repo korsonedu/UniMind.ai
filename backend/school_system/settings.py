@@ -58,8 +58,10 @@ if IS_PROD and DEBUG:
 
 ALLOWED_HOSTS = _get_list(
     "ALLOWED_HOSTS",
-    default=["127.0.0.1", "localhost", "0.0.0.0", "testserver"] if DEBUG else [],
+    default=["127.0.0.1", "localhost", "0.0.0.0", "testserver"] if DEBUG and not IS_PROD else [],
 )
+if DEBUG and not IS_PROD and _get_bool("DEV_ALLOW_ALL_HOSTS"):
+    ALLOWED_HOSTS = ["*"]
 if IS_PROD and not ALLOWED_HOSTS:
     raise ImproperlyConfigured("ALLOWED_HOSTS must be configured in production.")
 
@@ -97,6 +99,7 @@ INSTALLED_APPS = [
     "core",
     "payments",
     "backoffice",
+    "knowledge_builder",
 ]
 # 企业版裁剪：ENABLED_APPS 非空时只保留列出的模块（django/channels/rest 等基础 app 始终保留）
 if ENABLED_APPS is not None:
@@ -192,15 +195,35 @@ STATICFILES_DIRS = [
 MEDIA_URL = "media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
-CORS_ALLOW_ALL_ORIGINS = _get_bool("CORS_ALLOW_ALL_ORIGINS", default=DEBUG)
+CAPACITOR_ALLOWED_ORIGINS = [
+    "http://localhost",
+    "https://localhost",
+    "capacitor://localhost",
+]
+CORS_ALLOW_ALL_ORIGINS = _get_bool("CORS_ALLOW_ALL_ORIGINS", default=DEBUG and not IS_PROD)
 if IS_PROD and CORS_ALLOW_ALL_ORIGINS:
     raise ImproperlyConfigured("CORS_ALLOW_ALL_ORIGINS must be False in production.")
+CORS_ALLOW_PRIVATE_NETWORK = _get_bool(
+    "CORS_ALLOW_PRIVATE_NETWORK",
+    default=DEBUG and not IS_PROD,
+)
+CORS_ALLOW_CAPACITOR_ORIGINS = _get_bool(
+    "CORS_ALLOW_CAPACITOR_ORIGINS", default=DEBUG and not IS_PROD,
+)
 CORS_ALLOWED_ORIGINS = _get_list("CORS_ALLOWED_ORIGINS")
+if CORS_ALLOW_CAPACITOR_ORIGINS:
+    CORS_ALLOWED_ORIGINS = list(dict.fromkeys([*CORS_ALLOWED_ORIGINS, *CAPACITOR_ALLOWED_ORIGINS]))
 CORS_ALLOWED_ORIGIN_REGEXES = _get_list("CORS_ALLOWED_ORIGIN_REGEXES")
 CORS_ALLOW_CREDENTIALS = _get_bool("CORS_ALLOW_CREDENTIALS", default=True)
 CSRF_TRUSTED_ORIGINS = _get_list("CSRF_TRUSTED_ORIGINS", [
     "http://localhost:5173", "http://127.0.0.1:5173",
-] if DEBUG else [])
+] if DEBUG and not IS_PROD else [])
+WS_ALLOWED_ORIGINS = _get_list(
+    "WS_ALLOWED_ORIGINS",
+    [*CAPACITOR_ALLOWED_ORIGINS, "http://localhost:5173", "http://127.0.0.1:5173"] if DEBUG and not IS_PROD else [],
+)
+if CORS_ALLOW_CAPACITOR_ORIGINS:
+    WS_ALLOWED_ORIGINS = list(dict.fromkeys([*WS_ALLOWED_ORIGINS, *CAPACITOR_ALLOWED_ORIGINS]))
 
 # The account rollout is opt-in. No credentials are stored in the frontend.
 ACCOUNT_ENABLED = _get_bool("ACCOUNT_ENABLED")
@@ -509,6 +532,7 @@ CELERY_TASK_QUEUES = (
 )
 
 CELERY_TASK_ROUTES = {
+    "knowledge_builder.tasks.build_knowledge_tree": {"queue": "low_priority"},
     # ── high_priority ──
     "ai_assistant.tasks.record_trajectory_async": {"queue": "high_priority"},
     "ai_assistant.tasks.generate_conversation_title": {"queue": "high_priority"},

@@ -52,7 +52,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   return (
     <footer className={cn(
       "um-study-input border-t border-border z-20",
-      isMobile ? "px-3 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shrink-0" : "px-5 py-3"
+      isMobile ? "px-3 pt-2 pb-[calc(0.75rem+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] shrink-0" : "px-5 py-3"
     )}>
       <div className="max-w-4xl mx-auto">
         <div className="um-study-composer transition-colors border border-border overflow-hidden">

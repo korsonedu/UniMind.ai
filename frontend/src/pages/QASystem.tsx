@@ -1,3 +1,5 @@
+import { useProtectedMedia } from '@/hooks/useProtectedMedia';
+import { ProtectedImage } from '@/components/ProtectedImage';
 import { getLocale, t, useLocale } from '@/i18n';
 import { formatApiErrorToast } from '@/lib/apiError';
 import { useNotesSidebarAvailability } from '@/components/WorkspaceContext';
@@ -149,6 +151,7 @@ const AnswerItem = ({ answer, onReplyClick, onRefresh }: { answer: QAAnswer, onR
 };
 
 const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: { question: QAQuestion, onRefresh: () => void, isAdmin: boolean, detail?: boolean, onDelete?: () => void }) => {
+  const attachment = useProtectedMedia(question.attachment);
   useLocale();
   const location = useLocation();
   const [replyContent, setReplyContent] = useState('');
@@ -343,13 +346,13 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
           <div className="mt-3">
             {isImageAttachment ? (
               <div className="um-qa-attachment-image rounded-xl overflow-hidden border border-border/50 max-w-sm group/img relative">
-                <img src={question.attachment} alt={t('问题附件')} className="w-full h-auto max-h-[300px] object-contain" loading="lazy" />
-                <a href={question.attachment} target="_blank" rel="noreferrer" aria-label={t('查看原图')} className="absolute top-2 right-2 p-1.5 bg-[#0b0d10]/50 text-white rounded-lg opacity-100 md:opacity-0 group-hover/img:opacity-100 focus:opacity-100 transition-opacity">
+                <ProtectedImage src={question.attachment} alt={t('问题附件')} className="w-full h-auto max-h-[300px] object-contain" loading="lazy" />
+                <a href={attachment.src} target="_blank" rel="noreferrer" aria-label={t('查看原图')} className="absolute top-2 right-2 p-1.5 bg-[#0b0d10]/50 text-white rounded-lg opacity-100 md:opacity-0 group-hover/img:opacity-100 focus:opacity-100 transition-opacity">
                   <Paperclip className="h-3.5 w-3.5" />
                 </a>
               </div>
             ) : (
-              <a href={question.attachment} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/50 border border-border/50 text-xs font-bold text-primary hover:bg-muted transition-colors">
+              <a href={attachment.src} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/50 border border-border/50 text-xs font-bold text-primary hover:bg-muted transition-colors">
                 <Paperclip className="h-3.5 w-3.5" /> {t('附件下载')}
               </a>
             )}

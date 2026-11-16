@@ -1,5 +1,8 @@
 import { useEffect, type RefObject } from 'react';
-import api, { getCsrfToken } from '@/lib/api';
+import { getCsrfToken } from '@/lib/api';
+import { getApiBaseUrl, getRegisteredAuthToken, isNativePlatform } from '@/lib/serverConfig';
+import { getLocale } from '@/i18n';
+import { isOfflineDemo, isNativeOffline } from '@/lib/offlineSession';
 
 type Options = {
   enabled: boolean;
@@ -16,8 +19,8 @@ export function useLearningSession({ enabled, kind, courseId, questionIds, video
     if (!enabled) return;
     const video = videoRef?.current;
     if (kind === 'video' && !video) return;
-    void getCsrfToken().catch(() => {});
-    const url = `${api.defaults.baseURL?.replace(/\/$/, '') || ''}/users/me/learning-sessions/`;
+    const native = isNativePlatform();
+    if (!native) void getCsrfToken().catch(() => {});
     const isActive = () => kind === 'video'
       ? !!video && !video.paused && !video.seeking && !video.ended && video.readyState >= 3
       : document.visibilityState === 'visible';
@@ -30,7 +33,7 @@ export function useLearningSession({ enabled, kind, courseId, questionIds, video
     let lastSent = '';
 
     const flush = () => {
-      if (!session || session.active < 1) return;
+      if (!session || session.active < 1 || isOfflineDemo() || isNativeOffline()) return;
       const body = JSON.stringify({
         session_id: session.id, kind, course_id: courseId || null,
         question_ids: JSON.parse(questionKey),
@@ -41,8 +44,23 @@ export function useLearningSession({ enabled, kind, courseId, questionIds, video
       if (body === lastSent) return;
       lastSent = body;
       // keepalive 尽量保留切页和关闭页面前的最后一段；累计快照可安全重试。
+      const url = `${getApiBaseUrl().replace(/\/$/, '')}/users/me/learning-sessions/`;
+      if (native) {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Accept-Language': getLocale() };
+        const token = getRegisteredAuthToken();
+        if (token) headers['Authorization'] = `Token ${token}`;
+        void fetch(url, {
+          method: 'POST',
+          credentials: 'omit',
+          keepalive: true,
+          headers,
+          body,
+        }).then(response => { if (!response.ok && lastSent === body) lastSent = ''; })
+          .catch(() => { if (lastSent === body) lastSent = ''; });
+        return;
+      }
       void getCsrfToken().then(csrfToken => fetch(url, { method: 'POST', credentials: 'include', keepalive: true,
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body,
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken, 'Accept-Language': getLocale() }, body,
       })).then(response => { if (!response.ok && lastSent === body) lastSent = ''; })
         .catch(() => { if (lastSent === body) lastSent = ''; });
     };

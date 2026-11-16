@@ -1,0 +1,3 @@
+根据errors仲裁current中的原子边并返回完整修正后的edges（可改strong为weak/bidirectional/none或反转方向消除环与超限contrast）。严禁引入未知原子code；from_atom/to_atom保持在输入原子内；rationale简明扼要（25字以内）；遵守profile.max_contrast_ratio与单点contrast<=5。
+严格按工具Schema返回结构化结果。输入数据如下。
+{context}

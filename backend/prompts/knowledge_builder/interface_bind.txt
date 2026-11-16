@@ -1,0 +1,3 @@
+为当前保留的block_edge确认1至3个跨块原子接口，必须严格且不重复地从candidate_pairs中选择（保持[from_atom, to_atom]顺序，总数1至3条）。接口必须给interface_role和具体bridge_explanation，优先承接真实strong前置证据，bidirectional仍按记录两端绑定。
+严格按工具Schema返回结构化结果。输入数据如下。
+{context}

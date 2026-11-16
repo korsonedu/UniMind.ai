@@ -121,3 +121,18 @@
 .um-desktop-notification-types { min-width: 0; margin: 0 0 0 12px; padding: 0 0 0 16px; border: 0; }
 .um-settings-group:has(> .um-desktop-notification-types[hidden]) > .um-settings-row { border-bottom: 0; }
 .um-desktop-notification-types:disabled .um-settings-row { color: var(--um-color-text-muted); }
+
+.um-settings-server { flex-wrap: wrap; }
+.um-settings-server p { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .um-settings-workspace { padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); }
+  .um-settings-back, .um-settings-legal a { display: inline-flex; align-items: center; min-height: 44px; }
+  .um-settings-search button { min-width: 44px; }
+  .um-settings-edit-dialog { max-height: calc(var(--um-viewport-height, 100dvh) - 32px); scroll-padding-block: 16px; }
+  .um-settings-edit-dialog .um-settings-row { flex-wrap: wrap; }
+  .um-settings-edit-dialog .um-settings-row > :is(input, textarea), .um-settings-edit-dialog .um-settings-control { width: 100%; }
+  .um-settings-row, .um-settings-account-value { min-width: 0; }
+  .um-settings-profile-summary { flex-wrap: wrap; }
+  .um-settings-account-value { flex-wrap: wrap; gap: 8px; }
+  .um-settings-value { overflow-wrap: anywhere; }
+}

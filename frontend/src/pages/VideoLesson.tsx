@@ -1,3 +1,5 @@
+import { useProtectedMedia } from '@/hooks/useProtectedMedia';
+import { ProtectedMediaLink } from '@/components/ProtectedMediaLink';
 import { t, useLocale } from '@/i18n';
 import { useSystemStore, type ExperiencePreferences } from '@/store/useSystemStore';
 import type { Course } from '@/types/api';
@@ -43,6 +45,19 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoContainerRef = useRef<HTMLDivElement | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
+  const renewedPlayback = useRef<{ time: number; playing: boolean } | null>(null);
+  const media = useProtectedMedia(course?.video_file, () => {
+    const video = videoRef.current;
+    if (video?.readyState) renewedPlayback.current = { time: video.currentTime, playing: !video.paused };
+  });
+  const poster = useProtectedMedia(course?.cover_image);
+  const renewVideoTicket = async () => {
+    const video = videoRef.current;
+    if (!video || !media.crossOrigin || renewedPlayback.current) return;
+    renewedPlayback.current = { time: video.currentTime, playing: !video.paused };
+    const result = await media.refresh();
+    if (result.isError) { renewedPlayback.current = null; toast.error(t('视频授权更新失败，请重新打开课程')); }
+  };
   const [loading, setLoading] = useState(true);
   const [hasAwarded, setHasAwarded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -272,6 +287,13 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     video.playbackRate = playbackRate;
     const dur = video.duration || 0;
     setDuration(dur);
+    const restored = renewedPlayback.current;
+    if (restored) {
+      renewedPlayback.current = null;
+      video.currentTime = restored.time;
+      if (restored.playing) void video.play().catch(() => toast(t('点击播放继续观看')));
+      return;
+    }
     if (Number.isFinite(dur) && dur > 0) api.post(`/courses/${courseId}/progress/`, { duration: dur }).catch(() => {});
     if (linkedSeconds !== null && Number.isFinite(linkedSeconds) && linkedSeconds >= 0 && linkedSeconds < dur) {
       video.currentTime = linkedSeconds;
@@ -334,16 +356,18 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
               onResize={handleVideoResize}
               onPlay={() => { setIsPlaying(true); scheduleHideControls(); }}
               onPause={() => {
+                if (renewedPlayback.current) return;
                 setIsPlaying(false);
                 setShowControls(true);
                 // 暂停时补存进度，避免最后 10 秒内的位置丢失
                 api.post(`/courses/${courseId}/progress/`, { position: videoRef.current?.currentTime ?? 0 }).catch(() => {});
               }}
               onClick={() => { if (videoRef.current?.paused) void videoRef.current.play(); else videoRef.current?.pause(); }}
-              src={course.video_file}
+              src={media.src || undefined}
+              onError={() => void renewVideoTicket()}
               className="um-lesson-video"
               preload="metadata"
-              poster={course.cover_image || undefined}
+              poster={poster.src || undefined}
             />
             <SubtitlesOverlay courseId={courseId} videoRef={videoRef} visible={subtitlesVisible} />
             <div className="um-lesson-controls" data-visible={showControls || !isPlaying || undefined}>
@@ -419,8 +443,8 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
         <div id="sidebar-panel-materials" role="tabpanel" aria-labelledby="sidebar-tab-materials" className="um-course-info" hidden={sidebarView !== 'materials'}>
         <section className="um-lesson-resources" aria-labelledby="lesson-resources-heading">
           <h2 id="lesson-resources-heading">{t('课程资料')}</h2>
-          {course.courseware && <a href={course.courseware} download target="_blank" rel="noopener noreferrer"><FileText size={18} /><span>{t('教学课件')}</span><Download size={16} /></a>}
-          {course.reference_materials && <a href={course.reference_materials} download target="_blank" rel="noopener noreferrer"><FileText size={18} /><span>{t('参考资料')}</span><Download size={16} /></a>}
+          {course.courseware && <ProtectedMediaLink href={course.courseware} download target="_blank" rel="noopener noreferrer"><FileText size={18} /><span>{t('教学课件')}</span><Download size={16} /></ProtectedMediaLink>}
+          {course.reference_materials && <ProtectedMediaLink href={course.reference_materials} download target="_blank" rel="noopener noreferrer"><FileText size={18} /><span>{t('参考资料')}</span><Download size={16} /></ProtectedMediaLink>}
           {!course.courseware && !course.reference_materials && <p className="um-lesson-empty">{t('暂无课程资料')}</p>}
         </section>
         </div>

@@ -9,12 +9,18 @@ adds Range support so that video seeking works correctly in the browser.
 import os
 import re
 from email.utils import formatdate, parsedate_to_datetime
+from urllib.parse import unquote, urlsplit
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.core import signing
 from django.http import HttpResponse, StreamingHttpResponse, HttpResponseRedirect
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 
 from core.authentication import CookieTokenAuthentication
+
+MEDIA_TICKET_SALT = "media-access"
+MEDIA_TICKET_TTL = 300
 
 _RANGE_RE = re.compile(r"bytes\s*=\s*(\d*)\s*-\s*(\d*)")
 
@@ -59,10 +65,77 @@ def _iter_chunks(file_path: str, offset: int = 0, size: int | None = None, chunk
                 break
 
 
+def _is_valid_media_path(path: str) -> bool:
+    return bool(
+        path
+        and '\\' not in path
+        and '\x00' not in path
+        and not any(part in {'.', '..', ''} for part in path.split('/'))
+    )
+
+
+def normalize_media_path(raw_path: str) -> str | None:
+    """Normalize a /media/... path or URL into the relative storage path expected by media_serve."""
+    if not isinstance(raw_path, str):
+        return None
+    candidate = raw_path.strip()
+    if not candidate:
+        return None
+    try:
+        parsed = urlsplit(candidate)
+    except ValueError:
+        return None
+    if parsed.scheme or parsed.netloc:
+        if parsed.scheme not in {'http', 'https'} or not parsed.netloc or not parsed.path.startswith('/media/'):
+            return None
+    elif parsed.path.startswith('/') and not parsed.path.startswith('/media/'):
+        return None
+    decoded = unquote(parsed.path)
+    if decoded.startswith('/media/'):
+        decoded = decoded.removeprefix('/media/')
+    elif decoded.startswith('media/'):
+        decoded = decoded.removeprefix('media/')
+    return decoded if _is_valid_media_path(decoded) else None
+
+
+def issue_media_ticket(user, raw_path: str) -> tuple[str, str] | None:
+    """Sign a short-lived media access token bound to (user_id, account_session_version, media_path)."""
+    media_path = normalize_media_path(raw_path)
+    if not media_path:
+        return None
+    payload = {
+        "u": user.id,
+        "p": media_path,
+        "v": user.account_session_version,
+    }
+    token = signing.dumps(payload, salt=MEDIA_TICKET_SALT, compress=True)
+    return token, media_path
+
+
+def resolve_user_from_media_token(media_token: str, media_path: str):
+    """Verify a signed media token against exact media_path, TTL, active user, and session version."""
+    if not media_token:
+        return None
+    try:
+        payload = signing.loads(media_token, salt=MEDIA_TICKET_SALT, max_age=MEDIA_TICKET_TTL)
+    except signing.BadSignature:
+        return None
+    if not isinstance(payload, dict) or payload.get("p") != media_path:
+        return None
+    user_id = payload.get("u")
+    version = payload.get("v")
+    if (not isinstance(user_id, int) or isinstance(user_id, bool)
+            or not isinstance(version, int) or isinstance(version, bool)):
+        return None
+    user = get_user_model().objects.filter(pk=user_id, is_active=True).first()
+    if not user or user.account_session_version != version:
+        return None
+    return user
+
+
 def media_serve(request, path):
     # 所有存储后端共用同一对象路径，必须在查询和签名前拒绝路径穿越。
-    if (not path or '\\' in path or '\x00' in path
-            or any(part in {'.', '..', ''} for part in path.split('/'))):
+    if not _is_valid_media_path(path):
         return HttpResponse(status=404)
     if not request.user.is_authenticated:
         try:
@@ -71,6 +144,13 @@ def media_serve(request, path):
             return HttpResponse(status=401)
         if authentication is not None:
             request.user, _ = authentication
+    if not request.user.is_authenticated and request.method in ("GET", "HEAD"):
+        media_token = request.GET.get("media_token", "").strip()
+        if media_token:
+            user = resolve_user_from_media_token(media_token, path)
+            if user is None:
+                return HttpResponse(status=401)
+            request.user = user
 
     from django.db.models import Q
     from courses.models import Course, StartupMaterial
@@ -129,7 +209,7 @@ def media_serve(request, path):
         # 生成签名 URL（有效期 1 小时）
         from users.workspaces.access import membership_for
         ttl = 300 if membership_for(request.user) else 3600
-        url = bucket.sign_url('GET', path, ttl)
+        url = bucket.sign_url(request.method, path, ttl)
         return HttpResponseRedirect(url)
 
     # 本地文件服务（开发环境）
@@ -171,8 +251,13 @@ def media_serve(request, path):
             resp['Content-Range'] = f'bytes */{file_size}'
             return resp
 
-        chunk = _iter_chunks(full, offset=start, size=end - start + 1)
-        resp = StreamingHttpResponse(chunk, content_type=content_type, status=206)
+        if request.method == 'HEAD':
+            resp = HttpResponse(content_type=content_type, status=206)
+        else:
+            resp = StreamingHttpResponse(
+                _iter_chunks(full, offset=start, size=end - start + 1),
+                content_type=content_type, status=206,
+            )
         resp["Content-Range"] = f"bytes {start}-{end}/{file_size}"
         resp["Content-Length"] = str(end - start + 1)
         resp["Accept-Ranges"] = "bytes"
@@ -180,11 +265,10 @@ def media_serve(request, path):
         return resp
 
     # ── Full request ───────────────────────────────────────────────────
-    resp = StreamingHttpResponse(
-        _iter_chunks(full, offset=0),
-        content_type=content_type,
-        status=200,
-    )
+    if request.method == 'HEAD':
+        resp = HttpResponse(content_type=content_type)
+    else:
+        resp = StreamingHttpResponse(_iter_chunks(full, offset=0), content_type=content_type)
     resp["Content-Length"] = str(file_size)
     resp["Accept-Ranges"] = "bytes"
     resp["Last-Modified"] = formatdate(mtime, usegmt=True)
