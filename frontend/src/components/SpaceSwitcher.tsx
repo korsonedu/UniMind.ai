@@ -6,7 +6,7 @@ import api from '@/lib/api';
 import { activeWorkspace, setActiveWorkspace } from '@/lib/activeWorkspace';
 import { formatApiErrorToast } from '@/lib/apiError';
 import { useWorkspace } from '@/lib/workspace';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 
 export function SpaceSwitcher() {
   useLocale();
@@ -33,12 +33,11 @@ export function SpaceSwitcher() {
       {inWorkspace ? <Buildings size={18} /> : <User size={18} />}<span>{switching ? t('正在切换…') : inWorkspace ? workspaceName : t('个人空间')}</span><CaretDown size={12} />
     </button></DropdownMenuTrigger>
     <DropdownMenuContent align="start" sideOffset={8} className="um-app-menu um-space-menu">
-      <DropdownMenuLabel>{t('学习空间')}</DropdownMenuLabel>
       <DropdownMenuItem disabled={switching} onSelect={() => void switchSpace(null)}>
-        <User size={19} /><div><strong>{t('个人空间')}</strong><span>{t('独立的个人学习、笔记与记录')}</span></div>{!inWorkspace && <Check size={16} aria-label={t('当前空间')} />}
+        <User size={19} /><div><strong>{t('个人空间')}</strong></div>{!inWorkspace && <Check size={16} aria-label={t('当前空间')} />}
       </DropdownMenuItem>
       {workspace?.workspaces?.map(item => <DropdownMenuItem key={item.id} disabled={switching || isPending || !item.service_active} onSelect={() => void switchSpace(item.id)}>
-        <Buildings size={19} /><div><strong>{item.name}</strong><span>{item.service_active ? t('独立的机构学习、笔记与记录') : t('服务已暂停或到期')}</span></div>{activeWorkspace() === String(item.id) && <Check size={16} aria-label={t('当前空间')} />}
+        <Buildings size={19} /><div><strong>{item.name}</strong></div>{activeWorkspace() === String(item.id) && <Check size={16} aria-label={t('当前空间')} />}
       </DropdownMenuItem>)}
     </DropdownMenuContent>
   </DropdownMenu>;
