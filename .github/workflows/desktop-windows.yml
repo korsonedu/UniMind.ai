@@ -3,10 +3,8 @@ name: desktop-windows
 on:
   workflow_dispatch:
   push:
-    branches: ['codex/unimind-dsh-m0']
-    paths: ['frontend/electron/**', 'frontend/package*.json', '.github/workflows/desktop-windows.yml']
-  pull_request:
-    paths: ['frontend/electron/**', 'frontend/package*.json', '.github/workflows/desktop-windows.yml']
+    tags:
+      - 'v*'
 
 permissions:
   contents: read
@@ -18,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -64,4 +62,4 @@ jobs:
             frontend/electron/windows-sha256.txt
             frontend/electron/windows-build-info.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
