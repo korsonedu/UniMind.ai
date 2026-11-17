@@ -3145,6 +3145,8 @@ const en: Record<string, string> = {
   "打开 UniMind.ai": "Open UniMind.ai",
   "请稍候…": "Please wait…",
   "确认登录 App": "Confirm app sign-in",
+  "正在确认登录…": "Confirming sign-in…",
+  "重试登录 App": "Retry app sign-in",
   "正在确认账号…": "Verifying your account…",
   "至少 8 位，含大写字母和数字": "At least 8 characters, including an uppercase letter and a number",
   "请重试，或重新登录 UniMind.ai 账号。": "Try again or sign in to your UniMind.ai account again.",
