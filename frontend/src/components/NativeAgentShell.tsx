@@ -9,7 +9,7 @@ import { WorkspaceTrail } from './WorkspaceTrail';
 import { createPortal } from 'react-dom';
 import { ProjectChatSidebarContext, WorkspaceActiveContext } from './WorkspaceContext';
 
-export interface AgentWorkspace { active: boolean; activityKey?: string; header: ReactNode; activity: ReactNode; chatContext?: ReactNode; }
+export interface AgentWorkspace { active: boolean; header: ReactNode; activity: ReactNode; chatContext?: ReactNode; }
 
 interface Props { workspace?: AgentWorkspace; native?: boolean; sidebar?: ReactNode; onNew: () => void; children: ReactNode; title?: string; label?: string; action?: ReactNode; }
 
@@ -24,7 +24,7 @@ export function NativeAgentShell({ native, sidebar, onNew, children, title = t('
     setAvailable(workspaceActive && activityOpen);
     if (workspaceActive && activityOpen) openChat();
     return () => setAvailable(false);
-  }, [workspaceActive, activityOpen, workspace?.activityKey, setAvailable, openChat]);
+  }, [workspaceActive, activityOpen, setAvailable, openChat]);
   const conversation = <div className="um-agent-conversation" aria-label={t('小宇对话')} onKeyDown={event => { if (activityOpen && event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); closeChat(); } }}><WorkspaceActiveContext.Provider value={workspaceActive && (!activityOpen || chatVisible)}>{workspace?.chatContext}{children}</WorkspaceActiveContext.Provider></div>;
   const directory = useDirectoryWidth();
   if (!native) return <div className="h-full flex um-motion-surface animate-in fade-in duration-[180ms] ease-out">{sidebar}{children}</div>;
