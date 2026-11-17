@@ -34,6 +34,9 @@ const GuidedTour: React.FC<GuidedTourProps> = ({ steps, onDismiss }) => {
       scrollToFirstStep
       options={{
         primaryColor: BRAND_BLUE,
+        backgroundColor: 'hsl(var(--popover))',
+        arrowColor: 'hsl(var(--popover))',
+        textColor: 'hsl(var(--popover-foreground))',
         zIndex: 10000,
         showProgress: true,
         skipBeacon: true,
@@ -60,10 +63,11 @@ const GuidedTour: React.FC<GuidedTourProps> = ({ steps, onDismiss }) => {
         },
         tooltipContent: {
           fontSize: '0.875rem',
-          color: '#6b7280',
+          color: 'hsl(var(--muted-foreground))',
           paddingTop: '0.25rem',
         },
         buttonPrimary: {
+          color: '#fff',
           borderRadius: '0.75rem',
           padding: '0.5rem 1rem',
           fontSize: '0.8125rem',
@@ -74,10 +78,10 @@ const GuidedTour: React.FC<GuidedTourProps> = ({ steps, onDismiss }) => {
           padding: '0.5rem 1rem',
           fontSize: '0.8125rem',
           fontWeight: 600,
-          color: '#6b7280',
+          color: 'hsl(var(--muted-foreground))',
         },
         buttonSkip: {
-          color: '#9ca3af',
+          color: 'hsl(var(--muted-foreground))',
           fontSize: '0.8125rem',
           fontWeight: 500,
         },
