@@ -907,6 +907,56 @@
   color: var(--kb-text);
 }
 
+/* One-Click Return to Overall Framework (Overview Button & Floating FAB) */
+.kb-overview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--kb-text);
+  background: color-mix(in srgb, var(--kb-surface) 92%, var(--kb-bg));
+  border: 1px solid color-mix(in srgb, var(--kb-border) 85%, transparent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+.kb-overview-btn:hover {
+  background: var(--um-color-hover);
+  border-color: var(--kb-accent);
+  color: var(--kb-accent);
+}
+.kb-overview-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 75;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--kb-text);
+  background: color-mix(in srgb, var(--kb-surface) 88%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--kb-border) 80%, transparent);
+  box-shadow: 0 10px 28px -4px rgba(0, 0, 0, 0.14), 0 4px 10px -2px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, border-color 0.15s ease;
+}
+.kb-overview-fab:hover {
+  transform: translateY(-1px);
+  border-color: var(--kb-accent);
+  color: var(--kb-accent);
+}
+
 /* Fullscreen Knowledge Block Card & Study Dialog */
 .kb-card-actions {
   display: flex;
