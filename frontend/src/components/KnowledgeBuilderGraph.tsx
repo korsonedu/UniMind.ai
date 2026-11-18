@@ -543,6 +543,19 @@ export function KnowledgeBuilderGraph({
     setTooltip(null);
   }, []);
 
+  const resetToOverallFramework = useCallback(() => {
+    setFullscreenBlockId(null);
+    updateOpenIds(() => new Set());
+    setSearch('');
+    setHoveredBlockId(null);
+    setHoveredEdge(null);
+    setFlashBlockId(null);
+    hideTooltip();
+    window.requestAnimationFrame(() => {
+      viewportRef.current?.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
+    });
+  }, [hideTooltip, updateOpenIds]);
+
   const handleViewportMouseDown = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
@@ -623,6 +636,7 @@ export function KnowledgeBuilderGraph({
             </button>)}
           </div>}
         </div>
+        <button type="button" className="kb-overview-btn" onClick={resetToOverallFramework} title={t('收起所有展开的知识块并回到总体框架起点')}><ArrowsInSimple size={15} /><span>{t('回到总体框架')}</span></button>
       </header>
 
       <div
@@ -771,6 +785,7 @@ export function KnowledgeBuilderGraph({
                                 {t('资源与任务')}
                               </button>
                             )}
+                            <button type="button" className="kb-overview-btn" onClick={resetToOverallFramework}><ArrowsInSimple size={14} /> {t('回到总体框架')}</button>
                             <button
                               type="button"
                               className="kb-fullscreen-btn"
@@ -953,6 +968,10 @@ export function KnowledgeBuilderGraph({
           })}
         </div>
       </div>
+
+      {openIds.size > 0 && fullscreenBlockId === null && (
+        <button type="button" className="kb-overview-fab" onClick={resetToOverallFramework} aria-label={t('一键回到总体框架')}><ArrowsInSimple size={15} /><span>{t('回到总体框架')}</span></button>
+      )}
 
       <div
         className={`kb-edge-tooltip${tooltip ? ' show' : ''}`}
