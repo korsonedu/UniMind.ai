@@ -1,5 +1,5 @@
 import { t, useLocale } from '@/i18n';
-import { MagnifyingGlass, X } from '@phosphor-icons/react';
+import { ArrowsInSimple, ArrowsOutSimple, MagnifyingGlass, X } from '@phosphor-icons/react';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import type { BaselineSummary, KnowledgeTreeBuildDetail } from '@/types/knowledgeBuilder';
@@ -243,7 +243,6 @@ function computeInnerWiresForCard(stepsEl: HTMLElement, block: AdaptedBlock): In
 export function KnowledgeBuilderGraph({
   tree,
   headerLeftSlot,
-  headerRightSlot,
   selectedBlockIds,
   blockProgress,
   onToggleBlockSelection,
@@ -278,7 +277,7 @@ export function KnowledgeBuilderGraph({
   const searchResults = searchTerm ? adapted.blocks.filter(block =>
     [block.shortTitle, block.code, block.narrativeSummary, ...block.steps.flatMap(step => step.atoms.map(item => item.atom.name))]
       .some(value => normalizeTopicName(value).includes(searchTerm))) : [];
-  const [edgeMode, setEdgeMode] = useState<EdgeFilterMode>('retained');
+  const edgeMode: EdgeFilterMode = 'retained';
   const [openByBuild, setOpenByBuild] = useState<Record<string, Set<number>>>({});
   const openIds = useMemo(() => {
     const existing = openByBuild[adapted.buildId];
@@ -315,6 +314,27 @@ export function KnowledgeBuilderGraph({
   const [hoveredEdge, setHoveredEdge] = useState<AdaptedEdge | null>(null);
   const [flashBlockId, setFlashBlockId] = useState<number | null>(null);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const [fullscreenBlockId, setFullscreenBlockId] = useState<number | null>(null);
+
+  const openBlockFullscreen = useCallback((blockId: number) => {
+    updateOpenIds(prev => new Set(prev).add(blockId));
+    setFullscreenBlockId(blockId);
+  }, [updateOpenIds]);
+
+  const exitBlockFullscreen = useCallback(() => {
+    setFullscreenBlockId(null);
+  }, []);
+
+  useEffect(() => {
+    if (fullscreenBlockId === null) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        exitBlockFullscreen();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [fullscreenBlockId, exitBlockFullscreen]);
 
   const activeEdges = useMemo(
     () => (edgeMode === 'retained' ? adapted.edges.filter(e => e.isRetained) : adapted.edges),
@@ -380,6 +400,19 @@ export function KnowledgeBuilderGraph({
   const scheduleMeasure = useCallback(() => {
     setLayoutTick(t => t + 1);
   }, []);
+
+  useEffect(() => {
+    let raf2 = 0;
+    const raf1 = window.requestAnimationFrame(() => {
+      raf2 = window.requestAnimationFrame(() => {
+        scheduleMeasure();
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(raf1);
+      if (raf2) window.cancelAnimationFrame(raf2);
+    };
+  }, [fullscreenBlockId, scheduleMeasure]);
 
   useEffect(() => {
     const mapEl = mapRef.current;
@@ -455,16 +488,13 @@ export function KnowledgeBuilderGraph({
 
   const toggleBlock = useCallback((blockId: number) => {
     if (dragRef.current.moved) return;
+    setFullscreenBlockId(curr => (curr === blockId ? null : curr));
     updateOpenIds(prev => {
       const next = new Set(prev);
       if (next.has(blockId)) next.delete(blockId);
       else next.add(blockId);
       return next;
     });
-  }, [updateOpenIds]);
-
-  const collapseAll = useCallback(() => {
-    updateOpenIds(() => new Set());
   }, [updateOpenIds]);
 
   const jumpToBlock = useCallback((targetBlockId: number) => {
@@ -474,6 +504,9 @@ export function KnowledgeBuilderGraph({
       next.add(targetBlockId);
       return next;
     });
+    if (fullscreenBlockId !== null) {
+      setFullscreenBlockId(targetBlockId);
+    }
     setFlashBlockId(targetBlockId);
     window.setTimeout(() => {
       setFlashBlockId(curr => (curr === targetBlockId ? null : curr));
@@ -496,7 +529,7 @@ export function KnowledgeBuilderGraph({
         });
       });
     });
-  }, [updateOpenIds]);
+  }, [fullscreenBlockId, updateOpenIds]);
 
   const showTooltip = useCallback((e: ReactMouseEvent<SVGElement>, title: string, body: string) => {
     const pad = 16;
@@ -571,67 +604,26 @@ export function KnowledgeBuilderGraph({
       <header className="kb-header">
         <div className="kb-brand">
           {headerLeftSlot}
-          <p className="kb-status">
-            {t('{0} 个知识块 · {1} 个原子 · {2} 条精选单向 + {3} 条双向（候选 {4}）', { 0: adapted.blocks.length, 1: adapted.atomCount, 2: adapted.retainedUniCount, 3: adapted.retainedBiCount, 4: adapted.totalEdgeCount })}
-          </p>
         </div>
 
-      <div className="kb-find-bar">
-        <form className="kb-find-field" onSubmit={event => {
-          event.preventDefault();
-          if (searchResults[0]) { jumpToBlock(searchResults[0].id); setSearch(''); }
-        }}>
-          <MagnifyingGlass size={17} aria-hidden="true" />
-          <input aria-label={t('查找知识块或知识点')} placeholder={t('查找知识块或知识点')} value={search}
-            onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setSearch(''); }} />
-          {search && <button type="button" aria-label={t('清除搜索')} onClick={() => setSearch('')}><X size={16} /></button>}
-        </form>
-        {searchTerm && <div className="kb-find-results" aria-label={t('搜索结果')}>
-          <p role="status">{searchResults.length ? t('找到 {0} 个知识块', { 0: searchResults.length }) : t('没有找到匹配的知识块')}</p>
-          {searchResults.map(block => <button type="button" key={block.id} onClick={() => { jumpToBlock(block.id); setSearch(''); }}>
-            <span>{block.shortTitle}</span><small>{block.domainTitle}</small>
-          </button>)}
-        </div>}
-      </div>
-
-        <div className="kb-nav">
-          <button
-            type="button"
-            className={edgeMode === 'retained' ? 'active' : undefined}
-            aria-pressed={edgeMode === 'retained'}
-            onClick={() => setEdgeMode('retained')}
-          >
-            {t('主干精选 ({0})', { 0: adapted.retainedCount })}
-          </button>
-          <button
-            type="button"
-            className={edgeMode === 'all' ? 'active' : undefined}
-            aria-pressed={edgeMode === 'all'}
-            onClick={() => setEdgeMode('all')}
-          >
-            {t('全量候选 ({0})', { 0: adapted.totalEdgeCount })}
-          </button>
-          <button type="button" onClick={() => { if (adapted.entryBlockId !== null) jumpToBlock(adapted.entryBlockId); }} disabled={adapted.entryBlockId === null}>
-            {t('定位入口块')}
-          </button>
-          <button type="button" onClick={collapseAll} disabled={openIds.size === 0}>
-            {t('收起全部')}
-          </button>
-          {headerRightSlot}
+        <div className="kb-find-bar">
+          <form className="kb-find-field" onSubmit={event => {
+            event.preventDefault();
+            if (searchResults[0]) { jumpToBlock(searchResults[0].id); setSearch(''); }
+          }}>
+            <MagnifyingGlass size={17} aria-hidden="true" />
+            <input aria-label={t('查找知识块或知识点')} placeholder={t('查找知识块或知识点')} value={search}
+              onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setSearch(''); }} />
+            {search && <button type="button" aria-label={t('清除搜索')} onClick={() => setSearch('')}><X size={16} /></button>}
+          </form>
+          {searchTerm && <div className="kb-find-results" aria-label={t('搜索结果')}>
+            <p role="status">{searchResults.length ? t('找到 {0} 个知识块', { 0: searchResults.length }) : t('没有找到匹配的知识块')}</p>
+            {searchResults.map(block => <button type="button" key={block.id} onClick={() => { jumpToBlock(block.id); setSearch(''); }}>
+              <span>{block.shortTitle}</span><small>{block.domainTitle}</small>
+            </button>)}
+          </div>}
         </div>
       </header>
-
-      <div className="kb-legend">
-        {adapted.domains.map(dom => (
-          <span key={dom.id}>
-            <i style={{ background: dom.color }} />
-            {dom.title}
-          </span>
-        ))}
-        <span>{t('—→ 主干单向依赖')}</span>
-        <span>{t('- - ↔ 双向强关联')}</span>
-        <span className="kb-tip">{t('拖动画布 · 悬停块或连线聚焦上下游 · 点击块卡片原地展开')}</span>
-      </div>
 
       <div
         ref={viewportRef}
@@ -737,12 +729,14 @@ export function KnowledgeBuilderGraph({
                   const spine = resources.find(resource => resource.asset_track === 'spine');
                   const hasSpotlight = resources.some(resource => resource.asset_track === 'spotlight');
                   const hasWiki = resources.some(resource => resource.asset_track === 'wiki');
-                  const isOpen = openIds.has(block.id);
+                  const isFullscreen = fullscreenBlockId === block.id;
+                  const isOpen = openIds.has(block.id) || isFullscreen;
                   const isHighlighted = highlightedBlockIds.has(block.id) || flashBlockId === block.id;
                   const isDimmed = hasHoverFocus && !isHighlighted;
                   const cardClass = [
                     'kb-card',
                     isOpen ? 'open' : '',
+                    isFullscreen ? 'is-fullscreen' : '',
                     isHighlighted ? 'highlighted' : '',
                     isDimmed ? 'dimmed' : '',
                   ]
@@ -764,6 +758,29 @@ export function KnowledgeBuilderGraph({
                       onMouseEnter={() => setHoveredBlockId(block.id)}
                       onMouseLeave={() => setHoveredBlockId(curr => (curr === block.id ? null : curr))}
                     >
+                      {isFullscreen && (
+                        <div className="kb-fullscreen-bar">
+                          <strong>{block.code} · {block.shortTitle}</strong>
+                          <div className="kb-card-actions">
+                            {onStudyBlock && (
+                              <button
+                                type="button"
+                                className="kb-study-open"
+                                onClick={() => onStudyBlock(block.id)}
+                              >
+                                {t('资源与任务')}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="kb-fullscreen-btn"
+                              onClick={exitBlockFullscreen}
+                            >
+                              <ArrowsInSimple size={14} /> {t('退出全屏 (Esc)')}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       {onToggleBlockSelection && <label className="kb-select-block"><input type="checkbox" checked={selectedBlockIds?.has(block.id) ?? false}
                         onChange={() => onToggleBlockSelection(block.id)} />{t('加入项目目标')}</label>}
                       <button
@@ -790,7 +807,24 @@ export function KnowledgeBuilderGraph({
                           {renderTopicBadges([block.shortTitle, ...block.steps.flatMap(step => step.atoms.map(item => item.atom.name))])}
                         </span>
                       </button>
-                      {onStudyBlock && <button type="button" className="kb-study-open" aria-label={`${block.shortTitle}：学习资源与任务检测`} onClick={() => onStudyBlock(block.id)}>资源与任务</button>}
+                      <div className="kb-card-actions">
+                        {onStudyBlock && <button type="button" className="kb-study-open" aria-label={`${block.shortTitle}：学习资源与任务检测`} onClick={() => onStudyBlock(block.id)}>{t('资源与任务')}</button>}
+                        <button
+                          type="button"
+                          className="kb-fullscreen-btn"
+                          onClick={() => (isFullscreen ? exitBlockFullscreen() : openBlockFullscreen(block.id))}
+                        >
+                          {isFullscreen ? (
+                            <>
+                              <ArrowsInSimple size={14} /> {t('退出全屏')}
+                            </>
+                          ) : (
+                            <>
+                              <ArrowsOutSimple size={14} /> {t('全屏查看')}
+                            </>
+                          )}
+                        </button>
+                      </div>
 
                       {isOpen && (
                         <div className="kb-panel">
@@ -813,9 +847,6 @@ export function KnowledgeBuilderGraph({
                               </a>;
                             })}
                           </nav>}
-                          <div className="kb-hint">
-                            {t('悬停知识点可查看学习目标与易错点；实线框为必学原子，虚线框为拓展延伸；点击先修接口可跳转定位')}
-                          </div>
 
                           <div
                             className="kb-steps"
@@ -901,7 +932,6 @@ export function KnowledgeBuilderGraph({
                                     >
                                       <div>{item.atom.name}</div>
                                       <span className="kb-badges">{renderTopicBadges([item.atom.name])}</span>
-                                      {item.isInterfacePoint ? <b>{t('◆ 跨块接口点')}</b> : null}
                                     </div>
                                   ))}
                                 </div>
@@ -912,9 +942,6 @@ export function KnowledgeBuilderGraph({
                           <div className="kb-summary">
                             <strong>{t('本块回答主线串联')}</strong>
                             <p>{block.narrativeSummary || t('暂无主线串联说明')}</p>
-                            <p className="kb-orphan">
-                              {t('原子覆盖检查：本块共 {0} 个知识原子（必学 {1} · 拓展 {2}），分 {3} 步展开。', { 0: block.totalAtoms, 1: block.coreCount, 2: block.extensionCount, 3: block.steps.length })}
-                            </p>
                           </div>
                         </div>
                       )}

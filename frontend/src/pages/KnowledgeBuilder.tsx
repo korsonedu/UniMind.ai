@@ -1,5 +1,5 @@
 import { t, useLocale } from '@/i18n';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowClockwise, Plus, Spinner } from '@phosphor-icons/react';
@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { AppleSelect } from '@/components/ui/apple-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import '../styles/knowledge-builder.css';
@@ -79,6 +80,42 @@ export default function KnowledgeBuilder() {
   const [newSubject, setNewSubject] = useState(searchParams.get('subject') || '');
   const [newArchetype, setNewArchetype] = useState<BuildArchetype>('auto');
   const [formError, setFormError] = useState<string | null>(null);
+  const [chromeHover, setChromeHover] = useState(false);
+  const [selectMenuOpen, setSelectMenuOpen] = useState(false);
+  const hideTimerRef = useRef<number | null>(null);
+
+  const clearHideTimer = useCallback(() => {
+    if (hideTimerRef.current !== null) {
+      window.clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  }, []);
+
+  const showChrome = useCallback(() => {
+    clearHideTimer();
+    setChromeHover(true);
+  }, [clearHideTimer]);
+
+  const scheduleHideChrome = useCallback(() => {
+    clearHideTimer();
+    hideTimerRef.current = window.setTimeout(() => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      if (
+        activeEl &&
+        activeEl.closest('.kb-top-chrome, .kb-header') &&
+        (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')
+      ) {
+        return;
+      }
+      setChromeHover(false);
+    }, 350);
+  }, [clearHideTimer]);
+
+  useEffect(() => {
+    return () => clearHideTimer();
+  }, [clearHideTimer]);
+
+  const chromeHidden = !chromeHover && !selectMenuOpen;
 
   const listQuery = useQuery({
     queryKey: queryKeys.knowledgeBuilder.list(userId),
@@ -164,25 +201,48 @@ export default function KnowledgeBuilder() {
 
   const buildPicker = (
     <div className="kb-subject-picker">
-      <select
-        aria-label={t('选择知识结构图谱')}
+      <AppleSelect
+        ariaLabel={t('选择知识结构图谱')}
         className="kb-subject-select"
         value={activeBuildId ?? ''}
-        onChange={e => {
-          const nextId = e.target.value;
+        onOpenChange={setSelectMenuOpen}
+        options={
+          builds.length === 0 && effectiveSummary
+            ? [
+                {
+                  value: effectiveSummary.id,
+                  label: effectiveSummary.subject,
+                  badge: effectiveSummary.status !== 'COMPLETED' ? t(STATUS_LABEL[effectiveSummary.status]) : undefined,
+                },
+              ]
+            : builds.map(b => ({
+                value: b.id,
+                label: b.subject,
+                badge: b.status !== 'COMPLETED' ? t(STATUS_LABEL[b.status]) : undefined,
+              }))
+        }
+        footerActions={[
+          {
+            label: t('新建学科…'),
+            icon: <Plus size={14} weight="bold" />,
+            onSelect: () => {
+              setFormError(null);
+              setCreateOpen(true);
+            },
+          },
+          ...(detailQuery.data
+            ? [
+                {
+                  label: t('公开资产池 & 整树挂载…'),
+                  onSelect: () => setPublicAssetsBuildId(detailQuery.data!.id),
+                },
+              ]
+            : []),
+        ]}
+        onValueChange={nextId => {
           if (nextId) navigate({ pathname: `/knowledge-builder/${encodeURIComponent(nextId)}`, search: searchParams.toString() });
         }}
-      >
-        {builds.length === 0 && effectiveSummary && (
-          <option value={effectiveSummary.id}>{effectiveSummary.subject}</option>
-        )}
-        {builds.map(b => (
-          <option key={b.id} value={b.id}>
-            {b.subject}
-            {b.status !== 'COMPLETED' ? ` · ${t(STATUS_LABEL[b.status])}` : ''}
-          </option>
-        ))}
-      </select>
+      />
     </div>
   );
 
@@ -230,18 +290,17 @@ export default function KnowledgeBuilder() {
             <label htmlFor="kb-new-archetype" className="text-sm font-medium text-foreground">
               {t('学科结构范式')}
             </label>
-            <select
+            <AppleSelect
               id="kb-new-archetype"
+              ariaLabel={t('学科结构范式')}
               value={newArchetype}
-              onChange={e => setNewArchetype(e.target.value as BuildArchetype)}
-              className="um-focus-field flex h-10 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm text-foreground"
-            >
-              {ARCHETYPE_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>
-                  {t(opt.label)}
-                </option>
-              ))}
-            </select>
+              onValueChange={val => setNewArchetype(val as BuildArchetype)}
+              options={ARCHETYPE_OPTIONS.map(opt => ({
+                value: opt.value,
+                label: t(opt.label),
+              }))}
+              className="w-full"
+            />
           </div>
 
           {formError && (
@@ -276,46 +335,30 @@ export default function KnowledgeBuilder() {
   // Render full 431 v3 interactive graph when completed detail data is ready.
   if (effectiveSummary?.status === 'COMPLETED' && detailQuery.data) {
     return (
-      <div className="kb-unified-workspace">
-        {workspaceTabs}
-        <div className="kb-plan-toolbar">
-          <Button type="button" variant="outline" onClick={() => setPublicAssetsBuildId(detailQuery.data.id)}>
-            {t('公开资产池 & 整树挂载')}
-          </Button>
-          <span aria-live="polite">{t('已选择 {0} 个目标学习块', { 0: selectedBlocks.size })}</span>
-          {!!selectedBlocks.size && <Button type="button" variant="ghost" disabled={planning} onClick={() => setSelection({ buildId: activeBuildId, blocks: new Set() })}>{t('清空选择')}</Button>}
-          <Button type="button" variant="outline" disabled={!selectedBlocks.size || openingProject || planning || !projectQuery.data?.planning_enabled} onClick={async () => {
-            if (!chat.projectId || !projectQuery.data) return;
-            setPlanning(true); setPlanningError('');
-            try {
-              const { data } = await api.post<ProjectLearning>(`/ai/projects/${chat.projectId}/learning/knowledge/`, {
-                action: 'from_build', build_id: detailQuery.data.id, block_ids: [...selectedBlocks],
-                revision: projectQuery.data.revision, depth: 'apply',
-              });
-              await queryClient.invalidateQueries({ queryKey: learningKey(userId, chat.projectId) });
-              await queryClient.invalidateQueries({ queryKey: ['learning-knowledge-maps', userId, chat.projectId] });
-              navigate(learningUrl('/xiaoyu?learning_view=proposal', data.project_id, chat.conversationId || undefined));
-            } catch (error) {
-              setPlanningError(normalizeApiError(error, t('学习路径暂时无法准备，请重试。')).message);
-              void projectQuery.refetch();
-            } finally { setPlanning(false); }
-          }}>{planning ? t('正在准备学习路径…') : t('带回小宇确认学习路径')}</Button>
-          {!projectQuery.data?.planning_enabled && <p>{t('采用路径需要在规划项目中进行。')}<Link to="/xiaoyu?new=project">{t('新建规划项目')}</Link></p>}
-          {planningError && <p role="alert">{planningError}</p>}
-          <Button type="button" variant="ghost" onClick={() => navigate(learningUrl('/xiaoyu?learning_view=knowledge', chat.projectId, chat.conversationId || undefined))}>{t('返回小宇学习路径')}</Button>
-          {!!detailQuery.data.requirements && Object.keys(detailQuery.data.requirements).length > 0 && <details className="kb-requirements-summary">
-            <summary>{t('本次构建需求 · {0}', { 0: String(detailQuery.data.requirements.learning_goal || t('自定义学习需求')) })}</summary>
-            <p>{t('重点模块：')}{Array.isArray(detailQuery.data.requirements.scope_inclusions) ? detailQuery.data.requirements.scope_inclusions.join('、') : t('未指定')}</p>
-            <p>{t('深度：')}{String(detailQuery.data.requirements.depth_preference || t('未指定'))}</p>
-            <p>{t('推荐入口：')}{Array.isArray(detailQuery.data.requirements.suggested_entry_topics) ? detailQuery.data.requirements.suggested_entry_topics.join('、') : t('未指定')}</p>
-            <p>{String((detailQuery.data.requirements.baseline_summary as Record<string, unknown> | undefined)?.entry_strategy || '')}</p>
-          </details>}
+      <div
+        className="kb-unified-workspace"
+        data-chrome-hidden={chromeHidden ? 'true' : 'false'}
+        onMouseMove={e => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const inTopHeader = (e.target as HTMLElement).closest?.('.kb-top-chrome, .kb-header, .kb-chrome-sensor');
+          if (e.clientY - rect.top <= 14 || inTopHeader) showChrome();
+          else if (chromeHover && !inTopHeader) scheduleHideChrome();
+        }}
+        onMouseLeave={() => scheduleHideChrome()}
+      >
+        <div className="kb-chrome-sensor" onMouseEnter={showChrome}>
+          <button type="button" className="kb-chrome-pill" onClick={showChrome} aria-label={t('展开顶部工具栏')}>
+            <span className="kb-chrome-pill-bar" />
+            <span>{t('工具栏')}</span>
+          </button>
+        </div>
+        <div className="kb-top-chrome" onMouseEnter={showChrome} onMouseLeave={scheduleHideChrome}>
+          {workspaceTabs}
         </div>
         <KnowledgeBuilderGraph
           key={detailQuery.data.id}
           tree={detailQuery.data}
           headerLeftSlot={buildPicker}
-          headerRightSlot={createButton}
           blockProgress={projectQuery.data?.knowledge?.builder?.build_id === detailQuery.data.id
             ? Object.fromEntries(projectQuery.data.knowledge.nodes.flatMap(node => (node.builder_block_ids || []).map(id => [id, node.learning_status || 'unassessed']))) : undefined}
           selectedBlockIds={selectedBlocks}
@@ -327,6 +370,55 @@ export default function KnowledgeBuilder() {
           })}
           onStudyBlock={setStudyBlockId}
         />
+        {selectedBlocks.size > 0 && (
+          <div className="kb-selection-dock" role="region" aria-label={t('已选知识块操作')}>
+            <span aria-live="polite">{t('已选择 {0} 个目标学习块', { 0: selectedBlocks.size })}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={planning}
+              onClick={() => setSelection({ buildId: activeBuildId, blocks: new Set() })}
+            >
+              {t('清空')}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={openingProject || planning || !projectQuery.data?.planning_enabled}
+              onClick={async () => {
+                if (!chat.projectId || !projectQuery.data) return;
+                setPlanning(true);
+                setPlanningError('');
+                try {
+                  const { data } = await api.post<ProjectLearning>(`/ai/projects/${chat.projectId}/learning/knowledge/`, {
+                    action: 'from_build',
+                    build_id: detailQuery.data.id,
+                    block_ids: [...selectedBlocks],
+                    revision: projectQuery.data.revision,
+                    depth: 'apply',
+                  });
+                  await queryClient.invalidateQueries({ queryKey: learningKey(userId, chat.projectId) });
+                  await queryClient.invalidateQueries({ queryKey: ['learning-knowledge-maps', userId, chat.projectId] });
+                  navigate(learningUrl('/xiaoyu?learning_view=proposal', data.project_id, chat.conversationId || undefined));
+                } catch (error) {
+                  setPlanningError(normalizeApiError(error, t('学习路径暂时无法准备，请重试。')).message);
+                  void projectQuery.refetch();
+                } finally {
+                  setPlanning(false);
+                }
+              }}
+            >
+              {planning ? t('正在准备学习路径…') : t('带回小宇确认学习路径')}
+            </Button>
+            {!projectQuery.data?.planning_enabled && (
+              <Link to="/xiaoyu?new=project" className="text-xs underline">
+                {t('需先新建规划项目')}
+              </Link>
+            )}
+            {planningError && <span role="alert" className="text-xs text-destructive">{planningError}</span>}
+          </div>
+        )}
         {detailQuery.data.blocks.filter(block => block.id === studyBlockId).map(block => <BlockStudyDialog
           key={`${detailQuery.data.id}:${block.id}`} tree={detailQuery.data} block={block}
           project={projectQuery.data}

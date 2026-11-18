@@ -122,7 +122,7 @@ export function BlockStudyDialog({ tree, block, project, onClose, onChanged }: P
     </article>;
   };
   return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-    <DialogContent className="sm:max-w-[900px] max-h-[90dvh] overflow-y-auto kb-study-dialog">
+    <DialogContent className="w-screen max-w-none sm:max-w-none h-dvh max-h-dvh rounded-none border-0 p-6 md:p-10 overflow-y-auto kb-study-dialog kb-study-dialog--fullscreen">
       <DialogHeader><DialogTitle>{block.code} · {block.short_title}</DialogTitle>
         <DialogDescription>第 {block.layer} 层 · 学习资源与项目检测</DialogDescription></DialogHeader>
       <p className="text-sm text-muted-foreground">检测与小宇共用项目任务、原始作答和后续建议。本次通过后仍需换题检验。</p>
