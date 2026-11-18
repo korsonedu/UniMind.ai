@@ -205,8 +205,47 @@ class BlockResource(models.Model):
     course_id = models.PositiveIntegerField(null=True, blank=True)
     library_resource_id = models.PositiveIntegerField(null=True, blank=True)
     marketplace_listing_id = models.PositiveIntegerField(null=True, blank=True)
+    origin = models.CharField(max_length=16, choices=[('auto', 'auto'), ('manual', 'manual')], default='manual')
+    match_method = models.CharField(max_length=24, blank=True, default='')
+    match_score = models.FloatField(default=0.0)
+    upvotes = models.PositiveIntegerField(default=0)
+    downvotes = models.PositiveIntegerField(default=0)
+    is_dismissed = models.BooleanField(default=False)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_block_resources')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ('id',)
+
+
+class BlockResourceFeedback(models.Model):
+    resource = models.ForeignKey(BlockResource, on_delete=models.CASCADE, related_name='feedbacks')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='kb_resource_feedbacks')
+    vote = models.SmallIntegerField(choices=[(1, 'up'), (-1, 'down')])
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['resource', 'user'], name='kb_resource_feedback_unique')]
+
+
+class ConceptAssetIndex(models.Model):
+    subject_domain = models.CharField(max_length=120, db_index=True)
+    concept_name = models.CharField(max_length=200, db_index=True)
+    goal_statement = models.TextField(blank=True)
+    key_elements = models.JSONField(default=list)
+    public_asset = models.ForeignKey(PublicAssetCatalog, on_delete=models.CASCADE, related_name='concept_alignments')
+    segment_locator = models.CharField(max_length=120, blank=True, default='')
+    segment_title = models.CharField(max_length=200, blank=True, default='')
+    segment_url = models.CharField(max_length=1000, blank=True, default='')
+    asset_track = models.CharField(max_length=24, choices=PublicAssetCatalog.AssetTrack.choices, default=PublicAssetCatalog.AssetTrack.SPOTLIGHT)
+    pedagogical_role = models.CharField(max_length=32, blank=True, default='')
+    quality_score = models.FloatField(default=0.0)
+    upvotes = models.PositiveIntegerField(default=0)
+    downvotes = models.PositiveIntegerField(default=0)
+    is_disabled = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['subject_domain', 'concept_name', 'public_asset', 'segment_locator'], name='kb_concept_asset_unique')]

@@ -27,6 +27,7 @@ from .models import BlockResource, BlockStepAtom
 from .serializers import BlockResourceSerializer
 
 logger = logging.getLogger(__name__)
+_DEFAULT_PUBLIC_TEXT = learning_resources.public_text
 
 
 def _assignments(block):
@@ -84,7 +85,7 @@ def visible_block_resources(user, block, request=None, explicit_region=''):
     # A curated/shared build must not expose another learner's private library snapshots.
     from .public_asset_service import filter_resources_for_region, get_region_preference
 
-    resources = block.resources.filter(~Q(source_kind='library') | Q(created_by=user))
+    resources = block.resources.filter(is_dismissed=False).filter(~Q(source_kind='library') | Q(created_by=user))
     if resources.filter(source_kind='course').exists():
         resources = resources.filter(~Q(source_kind='course') | Q(course_id__in=_courses(user).values('pk')))
     region = get_region_preference(user, request, explicit_region)
@@ -97,8 +98,13 @@ def auto_mount_internal_resources(build):
             fields = {key: value for key, value in candidate.items() if key != 'source_kind'}
             source = candidate['source_kind']
             lookup = {'course_id': fields['course_id']} if source == 'course' else {'library_resource_id': fields['library_resource_id']}
+            if block.resources.filter(source_kind=source, **lookup).exists():
+                continue
+            if block.resources.filter(origin='auto', asset_track='spotlight', is_dismissed=False).count() >= 3:
+                break
             BlockResource.objects.get_or_create(block=block, source_kind=source, **lookup,
                 defaults={'build': build, 'created_by': build.created_by,
+                          'origin': 'auto', 'match_method': f'internal_{source}',
                           **{key: value for key, value in fields.items() if key not in lookup}})
 
 
@@ -107,6 +113,11 @@ def search_block_web_resources(block, query='', region_pref='cn'):
     query = query.strip() or f'{block.build.subject} {block.short_title}'
     if len(query) > 300:
         raise ValidationError('查询词最多 300 字，请缩小搜索范围。')
+    if learning_resources.public_text is _DEFAULT_PUBLIC_TEXT and config._get_api_key():
+        from .public_asset_discovery import search_public_web
+        results = search_public_web(query, region_pref=region_pref, limit=5)
+        if results:
+            return [{key: item.get(key, '') for key in ('title', 'url', 'summary')} for item in results]
     try:
         _, xml = learning_resources.public_text('https://www.bing.com/search?format=rss&q=' + quote(query))
         root = ElementTree.fromstring(xml)

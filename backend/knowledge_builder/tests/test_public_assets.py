@@ -670,3 +670,420 @@ def test_domestic_patch_rejects_legacy_forbidden_resource(tree, auth_client, url
     assert ('百度百科' if is_baidu_url(url) else '当前为国内版环境') in str(response.data)
     resource.refresh_from_db()
     assert resource.block_id == block.pk and resource.locator == '旧定位'
+
+
+def test_deepseek_search_parses_official_response_and_filters_web(monkeypatch):
+    from knowledge_builder import public_asset_discovery as discovery
+    monkeypatch.setattr('ai_engine.config._get_api_key', lambda: 'test-key')
+    monkeypatch.delenv('TENCENT_WSA_SECRET_ID', raising=False)
+    monkeypatch.delenv('TENCENT_WSA_SECRET_KEY', raising=False)
+    calls = []
+
+    def post(url, **kwargs):
+        calls.append((url, kwargs))
+        assert url == 'https://api.deepseek.com/v1/tools/search'
+        assert kwargs['headers']['Authorization'] == 'Bearer test-key'
+        assert kwargs['json'] == {'query': '合格投资者'}
+        assert kwargs['timeout'] == 15
+        payload = {'results': [
+            {'title': '私募基金合格投资者定义', 'url': 'https://www.csrc.gov.cn/rules/investor',
+             'snippet': '合格投资者认定条件', 'site_name': '中国证监会',
+             'authority': 3, 'rerank_score': 0.91, 'date': '2025-01-01'},
+            {'title': '重复', 'url': 'https://www.csrc.gov.cn/rules/investor#top'},
+            {'title': '百科', 'url': 'https://baike.baidu.com/item/合格投资者'},
+            {'title': '境外', 'url': 'https://www.youtube.com/watch?v=investor'},
+        ]}
+        return SimpleNamespace(raise_for_status=lambda: None, json=lambda: payload)
+
+    monkeypatch.setattr(discovery.httpx, 'post', post)
+    parsed = discovery.DeepSeekSearchProvider().search('合格投资者')
+    assert parsed[0]['summary'] == '合格投资者认定条件'
+    assert parsed[0]['authority'] == 3 and parsed[0]['rerank_score'] == 0.91
+    assert parsed[0]['provider'] == 'deepseek' and parsed[0]['site_name'] == '中国证监会'
+    results = discovery.search_public_web('合格投资者', limit=8)
+    assert len(results) == 1
+    assert results[0]['url'] == 'https://www.csrc.gov.cn/rules/investor'
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize('candidate', [
+    {'title': '私募股权合格投资者', 'url': 'https://baike.baidu.com/item/investor'},
+    {'title': '私募股权合格投资者', 'url': 'https://www.youtube.com/watch?v=investor'},
+    {'title': '私募股权合格投资者', 'url': 'http://www.csrc.gov.cn/investor'},
+    {'title': '私募股权保过班 包过 扫码领取 免费领资料', 'summary': '加微信代报名',
+     'url': 'https://example.cn/course'},
+    {'title': '基金从业《证券投资基金基础知识》全套精讲', 'summary': '证券投资基金课程',
+     'url': 'https://www.bilibili.com/video/BV1unrelated', 'asset_track': 'spine'},
+    {'title': '基金从业《基金法律法规》精讲', 'summary': '基金法律法规考试',
+     'url': 'https://www.bilibili.com/video/BV1lawonly', 'asset_track': 'spotlight'},
+    {'title': '手机配件促销购买', 'summary': '商城秒杀', 'url': 'https://item.jd.com/123.html'},
+])
+def test_auto_discovery_quality_rejects_unsafe_noise_and_other_subject(candidate):
+    from knowledge_builder.public_asset_discovery import evaluate_candidate_quality
+    assert evaluate_candidate_quality(candidate, '基金从业《私募股权投资基金基础知识》',
+                                      ['合格投资者', '合格投资者认定条件']) == 0
+
+
+def test_auto_discovery_quality_prefers_current_authoritative_regulations():
+    from knowledge_builder.public_asset_discovery import evaluate_candidate_quality
+    candidate = dict(title='2025年私募基金合格投资者认定规定',
+                     summary='私募股权投资基金合格投资者认定条件和资产要求',
+                     url='https://www.csrc.gov.cn/rules/investor', authority=3,
+                     rerank_score=0.95, asset_track='wiki')
+    assert evaluate_candidate_quality(candidate, '基金从业《私募股权投资基金基础知识》',
+                                      ['合格投资者', '合格投资者认定条件']) > 0
+    assert evaluate_candidate_quality(dict(candidate, title='2016年私募基金合格投资者考试大纲',
+        summary='2016年旧版法规考纲'), '基金从业《私募股权投资基金基础知识》', ['合格投资者']) < evaluate_candidate_quality(
+            candidate, '基金从业《私募股权投资基金基础知识》', ['合格投资者'])
+
+
+def test_bilibili_public_pages_drop_marketing_and_short_segments(monkeypatch):
+    from knowledge_builder import public_asset_discovery as discovery
+    pages = [
+        {'page': 1, 'part': '扫码领取资料包', 'duration': 180},
+        {'page': 2, 'part': '课程导读', 'duration': 30},
+        {'page': 3, 'part': '合格投资者认定', 'duration': 900},
+        {'page': 4, 'part': '私募基金募集', 'duration': 1200},
+        {'page': 5, 'part': '股权投资基金运作', 'duration': 1800},
+    ]
+
+    def get(url, **kwargs):
+        assert url == 'https://api.bilibili.com/x/web-interface/view'
+        assert kwargs['params'] == {'bvid': 'BV1public001'}
+        return SimpleNamespace(raise_for_status=lambda: None, json=lambda: {
+            'code': 0, 'data': {'title': '私募股权投资基金精讲', 'desc': '基金从业课程',
+                'stat': {'view': 100000, 'favorite': 1000}, 'pubdate': 1735689600, 'pages': pages}})
+
+    monkeypatch.setattr(discovery.httpx, 'get', get)
+    candidate = dict(title='搜索标题', url='https://www.bilibili.com/video/BV1public001/?spm_id_from=test')
+    result = discovery.enrich_bilibili_candidate(candidate)
+    assert result['url'] == 'https://www.bilibili.com/video/BV1public001'
+    assert result['title'] == '私募股权投资基金精讲' and result['asset_track'] == 'spine'
+    assert [row['locator'] for row in result['segments']] == ['P3', 'P4', 'P5']
+    assert [row['url'] for row in result['segments']] == [f'{result["url"]}?p={page}' for page in (3, 4, 5)]
+    pages.pop()
+    single = discovery.enrich_bilibili_candidate(candidate)
+    assert single['asset_track'] == 'spotlight'
+
+
+def test_bilibili_metadata_failure_keeps_search_result(monkeypatch):
+    from knowledge_builder import public_asset_discovery as discovery
+    def fail(*args, **kwargs):
+        raise discovery.httpx.TimeoutException('offline fixture')
+    monkeypatch.setattr(discovery.httpx, 'get', fail)
+    result = discovery.enrich_bilibili_candidate(dict(title='合格投资者讲解',
+        summary='私募基金合格投资者认定', url='https://www.bilibili.com/video/BV1public001'))
+    assert result['title'] == '合格投资者讲解' and result['asset_track'] == 'spotlight'
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_PUBLIC_ASSET_EDITION='cn')
+def test_resource_vote_toggle_dismissal_visibility_and_index_aggregation(tree, user, auth_client):
+    asset = catalog(tree)
+    block = tree.blocks.first()
+    row = models.BlockResource.objects.create(build=tree, block=block, public_asset=asset,
+        title=asset.title, url=asset.url, source_kind='bilibili', origin='auto', locator='P1')
+    index = models.ConceptAssetIndex.objects.create(subject_domain=tree.subject,
+        concept_name='极限', public_asset=asset, segment_locator='P1')
+    path = f'/{tree.pk}/blocks/{block.pk}/resources/'
+    for vote, expected in ((1, (1, 0, 1)), (-1, (0, 1, -1)), (0, (0, 0, 0))):
+        response = auth_client.post(path, {'action': 'vote', 'resource_id': row.pk, 'vote': vote}, format='json')
+        assert response.status_code == 200
+        assert tuple(response.data[key] for key in ('upvotes', 'downvotes', 'user_vote')) == expected
+        index.refresh_from_db()
+        assert (index.upvotes, index.downvotes) == expected[:2]
+    assert not models.BlockResourceFeedback.objects.filter(resource=row).exists()
+    assert auth_client.post(path, {'action': 'vote', 'resource_id': row.pk, 'vote': -1}, format='json').status_code == 200
+    # Repeating one user's downvote must not inflate the aggregate.
+    assert auth_client.post(path, {'action': 'vote', 'resource_id': row.pk, 'vote': -1}, format='json').data['downvotes'] == 1
+    voter = get_user_model().objects.create_user(username='resource_second_voter')
+    # Shared system trees are visible to both voters.
+    tree.created_by = None
+    tree.save(update_fields=('created_by',))
+    auth_client.force_authenticate(user=voter)
+    response = auth_client.post(path, {'action': 'vote', 'resource_id': row.pk, 'vote': -1}, format='json')
+    assert response.status_code == 200 and response.data['downvotes'] == 2
+    row.refresh_from_db()
+    index.refresh_from_db()
+    assert row.is_dismissed and index.is_disabled and index.downvotes == 2
+    assert row.pk not in {item['id'] for item in auth_client.get(path).data['resources']}
+    # A voter can undo feedback even after the resource disappears from the visible list.
+    response = auth_client.post(path, {'action': 'vote', 'resource_id': row.pk, 'vote': 0}, format='json')
+    assert response.status_code == 200 and response.data['user_vote'] == 0
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls')
+@pytest.mark.parametrize('payload', [
+    {'resource_id': 0, 'vote': 1}, {'resource_id': -1, 'vote': 1},
+    {'resource_id': 'oops', 'vote': 1}, {'resource_id': 1, 'vote': 2},
+    {'resource_id': 1, 'vote': True}, {'resource_id': 1, 'vote': 1.5},
+])
+def test_resource_vote_rejects_invalid_values(tree, auth_client, payload):
+    path = f'/{tree.pk}/blocks/{tree.blocks.first().pk}/resources/'
+    assert auth_client.post(path, {'action': 'vote', **payload}, format='json').status_code == 400
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_PUBLIC_ASSET_EDITION='cn')
+def test_auto_discover_api_contract_and_summary_aliases(tree, user, auth_client, monkeypatch):
+    from knowledge_builder import public_asset_discovery as discovery
+    row = models.BlockResource.objects.create(build=tree, block=tree.blocks.first(),
+        title='极限定义', url='https://oi-wiki.org/math/calculus/limit/', asset_track='wiki', origin='auto')
+    models.BlockResourceFeedback.objects.create(resource=row, user=user, vote=1)
+    calls = []
+    def discover(build, user=None, request=None):
+        calls.append((build.pk, user.pk, request is not None))
+        return dict(mounted_count=1, discovered_assets_count=1, reused_concept_count=0,
+                    mounted_summary={'spine_count': 0, 'spotlight_count': 0, 'wiki_count': 1}, resources=[row])
+    monkeypatch.setattr(discovery, 'auto_discover_and_mount_public_assets', discover)
+    path = f'/{tree.pk}/public-assets/'
+    response = auth_client.post(path, {'action': 'auto_discover'}, format='json')
+    assert response.status_code == 200
+    assert calls == [(tree.pk, user.pk, True)]
+    assert response.data['mounted_count'] == response.data['discovered_assets_count'] == 1
+    assert response.data['reused_concept_count'] == 0
+    assert response.data['asset_track'] == 'spotlight' and response.data['public_asset'] is None
+    assert response.data['mounted_summary']['wiki_count'] == 1
+    assert response.data['resources'][0]['user_vote'] == 1
+    summary = auth_client.get(path).data['mounted_summary']
+    for track in ('spine', 'spotlight', 'wiki'):
+        assert summary[track] == summary[f'{track}_count']
+
+
+@override_settings(UNIMIND_PUBLIC_ASSET_EDITION='cn')
+def test_auto_discover_persists_reuses_and_disables_concept_index(user, monkeypatch):
+    from knowledge_builder import public_asset_discovery as discovery
+    subject = '基金从业《私募股权投资基金基础知识》'
+    first = make_tree(user, subject=subject, titles=('合格投资者',))
+    second = make_tree(user, subject=subject, titles=('合格投资者',))
+    third = make_tree(user, subject=subject, titles=('合格投资者',))
+    monkeypatch.setattr(discovery, 'auto_mount_public_assets', lambda *args, **kwargs: [])
+    monkeypatch.setattr('knowledge_builder.block_study.auto_mount_internal_resources', lambda *args, **kwargs: [])
+    candidate = dict(title='私募基金合格投资者认定条件',
+        url='https://www.csrc.gov.cn/rules/qualified-investor',
+        summary='私募股权投资基金合格投资者定义、认定条件与资产要求',
+        authority=3, rerank_score=0.95, provider='deepseek', date='2025-01-01', asset_track='wiki')
+    searches = []
+    def search(query, **kwargs):
+        searches.append(query)
+        return [dict(candidate)]
+    monkeypatch.setattr(discovery, 'search_public_web', search)
+    discovery.auto_discover_and_mount_public_assets(first)
+    assert searches and first.block_resources.exists()
+    asset = models.PublicAssetCatalog.objects.get(url=candidate['url'])
+    alignment = models.ConceptAssetIndex.objects.get(public_asset=asset, concept_name='合格投资者')
+    assert alignment.quality_score > 0 and not alignment.is_disabled
+    counts = (models.PublicAssetCatalog.objects.count(), first.block_resources.count(), models.ConceptAssetIndex.objects.count())
+    discovery.auto_discover_and_mount_public_assets(first)
+    assert counts == (models.PublicAssetCatalog.objects.count(), first.block_resources.count(), models.ConceptAssetIndex.objects.count())
+    monkeypatch.setattr(discovery, 'search_public_web', lambda *args, **kwargs: [])
+    reused = discovery.auto_discover_and_mount_public_assets(second)
+    assert reused['reused_concept_count'] >= 1
+    assert second.block_resources.filter(public_asset=asset, origin='auto', match_method='concept_index').exists()
+    alignment.is_disabled = True
+    alignment.save(update_fields=('is_disabled',))
+    discovery.auto_discover_and_mount_public_assets(third)
+    assert not third.block_resources.filter(public_asset=asset).exists()
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_PUBLIC_ASSET_EDITION='cn')
+def test_feedback_aggregates_same_concept_across_mounts(tree, user, auth_client):
+    asset = catalog(tree)
+    index = models.ConceptAssetIndex.objects.create(subject_domain=tree.subject,
+        concept_name='极限', public_asset=asset, segment_locator='P1')
+    rows = [models.BlockResource.objects.create(build=tree, block=block, public_asset=asset,
+        title=asset.title, url=asset.url, source_kind='bilibili', origin='auto', locator='P1')
+        for block in tree.blocks.all()[:2]]
+    for row in rows:
+        path = f'/{tree.pk}/blocks/{row.block_id}/resources/'
+        assert auth_client.post(path, {'action': 'vote', 'resource_id': row.pk, 'vote': -1}, format='json').status_code == 200
+    index.refresh_from_db()
+    assert index.downvotes == 2 and index.is_disabled
+    assert all(not models.BlockResource.objects.get(pk=row.pk).is_dismissed for row in rows)
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_PUBLIC_ASSET_EDITION='cn')
+def test_vote_respects_build_block_and_library_visibility(tree, user, auth_client):
+    block, other_block = list(tree.blocks.all())[:2]
+    stranger = get_user_model().objects.create_user(username='private_resource_owner')
+    private_tree = make_tree(stranger)
+    row = models.BlockResource.objects.create(build=tree, block=block,
+        title='公开解释', url='https://oi-wiki.org/math/calculus/limit/')
+    private_library = models.BlockResource.objects.create(build=tree, block=block,
+        title='他人资料', url='https://example.cn/private', source_kind='library', created_by=stranger)
+    payload = {'action': 'vote', 'resource_id': row.pk, 'vote': 1}
+    assert auth_client.post(f'/{tree.pk}/blocks/{other_block.pk}/resources/', payload, format='json').status_code == 404
+    assert auth_client.post(f'/{private_tree.pk}/blocks/{private_tree.blocks.first().pk}/resources/', payload, format='json').status_code == 404
+    payload['resource_id'] = private_library.pk
+    assert auth_client.post(f'/{tree.pk}/blocks/{block.pk}/resources/', payload, format='json').status_code == 404
+    assert not models.BlockResourceFeedback.objects.exists()
+
+
+@override_settings(UNIMIND_PUBLIC_ASSET_EDITION='cn')
+def test_auto_discovery_caps_tracks_and_never_restores_dismissed_resource(user, monkeypatch):
+    from knowledge_builder import public_asset_discovery as discovery
+    build = make_tree(user, subject='私募股权投资基金', titles=('合格投资者',))
+    monkeypatch.setattr(discovery, 'auto_mount_public_assets', lambda *args, **kwargs: [])
+    monkeypatch.setattr('knowledge_builder.block_study.auto_mount_internal_resources', lambda *args, **kwargs: [])
+    def search(query, **kwargs):
+        wiki = '定义 法规 权威' in query or 'site:amac.org.cn' in query
+        host = 'www.csrc.gov.cn' if wiki else 'open-course.cn'
+        return [dict(title=f'私募股权合格投资者定义详解 {index}',
+            summary='合格投资者认定条件、资产要求与案例讲解', provider='deepseek',
+            url=f'https://{host}/investor/{index}', authority=3 if wiki else 1)
+            for index in range(6)]
+    monkeypatch.setattr(discovery, 'search_public_web', search)
+    discovery.auto_discover_and_mount_public_assets(build)
+    assert build.block_resources.filter(asset_track='spotlight').count() == 3
+    assert build.block_resources.filter(asset_track='wiki').count() == 2
+    rejected = build.block_resources.filter(asset_track='spotlight').first()
+    rejected.is_dismissed = True
+    rejected.save(update_fields=('is_dismissed',))
+    discovery.auto_discover_and_mount_public_assets(build)
+    rejected.refresh_from_db()
+    assert rejected.is_dismissed
+    assert build.block_resources.filter(url=rejected.url).count() == 1
+    assert build.block_resources.filter(asset_track='spotlight', is_dismissed=False).count() <= 3
+
+
+@pytest.mark.parametrize('title,track', [
+    ('【基金法规】第二章 基金募集', 'spine'),
+    ('【基金基础】第三章 股权投资基金设立', 'spotlight'),
+    ('【基金法律法规】合格投资者认定', 'wiki'),
+    ('《证券投资基金基础知识》基金募集与设立', 'spotlight'),
+])
+def test_live_regression_wrong_exam_episode_cannot_borrow_series_summary(title, track):
+    from knowledge_builder.public_asset_discovery import evaluate_candidate_quality
+    # A mixed-subject playlist description must never override this episode's subject.
+    candidate = dict(title=title, asset_track=track,
+        url='https://www.bilibili.com/video/BV1mixedsubject?p=4',
+        summary='基金从业科目三 私募股权投资基金基础知识 合格投资者 基金募集 股权投资基金设立')
+    assert evaluate_candidate_quality(candidate, '基金从业《私募股权投资基金基础知识》',
+        ['基金募集', '股权投资基金设立', '合格投资者']) == 0
+
+
+@pytest.mark.parametrize('url,title,summary', [
+    ('https://www.renrendoc.com/paper/123.html', '私募股权投资基金募集复习资料', '付费下载全文'),
+    ('https://www.100xuexi.com/Ebook/123.html', '私募股权投资基金募集教材辅导', '购买本书扫码阅读'),
+    ('https://www.mayizhixue.com/course/123', '私募股权投资基金募集课程介绍', '报班购买课程'),
+    ('https://bkso.baidu.com/item/基金募集', '基金募集 - 百度百科', '私募股权投资基金募集定义'),
+    ('https://open-course.cn/course/intro', '私募股权投资基金课程简介', '基金募集 合格投资者 点击购买课程'),
+    ('https://open-course.cn/chapter/1', '证券市场技术分析与K线交易', '私募股权投资基金募集 合格投资者认定条件'),
+])
+def test_live_regression_rejects_paid_catalog_mirror_and_title_mismatch(url, title, summary):
+    from knowledge_builder.public_asset_discovery import evaluate_candidate_quality
+    assert evaluate_candidate_quality(dict(url=url, title=title, summary=summary, asset_track='spotlight'),
+        '基金从业《私募股权投资基金基础知识》', ['基金募集', '合格投资者认定条件']) == 0
+
+
+@override_settings(UNIMIND_PUBLIC_ASSET_EDITION='cn')
+def test_live_regression_spine_episode_targets_block_instead_of_shared_subject(user, monkeypatch):
+    from knowledge_builder import public_asset_discovery as discovery
+    titles = ('私募基金概述', '基金组织形式', '基金募集', '基金设立', '投资策略',
+              '尽职调查', '投资决策', '基金估值', '投后管理')
+    build = make_tree(user, subject='基金从业《私募股权投资基金基础知识》', titles=titles)
+    monkeypatch.setattr(discovery, 'auto_mount_public_assets', lambda *args, **kwargs: [])
+    monkeypatch.setattr('knowledge_builder.block_study.auto_mount_internal_resources', lambda *args, **kwargs: [])
+    base = 'https://www.bilibili.com/video/BV1placement'
+    candidate = dict(title='私募股权投资基金全套精讲', url=base, provider='deepseek',
+                     summary='私募股权投资基金基础知识全套课程')
+    def search(query, **kwargs):
+        return [dict(candidate)] if '全套' in query or '课程 bilibili' in query else []
+    monkeypatch.setattr(discovery, 'search_public_web', search)
+    def metadata(url, **kwargs):
+        return {'code': 0, 'data': {'title': candidate['title'], 'desc': candidate['summary'],
+            'pages': [{'page': p, 'part': title, 'duration': 900}
+                      for p, title in enumerate(('【私募股权】基金募集', '【私募股权】基金设立',
+                                                 '【私募股权】投后管理', '【基金法规】基金募集'), 1)]}}
+    monkeypatch.setattr(discovery.httpx, 'get', metadata)
+    discovery.auto_discover_and_mount_public_assets(build)
+    rows = list(build.block_resources.filter(asset_track='spine').order_by('locator'))
+    assert [(row.locator, row.block.code) for row in rows] == [('P1', 'B3'), ('P2', 'B4'), ('P3', 'B9')]
+    assert all(row.atom.name == row.block.short_title for row in rows)
+    assert not build.block_resources.filter(locator='P4').exists()
+
+
+@override_settings(UNIMIND_PUBLIC_ASSET_EDITION='cn')
+def test_live_regression_targeted_spotlight_extracts_matching_page_from_series(user, monkeypatch):
+    from knowledge_builder import public_asset_discovery as discovery
+    build = make_tree(user, subject='私募股权投资基金', titles=('合格投资者',))
+    block = build.blocks.get()
+    # The tree already has its one spine; a second series can still supply a targeted lecture.
+    existing = catalog(build, title='私募股权主线课', asset_track='spine')
+    models.BlockResource.objects.create(build=build, block=block, public_asset=existing,
+        title=existing.title, url=existing.url, asset_track='spine', origin='auto')
+    monkeypatch.setattr(discovery, 'auto_mount_public_assets', lambda *args, **kwargs: [])
+    monkeypatch.setattr('knowledge_builder.block_study.auto_mount_internal_resources', lambda *args, **kwargs: [])
+    base = 'https://www.bilibili.com/video/BV1targeted'
+    candidate = dict(title='私募股权投资基金精讲', summary='私募股权全套精讲', url=base, provider='deepseek')
+    monkeypatch.setattr(discovery, 'search_public_web',
+        lambda query, **kwargs: [dict(candidate)] if '精讲 bilibili' in query or 'site:bilibili.com' in query else [])
+    def metadata(url, **kwargs):
+        return {'code': 0, 'data': {'title': candidate['title'], 'desc': candidate['summary'],
+            'pages': [{'page': p, 'part': title, 'duration': 900}
+                      for p, title in enumerate(('基金估值', '投后管理', '私募基金合格投资者认定条件'), 1)]}}
+    monkeypatch.setattr(discovery.httpx, 'get', metadata)
+    discovery.auto_discover_and_mount_public_assets(build)
+    rows = list(build.block_resources.filter(asset_track='spotlight'))
+    assert rows and all(row.url == base + '?p=3' and row.locator == 'P3' for row in rows)
+    assert all(row.atom.name == '合格投资者' for row in rows)
+    assert build.block_resources.filter(asset_track='spine').count() == 1
+
+
+@pytest.mark.parametrize('title,summary', [
+    ('私募基金信息披露管理系统产品宣传', '信息披露管理系统为私募股权基金提供服务'),
+    ('公募REITs信息披露规则解析', '私募股权投资基金 信息披露 监管规定'),
+    ('关于基金考试一切与应知应会考核宣传', '私募股权基金 信息披露 考试培训'),
+    ('2020私募股权投资基金信息披露精讲', '私募基金信息披露与监管办法'),
+])
+def test_final_quality_regression_rejects_products_cross_domain_promos_and_stale_law(title, summary):
+    from knowledge_builder.public_asset_discovery import evaluate_candidate_quality
+    candidate = dict(title=title, summary=summary, date='2026-11-18',
+        url='https://www.bilibili.com/video/BV1finalquality', asset_track='spotlight')
+    assert evaluate_candidate_quality(candidate, '基金从业《私募股权投资基金基础知识》',
+                                      ['信息披露', '私募基金信息披露要求']) == 0
+
+
+def test_yuanbao_optional_credentials_signed_request_and_json_encoded_pages(monkeypatch):
+    from knowledge_builder import public_asset_discovery as discovery
+    calls = []
+    def post(url, **kwargs):
+        calls.append((url, kwargs))
+        assert url == 'https://wsa.tencentcloudapi.com'
+        assert json.loads(kwargs['content']) == {'Query': '合格投资者', 'Mode': 2}
+        headers = kwargs['headers']
+        assert headers['X-TC-Action'] == 'SearchPro'
+        assert headers['X-TC-Version'] == '2025-05-08'
+        assert headers['X-TC-Timestamp'] == '1735689600'
+        assert headers['Host'] == 'wsa.tencentcloudapi.com'
+        assert headers['Authorization'].startswith('TC3-HMAC-SHA256 Credential=test-secret-id/2025-01-01/wsa/tc3_request, ')
+        assert 'SignedHeaders=content-type;host, Signature=' in headers['Authorization']
+        signature = headers['Authorization'].rsplit('Signature=', 1)[-1]
+        assert len(signature) == 64 and all(char in '0123456789abcdef' for char in signature)
+        return {'Response': {'Pages': json.dumps([{
+            'title': '私募基金合格投资者', 'url': 'https://www.amac.org.cn/rules/investor',
+            'passage': '合格投资者认定条件', 'site': '中国证券投资基金业协会', 'score': 0.92,
+        }], ensure_ascii=False)}}
+    monkeypatch.setattr(discovery.httpx, 'post', post)
+    monkeypatch.setattr(discovery.time, 'time', lambda: 1735689600)
+    monkeypatch.delenv('TENCENT_WSA_SECRET_ID', raising=False)
+    monkeypatch.delenv('TENCENT_WSA_SECRET_KEY', raising=False)
+    provider = discovery.YuanbaoSearchProvider()
+    assert provider.search('合格投资者') == [] and not calls
+    monkeypatch.setenv('TENCENT_WSA_SECRET_ID', 'test-secret-id')
+    assert provider.search('合格投资者') == [] and not calls
+    monkeypatch.setenv('TENCENT_WSA_SECRET_KEY', 'test-secret-key')
+    results = provider.search('合格投资者')
+    assert len(calls) == 1 and len(results) == 1
+    assert results[0]['summary'] == '合格投资者认定条件'
+    assert results[0]['site_name'] == '中国证券投资基金业协会'
+    assert results[0]['rerank_score'] == 0.92 and results[0]['provider'] == 'yuanbao'
+
+
+@pytest.mark.parametrize('title,summary,labels', [
+    ('私募基金管理人登记须知', '（2017年12月15日更新）私募基金内部控制和监管规定', ['内部控制']),
+    ('中国证券投资基金业协会', '本书为私募股权基金课程推荐读物，介绍基金退出方式', ['退出']),
+])
+def test_wiki_rejects_explicitly_obsolete_revision_and_book_recommendation(title, summary, labels):
+    from knowledge_builder.public_asset_discovery import evaluate_candidate_quality
+    assert evaluate_candidate_quality(dict(title=title, summary=summary,
+        date='2026-11-18', url='https://www.amac.org.cn/investread/article.html', asset_track='wiki'),
+        '私募股权投资基金', labels) == 0

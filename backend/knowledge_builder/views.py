@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import F, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
@@ -7,7 +8,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.authentication import CookieTokenAuthentication
-from .models import KnowledgeTreeBuild, LearningBlock, BlockStepAtom
+from .models import (KnowledgeTreeBuild, LearningBlock, BlockStepAtom,
+                     BlockResourceFeedback, ConceptAssetIndex, PublicAssetCatalog)
 from .pipeline import create_build
 from .serializers import BuildSummarySerializer, CreateBuildSerializer, FullKnowledgeTreeSerializer, RequirementIntakeSerializer
 from . import intake
@@ -103,7 +105,7 @@ class BlockResourceView(BuildStatusView):
         block = self.get_block(request, build_id, block_id)
         region = public_asset_service.get_region_preference(request.user, request)
         resources = block_study.visible_block_resources(request.user, block, request=request, explicit_region=region)
-        data = {'resources': BlockResourceSerializer(resources, many=True).data,
+        data = {'resources': BlockResourceSerializer(resources, many=True, context={'request': request}).data,
                 'internal_candidates': block_study.internal_resource_candidates(request.user, block, region), 'web_candidates': [],
                 'region_pref': region,
                 'wiki_candidates': public_asset_service.wiki_candidates_for_block(block, region),
@@ -115,6 +117,46 @@ class BlockResourceView(BuildStatusView):
 
     def post(self, request, build_id, block_id):
         block = self.get_block(request, build_id, block_id)
+        if request.data.get('action') == 'vote':
+            resource_id = serializers.IntegerField(min_value=1).run_validation(request.data.get('resource_id'))
+            vote = serializers.ChoiceField(choices=(1, -1, 0)).run_validation(request.data.get('vote'))
+            visible_ids = block_study.visible_block_resources(request.user, block, request=request).values('pk')
+            # Keep a learner's previous vote cancellable after automatic dismissal.
+            dismissed_ids = BlockResourceFeedback.objects.filter(
+                user=request.user, resource__block=block,
+                resource__is_dismissed=True).values('resource_id')
+            votable = block.resources.filter(
+                Q(pk__in=visible_ids) | Q(pk__in=dismissed_ids))
+            with transaction.atomic():
+                resource = get_object_or_404(votable.select_for_update(), pk=resource_id)
+                if resource.public_asset_id:
+                    # Serialize aggregation across mounts of the same public asset.
+                    PublicAssetCatalog.objects.select_for_update().get(pk=resource.public_asset_id)
+                if vote == 0:
+                    BlockResourceFeedback.objects.filter(resource=resource, user=request.user).delete()
+                else:
+                    BlockResourceFeedback.objects.update_or_create(
+                        resource=resource, user=request.user, defaults={'vote': vote})
+                resource.upvotes = resource.feedbacks.filter(vote=1).count()
+                resource.downvotes = resource.feedbacks.filter(vote=-1).count()
+                if resource.origin == 'auto' and (
+                        (resource.downvotes >= 2 and resource.downvotes > resource.upvotes)
+                        or request.data.get('dismiss') is True):
+                    resource.is_dismissed = True
+                resource.save(update_fields=('upvotes', 'downvotes', 'is_dismissed'))
+                if resource.public_asset_id:
+                    feedbacks = BlockResourceFeedback.objects.filter(
+                        resource__public_asset_id=resource.public_asset_id,
+                        resource__locator=resource.locator)
+                    upvotes = feedbacks.filter(vote=1).count()
+                    downvotes = feedbacks.filter(vote=-1).count()
+                    alignments = ConceptAssetIndex.objects.filter(
+                        public_asset_id=resource.public_asset_id, segment_locator=resource.locator)
+                    alignments.update(upvotes=upvotes, downvotes=downvotes)
+                    if downvotes - upvotes >= 2:
+                        alignments.update(is_disabled=True)
+            return Response(BlockResourceSerializer(resource, context={'request': request}).data,
+                            status=status.HTTP_200_OK)
         if request.data.get('action') == 'attach_project':
             project_id = serializers.IntegerField(min_value=1).run_validation(request.data.get('project_id'))
             resource_id = serializers.IntegerField(min_value=1).run_validation(request.data.get('resource_id'))
@@ -122,7 +164,7 @@ class BlockResourceView(BuildStatusView):
         serializer = AttachBlockResourceSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         resource = block_study.attach_block_resource(request.user, block, serializer.validated_data, request=request)
-        return Response(BlockResourceSerializer(resource).data, status=status.HTTP_201_CREATED)
+        return Response(BlockResourceSerializer(resource, context={'request': request}).data, status=status.HTTP_201_CREATED)
 
     def patch(self, request, build_id, block_id):
         block = self.get_block(request, build_id, block_id)
@@ -157,7 +199,7 @@ class BlockResourceView(BuildStatusView):
             if field in payload:
                 setattr(resource, field, payload[field])
         resource.save(update_fields=('block', 'step', 'atom', 'asset_track', 'pedagogical_role', 'locator'))
-        return Response(BlockResourceSerializer(resource).data)
+        return Response(BlockResourceSerializer(resource, context={'request': request}).data)
 
     def delete(self, request, build_id, block_id):
         block = self.get_block(request, build_id, block_id)
@@ -194,11 +236,12 @@ class TreePublicAssetView(BuildStatusView):
                     candidate for candidate in search_wikipedia_concepts(
                         build.subject, lang='en' if region == 'intl' else 'zh', region_pref=region)
                     if public_asset_service.public_asset_allowed(candidate, region)]
-        mounted = build.block_resources.filter(~Q(source_kind='library') | Q(created_by=request.user))
+        mounted = build.block_resources.filter(is_dismissed=False).filter(~Q(source_kind='library') | Q(created_by=request.user))
         mounted = public_asset_service.filter_resources_for_region(mounted, region)
         summary = {track: 0 for track in ('spine', 'spotlight', 'wiki')}
         for track in mounted.values_list('asset_track', flat=True):
             summary[track] += 1
+        summary.update({f'{track}_count': summary[track] for track in ('spine', 'spotlight', 'wiki')})
         return Response({
             'region_pref': region,
             'catalog_assets': PublicAssetCatalogSerializer(catalog, many=True).data,
@@ -214,6 +257,24 @@ class TreePublicAssetView(BuildStatusView):
 
     def post(self, request, build_id):
         build = get_object_or_404(_visible_builds(request.user), pk=build_id)
+        if request.data.get('action') == 'auto_discover':
+            from . import public_asset_discovery
+            result = public_asset_discovery.auto_discover_and_mount_public_assets(
+                build, user=request.user, request=request)
+            summary = result.get('mounted_summary', {})
+            summary = {**summary, **{
+                f'{track}_count': summary.get(f'{track}_count', summary.get(track, 0))
+                for track in ('spine', 'spotlight', 'wiki')}}
+            return Response({
+                'mounted_count': result['mounted_count'],
+                'discovered_assets_count': result['discovered_assets_count'],
+                'reused_concept_count': result['reused_concept_count'],
+                'asset_track': 'spotlight',
+                'public_asset': None,
+                'mounted_summary': summary,
+                'resources': BlockResourceSerializer(
+                    result['resources'], many=True, context={'request': request}).data,
+            }, status=status.HTTP_200_OK)
         serializer = TreePublicAssetImportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = public_asset_service.import_tree_public_asset(request.user, build, serializer.validated_data, request=request)
@@ -221,7 +282,7 @@ class TreePublicAssetView(BuildStatusView):
             'mounted_count': result['mounted_count'],
             'asset_track': result['asset_track'],
             'public_asset': PublicAssetCatalogSerializer(result['public_asset']).data if result['public_asset'] else None,
-            'resources': BlockResourceSerializer(result['resources'], many=True).data,
+            'resources': BlockResourceSerializer(result['resources'], many=True, context={'request': request}).data,
         }, status=status.HTTP_201_CREATED)
 
 
