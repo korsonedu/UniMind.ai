@@ -189,7 +189,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   const [contactOpen, setContactOpen] = useState(false);
 
   const {
-    bot, messages, input, loading, generatingIds, isComposing, initialized, skillOpen,
+    bot, messages, input, loading, waitingForReply, generatingIds, isComposing, initialized, skillOpen,
     sessions, activeSessionId, sessionOpen, chatWidth, dragging, hasConversation, conversationId, taskList,
     scrollRef, projectId, setProjectId,
     setInput, setSkillOpen, setSessionOpen, setIsComposition, setSessions,
@@ -673,8 +673,22 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   // 普通消息 → ChatBubble
                   return <ChatBubble native={appearance === 'native'} key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} streaming={msg.streaming} markdownComponents={markdownComponents} />;
                 })}
-                {loading && (
-                  <ChatBubble native={appearance === 'native'} msg={{ role: 'assistant', content: '' }} isUser={false} isThinking index={messages.length} />
+                {appearance === 'native' && waitingForReply && (
+                  <div className="um-agent-thinking-status" role="status">
+                    <span className="um-agent-thinking-icon" aria-hidden="true">
+                      {[[-100, 3.7], [-39, 4.3], [20, 3.5], [79, 4.5], [142, 3.9], [205, 3.3]].map(([angle, length]) => (
+                        <span key={angle} style={{
+                          '--um-thinking-angle': `${angle}deg`,
+                          '--um-thinking-length': `${length}px`,
+                          '--um-thinking-delay': `${2540 * (angle + 100) / 360 - 595}ms`,
+                        } as React.CSSProperties} />
+                      ))}
+                    </span>
+                    <span>{t('{0}正在思考', { 0: botDisplayName })}</span>
+                  </div>
+                )}
+                {appearance !== 'native' && loading && (
+                  <ChatBubble msg={{ role: 'assistant', content: '' }} isUser={false} isThinking index={messages.length} />
                 )}
               </div>
             </div>

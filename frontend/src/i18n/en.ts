@@ -557,6 +557,7 @@ const en: Record<string, string> = {
   "{0} · {1} 条": "{0} · Messages: {1}",
   "已置顶": "Pinned",
   "正在思考": "Thinking",
+  "{0}正在思考": "{0} is thinking",
   "有新回复": "New reply",
   "对话菜单：{0}": "Conversation menu: {0}",
   "历史对话": "Conversation history",

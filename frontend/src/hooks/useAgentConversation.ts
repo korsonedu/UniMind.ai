@@ -1,6 +1,6 @@
 import { t, useLocale } from '@/i18n';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
-import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import api from '@/lib/api';
 import { notifyDesktop } from '@/lib/desktop';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -124,7 +124,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const scopeRef = useRef<string | null>(null);
   const identityRef = useRef('');
   const recoveryEpochRef = useRef(0);
-  const [generatingIds, setGeneratingIds] = useState<string[]>([]);
+  const [generatingRuns, setGeneratingRuns] = useState(() => new Map<string, string>());
   const [isComposing, setIsComposition] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [skillOpen, setSkillOpen] = useState(false);
@@ -152,7 +152,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const taskListsRef = useRef(new Map<string, TaskListData | null>());
   const pendingSendsRef = useRef(new Map<string, PendingSend>());
   const sendCountsRef = useRef(new Map<string, number>());
-  const generatingRef = useRef(new Set<string>());
+  const generatingRef = useRef(generatingRuns);
   const conversationIdRef = useRef(conversationId);
   const sessionIdsRef = useRef(new Map<string, number>());
   const sessionsRevisionRef = useRef(0);
@@ -167,7 +167,13 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     saveRecovery(scopeRef.current, conversationIdRef.current, { projectId: next });
   }, []);
 
-  const loading = generatingIds.includes(conversationId);
+  const generatingIds = useMemo(() => [...generatingRuns.keys()], [generatingRuns]);
+  const activeRun = generatingRuns.get(conversationId);
+  const loading = activeRun !== undefined;
+  const waitingForReply = activeRun !== undefined && !messages.some(message =>
+    message._id?.startsWith(`${activeRun}_`) && message.role === 'assistant'
+    && message.visible !== false && !message.toolStep && message.content.trim(),
+  );
   const identity = `${userId ?? ''}:${bot?.id ?? ''}`;
   useLayoutEffect(() => { identityRef.current = identity; }, [identity]);
   const previousIdentityRef = useRef({ userId, botId: bot?.id });
@@ -203,11 +209,12 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const getSelectionVersion = useCallback(() => selectionVersionRef.current, []);
   const getInputRevision = useCallback(() => inputRevisionRef.current, []);
 
-  const markGenerating = useCallback((id: string, active: boolean) => {
-    const set = generatingRef.current;
-    if (active === set.has(id)) return;
-    if (active) set.add(id); else set.delete(id);
-    setGeneratingIds([...set]);
+  const markGenerating = useCallback((id: string, prefix: string | null) => {
+    if ((prefix !== null) === generatingRef.current.has(id)) return;
+    const runs = new Map(generatingRef.current);
+    if (prefix !== null) runs.set(id, prefix); else runs.delete(id);
+    generatingRef.current = runs;
+    setGeneratingRuns(runs);
   }, []);
 
   // ── Session grouping ──
@@ -291,7 +298,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     // 让仍在 beforeSend 里的请求在恢复后看到自己已失效。
     sendCountsRef.current.set(id, (sendCountsRef.current.get(id) ?? 0) + 1);
     updateConversationMessages(id, previous => previous.filter(message => !message.streaming));
-    markGenerating(id, false);
+    markGenerating(id, null);
   }, [markGenerating, updateConversationMessages]);
 
   useEffect(() => {
@@ -457,7 +464,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     streamsRef.current.forEach(entry => { entry.controller.abort(); entry.reveal.dispose(); entry.smoother?.dispose(); });
     streamsRef.current.clear();
     sendCountsRef.current.clear();
-    generatingRef.current.clear();
+    generatingRef.current = new Map();
     messageBuffersRef.current.clear();
     taskListsRef.current.clear();
     pendingSendsRef.current.clear();
@@ -465,7 +472,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     sessionIdsRef.current.clear();
     sessionSyncKeyRef.current = '';
     ++sessionsRevisionRef.current;
-    setGeneratingIds([]);
+    setGeneratingRuns(generatingRef.current);
     messagesRef.current = [];
     setMessages([]);
     setSessions([]);
@@ -558,7 +565,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       && identityRef.current === requestIdentity && useAuthStore.getState().user?.id === requestUserId;
     const isVisible = () => requestConversationId === conversationIdRef.current;
 
-    markGenerating(requestConversationId, true);
+    const streamPrefix = crypto.randomUUID();
+    markGenerating(requestConversationId, streamPrefix);
     taskListsRef.current.set(requestConversationId, null);
     if (isVisible()) setTaskList(null);
 
@@ -567,14 +575,13 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       if (!isRequestActive()) return;
     } catch (error) {
       if (isRequestActive()) {
-        markGenerating(requestConversationId, false);
+        markGenerating(requestConversationId, null);
         toast.error(error instanceof Error ? error.message : t('笔记尚未保存，问题已保留，请重试。'));
       }
       return;
     }
 
     let msgId = 0;
-    const streamPrefix = crypto.randomUUID();
     const nextId = () => `${streamPrefix}_${++msgId}`;
     let streamingId: string | null = null;
     let streamingContent = '';
@@ -824,7 +831,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       stopSmoother(completed ? streamingContent : undefined, !completed);
       if (streamsRef.current.get(requestConversationId) === entry) streamsRef.current.delete(requestConversationId);
       if (isRequestActive()) {
-        markGenerating(requestConversationId, false);
+        markGenerating(requestConversationId, null);
         if (!completed) {
           updateTaskList(() => null);
           updateConversationMessages(requestConversationId, () => previousMessages);
@@ -892,6 +899,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     input,
     coursePosition, setCoursePosition,
     loading,
+    waitingForReply,
     generatingIds,
     isComposing,
     initialized,
