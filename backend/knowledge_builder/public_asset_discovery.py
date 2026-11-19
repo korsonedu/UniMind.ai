@@ -21,7 +21,8 @@ from django.db import transaction
 from ai_engine import config
 from .models import BlockResource, ConceptAssetIndex, PublicAssetCatalog
 from .public_asset_service import (
-    _asset_text, _binding, _blocks, _normalized, _score, _text,
+    _asset_text, _binding, _blocks, _difficulty_filtered_details, _normalized,
+    _requires_difficult_atom, _score, _text, compute_atom_difficulty,
     align_and_mount_spine_series, auto_mount_public_assets,
     public_asset_allowed, store_public_asset,
 )
@@ -365,7 +366,7 @@ def _catalog_data(candidate, track=None):
                 asset_track=track or candidate.get('asset_track', 'spotlight'), region_scope='cn',
                 description=_text(candidate.get('summary') or candidate.get('description'))[:10000],
                 topic_keywords=candidate.get('topic_keywords', []), segments=candidate.get('segments', []),
-                locator=candidate.get('locator', ''))
+                locator=candidate.get('locator', ''), respect_difficulty=True)
 
 
 def _disabled(asset_id, locator):
@@ -374,6 +375,12 @@ def _disabled(asset_id, locator):
 
 @transaction.atomic
 def _mount_candidate(build, details, data, asset, score, method, user=None, target_atom=None):
+    eligible = _difficulty_filtered_details([details], data)
+    if not eligible:
+        return None, False
+    details = eligible[0]
+    if target_atom is not None and not any(row.atom_id == target_atom for row in details[2]):
+        return None, False
     block = details[0]
     type(block).objects.select_for_update().get(pk=block.pk)
     if _disabled(asset.pk, data.get('locator', '')):
@@ -381,6 +388,9 @@ def _mount_candidate(build, details, data, asset, score, method, user=None, targ
     # Identity excludes creator: repeated invocation by another user must not duplicate.
     existing = block.resources.filter(url=data['url'], locator=data.get('locator', '')).first()
     if existing is not None:
+        if (_requires_difficult_atom(data)
+                and (existing.atom is None or compute_atom_difficulty(existing.atom)[0] == 'L1')):
+            return None, False
         return (None, False) if existing.is_dismissed else (existing, False)
     track = data['asset_track']
     if track in ('spotlight', 'wiki') and block.resources.filter(origin='auto', asset_track=track, is_dismissed=False).count() >= (3 if track == 'spotlight' else 2):
@@ -398,6 +408,8 @@ def _mount_candidate(build, details, data, asset, score, method, user=None, targ
         assignment = ranked[0]
         if _specific_score(binding_text, [assignment.atom.name, assignment.atom.key_elements]):
             target_atom = assignment.atom_id
+    if _requires_difficult_atom(data) and target_atom is None:
+        return None, False
     step, atom = _binding(details, binding_text, target_atom)
     resource = BlockResource.objects.create(build=build, block=block, step=step, atom=atom,
         public_asset=asset, source_kind=data['source_kind'], asset_track=data['asset_track'],
@@ -436,8 +448,10 @@ def auto_discover_and_mount_public_assets(build, user=None, request=None):
     user = user or build.created_by
     before = set(build.block_resources.values_list('pk', flat=True))
     auto_mount_internal_resources(build)
-    auto_mount_public_assets(build)
+    auto_mount_public_assets(build, respect_difficulty=True)
     details = _blocks(build)
+    video_details = _difficulty_filtered_details(details,
+        dict(source_kind='bilibili', asset_track='spine', respect_difficulty=True))
     discovered_ids, reused_ids = set(), set()
     metadata_cache = {}
 
@@ -485,14 +499,14 @@ def auto_discover_and_mount_public_assets(build, user=None, request=None):
                     score = evaluate_candidate_quality(item, build.subject, [build.subject])
                     if score:
                         valid_parts = [part for part in item['segments'] if not _other_subject_part(part['title'])]
-                        covered = sum(any(_specific_score(part['title'], detail[3]) for part in valid_parts) for detail in details)
+                        covered = sum(any(_specific_score(part['title'], detail[3]) for part in valid_parts) for detail in video_details)
                         if covered:
                             candidates[item['url']] = (covered, len(valid_parts), score, item)
         if candidates:
             _, _, score, candidate = max(candidates.values(), key=lambda pair: pair[:3])
             # Keep only episodes with substantive block alignment; never interpolate noise.
             segments = [segment for segment in candidate['segments'] if not _other_subject_part(segment['title']) and any(evaluate_candidate_quality(
-                dict(candidate, title=segment['title'], summary=segment.get('summary', ''), segments=[], asset_track='spotlight'), build.subject, detail[3]) for detail in details)]
+                dict(candidate, title=segment['title'], summary=segment.get('summary', ''), segments=[], asset_track='spotlight'), build.subject, detail[3]) for detail in video_details)]
             if segments:
                 data = _catalog_data(dict(candidate, segments=segments), 'spine')
                 data.update(origin='auto', match_method=candidate.get('provider', 'deepseek') + '_search', match_score=score)
@@ -501,14 +515,17 @@ def auto_discover_and_mount_public_assets(build, user=None, request=None):
                 # A lecture may cover multiple blocks, but each needs a professional hit.
                 anchored = []
                 for segment in segments:
-                    for detail in details:
+                    for detail in video_details:
                         if not _specific_score(segment['title'], detail[3]):
                             continue
                         text = segment.get('summary') or segment['title']
                         assignments = sorted(detail[2], key=lambda row: (
                             _specific_score(text, [row.atom.name, row.atom.key_elements]),
                             _score(text, [row.atom.name])), reverse=True)
-                        target_atom_id = assignments[0].atom_id if assignments else None
+                        if not assignments or not _specific_score(text,
+                                [assignments[0].atom.name, assignments[0].atom.key_elements]):
+                            continue
+                        target_atom_id = assignments[0].atom_id
                         anchored.append(dict(segment, target_block_id=detail[0].pk,
                                              target_atom_id=target_atom_id))
                 # Tree-specific anchors stay out of the reusable catalog metadata.
@@ -521,6 +538,11 @@ def auto_discover_and_mount_public_assets(build, user=None, request=None):
     for detail in details:
         block = detail[0]
         for track, cap, suffix in (('spotlight', 3, '精讲 bilibili'), ('wiki', 2, '定义 法规 权威')):
+            eligible = _difficulty_filtered_details([detail],
+                dict(asset_track=track, respect_difficulty=True))
+            if not eligible:
+                continue
+            track_detail = eligible[0]
             if count(block, track) >= cap:
                 continue
             # A filled track is already useful; subsequent runs search only missing tracks.
@@ -528,9 +550,9 @@ def auto_discover_and_mount_public_assets(build, user=None, request=None):
                 continue
             finance = '私募' in build.subject or '股权' in build.subject
             core_subject = '私募股权' if finance else (_subject_terms(build.subject)[0] if _subject_terms(build.subject) else build.subject)
-            keywords = ' '.join(_specific_terms(detail[3])[:2]) or block.short_title
+            keywords = ' '.join(_specific_terms(track_detail[3])[:2]) or block.short_title
             query = f'{core_subject} {keywords} ' + ('讲解 site:bilibili.com/video' if track == 'spotlight' else ('定义 site:amac.org.cn' if finance else '专业 wiki 定义'))
-            terms = _specific_terms(detail[3]) or [block.short_title]
+            terms = _specific_terms(track_detail[3]) or [block.short_title]
             queries = [query]
             for term in terms[:3]:
                 if track == 'spotlight':
@@ -554,15 +576,15 @@ def auto_discover_and_mount_public_assets(build, user=None, request=None):
                         if track != 'spotlight':
                             continue
                         parts = [part for part in candidate.get('segments', []) if
-                                 not _other_subject_part(part['title']) and _specific_score(part['title'], detail[3])]
+                                 not _other_subject_part(part['title']) and _specific_score(part['title'], track_detail[3])]
                         if not parts:
                             continue
-                        part = max(parts, key=lambda item: _specific_score(item['title'], detail[3]))
+                        part = max(parts, key=lambda item: _specific_score(item['title'], track_detail[3]))
                         candidate = dict(candidate, title=f"{candidate['title']} · {part['title']}",
                                          url=part['url'], locator=part['locator'], segments=[],
                                          summary=part.get('summary') or part['title'])
                     candidate = dict(candidate, asset_track=track)
-                    score = evaluate_candidate_quality(candidate, build.subject, detail[3])
+                    score = evaluate_candidate_quality(candidate, build.subject, track_detail[3])
                     if score:
                         ranked.append((score, candidate))
                 if ranked:

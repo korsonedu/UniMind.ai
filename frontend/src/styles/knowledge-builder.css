@@ -347,6 +347,32 @@
   border-color: #abd5b6;
   color: var(--um-color-success);
 }
+
+.kb-diff-badge,
+.kb-point-action-hint {
+  padding: 2px 7px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.kb-diff-badge {
+  color: var(--kb-diff-color);
+  border-color: color-mix(in srgb, var(--kb-diff-color) 22%, transparent);
+  background: color-mix(in srgb, var(--kb-diff-color) 10%, var(--um-color-surface));
+}
+
+.kb-diff-badge--l1 { --kb-diff-color: var(--um-color-success); }
+.kb-diff-badge--l2 { --kb-diff-color: var(--um-color-warning); }
+.kb-diff-badge--l3 { --kb-diff-color: var(--um-color-danger); }
+
+.kb-point-action-hint {
+  color: var(--um-color-accent);
+  background: var(--um-color-selected);
+}
+
 .kb-point .kb-badges { margin-top: 6px; }
 
 .kb-card.open .kb-toggle {
@@ -489,6 +515,27 @@
   border-color: var(--kb-border);
   background: var(--um-color-context);
   color: var(--kb-muted);
+}
+
+.kb-point[role="button"] {
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.kb-point[role="button"]:is(:hover, :focus-visible) {
+  border-color: var(--kb-accent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--kb-accent) 14%, transparent);
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .kb-point[role="button"]:hover { transform: translateY(-2px); }
+  .kb-point[role="button"]:active { transform: translateY(0); }
+}
+
+.kb-point[role="button"]:focus-visible {
+  outline: 2px solid var(--kb-accent);
+  outline-offset: 2px;
 }
 
 .kb-point b {
@@ -1040,6 +1087,28 @@
   margin: 0 !important;
   border-radius: 0 !important;
   border: 0 !important;
+}
+
+.kb-atom-workbench-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(16px, 2vw, 28px);
+}
+
+.kb-atom-workbench-grid > * { min-width: 0; }
+
+.kb-xiaoyu-pane {
+  min-width: 0;
+  padding: clamp(14px, 2vw, 22px);
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  background: hsl(var(--muted) / 0.45);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .kb-atom-workbench-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 .kb-badge--weak { color: #a22323; background: #fff0eb; border: 1px solid #efb4a8; }

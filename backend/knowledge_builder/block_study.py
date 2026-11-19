@@ -30,6 +30,80 @@ logger = logging.getLogger(__name__)
 _DEFAULT_PUBLIC_TEXT = learning_resources.public_text
 
 
+@transaction.atomic
+def ensure_block_learning_project(user, block, project_id=None, atom_id=None):
+    """Activate an owned graph learning path and reuse its companion conversation."""
+    from django.contrib.auth import get_user_model
+    from ai_assistant.models import (Bot, Conversation, ConversationProject,
+                                     LearningKnowledgeVersion, ProjectLearning)
+    from ai_assistant.services.learning_knowledge import knowledge_operation
+    from ai_assistant.services.project_learning import change_learning
+
+    # Project names have no uniqueness constraint. Serialize automatic creation for this user.
+    get_user_model().objects.select_for_update().get(pk=user.pk)
+    project = ConversationProject.objects.filter(pk=project_id, user=user).first() if project_id else None
+    if project is None:
+        version_ids = list(LearningKnowledgeVersion.objects.filter(
+            knowledge_map__user=user, snapshot__builder__build_id=str(block.build_id)).values_list('pk', flat=True))
+        project = ConversationProject.objects.filter(user=user).filter(
+            Q(learning__plan__knowledge_path__version_id__in=version_ids)
+            | Q(learning__pending_plan__plan__knowledge_path__version_id__in=version_ids)).first()
+    if project is None:
+        project = ConversationProject.objects.filter(user=user, name=block.build.subject[:60]).first()
+    if project is None:
+        project = ConversationProject.objects.create(
+            user=user, name=block.build.subject[:60],
+            instructions=f'围绕《{block.build.subject}》知识结构图谱进行分步学习、概念速通与难点检验。')
+
+    state, _ = ProjectLearning.objects.get_or_create(project=project, defaults={'planning_enabled': True})
+    state = ProjectLearning.objects.select_for_update().get(pk=state.pk)
+    if not state.planning_enabled:
+        state.planning_enabled = True
+        state.save(update_fields=['planning_enabled', 'updated_at'])
+    path = state.plan.get('knowledge_path') or {}
+    version = LearningKnowledgeVersion.objects.filter(
+        pk=path.get('version_id'), knowledge_map__user=user,
+        snapshot__builder__build_id=str(block.build_id)).first()
+    included = version and any(
+        block.pk in node.get('builder_block_ids', []) for node in version.snapshot.get('nodes', []))
+    if state.status != 'active' or not included:
+        target_block_ids = list(block.build.blocks.values_list('pk', flat=True)[:26])
+        if len(target_block_ids) > 25:
+            target_block_ids = [block.pk]
+        knowledge_operation(project, {
+            'action': 'from_build', 'build_id': str(block.build_id),
+            'block_ids': target_block_ids, 'revision': state.revision, 'depth': 'apply',
+        })
+        state.refresh_from_db()
+        if state.pending_plan.get('plan'):
+            change_learning(project, {'action': 'accept', 'revision': state.revision})
+            state.refresh_from_db()
+
+    bot = Bot.objects.filter(name='小宇', bot_type='planner', institution__isnull=True, is_active=True).order_by('id').first()
+    if bot is None:
+        bot = Bot.objects.filter(bot_type='planner').order_by('id').first()
+    conversations = Conversation.objects.filter(user=user, project=project)
+    conversation = conversations.filter(pk=state.last_conversation_id).first() if state.last_conversation_id else None
+    if conversation is None:
+        conversation = conversations.order_by('-updated_at').first()
+    if conversation is None and bot:
+        conversation = Conversation.objects.create(
+            user=user, bot=bot, project=project, conversation_id=uuid4(),
+            title=f'{block.build.subject[:40]} · 伴学')
+    if conversation and state.last_conversation_id != conversation.pk:
+        state.last_conversation = conversation
+        state.save(update_fields=['last_conversation', 'updated_at'])
+    return {
+        'project_id': project.pk,
+        'conversation_id': str(conversation.conversation_id) if conversation else None,
+        'bot_id': bot.pk if bot else None,
+        'project_name': project.name,
+        'status': state.status,
+        'block_id': block.pk,
+        'atom_id': atom_id,
+    }
+
+
 def _assignments(block):
     return sorted(BlockStepAtom.objects.filter(step__block=block).select_related('atom', 'step'),
                   key=lambda row: (row.membership_type != 'core', row.step.step_index, row.position, row.pk))
