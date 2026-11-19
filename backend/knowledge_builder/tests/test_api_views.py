@@ -29,6 +29,9 @@ def test_serializers_explicit_fields():
         serializers.AttachBlockResourceSerializer, serializers.BlockQuizRequestSerializer,
         serializers.BlockResourceInputSerializer, serializers.BlockResourceUpdateSerializer,
         serializers.PublicAssetCatalogSerializer, serializers.TreePublicAssetImportSerializer,
+        serializers.SourceAlignmentSerializer, serializers.TreeSourceDocumentSerializer,
+        serializers.CreateTreeSourceSerializer, serializers.SourceAlignmentUpdateSerializer,
+        serializers.AtomMicroLessonSerializer, serializers.AtomMicroLessonRequestSerializer,
     ):
         assert isinstance(serializer.Meta.fields, tuple)
         assert set(serializer().fields) == set(serializer.Meta.fields)

@@ -1,4 +1,5 @@
 import type { LearningTask } from '@/components/LearningTasksPanel';
+import type { VisualData } from '@/pages/xiaoyu/visuals';
 export type BuildArchetype =
   | 'auto'
   | 'institution_mechanism_theory'
@@ -320,6 +321,7 @@ export interface BlockResourceUpdatePayload {
 export interface BlockResourcesResponse {
   region_pref?: 'cn' | 'intl';
   resources: BlockResourceItem[];
+  source_alignments?: SourceAlignmentItem[];
   internal_candidates: (BlockResourcePayload & { source_kind: 'course' | 'library'; title: string; url: string; excerpt: string })[];
   web_candidates: { title: string; url: string; summary: string }[];
   wiki_candidates?: WikiCandidateItem[];
@@ -328,4 +330,142 @@ export interface BlockResourcesResponse {
 export interface BlockAssessment {
   id: number; block_id: number; mode: BlockQuizMode; complete: boolean; passed: boolean; accuracy: number | null;
   items: { task_id: string; atom_id: number; atom_name: string; membership_type: 'core' | 'extension'; q_type: 'objective' | 'subjective'; task: LearningTask }[];
+}
+
+export type TreeSourceKind = 'pdf' | 'markdown' | 'text' | 'bilibili_series' | 'course_album' | 'web_repo';
+export type AlignmentRole = 'primary_textbook' | 'official_syllabus' | 'video_lecture' | 'worked_example';
+export type MicroLessonStyle = 'balanced' | 'intuition' | 'exam' | 'visual';
+
+export interface SourceTocNode {
+  node_id: string;
+  parent_id: string | null;
+  title: string;
+  locator: string;
+  summary: string;
+  char_count: number;
+  url?: string;
+  children?: SourceTocNode[];
+}
+
+export interface SourceAlignmentItem {
+  id: number;
+  source_document: number;
+  source_title: string;
+  source_kind: TreeSourceKind;
+  block: number;
+  block_title: string;
+  atom: number | null;
+  atom_name: string;
+  source_node_id: string;
+  section_title: string;
+  locator: string;
+  source_url: string;
+  excerpt_quote: string;
+  full_excerpt: string;
+  alignment_role: AlignmentRole;
+  match_reason: string;
+  confidence: number;
+  is_verified: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TreeSourceDocumentItem {
+  id: number;
+  build: string;
+  source_kind: TreeSourceKind;
+  title: string;
+  url: string;
+  file_key: string;
+  is_primary: boolean;
+  parse_status: 'pending' | 'ready' | 'failed';
+  parse_error: string;
+  toc_tree: SourceTocNode[];
+  node_count: number;
+  alignment_count: number;
+  aligned_block_count: number;
+  aligned_atom_count: number;
+  alignments: SourceAlignmentItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SourceCoverageSummary {
+  total_block_count: number;
+  aligned_block_count: number;
+  total_atom_count: number;
+  aligned_atom_count: number;
+  alignment_count: number;
+}
+
+export interface TreeSourcesListResponse {
+  sources: TreeSourceDocumentItem[];
+  coverage: SourceCoverageSummary;
+  albums: { id: number; name: string; description: string }[];
+}
+
+export interface CreateTreeSourcePayload {
+  source_kind: TreeSourceKind;
+  title?: string;
+  url?: string;
+  content?: string;
+  outline_text?: string;
+  album_id?: number;
+  is_primary?: boolean;
+  auto_align?: boolean;
+  file?: File;
+}
+
+export interface TreeSourceAlignResponse {
+  source: TreeSourceDocumentItem;
+  used_ai: boolean;
+  created_count: number;
+  coverage: SourceCoverageSummary;
+  build_coverage: SourceCoverageSummary;
+  alignments: SourceAlignmentItem[];
+}
+
+export interface MicroLessonCitation {
+  alignment_id: number;
+  source_id: number;
+  title: string;
+  source_kind: TreeSourceKind;
+  section_title: string;
+  locator: string;
+  quote: string;
+  full_excerpt?: string;
+  url: string;
+  alignment_role: AlignmentRole;
+  match_reason?: string;
+  is_verified?: boolean;
+}
+
+export interface MicroLessonQuickCheck {
+  question: string;
+  options: { key: string; label: string }[];
+  answer: string;
+  explanation: string;
+}
+
+export interface AtomMicroLessonResponse {
+  exists: boolean;
+  id?: number;
+  build: string;
+  atom: number;
+  version?: number;
+  difficulty_tier: AtomDifficultyTier;
+  difficulty_label: string;
+  style?: MicroLessonStyle;
+  is_source_grounded: boolean;
+  grounded_source_ids?: number[];
+  hook_summary?: string;
+  pitfalls?: string[];
+  narration_script?: string;
+  visuals?: VisualData[];
+  quick_check?: MicroLessonQuickCheck;
+  citations: MicroLessonCitation[];
+  status?: 'ready' | 'generating' | 'failed';
+  error_message?: string;
+  created_at?: string;
+  updated_at?: string;
 }

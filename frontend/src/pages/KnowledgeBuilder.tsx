@@ -234,7 +234,7 @@ export default function KnowledgeBuilder() {
           ...(detailQuery.data
             ? [
                 {
-                  label: t('公开资产池 & 整树挂载…'),
+                  label: t('📚 主线资料与切片对齐…'),
                   onSelect: () => setPublicAssetsBuildId(detailQuery.data!.id),
                 },
               ]

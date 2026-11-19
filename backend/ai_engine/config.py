@@ -14,6 +14,8 @@ _TASK_MODEL_MAP = {
     'knowledge_tree_edges': ('AI_MODEL_GENERATE_KNOWLEDGE_TREE', 'fast'),
     'knowledge_tree_repair': ('AI_MODEL_SCHEMA_REPAIR', 'fast'),
     'knowledge_tree_block': ('AI_MODEL_GENERATE_KNOWLEDGE_TREE', 'fast'),
+    'knowledge_builder_source_align': ('AI_MODEL_PARSE_TEXT', 'fast'),
+    'knowledge_builder_micro_lesson': ('AI_MODEL_CHAT', 'fast'),
     # ── Chat ──
     # 前缀匹配规则：'assistant.chat.planner' 精确匹配小宇，其他 agent 操作 fallback 到默认 flash
     'assistant.chat.planner': ('AI_MODEL_CHAT', 'fast'),
