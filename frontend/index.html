@@ -74,10 +74,67 @@
       body {
         font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
+
+      html[data-account-callback] { color-scheme: light dark; }
+      #workspace-loader {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        align-items: center;
+        justify-content: center;
+        background: light-dark(white, #09090b);
+        --loader-muted: light-dark(#f4f4f5, #27272a);
+        --loader-border: light-dark(#f2f2f3, #18181b);
+      }
+      #root:has([data-workspace-loader]) + #workspace-loader,
+      html[data-account-callback] #root:empty + #workspace-loader { display: flex; }
+      #workspace-loader > div { box-sizing: border-box; width: min(100%, 72rem); padding: 3rem 1.5rem; }
+      .workspace-loader-heading { margin-bottom: 2rem; }
+      .workspace-loader-grid { display: grid; gap: 1rem; }
+      .workspace-loader-card { display: grid; gap: .75rem; padding: 1.25rem; border: 1px solid var(--loader-border); border-radius: .75rem; }
+      #workspace-loader span { display: block; background: var(--loader-muted); border-radius: .375rem; }
+      .workspace-loader-heading span:first-child { width: min(100%, 16rem); height: 2rem; border-radius: .5rem; }
+      .workspace-loader-heading span + span { margin-top: .75rem; width: min(100%, 24rem); height: 1rem; }
+      .workspace-loader-card span:first-child { height: 9rem; border-radius: .5rem; }
+      .workspace-loader-card span:nth-child(2) { width: 75%; height: 1.25rem; }
+      .workspace-loader-card span:last-child { width: 50%; height: 1rem; }
+      @media (min-width: 48rem) {
+        #workspace-loader > div { padding-inline: 2rem; }
+        .workspace-loader-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
+      @media (min-width: 64rem) {
+        .workspace-loader-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      }
     </style>
+    <script>
+      if (/^\/account-callback\/?$/i.test(location.pathname)) {
+        document.documentElement.dataset.accountCallback = '';
+        try {
+          const space = sessionStorage.getItem('unimind-active-workspace');
+          const key = space && space !== 'personal' ? 'system-storage:workspace:' + space : 'system-storage';
+          const saved = JSON.parse(localStorage.getItem(key));
+          const theme = (saved?.state ?? saved)?.theme;
+          if (theme === 'light' || theme === 'dark') document.documentElement.style.colorScheme = theme;
+        } catch { /* Use the system appearance until the app loads. */ }
+      }
+    </script>
   </head>
   <body class="antialiased">
     <div id="root"></div>
+    <div id="workspace-loader" aria-hidden="true">
+      <div>
+        <div class="workspace-loader-heading"><span></span><span></span></div>
+        <div class="workspace-loader-grid">
+          <div class="workspace-loader-card"><span></span><span></span><span></span></div>
+          <div class="workspace-loader-card"><span></span><span></span><span></span></div>
+          <div class="workspace-loader-card"><span></span><span></span><span></span></div>
+          <div class="workspace-loader-card"><span></span><span></span><span></span></div>
+          <div class="workspace-loader-card"><span></span><span></span><span></span></div>
+          <div class="workspace-loader-card"><span></span><span></span><span></span></div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

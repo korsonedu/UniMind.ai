@@ -1,6 +1,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { queryKeys } from '@/lib/queryKeys';
 import { AuthLayout } from '@/components/AuthLayout';
+import { PageLoader } from '@/components/PageLoader';
 import { Button } from '@/components/ui/button';
 import { t, useLocale } from '@/i18n';
 import { useEffect, useState } from 'react';
@@ -41,10 +42,12 @@ export function AccountCallback() {
     void load();
     return () => { cancelled = true; controller.abort(); };
   }, [navigate, returnTo]);
-  return <AuthLayout title={error ? t('暂时无法进入 UniMind') : t('正在确认你的账号')}>
-    {error ? <div className="space-y-3">
+  if (!error) return <PageLoader />;
+
+  return <AuthLayout title={t('暂时无法进入 UniMind')}>
+    <div className="space-y-3">
       <Button className="um-auth-submit" onClick={() => window.location.reload()}>{t('重试')}</Button>
       <Button asChild variant="ghost" className="um-auth-secondary"><a href={getLoginPath(returnTo)}>{t('重新登录')}</a></Button>
-    </div> : <p role="status" className="um-auth-status">{t('确认后将进入 UniMind。')}</p>}
+    </div>
   </AuthLayout>;
 }
