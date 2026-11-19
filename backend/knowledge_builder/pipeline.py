@@ -5,6 +5,7 @@ import logging
 from itertools import combinations
 
 import numpy as np
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from ai_engine.service import AICallError
@@ -727,6 +728,9 @@ def run_build(build_id, progress=None):
             with transaction.atomic():
                 auto_mount_internal_resources(build)
                 auto_mount_public_assets(build)
+            if getattr(settings, 'UNIMIND_KB_ONLINE_AUTO_MOUNT', False):
+                from .public_asset_discovery import auto_discover_and_mount_public_assets
+                auto_discover_and_mount_public_assets(build)
         except Exception:
             logging.getLogger(__name__).exception('Initial resource matching failed for build %s', build.pk)
         return build

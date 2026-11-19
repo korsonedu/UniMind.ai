@@ -192,15 +192,31 @@ def _mount(build, details, data, user=None, public_asset=None, *, segment=None, 
                          ('wiki_reference' if track == 'wiki' else 'concept_intuition'),
         title=title[:200], excerpt=segment.get('summary') or data.get('description', ''),
         region_scope=data.get('region_scope', 'global'),
+        origin=data.get('origin', 'manual'),
+        match_method=data.get('match_method', 'manual'),
+        match_score=data.get('match_score', 0.0),
     )
     creator = user if user is not None and getattr(user, 'is_authenticated', False) else None
     # Album episodes share /courses, so retain their course ID and locator in the identity.
-    resource, _ = BlockResource.objects.update_or_create(
-        build=build, block=block, public_asset=public_asset, created_by=creator,
-        source_kind=data['source_kind'],
-        url=url, locator=locator, course_id=segment.get('course_id') or data.get('course_id'),
-        marketplace_listing_id=data.get('marketplace_listing_id'), defaults=fields,
-    )
+    identity = dict(build=build, block=block, public_asset=public_asset,
+                    source_kind=data['source_kind'], url=url, locator=locator,
+                    course_id=segment.get('course_id') or data.get('course_id'),
+                    marketplace_listing_id=data.get('marketplace_listing_id'))
+    if data.get('origin') == 'auto':
+        # Automatic reruns must never resurrect dismissed or globally rejected alignments.
+        existing = BlockResource.objects.filter(**identity).first()
+        if existing is not None:
+            return existing
+        if public_asset is not None:
+            from .models import ConceptAssetIndex
+            if ConceptAssetIndex.objects.filter(public_asset=public_asset,
+                    segment_locator=locator, is_disabled=True).exists():
+                return None
+        resource, _ = BlockResource.objects.get_or_create(**identity,
+                defaults={**fields, 'created_by': creator})
+    else:
+        resource, _ = BlockResource.objects.update_or_create(**identity,
+                created_by=creator, defaults=fields)
     return resource
 
 
@@ -214,7 +230,11 @@ def align_and_mount_spine_series(build, asset_data, user=None, public_asset=None
         text = f"{segment['title']} {segment.get('summary', '')}"
         scores = [_score(text, item[3]) for item in details]
         best = max(range(len(scores)), key=scores.__getitem__)
-        if scores[best] > 0:
+        explicit = next((i for i, detail in enumerate(details)
+                         if detail[0].pk == segment.get('target_block_id')), None)
+        if explicit is not None:
+            anchors[index] = explicit
+        elif scores[best] > 0:
             anchors[index] = best
     positions = {}
     for index in range(len(segments)):
@@ -232,8 +252,15 @@ def align_and_mount_spine_series(build, asset_data, user=None, public_asset=None
             position = round(left_y + (right_y - left_y) * (index - left_x) / (right_x - left_x))
         positions[index] = max(0, min(len(details) - 1, position))
     with transaction.atomic():
-        return [_mount(build, details[positions[index]], asset_data, user, public_asset, segment=segment)
-                for index, segment in enumerate(segments)]
+        type(build).objects.select_for_update().get(pk=build.pk)
+        if asset_data.get('origin') == 'auto' and build.block_resources.filter(
+                asset_track='spine', is_dismissed=False).exclude(public_asset=public_asset).exists():
+            return []
+        resources = [_mount(build, details[positions[index]], asset_data, user, public_asset, segment=segment,
+                            target_atom_id=segment.get('target_atom_id'))
+                     for index, segment in enumerate(segments)
+                     if not asset_data.get('strict_alignment') or index in anchors]
+        return [resource for resource in resources if resource is not None and not resource.is_dismissed]
 
 
 def mount_single_public_asset(build, asset_data, user=None, public_asset=None, target_block=None, target_atom_id=None):
@@ -356,21 +383,45 @@ def resolve_and_store_asset(build, url, payload=None, user=None, region_pref='cn
 
 def auto_mount_public_assets(build):
     region = get_region_preference(build.created_by)
-    assets = catalog_candidates_for_build(build, region)
-    spine = next((asset for asset in assets if asset.asset_track == 'spine' and asset.segments), None)
+    # Indexed assets must be reused through their verified concept alignment, not
+    # broad catalog token overlap; this also preserves disabled feedback tombstones.
+    assets = [asset for asset in catalog_candidates_for_build(build, region)
+              if not asset.concept_alignments.exists()]
+    from .public_asset_discovery import evaluate_candidate_quality, PART_MARKETING, _other_subject_part
+    details = _blocks(build)
+    assets = [asset for asset in assets if any(evaluate_candidate_quality(
+        asset_data_from_catalog(asset), build.subject,
+        [build.subject] if asset.asset_track == 'spine' else detail[3]) for detail in details)]
+    existing_spine = build.block_resources.filter(asset_track='spine', is_dismissed=False).first()
+    spine = next((asset for asset in assets if asset.asset_track == 'spine' and asset.segments
+                  and (existing_spine is None or existing_spine.public_asset_id == asset.pk)), None)
+    def automatic_data(asset):
+        data = {**asset_data_from_catalog(asset), 'origin': 'auto', 'match_method': 'seed_catalog'}
+        data['segments'] = [segment for segment in data.get('segments', [])
+            if not PART_MARKETING.search(segment.get('title', ''))
+            and not (0 < float(segment.get('duration', 0) or 0) < 90)
+            and not (_other_subject_part(segment.get('title', ''))
+                     and any(term in build.subject for term in ('\u79c1\u52df', '\u80a1\u6743')))]
+        return data
     with transaction.atomic():
         if spine is not None:
-            align_and_mount_spine_series(build, asset_data_from_catalog(spine), build.created_by, spine)
+            align_and_mount_spine_series(build, automatic_data(spine), build.created_by, spine)
         details = _blocks(build)
         for asset in assets:
             if asset.asset_track == 'spine':
                 continue
-            data = asset_data_from_catalog(asset)
-            if any(_score(_asset_text(data), item[3]) > 0 for item in details):
-                mount_single_public_asset(build, data, build.created_by, asset)
+            data = automatic_data(asset)
+            ranked = sorted(details, key=lambda item: _score(_asset_text(data), item[3]), reverse=True)
+            if ranked and _score(_asset_text(data), ranked[0][3]) > 0:
+                limit = 2 if asset.asset_track == 'wiki' else 3
+                if ranked[0][0].resources.filter(origin='auto', asset_track=asset.asset_track, is_dismissed=False).count() < limit:
+                    mount_single_public_asset(build, data, build.created_by, asset, target_block=ranked[0][0])
         for listing in marketplace_candidates(build):
-            if details:
-                mount_single_public_asset(build, _marketplace_data(listing), build.created_by)
+            data = {**_marketplace_data(listing), 'origin': 'auto', 'match_method': 'seed_catalog'}
+            ranked = sorted(details, key=lambda item: _score(_asset_text(data), item[3]), reverse=True)
+            if ranked and _score(_asset_text(data), ranked[0][3]) > 0:
+                if ranked[0][0].resources.filter(origin='auto', asset_track='spotlight', is_dismissed=False).count() < 3:
+                    mount_single_public_asset(build, data, build.created_by, target_block=ranked[0][0])
 
 
 @transaction.atomic

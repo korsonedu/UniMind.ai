@@ -92,9 +92,18 @@ class StepSerializer(serializers.ModelSerializer):
 
 
 class BlockResourceSerializer(serializers.ModelSerializer):
+    user_vote = serializers.SerializerMethodField()
+
+    def get_user_vote(self, instance):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated:
+            return 0
+        return instance.feedbacks.filter(user=user).values_list('vote', flat=True).first() or 0
+
     class Meta:
         model = models.BlockResource
-        fields = ('id', 'block', 'step', 'atom', 'public_asset', 'source_kind', 'asset_track', 'pedagogical_role', 'locator', 'region_scope', 'title', 'url', 'excerpt', 'course_id', 'library_resource_id', 'marketplace_listing_id', 'created_at')
+        fields = ('id', 'block', 'step', 'atom', 'public_asset', 'source_kind', 'asset_track', 'pedagogical_role', 'locator', 'region_scope', 'title', 'url', 'excerpt', 'course_id', 'library_resource_id', 'marketplace_listing_id', 'origin', 'match_method', 'match_score', 'upvotes', 'downvotes', 'user_vote', 'created_at')
 
 
 class BlockResourceInputSerializer(serializers.Serializer):

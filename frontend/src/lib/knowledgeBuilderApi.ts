@@ -1,7 +1,7 @@
 import api from '@/lib/api';
 import type { BlockResourceItem, BlockResourcePayload, BlockResourcesResponse, BlockQuizMode, BlockAssessment } from '@/types/knowledgeBuilder';
 import type { BuildArchetype, BuildSummary, KnowledgeTreeBuildDetail, IntakeRequestPayload, IntakeResponsePayload } from '@/types/knowledgeBuilder';
-import type { AssetTrack, BlockResourceUpdatePayload, TreePublicAssetImportPayload, TreePublicAssetsResponse } from '@/types/knowledgeBuilder';
+import type { AssetTrack, BlockResourceUpdatePayload, BlockResourceVotePayload, TreeAutoDiscoverResponse, TreePublicAssetImportPayload, TreePublicAssetsResponse } from '@/types/knowledgeBuilder';
 
 export function resolvePublicAssetLink(url: string, locator?: string): string | undefined {
   const internal = /^\/courses(?:\/|[?#]|$)/.test(url);
@@ -65,6 +65,10 @@ export async function getTreePublicAssets(buildId: string, signal?: AbortSignal)
   const { data } = await api.get<TreePublicAssetsResponse>(`/knowledge-builder/${encodeURIComponent(buildId)}/public-assets/`, { signal });
   return data;
 }
+export async function autoDiscoverTreePublicAssets(buildId: string): Promise<TreeAutoDiscoverResponse> {
+  const { data } = await api.post<TreeAutoDiscoverResponse>(`/knowledge-builder/${encodeURIComponent(buildId)}/public-assets/`, { action: 'auto_discover' });
+  return data;
+}
 export async function importTreePublicAsset(buildId: string, payload: TreePublicAssetImportPayload): Promise<{ mounted_count: number; asset_track: AssetTrack; resources: BlockResourceItem[] }> {
   const { data } = await api.post<{ mounted_count: number; asset_track: AssetTrack; resources: BlockResourceItem[] }>(`/knowledge-builder/${encodeURIComponent(buildId)}/public-assets/`, payload);
   return data;
@@ -74,6 +78,11 @@ export async function updateBlockResource(buildId: string, blockId: number, payl
   return data;
 }
 export async function attachBlockResource(buildId: string, blockId: number, payload: BlockResourcePayload): Promise<BlockResourceItem> {
+  const { data } = await api.post<BlockResourceItem>(`${blockPath(buildId, blockId)}/resources/`, payload);
+  return data;
+}
+export async function voteBlockResource(buildId: string, blockId: number, resourceId: number, vote: 1 | -1 | 0, dismiss?: boolean): Promise<BlockResourceItem> {
+  const payload: BlockResourceVotePayload = { action: 'vote', resource_id: resourceId, vote, ...(dismiss ? { dismiss: true } : {}) };
   const { data } = await api.post<BlockResourceItem>(`${blockPath(buildId, blockId)}/resources/`, payload);
   return data;
 }

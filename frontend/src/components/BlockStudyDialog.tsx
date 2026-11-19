@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { attachBlockResource, deleteBlockResource, blockAssessment, attachBlockResourceToProject, getBlockResources, resolvePublicAssetLink, updateBlockResource } from '@/lib/knowledgeBuilderApi';
+import { attachBlockResource, deleteBlockResource, blockAssessment, attachBlockResourceToProject, getBlockResources, resolvePublicAssetLink, updateBlockResource, voteBlockResource } from '@/lib/knowledgeBuilderApi';
 import type { AssetSourceKind, AssetTrack, BlockResourcesResponse, BlockResourceUpdatePayload, BlockQuizMode, BlockResourceItem, BlockResourcePayload, KnowledgeTreeBuildDetail, LearningBlock } from '@/types/knowledgeBuilder';
 import { learningKey, type ProjectLearning } from '@/lib/projectLearning';
 import { PracticeQuizCard } from '@/pages/xiaoyu/visuals/PracticeQuizCard';
@@ -56,6 +56,10 @@ export function BlockStudyDialog({ tree, block, project, onClose, onChanged }: P
   });
   const update = useMutation({ mutationFn: (payload: BlockResourceUpdatePayload) => updateBlockResource(tree.id, block.id, payload), onSuccess: refresh, onError });
   const remove = useMutation({ mutationFn: (id: number) => deleteBlockResource(tree.id, block.id, id), onSuccess: refresh, onError });
+  const voteMutation = useMutation({
+    mutationFn: ({ resourceId, vote }: { resourceId: number; vote: 1 | -1 | 0 }) => voteBlockResource(tree.id, block.id, resourceId, vote),
+    onSuccess: refresh, onError,
+  });
   const search = useMutation({
     mutationFn: () => getBlockResources(tree.id, block.id, query),
     onSuccess: data => { setSearchResults(data); setSearched(true); }, onError,
@@ -84,7 +88,7 @@ export function BlockStudyDialog({ tree, block, project, onClose, onChanged }: P
     mutationFn: (id: number) => attachBlockResourceToProject(tree.id, block.id, project!.project_id, id),
     onSuccess: data => { setNotice(data.notice); refreshTasks(); }, onError,
   });
-  const busy = attach.isPending || update.isPending || remove.isPending || search.isPending || generate.isPending || useResource.isPending;
+  const busy = attach.isPending || update.isPending || remove.isPending || search.isPending || generate.isPending || useResource.isPending || voteMutation.isPending;
   const mountWeb = (link: string) => { setError(''); attach.mutate({ url: link.trim(), asset_track: assetTrack, locator: locator.trim(), save_to_library: saveToLibrary, ...(atomId ? { atom_id: Number(atomId) } : {}) }); };
   const resources = resourcesQuery.data?.resources ?? block.resources ?? [];
   const candidateData = searchResults ?? resourcesQuery.data;
@@ -101,6 +105,7 @@ export function BlockStudyDialog({ tree, block, project, onClose, onChanged }: P
       <div className="flex flex-wrap items-center gap-2">
         <a href={href} target="_blank" rel="noopener noreferrer" className="font-semibold underline">{resource.title}</a>
         <span className="kb-badge">{sourceLabels[resource.source_kind]}</span>
+        {resource.origin === 'auto' && <span className="kb-badge">AI 自动挂载</span>}
         {resource.locator && <span className="kb-badge kb-resource-locator">{resource.locator}</span>}
         {resource.pedagogical_role && <span className="kb-badge">{roleLabels[resource.pedagogical_role] ?? resource.pedagogical_role}</span>}
         {track === 'spine' && <span className="text-sm text-muted-foreground">体系连贯主干</span>}
@@ -110,6 +115,14 @@ export function BlockStudyDialog({ tree, block, project, onClose, onChanged }: P
         : <details><summary>查看正文摘要</summary><p className="whitespace-pre-wrap text-sm">{resource.excerpt || '暂无正文摘要。'}</p></details>}
       <a href={href} target="_blank" rel="noopener noreferrer" className="kb-resource-direct-link underline">直接打开{resource.locator ? `（${resource.locator}）` : ''}</a>
       {project && <Button size="sm" variant="outline" disabled={busy} onClick={() => { setError(''); useResource.mutate(resource.id); }}>用于当前小宇项目</Button>}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant={resource.user_vote === 1 ? 'default' : 'outline'} disabled={busy} aria-label={`${resource.title}有用`} aria-pressed={resource.user_vote === 1} onClick={() => {
+          setError(''); voteMutation.mutate({ resourceId: resource.id, vote: resource.user_vote === 1 ? 0 : 1 });
+        }}>👍 有用 ({resource.upvotes ?? 0})</Button>
+        <Button size="sm" variant={resource.user_vote === -1 ? 'default' : 'outline'} disabled={busy} aria-label={`${resource.title}没用`} aria-pressed={resource.user_vote === -1} onClick={() => {
+          setError(''); voteMutation.mutate({ resourceId: resource.id, vote: resource.user_vote === -1 ? 0 : -1 });
+        }}>👎 没用 ({resource.downvotes ?? 0})</Button>
+      </div>
       {allowEdit && <div className="kb-resource-adjustments flex flex-wrap items-center gap-2">
         <label className="text-sm">轨道<select className="kb-study-select" aria-label={`${resource.title}的资源轨道`} value={track} disabled={busy} onChange={event => {
           setError(''); update.mutate({ resource_id: resource.id, asset_track: event.target.value as AssetTrack });

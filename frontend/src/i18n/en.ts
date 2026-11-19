@@ -3362,7 +3362,15 @@ const en: Record<string, string> = {
   "先选择范围，再回到小宇确认学习路径。": "Choose your scope, then confirm the path with XiaoYu.",
   "确认后开始，原学习安排在确认前保持不变。": "Start after confirmation. Your existing plan stays in place until then.",
   "生成知识结构": "Build a knowledge graph",
-  "查看并选择目标范围": "View and choose learning targets"
+  "查看并选择目标范围": "View and choose learning targets",
+  "AI 自动挂载": "AI auto-mounted",
+  "👍 有用 ({count})": "👍 Helpful ({count})",
+  "👎 没用 ({count})": "👎 Not helpful ({count})",
+  "{title}有用": "{title}: helpful",
+  "{title}没用": "{title}: not helpful",
+  "正在全网搜索并匹配…": "Searching the web and matching…",
+  "🌐 全网智能搜索并自动挂载": "🌐 Discover web resources and auto-mount",
+  "已从全网智能发现并向本树挂载 {count} 条资源。": "Discovered and mounted {count} web resources to this tree."
 };
 
 export default en;

@@ -259,6 +259,26 @@ export interface BlockResourceItem {
   course_id: number | null; library_resource_id: number | null; created_at: string;
   asset_track?: AssetTrack; pedagogical_role?: string; locator?: string;
   region_scope?: 'cn' | 'intl' | 'global'; public_asset?: number | null; marketplace_listing_id?: number | null;
+  origin?: 'auto' | 'manual';
+  match_method?: string;
+  match_score?: number;
+  upvotes?: number;
+  downvotes?: number;
+  user_vote?: 1 | -1 | 0;
+}
+export interface BlockResourceVotePayload {
+  action: 'vote';
+  resource_id: number;
+  vote: 1 | -1 | 0;
+  dismiss?: boolean;
+}
+export interface TreeAutoDiscoverResponse {
+  mounted_count: number;
+  discovered_assets_count?: number;
+  reused_concept_count?: number;
+  asset_track: AssetTrack;
+  mounted_summary?: { spine_count: number; spotlight_count: number; wiki_count: number };
+  resources: BlockResourceItem[];
 }
 export interface BlockResourcePayload {
   url?: string; course_id?: number; library_resource_id?: number;
