@@ -69,6 +69,7 @@ export default function KnowledgeBuilder() {
   const projectTab = searchParams.get('tab') === 'project';
   const { chat, openingProject } = useXiaoYuChat();
   const [studyBlockId, setStudyBlockId] = useState<number | null>(null);
+  const [studyAtomId, setStudyAtomId] = useState<number | null>(null);
   const [publicAssetsBuildId, setPublicAssetsBuildId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const userId = useAuthStore(s => s.user?.id);
@@ -233,7 +234,7 @@ export default function KnowledgeBuilder() {
           ...(detailQuery.data
             ? [
                 {
-                  label: t('公开资产池 & 整树挂载…'),
+                  label: t('📚 主线资料与切片对齐…'),
                   onSelect: () => setPublicAssetsBuildId(detailQuery.data!.id),
                 },
               ]
@@ -368,7 +369,10 @@ export default function KnowledgeBuilder() {
             else blocks.add(id);
             return { buildId: activeBuildId, blocks };
           })}
-          onStudyBlock={setStudyBlockId}
+          onStudyBlock={(blockId, atomId = null) => {
+            setStudyBlockId(blockId);
+            setStudyAtomId(atomId ?? null);
+          }}
         />
         {selectedBlocks.size > 0 && (
           <div className="kb-selection-dock" role="region" aria-label={t('已选知识块操作')}>
@@ -422,7 +426,11 @@ export default function KnowledgeBuilder() {
         {detailQuery.data.blocks.filter(block => block.id === studyBlockId).map(block => <BlockStudyDialog
           key={`${detailQuery.data.id}:${block.id}`} tree={detailQuery.data} block={block}
           project={projectQuery.data}
-          onClose={() => setStudyBlockId(null)}
+          {...({ initialAtomId: studyAtomId } as { initialAtomId?: number | null })}
+          onClose={() => {
+            setStudyBlockId(null);
+            setStudyAtomId(null);
+          }}
           onChanged={() => {
             void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBuilder.detail(detailQuery.data.id) });
             void queryClient.invalidateQueries({ queryKey: ['knowledge-tree-public-assets', userId, detailQuery.data.id] });

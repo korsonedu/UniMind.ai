@@ -25,9 +25,84 @@ from quizzes.services.single_generate_pipeline import _check_latex_integrity, _c
 from .intake import _bank_question
 from .models import BlockResource, BlockStepAtom
 from .serializers import BlockResourceSerializer
+from .source_parsers import clean_resource_excerpt
 
 logger = logging.getLogger(__name__)
 _DEFAULT_PUBLIC_TEXT = learning_resources.public_text
+
+
+@transaction.atomic
+def ensure_block_learning_project(user, block, project_id=None, atom_id=None):
+    """Activate an owned graph learning path and reuse its companion conversation."""
+    from django.contrib.auth import get_user_model
+    from ai_assistant.models import (Bot, Conversation, ConversationProject,
+                                     LearningKnowledgeVersion, ProjectLearning)
+    from ai_assistant.services.learning_knowledge import knowledge_operation
+    from ai_assistant.services.project_learning import change_learning
+
+    # Project names have no uniqueness constraint. Serialize automatic creation for this user.
+    get_user_model().objects.select_for_update().get(pk=user.pk)
+    project = ConversationProject.objects.filter(pk=project_id, user=user).first() if project_id else None
+    if project is None:
+        version_ids = list(LearningKnowledgeVersion.objects.filter(
+            knowledge_map__user=user, snapshot__builder__build_id=str(block.build_id)).values_list('pk', flat=True))
+        project = ConversationProject.objects.filter(user=user).filter(
+            Q(learning__plan__knowledge_path__version_id__in=version_ids)
+            | Q(learning__pending_plan__plan__knowledge_path__version_id__in=version_ids)).first()
+    if project is None:
+        project = ConversationProject.objects.filter(user=user, name=block.build.subject[:60]).first()
+    if project is None:
+        project = ConversationProject.objects.create(
+            user=user, name=block.build.subject[:60],
+            instructions=f'围绕《{block.build.subject}》知识结构图谱进行分步学习、概念速通与难点检验。')
+
+    state, _ = ProjectLearning.objects.get_or_create(project=project, defaults={'planning_enabled': True})
+    state = ProjectLearning.objects.select_for_update().get(pk=state.pk)
+    if not state.planning_enabled:
+        state.planning_enabled = True
+        state.save(update_fields=['planning_enabled', 'updated_at'])
+    path = state.plan.get('knowledge_path') or {}
+    version = LearningKnowledgeVersion.objects.filter(
+        pk=path.get('version_id'), knowledge_map__user=user,
+        snapshot__builder__build_id=str(block.build_id)).first()
+    included = version and any(
+        block.pk in node.get('builder_block_ids', []) for node in version.snapshot.get('nodes', []))
+    if state.status != 'active' or not included:
+        target_block_ids = list(block.build.blocks.values_list('pk', flat=True)[:26])
+        if len(target_block_ids) > 25:
+            target_block_ids = [block.pk]
+        knowledge_operation(project, {
+            'action': 'from_build', 'build_id': str(block.build_id),
+            'block_ids': target_block_ids, 'revision': state.revision, 'depth': 'apply',
+        })
+        state.refresh_from_db()
+        if state.pending_plan.get('plan'):
+            change_learning(project, {'action': 'accept', 'revision': state.revision})
+            state.refresh_from_db()
+
+    bot = Bot.objects.filter(name='小宇', bot_type='planner', institution__isnull=True, is_active=True).order_by('id').first()
+    if bot is None:
+        bot = Bot.objects.filter(bot_type='planner').order_by('id').first()
+    conversations = Conversation.objects.filter(user=user, project=project)
+    conversation = conversations.filter(pk=state.last_conversation_id).first() if state.last_conversation_id else None
+    if conversation is None:
+        conversation = conversations.order_by('-updated_at').first()
+    if conversation is None and bot:
+        conversation = Conversation.objects.create(
+            user=user, bot=bot, project=project, conversation_id=uuid4(),
+            title=f'{block.build.subject[:40]} · 伴学')
+    if conversation and state.last_conversation_id != conversation.pk:
+        state.last_conversation = conversation
+        state.save(update_fields=['last_conversation', 'updated_at'])
+    return {
+        'project_id': project.pk,
+        'conversation_id': str(conversation.conversation_id) if conversation else None,
+        'bot_id': bot.pk if bot else None,
+        'project_name': project.name,
+        'status': state.status,
+        'block_id': block.pk,
+        'atom_id': atom_id,
+    }
 
 
 def _assignments(block):
@@ -207,9 +282,75 @@ def attach_block_resource(user, block, payload, request=None):
     if assignment:
         atom_id, step_id = assignment.atom_id, assignment.step_id
     fields.update({key: payload[key] for key in ('asset_track', 'pedagogical_role', 'locator') if key in payload})
+    fields['excerpt'] = clean_resource_excerpt(fields.get('excerpt', ''), max_len=600)
     with transaction.atomic():
         return BlockResource.objects.create(build=block.build, block=block, created_by=user,
                                             atom_id=atom_id, step_id=step_id, **fields)
+
+
+def auto_discover_block_resources(user, block, request=None, atom_id=None, max_mount=2):
+    """Single-block budgeted fallback discovery so BlockResourceDrawer never triggers a full-tree scan."""
+    from .public_asset_discovery import evaluate_candidate_quality, search_public_web
+    from .public_asset_resolvers import detect_source_kind, extract_locator_from_url, infer_region_scope
+    from .public_asset_service import get_region_preference, public_asset_allowed
+
+    region = get_region_preference(user, request)
+    assignments = _assignments(block)
+    target_row = next((r for r in assignments if r.atom_id == atom_id), None) if atom_id else None
+    focus_term = target_row.atom.name if target_row else block.short_title
+    queries = [
+        f'{block.build.subject} {focus_term} 精讲 site:bilibili.com/video',
+        f'{block.build.subject} {focus_term} 讲义 定义',
+    ]
+    existing_urls = set(block.resources.filter(is_dismissed=False).values_list('url', flat=True))
+    mounted = []
+    labels = [focus_term, block.short_title, *(row.atom.name for row in assignments[:4])]
+
+    for query in queries:
+        if len(mounted) >= max_mount:
+            break
+        try:
+            candidates = search_public_web(query, region_pref=region, limit=5)
+        except Exception as exc:
+            logger.warning('Single-block web discovery failed for query %r: %s', query, exc)
+            continue
+        for item in candidates:
+            if len(mounted) >= max_mount:
+                break
+            url = (item.get('url') or '').strip()
+            if not url.startswith('https://') or url in existing_urls:
+                continue
+            if not public_asset_allowed(item, region):
+                continue
+            score = evaluate_candidate_quality(item, block.build.subject, labels)
+            if not score:
+                continue
+            kind = detect_source_kind(url)
+            track = 'wiki' if kind == 'wikipedia' else 'spotlight'
+            row_match = target_row
+            if row_match is None:
+                row_match, _ = _match(block, assignments, f"{item.get('title', '')} {item.get('summary', '')}")
+            created = BlockResource.objects.create(
+                build=block.build,
+                block=block,
+                step_id=row_match.step_id if row_match else None,
+                atom_id=row_match.atom_id if row_match else None,
+                source_kind=kind,
+                asset_track=track,
+                pedagogical_role='wiki_reference' if track == 'wiki' else 'concept_intuition',
+                locator=extract_locator_from_url(url, kind),
+                region_scope=infer_region_scope(url, kind),
+                title=clean_resource_excerpt(item.get('title') or url, max_len=200),
+                url=url[:1000],
+                excerpt=clean_resource_excerpt(item.get('summary') or '', max_len=600),
+                origin='auto',
+                match_method='block_fallback_search',
+                match_score=float(score),
+                created_by=user,
+            )
+            existing_urls.add(url)
+            mounted.append(created)
+    return mounted
 
 
 def _hash(stem):
