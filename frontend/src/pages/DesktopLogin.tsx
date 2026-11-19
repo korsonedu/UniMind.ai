@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { getReturnTo } from '@/lib/routing';
 import type { DesktopLoginState } from '@/lib/desktop';
 import { AuthLayout } from '@/components/AuthLayout';
+import { PageLoader } from '@/components/PageLoader';
 import { Button } from '@/components/ui/button';
 
 export function DesktopLogin() {
@@ -23,7 +24,8 @@ export function DesktopLogin() {
   const sessionCheck = useRef<AbortController | null>(null);
   const supported = !!desktop?.startLogin && !!desktop.cancelLogin;
   const waiting = auth.status === 'waiting';
-  const busy = actionPending || ['opening', 'completing', 'authenticated'].includes(auth.status);
+  const completing = auth.status === 'completing' || auth.status === 'authenticated';
+  const busy = actionPending || auth.status === 'opening' || completing;
 
   useEffect(() => {
     if (!desktop) return;
@@ -78,14 +80,14 @@ export function DesktopLogin() {
     } catch { setError(t('暂时无法取消，请重新打开 UniMind。')); }
     finally { setActionPending(false); }
   };
+  if (completing) return <PageLoader />;
+
   const status = error || auth.error || (!supported ? t('请安装最新客户端，以使用浏览器登录。')
-    : auth.status === 'completing' || auth.status === 'authenticated' ? t('正在确认账号，即将进入学习空间。')
-      : waiting ? t('浏览器已打开。登录完成后，会自动回到这里。')
-        : '');
+    : waiting ? t('浏览器已打开。登录完成后，会自动回到这里。') : '');
 
   return <AuthLayout title={t('登录 UniMind.ai')}>
     <Button className="um-auth-submit" disabled={!supported || busy} onClick={() => void start()}>
-      {busy ? <><Spinner size={18} className="animate-spin" aria-hidden="true" />{auth.status === 'completing' || auth.status === 'authenticated' ? t('正在进入 UniMind.ai') : t('正在打开浏览器')}</>
+      {busy ? <><Spinner size={18} className="animate-spin" aria-hidden="true" />{t('正在打开浏览器')}</>
         : <>{waiting ? t('重新打开浏览器') : t('通过浏览器登录')}<ArrowUpRight size={18} aria-hidden="true" /></>}
     </Button>
     {status && <p className="mt-4 text-sm text-center text-muted-foreground" role={error || auth.error ? 'alert' : 'status'}>{status}</p>}

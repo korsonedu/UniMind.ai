@@ -3,7 +3,7 @@ import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { OfflineTrialPage } from '@/components/OfflineTrialPage';
 import { getLocale, t, useLocale } from '@/i18n';
 import { saveLanguagePreference } from '@/lib/languagePreference';
-import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet, matchPath, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { registerSW } from 'virtual:pwa-register';
 import axios from 'axios';
@@ -21,6 +21,7 @@ import { useAuthStore } from './store/useAuthStore';
 import { useInstitutionStore } from './store/useInstitutionStore';
 import { FeatureGuard } from './components/FeatureGuard';
 import { Loading } from '@/components/Loading';
+import { PageLoader } from '@/components/PageLoader';
 import api from '@/lib/api';
 import { Toaster, toast } from 'sonner';
 import { App as NativeApp } from '@capacitor/app';
@@ -69,31 +70,6 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 
 const Legal = lazy(() => import('./pages/Legal'));
 const PricingPage = lazy(() => import('./pages/Pricing'));
-
-
-import { Skeleton } from '@/components/ui/skeleton';
-
-const PageLoader = () => (
-  <div data-workspace-loader className="fixed inset-0 z-50 flex items-center justify-center bg-background">
-    <div className="w-full max-w-6xl mx-auto px-6 md:px-8 py-12 space-y-8">
-      {/* Header skeleton */}
-      <div className="space-y-3 max-w-lg">
-        <Skeleton className="h-8 w-64 rounded-lg" />
-        <Skeleton className="h-4 w-96 max-w-full rounded-md" />
-      </div>
-      {/* Card grid skeleton */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="space-y-3 rounded-xl border border-border/50 p-5">
-            <Skeleton className="h-36 w-full rounded-lg" />
-            <Skeleton className="h-5 w-3/4 rounded-md" />
-            <Skeleton className="h-4 w-1/2 rounded-md" />
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>
-);
 
 // Auth Guard — RootRedirect already handles auth validation; here we just gate.
 const RequireAuth = ({ children }: { children: ReactNode }) => {
@@ -228,6 +204,8 @@ const WorkspaceEntry = () => {
   const [entered, setEntered] = useState(false);
   const needsChat = pathname === '/xiaoyu' && hasFeature('ai.assistant');
   const waiting = loading || (needsChat && !chat.initialized);
+  const redirecting = !entered && activeWorkspace() === 'personal'
+    && (matchPath('/courses', pathname) || matchPath('/course/:id', pathname));
 
   useEffect(() => {
     if (useInstitutionStore.getState().loading) void fetchFeatures();
@@ -241,9 +219,9 @@ const WorkspaceEntry = () => {
 
   return <RequireAuth>
     {!entered && <PageLoader />}
-    <Suspense fallback={entered ? <PageLoader /> : null}>
+    {redirecting ? <HomeRedirect /> : <Suspense fallback={entered ? <PageLoader /> : null}>
       {(entered || !waiting) && <div className="contents" ref={reveal}><MainLayout /></div>}
-    </Suspense>
+    </Suspense>}
   </RequireAuth>;
 };
 
