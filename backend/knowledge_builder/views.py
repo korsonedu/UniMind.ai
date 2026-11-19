@@ -89,7 +89,7 @@ class BuildDetailView(BuildStatusView):
 
     def get(self, request, build_id):
         queryset = _visible_builds(request.user).prefetch_related(
-            'modules', 'atoms', 'atom_edges', 'blocks__steps__step_atoms',
+            'modules', 'atoms', 'atom_edges', 'blocks__steps__step_atoms__atom',
             'block_edges', 'cross_block_interfaces', 'blocks__resources',
         )
         build = get_object_or_404(queryset, pk=build_id)
@@ -117,6 +117,20 @@ class BlockResourceView(BuildStatusView):
 
     def post(self, request, build_id, block_id):
         block = self.get_block(request, build_id, block_id)
+        if request.data.get('action') == 'ensure_project':
+            project_id = request.data.get('project_id')
+            atom_id = request.data.get('atom_id')
+            if project_id not in (None, ''):
+                project_id = serializers.IntegerField(min_value=1).run_validation(project_id)
+            else:
+                project_id = None
+            if atom_id not in (None, ''):
+                atom_id = serializers.IntegerField(min_value=1).run_validation(atom_id)
+            else:
+                atom_id = None
+            result = block_study.ensure_block_learning_project(
+                request.user, block, project_id=project_id, atom_id=atom_id)
+            return Response(result, status=status.HTTP_200_OK)
         if request.data.get('action') == 'vote':
             resource_id = serializers.IntegerField(min_value=1).run_validation(request.data.get('resource_id'))
             vote = serializers.ChoiceField(choices=(1, -1, 0)).run_validation(request.data.get('vote'))

@@ -625,3 +625,161 @@ def test_run_build_mounts_resources_after_publication(user, monkeypatch):
     build = run_build(create_build('微积分', created_by=user).pk)
     assert build.status == 'COMPLETED' and build.blocks.exists()
     assert not build.block_resources.exists()
+
+
+@pytest.mark.parametrize('goal,cognitive,expected_tier,expected_label', [
+    ('概念辨析', '理解', 'L1', '基础速通'),
+    ('机制辨析', '分析', 'L2', '机制辨析'),
+    ('实操计算', '应用', 'L3', '硬核攻坚'),
+])
+def test_atom_serializer_exposes_difficulty(study_block, goal, cognitive, expected_tier, expected_label):
+    atom = study_block.build.atoms.first()
+    atom.goal_type, atom.cognitive_level = goal, cognitive
+    data = serializers.AtomSerializer(atom).data
+    assert data['difficulty_tier'] == expected_tier
+    assert data['difficulty_label'] == expected_label
+    assert serializers.AtomSerializer.Meta.fields == (
+        'id', 'module', 'code', 'name', 'goal_statement', 'parent_path', 'goal_type',
+        'granularity_minutes', 'cognitive_level', 'key_elements', 'prerequisites_hint',
+        'common_misconceptions', 'branch_condition', 'order', 'difficulty_tier', 'difficulty_label',
+    )
+
+
+def test_block_difficulty_summary_counts_distinct_atoms(study_block):
+    atoms = list(study_block.build.atoms.order_by('pk'))
+    for atom, goal in zip(atoms, ('概念辨析', '机制辨析', '实操计算', '概念')):
+        atom.goal_type = goal
+        atom.save(update_fields=['goal_type'])
+    prefetched = models.LearningBlock.objects.prefetch_related('steps__step_atoms__atom').get(pk=study_block.pk)
+    # The current schema assigns an atom once. Exercise deduplication through a repeated prefetched row.
+    memberships = prefetched.steps.all()[0].step_atoms.all()
+    memberships._result_cache.append(memberships[0])
+    for block in (study_block, prefetched):
+        assert serializers.BlockSerializer(block).data['difficulty_summary'] == {'L1': 2, 'L2': 1, 'L3': 1}
+    empty = models.LearningBlock.objects.create(build=study_block.build, code='empty', short_title='空块')
+    assert serializers.BlockSerializer(empty).data['difficulty_summary'] == {'L1': 0, 'L2': 0, 'L3': 0}
+    assert serializers.BlockSerializer.Meta.fields == (
+        'id', 'code', 'short_title', 'narrative_summary', 'layer', 'contraction_group',
+        'is_entry_block', 'node_shape', 'order', 'difficulty_summary', 'steps', 'resources',
+    )
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
+def test_ensure_project_activates_whole_tree_and_immediately_generates_quiz(
+        client, user, study_block, monkeypatch, django_capture_on_commit_callbacks):
+    from ai_assistant.models import Bot, Conversation, ConversationProject, LearningKnowledgeVersion, ProjectLearning, ProjectLearningTask
+    from knowledge_builder.tasks import prepare_block_assessment
+
+    bot = Bot.objects.create(name='小宇', bot_type='planner', system_prompt='学习教练')
+    following = models.LearningBlock.objects.create(
+        build=study_block.build, code='B2', short_title='净现值', narrative_summary='计算净现值')
+    models.BlockEdge.objects.create(build=study_block.build, from_block=study_block, to_block=following, edge_kind='unidirectional')
+    path = f'/{study_block.build_id}/blocks/{study_block.pk}/resources/'
+    atom_id = study_block.build.atoms.first().pk
+    response = client.post(path, {'action': 'ensure_project', 'atom_id': atom_id}, format='json')
+    assert response.status_code == 200, response.data
+    data = response.data
+    project = ConversationProject.objects.get(pk=data['project_id'], user=user)
+    state = ProjectLearning.objects.get(project=project)
+    conversation = Conversation.objects.get(conversation_id=data['conversation_id'], project=project, user=user)
+    assert data == dict(project_id=project.pk, conversation_id=str(conversation.conversation_id),
+                        bot_id=bot.pk, project_name=study_block.build.subject, status='active',
+                        block_id=study_block.pk, atom_id=atom_id)
+    assert state.planning_enabled and state.status == 'active'
+    assert state.last_conversation_id == conversation.pk and conversation.bot_id == bot.pk
+    version = LearningKnowledgeVersion.objects.get(pk=state.plan['knowledge_path']['version_id'])
+    assert version.snapshot['builder']['build_id'] == str(study_block.build_id)
+    assert {block_id for node in version.snapshot['nodes'] for block_id in node['builder_block_ids']} == {study_block.pk, following.pk}
+    revision = state.revision
+    project.name = '我的公司理财复习'
+    project.save(update_fields=['name'])
+    repeated = client.post(f'/{following.build_id}/blocks/{following.pk}/resources/', {'action': 'ensure_project'}, format='json')
+    assert repeated.status_code == 200, repeated.data
+    assert repeated.data['project_id'] == project.pk
+    assert repeated.data['conversation_id'] == data['conversation_id']
+    state.refresh_from_db()
+    assert state.revision == revision
+    assert ConversationProject.objects.filter(user=user).count() == 1
+    assert project.conversations.count() == 1
+
+    monkeypatch.setattr('users.feature_access.has_learning_feature', lambda *args: True)
+    monkeypatch.setattr('ai_assistant.services.learning_tasks.has_learning_feature', lambda *args: True)
+    monkeypatch.setattr('knowledge_builder.tasks.prepare_block_assessment.delay', prepare_block_assessment)
+    def generate(row, block, q_type, seen, source_context=''):
+        return dict(stem=f'{row.atom.name}如何影响现值？', q_type=q_type,
+                    options={'A': '改变现值', 'B': '始终不变'}, correct_answer='A',
+                    grading_points='分析时间价值', subjective_type='short', question_id=None)
+    monkeypatch.setattr('knowledge_builder.block_assessments._generate_question', generate)
+    quiz_path = f'/{study_block.build_id}/blocks/{study_block.pk}/quiz/'
+    with django_capture_on_commit_callbacks(execute=True):
+        generated = client.post(quiz_path, {'project_id': project.pk}, format='json')
+    assert generated.status_code == 200, generated.data
+    restored = client.post(quiz_path, {'project_id': project.pk, 'action': 'read'}, format='json')
+    assert restored.status_code == 200, restored.data
+    assert restored.data['preparation']['status'] == 'completed'
+    assert len(restored.data['assessment']['items']) == 4
+    assert ProjectLearningTask.objects.filter(project=project).count() == 4
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
+@pytest.mark.parametrize('explicit', [False, True])
+def test_ensure_project_reuses_existing_project_and_fallback_planner(client, user, study_block, explicit):
+    from ai_assistant.models import Bot, ConversationProject, ProjectLearning
+
+    bot = Bot.objects.create(name='测试规划师', bot_type='planner', system_prompt='学习教练')
+    project = ConversationProject.objects.create(user=user, name=study_block.build.subject)
+    state = ProjectLearning.objects.create(project=project, planning_enabled=False)
+    payload = {'action': 'ensure_project'}
+    if explicit:
+        payload['project_id'] = str(project.pk)
+    response = client.post(f'/{study_block.build_id}/blocks/{study_block.pk}/resources/', payload, format='json')
+    assert response.status_code == 200, response.data
+    assert response.data['project_id'] == project.pk and response.data['bot_id'] == bot.pk
+    state.refresh_from_db()
+    assert state.planning_enabled and state.status == 'active'
+    assert state.last_conversation.project_id == project.pk
+    assert ConversationProject.objects.filter(user=user).count() == 1
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
+def test_ensure_project_without_planner_still_activates_path(client, study_block):
+    response = client.post(f'/{study_block.build_id}/blocks/{study_block.pk}/resources/',
+                           {'action': 'ensure_project'}, format='json')
+    assert response.status_code == 200, response.data
+    assert response.data['status'] == 'active'
+    assert response.data['conversation_id'] is None and response.data['bot_id'] is None
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_CONTENT_INSTITUTION_ID='global')
+@pytest.mark.parametrize('pending', [False, True])
+def test_ensure_project_finds_renamed_project_by_active_or_pending_build(client, user, study_block, pending):
+    from ai_assistant.models import ConversationProject, ProjectLearning
+    from ai_assistant.services.learning_knowledge import knowledge_operation
+    from ai_assistant.services.project_learning import change_learning
+
+    project = ConversationProject.objects.create(user=user, name='我的独立学习项目')
+    state = ProjectLearning.objects.create(project=project, planning_enabled=True)
+    knowledge_operation(project, {'action': 'from_build', 'build_id': str(study_block.build_id),
+                                  'block_ids': [study_block.pk], 'revision': state.revision, 'depth': 'apply'})
+    state.refresh_from_db()
+    assert state.pending_plan.get('plan')
+    if not pending:
+        change_learning(project, {'action': 'accept', 'revision': state.revision})
+    response = client.post(f'/{study_block.build_id}/blocks/{study_block.pk}/resources/',
+                           {'action': 'ensure_project'}, format='json')
+    assert response.status_code == 200, response.data
+    assert response.data['project_id'] == project.pk
+    assert response.data['project_name'] == '我的独立学习项目'
+    assert response.data['status'] == 'active'
+    assert ConversationProject.objects.filter(user=user).count() == 1
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls')
+@pytest.mark.parametrize('field', ['project_id', 'atom_id'])
+@pytest.mark.parametrize('value', [0, -1, 'invalid', 1.5])
+def test_ensure_project_validates_optional_positive_ids(client, study_block, field, value):
+    from ai_assistant.models import ConversationProject
+    response = client.post(f'/{study_block.build_id}/blocks/{study_block.pk}/resources/',
+                           {'action': 'ensure_project', field: value}, format='json')
+    assert response.status_code == 400
+    assert not ConversationProject.objects.exists()
