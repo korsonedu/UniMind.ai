@@ -1,0 +1,85 @@
+name: android-apk
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Android build variant'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build web bundle
+        working-directory: frontend
+        run: npm run build
+
+      - name: Sync Capacitor Android project
+        working-directory: frontend
+        run: npx cap sync android
+
+      - name: Build Android APK
+        working-directory: frontend/android
+        env:
+          BUILD_TYPE: ${{ inputs.build_type || 'debug' }}
+        run: |
+          chmod +x gradlew
+          if [ "$BUILD_TYPE" = "release" ]; then
+            ./gradlew assembleRelease --no-daemon
+          else
+            ./gradlew assembleDebug --no-daemon
+          fi
+
+      - name: Collect APK artifacts and SHA256
+        shell: bash
+        working-directory: frontend/android
+        run: |
+          mkdir -p dist-apk
+          find app/build/outputs/apk /tmp/unimind-android-build -type f -name '*.apk' 2>/dev/null -exec cp {} dist-apk/ \; || true
+          ls -lh dist-apk
+          if [ -z "$(ls -A dist-apk)" ]; then
+            echo "No APK files found"
+            exit 1
+          fi
+          sha256sum dist-apk/*.apk > dist-apk/android-sha256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: UniMind-Android-${{ inputs.build_type || 'debug' }}-${{ github.sha }}
+          path: frontend/android/dist-apk/*
+          if-no-files-found: error
+          retention-days: 7
