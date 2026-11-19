@@ -10,12 +10,13 @@ interface AuthLayoutProps {
   title: string;
   subtitle?: ReactNode;
   footer?: ReactNode;
+  className?: string;
 }
 
-export const AuthLayout = ({ children, title, subtitle, footer }: AuthLayoutProps) => {
+export const AuthLayout = ({ children, title, subtitle, footer, className = '' }: AuthLayoutProps) => {
   useLocale();
   return (
-  <div className={`um-auth-shell${window.unimindDesktop ? ' um-auth-native' : ''}`}>
+  <div className={`um-auth-shell${window.unimindDesktop ? ' um-auth-native' : ''}${className ? ` ${className}` : ''}`}>
     <header className="um-auth-topbar">
       <Link to="/" className="um-auth-wordmark" aria-label={t('UniMind.ai 首页')}>UniMind<span>.ai</span></Link>
       <div className="inline-flex items-center gap-4"><LanguageSelect />

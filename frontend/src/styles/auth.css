@@ -35,6 +35,26 @@
 .um-auth-native .um-auth-topbar { padding-top: 48px; -webkit-app-region: drag; }
 .um-auth-native .um-auth-wordmark { -webkit-app-region: no-drag; }
 .dark .um-auth-shell { --auth-bg: #1c1e1b; --auth-surface: #252823; --auth-ink: #e9ece4; --auth-muted: #a0a69b; --auth-line: #3c4137; --auth-field: #2c3029; --auth-accent: #657959; }
+.um-auth-login {
+  --auth-bg: #f1f1f3;
+  --auth-surface: #fcfcfd;
+  --auth-ink: #25252a;
+  --auth-muted: #65656f;
+  --auth-line: #dfdfe4;
+  --auth-field: #ededf0;
+  --auth-accent: #4c4c55;
+  background: radial-gradient(ellipse at 12% 18%, color-mix(in srgb, var(--auth-ink) 5%, transparent), transparent 55%), var(--auth-bg);
+}
+.dark .um-auth-login {
+  --auth-bg: #19191c;
+  --auth-surface: #242427;
+  --auth-ink: #f1f1f3;
+  --auth-muted: #aeaeb6;
+  --auth-line: #3b3b40;
+  --auth-field: #2e2e33;
+  --auth-accent: #71717b;
+}
+.um-auth-login .um-auth-panel { box-shadow: 0 16px 56px -32px #0003; }
 @keyframes um-auth-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 560px) {
   .um-auth-topbar { padding: 24px; }
