@@ -3,7 +3,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { t, useLocale } from '@/i18n';
 import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AuthLayout } from '@/components/AuthLayout';
@@ -23,8 +23,9 @@ export const Login: React.FC = () => window.unimindDesktop ? <DesktopLogin /> : 
 
 const WebLogin: React.FC = () => {
   useLocale();
-  const [tab, setTab] = useState<LoginTab>('password');
-  const [email, setEmail] = useState('');
+  const { state } = useLocation();
+  const [tab, setTab] = useState<LoginTab>('code');
+  const [email, setEmail] = useState(() => typeof state?.email === 'string' ? state.email : '');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -87,18 +88,20 @@ const WebLogin: React.FC = () => {
 
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
-  const handleSendCode = async () => {
-    if (!email.trim()) return;
-    if (!isValidEmail(email)) {
+  const handleSendCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const address = email.trim();
+    if (!address || sendingCode) return;
+    if (!isValidEmail(address)) {
       setError(t('请输入有效的邮箱地址'));
       return;
     }
     setSendingCode(true);
     setError('');
     try {
-      await api.post('/users/send-verification-code/', { email, purpose: 'login_by_code' });
+      await api.post('/users/send-verification-code/', { email: address, purpose: 'login_by_code' });
       const params = new URLSearchParams(registerParams);
-      params.set('email', email);
+      params.set('email', address);
       params.set('purpose', 'login_by_code');
       navigate(`/verify-code?${params}`);
     } catch (err: unknown) {
@@ -109,6 +112,7 @@ const WebLogin: React.FC = () => {
 
   return (
     <AuthLayout
+      className="um-auth-login"
       title={t('欢迎回来')}
       footer={
         tab === 'password' ? (
@@ -134,39 +138,38 @@ const WebLogin: React.FC = () => {
         }}>{t('离线试用（无需连接服务器）')}</Button>
       </div>}
       <div className="um-auth-tabs" aria-label={t('登录方式')}>
-        <button type="button" aria-pressed={tab === 'password'} onClick={() => { setTab('password'); setError(''); }}>{t('密码登录')}</button>
-        <button type="button" aria-pressed={tab === 'code'} onClick={() => { setTab('code'); setError(''); }}>{t('验证码登录 / 注册')}</button>
+        <button type="button" aria-pressed={tab === 'code'} disabled={loading || sendingCode} onClick={() => { setTab('code'); setError(''); }}>{t('验证码登录 / 注册')}</button>
+        <button type="button" aria-pressed={tab === 'password'} disabled={loading || sendingCode} onClick={() => { setTab('password'); setError(''); }}>{t('密码登录')}</button>
       </div>
 
       {/* Error banner */}
       {error && (
-        <div className="flex items-start gap-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 px-4 py-3 mb-5 text-sm text-red-700 dark:text-red-400">
+        <div role="alert" className="flex items-start gap-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 px-4 py-3 mb-5 text-sm text-red-700 dark:text-red-400">
           <Warning className="h-4 w-4 mt-0.5 shrink-0" weight="fill" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Shared email field */}
-      <div className="space-y-1.5 mb-4">
-        <label htmlFor="login-email" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
-          {t('邮箱')}
-        </label>
-        <Input
-          id="login-email"
-          type="email"
-          placeholder="name@example.com"
-          value={email}
-          onChange={(e) => { setEmail(e.target.value); setError(''); }}
-          autoComplete="username"
-          spellCheck={false}
-          className="h-12 rounded-xl"
-          required
-        />
-      </div>
+      <form noValidate onSubmit={tab === 'code' ? handleSendCode : handlePasswordLogin} className="space-y-4">
+        <div className="space-y-1.5">
+          <label htmlFor="login-email" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
+            {t('邮箱')}
+          </label>
+          <Input
+            id="login-email"
+            type="email"
+            placeholder="name@example.com"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setError(''); }}
+            autoComplete="username"
+            spellCheck={false}
+            readOnly={loading || sendingCode}
+            className="h-12 rounded-xl"
+            required
+          />
+        </div>
 
-      {/* Password tab */}
-      {tab === 'password' && (
-        <form onSubmit={handlePasswordLogin} className="space-y-4">
+        {tab === 'password' && (
           <div className="space-y-1.5">
             <label htmlFor="login-password" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
               {t('密码')}
@@ -183,30 +186,17 @@ const WebLogin: React.FC = () => {
               required
             />
           </div>
+        )}
 
-          <Button
-            type="submit"
-            className="um-auth-submit"
-            disabled={loading}
-          >
-            {loading ? t('登录中...') : t('登录')}
-          </Button>
-        </form>
-      )}
-
-      {/* Code tab */}
-      {tab === 'code' && (
-        <div className="space-y-1.5">
-          <Button
-            type="button"
-            className="um-auth-submit"
-            disabled={sendingCode || !email.trim()}
-            onClick={handleSendCode}
-          >
-            {sendingCode ? <Spinner className="h-4 w-4 animate-spin" /> : t('发送验证码')}
-          </Button>
-        </div>
-      )}
+        <Button
+          type="submit"
+          className="um-auth-submit"
+          disabled={tab === 'code' ? sendingCode || !email.trim() : loading}
+        >
+          {tab === 'password' ? (loading ? t('登录中...') : t('登录'))
+            : sendingCode ? <><Spinner className="h-4 w-4 animate-spin" aria-hidden="true" />{t('正在发送…')}</> : t('发送验证码')}
+        </Button>
+      </form>
     </AuthLayout>
   );
 };
