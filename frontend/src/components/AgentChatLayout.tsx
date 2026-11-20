@@ -10,6 +10,7 @@ import api from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useTypewriter } from '@/hooks/useTypewriter';
 import ChatBubble from '@/components/ChatBubble';
+import { ThinkingSphere } from '@/components/ThinkingSphere';
 import { ToolStepMessage } from '@/components/AgentStepCard';
 import { DshToolCard, type DshCard } from '@/components/DshToolCard';
 import { InlineVisualCard } from '@/components/InlineVisualCard';
@@ -675,15 +676,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 })}
                 {appearance === 'native' && waitingForReply && (
                   <div className="um-agent-thinking-status" role="status">
-                    <span className="um-agent-thinking-icon" aria-hidden="true">
-                      {[[-100, 3.7], [-39, 4.3], [20, 3.5], [79, 4.5], [142, 3.9], [205, 3.3]].map(([angle, length]) => (
-                        <span key={angle} style={{
-                          '--um-thinking-angle': `${angle}deg`,
-                          '--um-thinking-length': `${length}px`,
-                          '--um-thinking-delay': `${2540 * (angle + 100) / 360 - 595}ms`,
-                        } as React.CSSProperties} />
-                      ))}
-                    </span>
+                    <ThinkingSphere />
                     <span>{t('{0}正在思考', { 0: botDisplayName })}</span>
                   </div>
                 )}
