@@ -12,7 +12,7 @@ import { useSystemStore } from '@/store/useSystemStore';
 
 function StreamingText({ content }: { content: string }) {
   const reduceMotion = useSystemStore(state => state.reduceMotion);
-  const root = React.useRef<HTMLDivElement>(null);
+  const root = React.useRef<HTMLParagraphElement>(null);
   const previous = React.useRef('');
   React.useLayoutEffect(() => {
     const start = content.startsWith(previous.current) ? Array.from(previous.current).length : 0;
@@ -25,7 +25,7 @@ function StreamingText({ content }: { content: string }) {
       }));
     return () => animations.forEach(animation => animation.cancel());
   }, [content, reduceMotion]);
-  return <div ref={root} className="um-streaming-text" aria-live="polite">{Array.from(content).map((char, index) => char === '\n' ? <br key={index} /> : <span key={index}>{char}</span>)}</div>;
+  return <p ref={root} className="um-streaming-text" aria-live="polite">{Array.from(content).map((char, index) => char === '\n' ? <br key={index} /> : <span key={index}>{char}</span>)}</p>;
 }
 
 export interface ChatBubbleMessage {
