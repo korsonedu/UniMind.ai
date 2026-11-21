@@ -85,7 +85,7 @@ def prepare_build(project, data, state):
     if old:
         version = old
     else:
-        url = f'/knowledge-builder/{build.pk}?snapshot={digest}'
+        url = f'/xiaoyu/knowledge-builder/{build.pk}?snapshot={digest}'
         excerpt = NOTICE + '\n\n' + '\n\n'.join(texts)
         resource, _ = LearningResource.objects.get_or_create(user=project.user, url_hash=hashlib.sha256(url.encode()).hexdigest(),
             defaults={'url': url, 'title': build.subject[:200], 'excerpt': excerpt, 'read_at': timezone.now()})

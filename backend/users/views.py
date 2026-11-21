@@ -8,7 +8,6 @@ from django.db import transaction, IntegrityError
 from django.utils.decorators import method_decorator
 from django.contrib.auth import authenticate
 from django.http import HttpResponse
-from django.template.loader import render_to_string
 from .serializers import (
     UserSerializer,
     RegisterSerializer,
@@ -20,16 +19,13 @@ from .permissions import IsPlatformAdmin, IsAdmin, HasStudentFeature, is_platfor
 from django.utils import timezone
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
-from django.utils.http import content_disposition_header
 from core.rate_limit import rate_limit, _get_client_ip
 from core.analytics import record_event
 from core.utils import apply_institution_filter
 from quizzes.utils import safe_int as _safe_int
 import datetime
 import logging
-import os
 import re
-import tempfile
 
 
 logger = logging.getLogger(__name__)
@@ -241,7 +237,7 @@ class OnlineUserListView(generics.ListAPIView):
         threshold = now - datetime.timedelta(seconds=active_window_seconds)
         qs = User.objects.filter(is_active=True, last_active__gte=threshold)
         qs = apply_institution_filter(qs, self.request.user, self.request)
-        return qs.order_by('-last_active', '-elo_score')
+        return qs.order_by('-last_active', 'id')
 
 
 class LoginView(APIView):
@@ -1090,7 +1086,6 @@ class DataExportView(APIView):
                 'email': user.email,
                 'bio': user.bio,
                 'role': user.role,
-                'elo_score': user.elo_score,
                 'is_member': user.is_member,
                 'membership_tier': user.membership_tier,
                 'membership_expires_at': str(user.membership_expires_at) if user.membership_expires_at else None,
@@ -1203,7 +1198,7 @@ class AvatarProxyView(APIView):
             return Response({'error': 'Avatar service unavailable'}, status=502)
 
 
-# ── 签到 & 成就 ──────────────────────────────────────────────
+# ── 签到 ──────────────────────────────────────────────
 
 class UserCheckInView(APIView):
     """POST /api/users/me/checkin/ — 每日签到；GET 返回签到历史+当前 streak。"""
@@ -1224,7 +1219,6 @@ class UserCheckInView(APIView):
     def post(self, request):
         from .models import DailyCheckIn
         from .serializers import DailyCheckInSerializer
-        from users.services.achievements import check_and_unlock
 
         today = timezone.now().date()
         existing = DailyCheckIn.objects.filter(user=request.user, date=today).first()
@@ -1242,85 +1236,11 @@ class UserCheckInView(APIView):
         record = DailyCheckIn.objects.create(user=request.user, date=today, streak=streak)
         record_event('checkin', user=request.user, properties={'streak': streak})
 
-        check_and_unlock(request.user)
-
         return Response({
             'message': f'签到成功！连续 {streak} 天',
             'created': True,
             'record': DailyCheckInSerializer(record).data,
         })
-
-
-class AchievementListView(APIView):
-    """GET /api/users/achievements/ — 所有预置成就列表（含解锁状态+进度）。"""
-    permission_classes = [permissions.IsAuthenticated, HasStudentFeature]
-
-    def get(self, request):
-        from .models import Achievement, UserAchievement, DailyCheckIn
-        from .serializers import AchievementSerializer
-        from quizzes.models import QuizAttempt, UserQuestionStatus, QuizExam
-        from django.utils import timezone
-
-        user = request.user
-        # 已解锁成就映射：key → unlocked_at
-        ua_qs = UserAchievement.objects.filter(user=user).select_related('achievement')
-        unlocked_map = {ua.achievement.key: ua.unlocked_at for ua in ua_qs}
-        unlocked_keys = set(unlocked_map.keys())
-
-        # ── 各维度当前进度（一次查询） ──
-        today = timezone.now().date()
-        checkin = DailyCheckIn.objects.filter(user=user, date=today).first()
-        streak_val = checkin.streak if checkin else 0
-
-        question_count = QuizAttempt.objects.filter(user=user).count()
-
-        has_diagnostic = 1 if user.has_completed_initial_assessment else 0
-
-        mastered_kps = (
-            UserQuestionStatus.objects
-            .filter(user=user, is_mastered=True)
-            .values('question__qmatrixentry__knowledge_point')
-            .distinct().count()
-        )
-
-        best_exam = QuizExam.objects.filter(user=user).order_by('-total_score').first()
-        best_exam_pct = 0
-        if best_exam and best_exam.max_score:
-            best_exam_pct = round(best_exam.total_score / best_exam.max_score * 100)
-
-        # ── 组装响应 ──
-        all_achievements = Achievement.objects.filter(is_active=True).order_by('category', 'threshold')
-        data = []
-        for a in all_achievements:
-            entry = AchievementSerializer(a).data
-            entry['is_unlocked'] = a.key in unlocked_keys
-            entry['unlocked_at'] = unlocked_map[a.key].isoformat() if a.key in unlocked_map else None
-
-            if a.category == 'streak':
-                entry['progress'] = min(streak_val, a.threshold)
-            elif a.category == 'question':
-                entry['progress'] = min(question_count, a.threshold)
-            elif a.category == 'diagnostic':
-                entry['progress'] = has_diagnostic
-            elif a.category == 'mastery':
-                entry['progress'] = min(mastered_kps, a.threshold)
-            elif a.category == 'exam':
-                entry['progress'] = min(best_exam_pct, a.threshold)
-            else:
-                entry['progress'] = 0
-            data.append(entry)
-        return Response(data)
-
-
-class UserAchievementView(APIView):
-    """GET /api/users/me/achievements/ — 当前用户已解锁成就。"""
-    permission_classes = [permissions.IsAuthenticated, HasStudentFeature]
-
-    def get(self, request):
-        from .models import UserAchievement
-        from .serializers import UserAchievementSerializer
-        qs = UserAchievement.objects.filter(user=request.user).select_related('achievement').order_by('-unlocked_at')
-        return Response(UserAchievementSerializer(qs, many=True).data)
 
 
 # ── PWA Push 订阅 ──────────────────────────────────────────
@@ -1357,14 +1277,14 @@ class PushSubscribeView(APIView):
 # ── 成绩报告卡 ──────────────────────────────────────────────
 
 def _build_report_data(user, date_from=None, date_to=None):
-    """聚合学生报告卡全部数据。供 self-report 和 teacher-view 复用。
+    """聚合学生报告卡全部数据。供小宇与教师学情报告复用。
 
     date_from / date_to: 可选日期范围过滤（用于教师查看指定时间段学生报告）。
     """
     from django.db.models import Count, Avg
     from quizzes.models import UserKnowledgeState, ReviewLog, QuizExam
     from quizzes.services.learning_stats import build_learning_stats
-    from .models import DailyCheckIn, UserAchievement
+    from .models import DailyCheckIn
 
     now = timezone.now()
     # 确保 aware datetime（兼容 naive 输入）
@@ -1420,25 +1340,14 @@ def _build_report_data(user, date_from=None, date_to=None):
         {
             'id': e.id, 'total_score': e.total_score, 'max_score': e.max_score,
             'percentage': round(e.total_score / e.max_score * 100, 1) if e.max_score else 0,
-            'elo_change': e.elo_change, 'created_at': e.created_at.isoformat(),
+            'created_at': e.created_at.isoformat(),
         }
         for e in exams
     ]
 
-    # 成就
-    ua_qs = UserAchievement.objects.filter(user=user).select_related('achievement').order_by('-unlocked_at')
-    achievements_list = [
-        {
-            'key': ua.achievement.key, 'name': ua.achievement.name,
-            'description': ua.achievement.description, 'icon': ua.achievement.icon,
-            'category': ua.achievement.category, 'unlocked_at': ua.unlocked_at.isoformat(),
-        }
-        for ua in ua_qs
-    ]
-
     return {
         'student': {
-            'id': user.id, 'nickname': user.nickname, 'elo_score': user.elo_score,
+            'id': user.id, 'nickname': user.nickname,
             'date_joined': user.date_joined.isoformat() if user.date_joined else None,
         },
         'stats': {
@@ -1461,87 +1370,4 @@ def _build_report_data(user, date_from=None, date_to=None):
         'radar': radar,
         'daily_activity': daily,
         'exams': exam_list,
-        'achievements': achievements_list,
     }
-
-
-class StudentReportCardView(APIView):
-    """GET /api/users/me/report-card/ — 学生自己的成绩报告卡。"""
-    permission_classes = [permissions.IsAuthenticated, HasStudentFeature]
-
-    def get(self, request):
-        return Response(_build_report_data(request.user))
-
-
-
-def _html_to_pdf(html_string: str, output_path: str):
-    """使用 Playwright Chromium headless 将 HTML 渲染为 PDF。
-
-    通过独立子进程运行 Playwright，完全隔离 Python 解释器生命周期，
-    避免 Python 3.14+ 在解释器 shutdown 时 ThreadPoolExecutor 拒绝新任务的问题。
-    """
-    import sys
-    import subprocess as _sp
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
-        f.write(html_string)
-        html_path = f.name
-
-    try:
-        script = (
-            "import sys, json\n"
-            "from playwright.sync_api import sync_playwright\n"
-            f"with open({html_path!r}, 'r', encoding='utf-8') as f:\n"
-            "    content = f.read()\n"
-            "with sync_playwright() as p:\n"
-            "    browser = p.chromium.launch(headless=True)\n"
-            "    page = browser.new_page()\n"
-            "    page.set_content(content, wait_until='networkidle')\n"
-            "    page.pdf(\n"
-            f"        path={output_path!r},\n"
-            "        format='A4',\n"
-            "        margin={'top': '15mm', 'bottom': '15mm', 'left': '15mm', 'right': '15mm'},\n"
-            "        print_background=True,\n"
-            "    )\n"
-            "    browser.close()\n"
-            "print('OK')\n"
-        )
-        result = _sp.run(
-            [sys.executable, '-c', script],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"Playwright 子进程渲染失败 (exit={result.returncode}): {result.stderr.strip()}")
-        if 'OK' not in result.stdout:
-            raise RuntimeError(f"Playwright 子进程异常: {result.stderr.strip() or result.stdout.strip()}")
-    finally:
-        try:
-            os.unlink(html_path)
-        except OSError:
-            pass
-
-
-
-class StudentReportCardPDFView(APIView):
-    """GET /api/users/me/report-card/pdf/ — 成绩报告卡 PDF。"""
-    permission_classes = [permissions.IsAuthenticated, HasStudentFeature]
-
-    def get(self, request):
-        data = _build_report_data(request.user)
-        html = render_to_string('report_card_pdf.html', {'data': data})
-        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as f:
-            output_path = f.name
-        try:
-            _html_to_pdf(html, output_path)
-            with open(output_path, 'rb') as f:
-                pdf_bytes = f.read()
-            response = HttpResponse(pdf_bytes, content_type='application/pdf')
-            nickname = data['student']['nickname'] or 'student'
-            response['Content-Disposition'] = content_disposition_header(True, f'report_{nickname}.pdf')
-            return response
-        finally:
-            try:
-                os.unlink(output_path)
-            except OSError:
-                pass

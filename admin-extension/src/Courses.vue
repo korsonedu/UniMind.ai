@@ -49,7 +49,7 @@ function editCourse(row?: Course) {
   files.value = {};
   progress.value = {};
   courseSubject.value = row?.subject_name || subjectFilter.value;
-  courseForm.value = row ? { ...row } : { title: '', description: '', module: null, sort_order: 0, elo_reward: 50, ai_outline_enabled: true };
+  courseForm.value = row ? { ...row } : { title: '', description: '', module: null, sort_order: 0, ai_outline_enabled: true };
 }
 function editModule(row?: Module) {
   error.value = '';
@@ -119,7 +119,7 @@ function toggleAll(event: Event) {
           <label>所属学科<select v-model="courseSubject" required :disabled="busy" @change="courseForm.module = null"><option value="" disabled>请选择学科</option><option v-for="subject in subjects" :key="subject" :value="subject">{{ subject }}</option></select></label>
           <label>知识地图模块<select v-model="courseForm.module" required :disabled="busy || !courseSubject"><option :value="null" disabled>请选择模块</option><option v-for="item in courseModules" :key="item.id" :value="item.id">{{ item.subject ? `${item.subject} / ` : '' }}{{ item.name }}</option></select></label>
           <label>课程介绍<textarea v-model="courseForm.description" rows="3" :disabled="busy" /></label>
-          <div class="form-grid"><label>排序<input v-model.number="courseForm.sort_order" type="number" min="0" required :disabled="busy" /></label><label>完成奖励<input v-model.number="courseForm.elo_reward" type="number" min="0" required :disabled="busy" /></label></div>
+          <div class="form-grid"><label>排序<input v-model.number="courseForm.sort_order" type="number" min="0" required :disabled="busy" /></label></div>
           <label class="checkbox"><input v-model="courseForm.ai_outline_enabled" type="checkbox" :disabled="busy" />启用 AI 大纲</label>
           <fieldset class="media-fields" :disabled="busy || !meta.uploads_enabled">
             <legend>视频与附件</legend><p v-if="!meta.uploads_enabled" class="notice">OSS 文件存储尚未配置。</p>

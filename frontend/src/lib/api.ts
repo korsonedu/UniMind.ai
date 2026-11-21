@@ -44,7 +44,7 @@ api.interceptors.request.use(async (config) => {
       else if (path === '/users/institution/me/features/') data = { features: ['ai.assistant','quiz.exam','knowledge.graph','full.report'], is_platform_admin: false, institution: null };
       else if (path === '/users/learning/access/') data = { is_course_student: false, ai_usage: { used: 0, limit: 0, remaining: 0, base_remaining: 0, addon_remaining: 0, configured: true, unlimited: false }, addons: [] };
       else if (path === '/notifications/unread-count/') data = { count: 0 };
-      else if (['/notifications/','/users/plans/','/users/online/'].includes(path)) data = [];
+      else if (path === '/notifications/') data = [];
       else {
         try { data = await (await import('./offlineDemoApi')).demoRequest(method, path, typeof request.data === 'string' ? JSON.parse(request.data) : request.data, request.params); } catch (error) { if (error instanceof Error && error.message === t(OFFLINE_MESSAGE)) toast.info(t(OFFLINE_MESSAGE), { id: 'offline-action' }); throw error; }
       }

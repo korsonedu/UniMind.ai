@@ -3,11 +3,9 @@ from .learning import LEARNING_FEATURES
 
 FEATURE_AREAS = [
     {'key': 'ai.assistant', 'name': '小宇'},
-    {'key': 'full.report', 'name': '学习记录'},
+    {'key': 'full.report', 'name': '小宇学习上下文'},
     {'key': 'course.video', 'name': '课程中心'},
     {'key': 'quiz.exam', 'name': '习题训练'},
-    {'key': 'faq.system', 'name': '课程答疑'},
-    {'key': 'study.room', 'name': '自习室'},
 ]
 FEATURE_PARENTS = {'video.outline': 'course.video', 'wrong.review': 'quiz.exam',
                    'memorix.review': 'quiz.exam', 'quiz.manual': 'quiz.exam', 'pdf.mock': 'quiz.exam'}
@@ -29,15 +27,13 @@ def has_learning_feature(user, feature):
 def request_feature(request):
     path = request.path
     for prefix, feature in (
-        ('/api/courses/', 'course.video'), ('/api/qa/', 'faq.system'),
-        ('/api/study/', 'study.room'), ('/api/users/me/report-card/', 'full.report'),
+        ('/api/courses/', 'course.video'),
         ('/api/users/me/knowledge-mastery/', 'full.report'),
         ('/api/users/me/diagnostic/', 'quiz.exam'),
         ('/api/ai/dashboard/', 'full.report'), ('/api/ai/memory/', 'full.report'),
         ('/api/ai/practice/', 'quiz.exam'), ('/api/ai/grading/', 'quiz.exam'),
-        ('/api/articles/', 'course.video'), ('/api/users/plans/', 'full.report'),
-        ('/api/users/me/checkin/', 'full.report'), ('/api/users/achievements/', 'full.report'),
-        ('/api/users/me/achievements/', 'full.report'),
+        ('/api/articles/', 'course.video'),
+        ('/api/users/me/checkin/', 'full.report'),
     ):
         if path.startswith(prefix):
             return feature

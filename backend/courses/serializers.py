@@ -146,7 +146,7 @@ class CourseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Course
-        fields = ('id', 'title', 'module', 'module_name', 'module_sort_order', 'subject_name', 'album', 'album_obj', 'description', 'knowledge_point', 'cover_image', 'video_file', 'elo_reward', 'courseware', 'reference_materials', 'ai_outline_enabled', 'sort_order', 'institution', 'tags', 'progress', 'created_at', 'updated_at', 'author')
+        fields = ('id', 'title', 'module', 'module_name', 'module_sort_order', 'subject_name', 'album', 'album_obj', 'description', 'knowledge_point', 'cover_image', 'video_file', 'courseware', 'reference_materials', 'ai_outline_enabled', 'sort_order', 'institution', 'tags', 'progress', 'created_at', 'updated_at', 'author')
         read_only_fields = ('author', 'institution')
 
 class StartupMaterialSerializer(serializers.ModelSerializer):

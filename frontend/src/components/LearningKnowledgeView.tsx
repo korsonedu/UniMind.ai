@@ -95,14 +95,14 @@ export function LearningKnowledgeView({ project, selected, tasks, tasksLoading, 
     <div className="um-work-section-heading"><div><h2>{t('知识关系')}</h2><p>{knowledge?.title || t('围绕当前学习内容，了解前置与依据')}{knowledge?.revision && t(' · 版本 {0}', { 0: knowledge.revision })}</p></div><button className="um-agent-button" onClick={() => setChoosing(value => !value)}>{t('选择学习范围')}</button></div>
     <div className="um-work-actions">
       <button className="um-agent-button" onClick={() => onStudy(t('我想系统学习当前项目的目标。请结合已有背景，必要时先简短了解用途、范围与基础，再和我确定一段可以开始的学习路径。请查询可用的学科知识结构，有适合的就复用；也可以边学边了解，不必先完成整套问答或快测。'))}>{t('和小宇确定学习路径')}</button>
-      <Link className="um-learning-text-button" to={learningUrl(knowledge?.builder ? `/knowledge-builder/${knowledge.builder.build_id}` : '/knowledge-builder', project.project_id, conversationId)}>{knowledge?.builder ? t('展开完整图谱') : t('选择知识结构')}</Link>
+      <Link className="um-learning-text-button" to={learningUrl(knowledge?.builder ? `/xiaoyu/knowledge-builder/${knowledge.builder.build_id}` : '/xiaoyu/knowledge-builder', project.project_id, conversationId)}>{knowledge?.builder ? t('展开完整图谱') : t('选择知识结构')}</Link>
     </div>
     {!!knowledge?.recommendations.length && <section className="um-work-node-evidence"><h3>{t('建议下一步')}</h3>{knowledge.recommendations.map(item => <div className="um-work-section-heading" key={item.node_id}><div><strong>{item.title}</strong><p>{t(item.reason)}</p></div><button className="um-agent-button" disabled={busy || tasksLoading || !project.planning_enabled || project.status !== 'active'} onClick={() => { onSelect(item.node_id); startNode(item.node_id, item.mode); }}>{t('继续学习')}</button></div>)}</section>}
     {choosing ? <div className="um-work-map-picker">
       <p>{t('地图与来源可以复用，当前表现按项目分别记录。采用新版本时，已有作答保留在原版本。')}</p>
-      <Link className="um-agent-button" to={learningUrl('/knowledge-builder?create=1', project.project_id, conversationId)}>{t('和小宇生成知识结构')}</Link>
+      <Link className="um-agent-button" to={learningUrl('/xiaoyu/knowledge-builder?create=1', project.project_id, conversationId)}>{t('和小宇生成知识结构')}</Link>
       {builds.isError && <button className="um-learning-text-button" onClick={() => void builds.refetch()}>{t('重新读取学科结构')}</button>}
-      {!!builds.data?.some(build => build.status === 'COMPLETED') && <details><summary>{t('已有学科知识结构')}</summary>{builds.data.filter(build => build.status === 'COMPLETED').map(build => <p key={build.id}><Link to={learningUrl(`/knowledge-builder/${build.id}`, project.project_id, conversationId)}>{build.subject}</Link></p>)}</details>}
+      {!!builds.data?.some(build => build.status === 'COMPLETED') && <details><summary>{t('已有学科知识结构')}</summary>{builds.data.filter(build => build.status === 'COMPLETED').map(build => <p key={build.id}><Link to={learningUrl(`/xiaoyu/knowledge-builder/${build.id}`, project.project_id, conversationId)}>{build.subject}</Link></p>)}</details>}
       {maps.isPending && <p role="status">{t('正在读取知识地图…')}</p>}
       {maps.isError && <button className="um-agent-button" onClick={() => void maps.refetch()}>{t('重新读取地图')}</button>}
       {maps.data && !maps.data.maps.length && <p>{t('还没有地图，可以先让小宇从本人资料与实际引用整理。')}</p>}

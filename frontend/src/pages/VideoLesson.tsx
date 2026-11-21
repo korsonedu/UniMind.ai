@@ -39,7 +39,6 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   const [searchParams] = useSearchParams();
   const linkedPosition = searchParams.get('t');
   const linkedSeconds = linkedPosition?.trim() ? Number(linkedPosition) : null;
-  const updateUser = useAuthStore(s => s.updateUser);
   const userId = useAuthStore(s => s.user?.id);
   const desktopState = useDesktopStore(s => s.state);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -59,7 +58,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     if (result.isError) { renewedPlayback.current = null; toast.error(t('视频授权更新失败，请重新打开课程')); }
   };
   const [loading, setLoading] = useState(true);
-  const [hasAwarded, setHasAwarded] = useState(false);
+  const [completionSaved, setCompletionSaved] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const { videoSpeed: playbackRate, videoSubtitles: subtitlesVisible, setExperience } = useSystemStore();
@@ -243,7 +242,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
       try {
         setLoading(true);
         setCourse(null);
-        setHasAwarded(false);
+        setCompletionSaved(false);
         setVideoAspectRatio(16 / 9);
         const res = await api.get(`/courses/${courseId}/`, { signal: controller.signal });
         setCourse(res.data);
@@ -255,19 +254,13 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   }, [courseId]);
 
   const handleVideoEnd = async () => {
-    if (hasAwarded) return;
+    if (completionSaved) return;
     try {
-      const res = await api.post(`/courses/${courseId}/progress/`, { is_finished: true });
-      if (res.data.elo_added > 0) {
-        setHasAwarded(true);
-        toast.success(t('观看完成！奖励 {0} ELO', { 0: res.data.elo_added }), {
-          description: t('当前 ELO: {0}', { 0: res.data.new_score })
-        });
-        const me = await api.get('/users/me/');
-        updateUser(me.data);
-      }
+      await api.post(`/courses/${courseId}/progress/`, { is_finished: true });
+      setCompletionSaved(true);
+      toast.success(t('已看完'));
     } catch (e) {
-      console.error("Failed to update progress/award ELO", e);
+      console.error("Failed to save course completion", e);
     }
   };
 

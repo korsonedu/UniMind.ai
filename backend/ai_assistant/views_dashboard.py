@@ -101,22 +101,6 @@ class XiaoYuDashboardView(APIView):
                 'checked_in': d in checkin_dates,
             })
 
-        # Next achievements
-        from users.models import Achievement, UserAchievement
-        unlocked_keys = set(
-            UserAchievement.objects.filter(user=user)
-            .values_list('achievement__key', flat=True)
-        )
-        next_achievements = []
-        for a in Achievement.objects.filter(is_active=True).order_by('category', 'threshold'):
-            if a.key not in unlocked_keys:
-                next_achievements.append({
-                    'key': a.key, 'name': a.name, 'description': a.description,
-                    'icon': a.icon, 'category': a.category,
-                })
-                if len(next_achievements) >= 3:
-                    break
-
         return {
             'total_attempted': stats['attempted_questions'],
             'correct_count': stats['last_correct_count'],
@@ -137,8 +121,6 @@ class XiaoYuDashboardView(APIView):
             'checkin_streak': checkin_streak,
             'checkin_history': checkin_history,
             'heatmap_days': heatmap_days,
-            'unlocked_achievement_count': len(unlocked_keys),
-            'next_achievements': next_achievements,
         }
 
     # ── Mastery ───────────────────────────────────────────
@@ -196,7 +178,6 @@ class XiaoYuDashboardView(APIView):
                 'total_score': e.total_score,
                 'max_score': e.max_score,
                 'percentage': round(e.total_score / e.max_score * 100, 1) if e.max_score else 0,
-                'elo_change': e.elo_change,
                 'created_at': e.created_at.isoformat(),
             }
             for e in exams

@@ -81,12 +81,6 @@ def backend_fixture():
         options=['越敏感', '越不敏感'], correct_answer='A')
     status = UserQuestionStatus.objects.create(user=user, question=question, wrong_count=2,
         reps=3, difficulty=7, stability=2)
-    from study_room.models import StudySession
-    from study_room import session_manager
-    # Only this guarded temporary fixture substitutes an absent current Redis snapshot.
-    session_manager.get_session = lambda user_id: None
-    StudySession.objects.create(user=user, status='ended', ended_at=timezone.now(), total_focus_seconds=1500)
-    StudySession.objects.create(user=other, status='ended', ended_at=timezone.now(), total_focus_seconds=5940, task_name='OTHER_PRIVATE_FOCUS')
     now = timezone.now()
     UserQuestionStatus.objects.filter(pk=status.pk).update(next_review_at=now-timedelta(days=1))
     UserKnowledgeState.objects.create(user=user, knowledge_point=kp, mastery_score=40)
@@ -246,13 +240,6 @@ def model_fixture(status=200):
             elif '诊断确认冒烟' in prompt:
                 if not has_result:
                     tools = [('run_diagnostic', {'mode': 'generate'})]
-            elif '人工答疑确认冒烟' in prompt:
-                if not has_result:
-                    tools = [('create_faq_ticket', {'question_text': '合成人工答疑问题：久期如何理解？',
-                        'context_summary': '合成背景：已看过课程，希望老师补充说明。', 'reason': 'student_request'})]
-            elif 'M0专注迁移' in prompt:
-                if not has_result:
-                    tools = [('get_study_status', {}), ('get_focus_history', {'days': 7})]
             elif course_question:
                 tools = None
             elif not has_result:

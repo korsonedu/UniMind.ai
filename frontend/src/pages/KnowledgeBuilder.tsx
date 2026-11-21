@@ -131,7 +131,7 @@ export default function KnowledgeBuilder() {
 
   useEffect(() => {
     if (!projectTab && !paramBuildId && defaultBuildId) {
-      navigate({ pathname: `/knowledge-builder/${encodeURIComponent(defaultBuildId)}`, search: searchParams.toString() }, { replace: true });
+      navigate({ pathname: `/xiaoyu/knowledge-builder/${encodeURIComponent(defaultBuildId)}`, search: searchParams.toString() }, { replace: true });
     }
   }, [paramBuildId, defaultBuildId, navigate, projectTab, searchParams]);
 
@@ -192,7 +192,7 @@ export default function KnowledgeBuilder() {
       setFormError(null);
       void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBuilder.list(userId) });
       const params = new URLSearchParams(searchParams); params.delete('create'); params.delete('subject');
-      navigate({ pathname: `/knowledge-builder/${encodeURIComponent(created.id)}`, search: params.toString() });
+      navigate({ pathname: `/xiaoyu/knowledge-builder/${encodeURIComponent(created.id)}`, search: params.toString() });
     },
     onError: err => {
       setFormError(extractApiError(err));
@@ -240,7 +240,7 @@ export default function KnowledgeBuilder() {
             : []),
         ]}
         onValueChange={nextId => {
-          if (nextId) navigate({ pathname: `/knowledge-builder/${encodeURIComponent(nextId)}`, search: searchParams.toString() });
+          if (nextId) navigate({ pathname: `/xiaoyu/knowledge-builder/${encodeURIComponent(nextId)}`, search: searchParams.toString() });
         }}
       />
     </div>

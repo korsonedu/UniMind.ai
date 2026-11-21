@@ -22,12 +22,12 @@ M0_TOOLS = frozenset({
     'manage_learning_resources', 'manage_learning_strategies', 'manage_learning_knowledge', 'manage_learning_tasks',
     'read_learning_project', 'plan_learning_project', 'record_learning_progress', 'set_learning_followup', 'find_learning_resources',
     'get_learning_stats', 'get_recent_practice_result', 'get_user_weak_points',
-    'get_study_status', 'get_focus_history', 'run_diagnostic', 'create_faq_ticket',
+    'run_diagnostic',
     'search_courses', 'search_asr',
     'search_knowledge_tree', 'get_user_wrong_questions', 'lookup_question',
     'get_learning_sessions', 'get_knowledge_mastery_map', 'get_due_reviews',
     'get_knowledge_difficulty_analysis', 'get_practice_questions', 'get_exam_history',
-    'get_report_card', 'get_my_achievements', 'search_similar_questions',
+    'get_report_card', 'search_similar_questions',
 })
 
 
@@ -45,20 +45,16 @@ def memory_snapshot(user):
 
 
 def student_catalog(user):
-    # Retired Agent note writes stay excluded even when legacy permissions allow them.
-    definitions = [t for t in get_planner_tools() if t['function']['name'] != 'save_session_note']
+    definitions = get_planner_tools()
     for tool in definitions:
         if tool['function']['name'] == 'run_diagnostic':
             tool['function']['description'] = '准备首次诊断作答卡片，学生自行作答并确认提交后才评分。已完成首次诊断的学生进入原诊断页重新评估。本工具不接受或提交答案。'
             tool['function']['parameters'] = {'type': 'object', 'properties': {'mode': {'type': 'string', 'enum': ['generate']}}, 'required': ['mode'], 'additionalProperties': False}
-        if tool['function']['name'] == 'create_faq_ticket':
-            tool['function']['description'] = '准备人工答疑草稿，尚未发布；学生核对、编辑并明确确认后才能发布。本工具不创建已提交工单。'
-            tool['function']['parameters'] = {**tool['function']['parameters'], 'additionalProperties': False}
         if tool['function']['name'] == 'get_practice_questions':
             parameters = tool['function']['parameters']
             parameters['properties']['purpose'] = {'type': 'string', 'enum': ['practice', 'explanation'],
                 'description': '讲解取题选 explanation，只读取题目，不展示作答卡片；练习选 practice（默认）。'}
-            tool['function']['description'] = '从题库读取题目并展示可作答的练习卡片。支持 q_type/subjective_type 题型过滤；学生直接在卡片内作答和提交，提交走站内练习接口并触发后台批改。若 questions 为空或 total_found=0，直接给出一道符合要求的题，可以用一句话说明考查范围，但不要说明题目来源；先给题干，等学生作答后按评分点给分和讲解；这道题的评分只在对话内有效，不写入练习记录、错题本、掌握度、ELO 或 Memorix，不伪造题目ID，不调用评分工具。本工具本身不提交答案。'
+            tool['function']['description'] = '从题库读取题目并展示可作答的练习卡片。支持 q_type/subjective_type 题型过滤；学生直接在卡片内作答和提交，提交走站内练习接口并触发后台批改。若 questions 为空或 total_found=0，直接给出一道符合要求的题，可以用一句话说明考查范围，但不要说明题目来源；先给题干，等学生作答后按评分点给分和讲解；这道题的评分只在对话内有效，不写入练习记录、错题本、掌握度或 Memorix，不伪造题目ID，不调用评分工具。本工具本身不提交答案。'
             tool['function']['description'] += '用于讲解时必须传 purpose=explanation，只读取题目，不要求学生作答，也不展示练习卡片；无匹配时直接用合成示例讲解。'
     return filter_tools('planner', None, definitions, user=user)
 
@@ -139,6 +135,10 @@ def build_context(user, message, recent_messages=None, chat_context=None):
         },
         'system_prompt': (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu/dsh_system_prompt.txt').read_text(),
     }
+    from users.feature_access import has_learning_feature
+    if has_learning_feature(user, 'full.report'):
+        from ai_assistant.utils import recent_learning_context
+        context['system_prompt'] += '\n' + recent_learning_context(user)
     if learning:
         context['learning_project'] = learning
         context['system_prompt'] += learning
@@ -204,9 +204,6 @@ def execute_tool(user, name, arguments, memory_version, source=None, chat_contex
     if name == 'run_diagnostic':
         from .dsh_actions import prepare_diagnostic
         return observed(prepare_diagnostic(user, source))
-    if name == 'create_faq_ticket':
-        from .dsh_actions import prepare_faq
-        return observed(prepare_faq(user, arguments, source))
     executor = PlannerToolExecutor(user)
     executor.learning_context = chat_context
     set_permitted_tools(executor, [definition])

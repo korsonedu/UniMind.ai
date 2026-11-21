@@ -5,11 +5,9 @@ import { Button } from '@/components/ui/button';
 
 const FEATURE_LABELS: Record<string, string> = {
   'ai.assistant': '小宇',
-  'full.report': '学习记录',
+  'full.report': '小宇学习上下文',
   'quiz.exam': '智能刷题',
   'knowledge.graph': '知识地图',
-  'faq.system': '答疑系统',
-  'study.room': '在线自习室',
   'course.video': '视频课程',
   'wrong.review': '错题回顾',
 };

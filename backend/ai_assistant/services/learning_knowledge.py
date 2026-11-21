@@ -303,9 +303,9 @@ def knowledge_operation(project, arguments, *, message=None):
         from .knowledge_build_path import available_builds
         return {'builds': [{'id': str(build.pk), 'subject': build.subject,
             'blocks': [{'id': block.pk, 'title': block.short_title} for block in build.blocks.all()],
-            'href': f'/knowledge-builder/{build.pk}?project={project.pk}'}
+            'href': f'/xiaoyu/knowledge-builder/{build.pk}?project={project.pk}'}
             for build in available_builds(project.user)[:20]],
-            'create_href': f'/knowledge-builder?project={project.pk}&create=1'}
+            'create_href': f'/xiaoyu/knowledge-builder?project={project.pk}&create=1'}
     if action == 'search':
         rows = LearningKnowledgeMap.objects.filter(user=project.user, title__icontains=data.get('query', '')).order_by('-pk')[:20]
         return {'maps': [{'id': row.pk, 'title': row.title, 'revision': row.revision,

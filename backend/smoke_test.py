@@ -54,7 +54,7 @@ def check_tool_registry():
     names = [t['function']['name'] for t in tools]
     print(f"\n  Planner+ExamGenerator 工具总数: {len(tools)}")
 
-    kept_tools = ['get_report_card', 'get_my_achievements', 'run_diagnostic',
+    kept_tools = ['get_report_card', 'get_learning_sessions', 'run_diagnostic',
                   'get_practice_questions', 'grade_student_answer',
                   'generate_student_report', 'send_notification', 'get_student_detail']
     for t in kept_tools:
@@ -68,7 +68,8 @@ def check_tool_registry():
                      'get_assignment_progress', 'assign_practice', 'list_classes',
                      'assign_class_course', 'get_class_gradebook', 'grade_submissions',
                      'create_teaching_plan', 'get_teaching_plan_kps',
-                     'bulk_grade_submissions', 'confirm_grades', 'get_my_courses']
+                     'bulk_grade_submissions', 'confirm_grades', 'get_my_courses',
+                     'get_my_achievements', 'create_faq_ticket', 'get_study_status', 'get_focus_history']
     leaked = [t for t in removed_tools if t in names]
     if leaked:
         print(f"  ❌ 已删除工具仍在注册: {leaked}")
@@ -88,17 +89,14 @@ def check_views():
     )
     print(f"  ✅ 内容市场 4 个 View")
 
-    from faq_system.views import QuestionListCreateView, QuestionDetailView
-    print(f"  ✅ 答疑 2 个 View")
-
     from payments.views import WebhookView
     print(f"  ✅ 支付 Webhook View")
 
 def check_tool_executors():
     """验证 tool executor handler 存在"""
-    from ai_assistant.services.tool_executor import BaseToolExecutor
-    handlers = [m for m in dir(BaseToolExecutor) if m.startswith('_handle_')]
-    new_handlers = ['_handle_get_report_card', '_handle_get_my_achievements']
+    from ai_assistant.services.tool_executor import PlannerToolExecutor
+    handlers = [m for m in dir(PlannerToolExecutor) if m.startswith('_handle_')]
+    new_handlers = ['_handle_get_report_card', '_handle_get_learning_sessions']
     print(f"\n  ToolExecutor handlers 总数: {len(handlers)}")
     for h in new_handlers:
         if h in handlers:

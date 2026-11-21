@@ -2,11 +2,11 @@ import { ProtectedMediaLink } from '@/components/ProtectedMediaLink';
 import { getLocale, t, useLocale } from '@/i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Check, Clock as Clock3, CalendarBlank as CalendarDays, Play, Plus, Trophy, X } from '@phosphor-icons/react';
+import { ArrowUpRight, Check, Clock as Clock3, CalendarBlank as CalendarDays, Play, Plus, X } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import { CheckInFireworks } from '@/components/CheckInFireworks';
-import { LearningOverview, type DashData } from './LearningOverview';
+import type { DashData } from './types';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { LearningCalendar } from './LearningCalendar';
@@ -101,8 +101,6 @@ export function CoursePortal({ courses, progress, loading, error, activity, acti
   let date = activeDates.has(today) ? today : dateOffset(today, -1);
   while (activeDates.has(date)) { streak++; date = dateOffset(date, -1); }
   const seconds = totals.reduce((sum, item) => sum + item.watched_seconds, 0);
-  const earned = totals.reduce((sum, item) => sum + item.elo_earned, 0);
-  const recentEarned = activityDays.filter(day => day.date >= dateOffset(today, -6) && day.date <= today).reduce((sum, day) => sum + day.elo_earned, 0);
   const selectedCourses = tab === 'all' ? courses : tab === 'unfinished' ? unfinished.map(record => byCourse.get(record.course)!) : tab === 'watched' ? recent.map(record => byCourse.get(record.course)!) : queued;
   const upcoming = [...queued, ...nextCourses].filter(course => course.id !== lastCourse?.id).slice(0, 3);
   const activityUnavailable = !activity || !!activityError;
@@ -122,7 +120,6 @@ export function CoursePortal({ courses, progress, loading, error, activity, acti
       <div><dt><CalendarDays size={16} />{t('学习频率')}</dt><dd>{activityUnavailable ? '—' : weekDays}<small> {t('/ 7 天')}</small></dd><p>{activityUnavailable ? '—' : t('连续 {0} 天', { 0: streak })}</p></div>
       <div><dt><Clock3 size={16} />{t('观看时长')}</dt><dd className="um-portal-duration">{activityUnavailable ? '—' : learningDuration(seconds)}</dd></div>
       <div><dt><Check size={16} />{t('已看完')}</dt><dd>{loading || error ? '—' : completed.length}<small> {t('门')}</small></dd><p>{unfinished.length} {t('门未看完')}</p></div>
-      <div><dt><Trophy size={16} />{t('听课获得 ELO')}</dt><dd>{activityUnavailable ? '—' : `+${recentEarned}`}</dd><p>{t('近 7 天 · 累计 +')}{activityUnavailable ? '—' : earned}</p></div>
     </dl></section>
     {activityError ? <section className="um-portal-card"><h2>{t('学习活动')}</h2><p role="alert">{activityError}</p><button type="button" className="um-course-button" onClick={onRetryActivity}>{t('重试学习活动')}</button></section> : activity ? <LearningCalendar today={today} days={activityDays} courses={courses} /> : <section className="um-portal-card"><h2>{t('学习活动')}</h2><p role="status" className="um-course-muted">{t('正在读取学习活动…')}</p></section>}
     <section className="um-portal-card um-portal-library" aria-label={t('我的课程')}><div className="um-course-section-heading"><h2>{t('我的课程')}</h2><div className="um-segmented" role="group" aria-label={t('观看分类')}><button type="button" aria-pressed={tab === 'all'} onClick={() => setTab('all')}>{t('全部')} <span>{courses.length}</span></button><button type="button" aria-pressed={tab === 'unfinished'} onClick={() => setTab('unfinished')}>{t('未看完')} <span>{loading || error ? '—' : unfinished.length}</span></button><button type="button" aria-pressed={tab === 'watched'} onClick={() => setTab('watched')}>{t('已看过')} <span>{loading || error ? '—' : recent.length}</span></button><button type="button" aria-pressed={tab === 'later'} onClick={() => setTab('later')}>{t('稍后观看')} <span>{queueLoading || queueError ? '—' : queued.length}</span></button></div></div>
@@ -130,7 +127,6 @@ export function CoursePortal({ courses, progress, loading, error, activity, acti
       {tab === 'later' && !queueLoading && !queueError && queued.length > 0 && <p className="mb-3 text-xs italic text-muted-foreground">{t('薛定谔的知识：在做题之前，你既会又不会。')}</p>}
       {tab === 'later' && queueLoading ? <p role="status" className="um-course-muted">{t('正在读取稍后观看…')}</p> : tab !== 'later' && tab !== 'all' && (loading || error) ? <p className="um-course-muted">{loading ? t('正在读取观看记录…') : t('重试观看记录后可查看。')}</p> : <><ul className="um-portal-video-list">{selectedCourses.map(course => <li key={course.id}><div className="um-portal-video-glyph" aria-hidden="true"><Play size={15} /></div><div className="um-portal-video-info"><button type="button" className="um-course-course-link" onClick={() => onOpen(course, course.video_file ? 'video' : 'materials')}>{course.title}</button><p>{loading || error ? '—' : progressLabel(byProgress.get(course.id))}</p><div className="um-course-material-links">{course.courseware && <ProtectedMediaLink href={course.courseware} target="_blank" rel="noopener noreferrer">{t('教学课件')}</ProtectedMediaLink>}{course.reference_materials && <ProtectedMediaLink href={course.reference_materials} target="_blank" rel="noopener noreferrer">{t('参考资料')}</ProtectedMediaLink>}</div></div>{tab === 'later' ? <button type="button" className="um-portal-icon-button" aria-label={t('移出稍后观看：{0}', { 0: course.title })} disabled={queueDisabled(course)} onClick={() => onQueueChange(course, true)}><X size={15} /></button> : course.video_file ? queueButton(course) : null}<button type="button" className="um-course-button" onClick={() => onOpen(course, course.video_file ? 'video' : 'materials')}>{!course.video_file ? t('资料') : byProgress.get(course.id)?.is_finished ? t('重看') : t('观看')}</button></li>)}</ul>{!selectedCourses.length && <p className="um-portal-empty">{tab === 'all' ? t('当前范围没有课程') : tab === 'unfinished' ? t('暂无未看完视频') : tab === 'watched' ? t('暂无观看记录') : t('暂无稍后观看')}</p>}{tab === 'later' && !queueLoading && !queueError && queue.length === 0 && <p className="text-xs italic text-muted-foreground">{t('这里还没有“收藏了就等于学会了”的知识。')}</p>}</>}
     </section>
-    {hasReport && <LearningOverview data={dash} error={dashError} onRetry={() => setDashboardVersion(value => value + 1)} />}
-    <nav className="um-portal-tools" aria-label={t('学习快捷入口')}><Link to="/xiaoyu">{t('小宇 Agent')}<ArrowUpRight size={14} /></Link>{features.includes('quiz.exam') && <Link to="/tests">{t('题库练习')}<ArrowUpRight size={14} /></Link>}{features.includes('faq.system') && <Link to="/qa">{t('答疑中心')}<ArrowUpRight size={14} /></Link>}{features.includes('study.room') && <Link to="/study">{t('自习室')}<ArrowUpRight size={14} /></Link>}</nav>
+    <nav className="um-portal-tools" aria-label={t('学习快捷入口')}><Link to="/xiaoyu">{t('小宇 Agent')}<ArrowUpRight size={14} /></Link>{features.includes('quiz.exam') && <Link to="/tests">{t('题库练习')}<ArrowUpRight size={14} /></Link>}</nav>
   </div>;
 }
