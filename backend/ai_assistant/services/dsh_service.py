@@ -209,7 +209,7 @@ def execute_tool(user, name, arguments, memory_version, source=None, chat_contex
     set_permitted_tools(executor, [definition])
     executor._allowed_tool_names = {name}
     result = json.loads(executor(name, arguments))
-    if not result.get('error'):
+    if not result.get('error') and not result.get('visual'):
         card = build_tool_card(name, result)
         if card:
             result['visual'] = card

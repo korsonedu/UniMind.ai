@@ -57,6 +57,7 @@ export interface RightPanelProps {
 
 export interface AgentChatLayoutProps {
   workspace?: AgentWorkspace;
+  composerId?: string;
   appearance?: 'native';
   // Skills
   skills: Skill[];
@@ -166,7 +167,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     inputTourClass,
     sidebar,
     onSessionsReady,
-    appearance, workspace,
+    appearance, workspace, composerId,
   } = props;
 
   const setPageHeader = useSystemStore(state => state.setPageHeader);
@@ -424,7 +425,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             <div className="w-full max-w-[680px]">
             <div data-tour={inputTourClass} className="um-agent-composer">
               {noteMentions.panel}
-              <textarea ref={nativeInputRef} value={input} onChange={event => { setInput(event.target.value); noteMentions.updateQuery(event.target.value, event.target.selectionStart); }}
+              <textarea id={composerId} ref={nativeInputRef} value={input} onChange={event => { setInput(event.target.value); noteMentions.updateQuery(event.target.value, event.target.selectionStart); }}
                 onCompositionStart={() => setIsComposition(true)} onCompositionEnd={() => setIsComposition(false)}
                 onKeyDown={event => { if (noteMentions.onKeyDown(event, isComposing)) return; if (shouldSend(event) && !isComposing && !event.nativeEvent.isComposing && !loading && input.trim() && bot) { event.preventDefault(); doSend(input); } }}
                 placeholder={chatPlaceholder} aria-label={t('和{0}对话', { 0: botDisplayName })} disabled={loading || !bot} />
@@ -701,7 +702,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             <div className="max-w-3xl mx-auto">
               <div data-tour={inputTourClass} className="rounded-2xl border border-border bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)] overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
                 {noteMentions.panel}
-                <textarea ref={nativeInputRef} rows={1}
+                <textarea id={composerId} ref={nativeInputRef} rows={1}
                   value={input}
                   onChange={e => { setInput(e.target.value); noteMentions.updateQuery(e.target.value, e.target.selectionStart); }}
                   onCompositionStart={() => setIsComposition(true)}

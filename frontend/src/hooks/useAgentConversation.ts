@@ -544,7 +544,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
   // ── SSE streaming ──
 
-  const doSend = useCallback(async (text: string, silent: boolean = false) => {
+  const doSend = useCallback(async (text: string, silent = false, { preserveDraft = false } = {}) => {
     if (!bot) return;
 
     const requestConversationId = conversationIdRef.current;
@@ -608,11 +608,11 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     if (!silent) {
       if (isVisible()) followScrollRef.current = true;
       const userMsg: Message = { _id: userMessageId, role: 'user', content: text, timestamp: new Date().toISOString(), conversation_id: requestConversationId,
-        ...(body.course_context ? { metadata: { course_context: body.course_context } } : {}) };
+        metadata: { course_context: body.course_context, learning_activity: body.learning_activity } };
       updateConversationMessages(requestConversationId, previous => previous.some(row => row._id === userMessageId || (pending.serverMessageId && row.id === pending.serverMessageId)) ? previous : [...previous, userMsg]);
       syncSession(requestConversationId, messageBuffersRef.current.get(requestConversationId) ?? [], projectIdRef.current);
     }
-    if (isVisible() && inputRevisionRef.current === sentInputRevision) {
+    if (!preserveDraft && isVisible() && inputRevisionRef.current === sentInputRevision) {
       setInput('');
     }
 

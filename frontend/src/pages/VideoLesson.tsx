@@ -5,7 +5,7 @@ import { useSystemStore, type ExperiencePreferences } from '@/store/useSystemSto
 import type { Course } from '@/types/api';
 import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import { createPortal, flushSync } from 'react-dom';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { Play, Pause, Star, FileText, Download, ArrowsOut, ArrowsIn, ClosedCaptioning, SpeakerHigh, SpeakerX } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
@@ -13,11 +13,12 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { OutlinePanel } from '@/components/course/OutlinePanel';
 import { SubtitlesOverlay } from '@/components/course/SubtitlesOverlay';
 import { CourseChatPanel } from '@/components/course/CourseChatPanel';
+import ProjectCourseChat from '@/components/course/ProjectCourseChat';
 import { toast } from 'sonner';
 import { shouldTogglePlayback } from './videoLessonKeyboard';
 import { useLearningSession } from '@/hooks/useLearningSession';
 import { useDesktopStore } from '@/lib/desktop';
-import { CourseSidebarContext, useNotesSidebarAvailability } from '@/components/WorkspaceContext';
+import { CourseSidebarContext, ProjectChatSidebarContext, useNotesSidebarAvailability } from '@/components/WorkspaceContext';
 import '@/styles/course-lesson.css';
 
 const formatTime = (s: number) => {
@@ -36,9 +37,14 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   useLocale();
   const hasCourseCatalog = useInstitutionStore(state => state.hasCourseCatalog);
   const { id } = useParams();
+  const { key: locationKey } = useLocation();
   const [searchParams] = useSearchParams();
   const linkedPosition = searchParams.get('t');
-  const linkedSeconds = linkedPosition?.trim() ? Number(linkedPosition) : null;
+  const requestedSeconds = linkedPosition?.trim() ? Number(linkedPosition) : Number.NaN;
+  const linkedSeconds = Number.isFinite(requestedSeconds) && requestedSeconds >= 0 ? requestedSeconds : null;
+  const requestedProject = Number(searchParams.get('project'));
+  const projectId = Number.isSafeInteger(requestedProject) && requestedProject > 0 ? requestedProject : null;
+  const linkedConversation = searchParams.get('conversation') || undefined;
   const userId = useAuthStore(s => s.user?.id);
   const desktopState = useDesktopStore(s => s.state);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -61,14 +67,16 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   const [completionSaved, setCompletionSaved] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const { videoSpeed: playbackRate, videoSubtitles: subtitlesVisible, setExperience } = useSystemStore();
+  const { videoSpeed: playbackRate, videoSubtitles, setExperience } = useSystemStore();
+  const [linkedSubtitles, setLinkedSubtitles] = useState<boolean | null>(null);
+  const subtitlesVisible = linkedSeconds === null ? videoSubtitles : linkedSubtitles ?? true;
   const { host: sidebarHost, view: sidebarView, visible: sidebarVisible, setAvailable: setSidebarAvailable } = useContext(CourseSidebarContext);
+  const { open: openProjectChat } = useContext(ProjectChatSidebarContext);
   const [showControls, setShowControls] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [videoAspectRatio, setVideoAspectRatio] = useState(16 / 9);
-  const [seeking] = useState(false);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const courseId = Number(id);
   const offlineDownload = desktopState?.downloads.find(item => item.courseId === courseId);
@@ -102,6 +110,9 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     setSidebarAvailable(sidebarReady);
     return () => setSidebarAvailable(false);
   }, [sidebarReady, courseId, setSidebarAvailable]);
+  useEffect(() => {
+    if (projectId && sidebarReady && !window.matchMedia('(max-width: 767px)').matches) openProjectChat();
+  }, [projectId, sidebarReady, openProjectChat]);
   useLearningSession({ enabled: !loading && course?.id === courseId && !!course.video_file, kind: 'video', courseId, videoRef });
 
   useEffect(() => {
@@ -265,14 +276,24 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   };
 
   const handleTimeUpdate = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    const video = e.currentTarget;
-    if (!seeking) setCurrentTime(video.currentTime);
+    setCurrentTime(e.currentTarget.currentTime);
   };
 
   const handleVideoResize = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     const { videoWidth, videoHeight } = e.currentTarget;
     if (videoWidth > 0 && videoHeight > 0) setVideoAspectRatio(videoWidth / videoHeight);
   };
+
+  const seekTo = useCallback((seconds: number) => {
+    if (!videoRef.current) return;
+    videoRef.current.currentTime = seconds;
+    setCurrentTime(seconds);
+  }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video?.readyState && linkedSeconds !== null && linkedSeconds < video.duration) seekTo(linkedSeconds);
+  }, [linkedSeconds, locationKey, seekTo]);
 
   const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     const video = e.currentTarget;
@@ -283,14 +304,13 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     const restored = renewedPlayback.current;
     if (restored) {
       renewedPlayback.current = null;
-      video.currentTime = restored.time;
+      seekTo(restored.time);
       if (restored.playing) void video.play().catch(() => toast(t('点击播放继续观看')));
       return;
     }
     if (Number.isFinite(dur) && dur > 0) api.post(`/courses/${courseId}/progress/`, { duration: dur }).catch(() => {});
-    if (linkedSeconds !== null && Number.isFinite(linkedSeconds) && linkedSeconds >= 0 && linkedSeconds < dur) {
-      video.currentTime = linkedSeconds;
-      setCurrentTime(linkedSeconds);
+    if (linkedSeconds !== null && linkedSeconds < dur) {
+      seekTo(linkedSeconds);
       return;
     }
     // 续播：从上次位置继续（已完成、接近开头或结尾则不跳）
@@ -301,12 +321,6 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
       toast.info(t('已从上次位置继续播放'));
     }
   };
-
-  const seekTo = useCallback((seconds: number) => {
-    if (!videoRef.current) return;
-    videoRef.current.currentTime = seconds;
-    setCurrentTime(seconds);
-  }, []);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = videoRef.current;
@@ -345,6 +359,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
               playsInline
               onEnded={handleVideoEnd}
               onTimeUpdate={handleTimeUpdate}
+              onSeeked={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
               onResize={handleVideoResize}
               onPlay={() => { setIsPlaying(true); scheduleHideControls(); }}
@@ -362,7 +377,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
               preload="metadata"
               poster={poster.src || undefined}
             />
-            <SubtitlesOverlay courseId={courseId} videoRef={videoRef} visible={subtitlesVisible} />
+            <SubtitlesOverlay courseId={courseId} currentTime={currentTime} visible={subtitlesVisible} />
             <div className="um-lesson-controls" data-visible={showControls || !isPlaying || undefined}>
               <input className="um-lesson-progress" type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime, duration)} onChange={handleSeek} disabled={!duration} aria-label={t('播放进度')} aria-valuetext={`${formatTime(currentTime)} / ${formatTime(duration)}`} />
               <div className="flex items-center justify-between">
@@ -382,7 +397,10 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
                   <button onClick={cycleSpeed} className="rounded-md px-1.5 py-1 text-xs font-bold text-white/70 hover:text-white transition-colors min-w-[32px] text-center" aria-label={t('播放速度')} title={t('播放速度')}>
                     {playbackRate}x
                   </button>
-                  <button onClick={() => setExperience({ videoSubtitles: !subtitlesVisible })} className={`rounded-md p-1.5 transition-colors ${subtitlesVisible ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`} aria-label={subtitlesVisible ? t('关闭字幕') : t('开启字幕')} title={subtitlesVisible ? t('关闭字幕') : t('开启字幕')}>
+                  <button onClick={() => {
+                    if (linkedSeconds !== null) setLinkedSubtitles(!subtitlesVisible);
+                    else setExperience({ videoSubtitles: !subtitlesVisible });
+                  }} className={`rounded-md p-1.5 transition-colors ${subtitlesVisible ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`} aria-label={subtitlesVisible ? t('关闭字幕') : t('开启字幕')} title={subtitlesVisible ? t('关闭字幕') : t('开启字幕')}>
                     <ClosedCaptioning className="h-[18px] w-[18px]" />
                   </button>
                   <button onClick={toggleFullscreen} className="rounded-md p-1.5 text-white/70 hover:text-white transition-colors" aria-label={isFullscreen ? t('退出全屏') : t('全屏')} title={isFullscreen ? t('退出全屏') : t('全屏')}>
@@ -424,8 +442,10 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
       </section>
       {sidebarHost && createPortal(<aside className="um-course-sidebar-content" aria-label={t('课程侧栏')}>
         <div id="sidebar-panel-chat" role="tabpanel" aria-labelledby="sidebar-tab-chat" className="um-course-sidebar-chat" hidden={sidebarView !== 'chat'}>
-          <CourseChatPanel key={`${userId}:${courseId}`} courseId={courseId} videoRef={videoRef}
-            mode="sidebar" visible={sidebarVisible && sidebarView === 'chat'} onSeek={seekTo} />
+          {projectId ? <ProjectCourseChat key={`${projectId}:${linkedConversation || ''}`} projectId={projectId} linkedConversation={linkedConversation}
+            courseId={courseId} videoRef={videoRef} mode="sidebar" visible={sidebarVisible && sidebarView === 'chat'} onSeek={seekTo} />
+            : <CourseChatPanel key={`${userId}:${courseId}`} courseId={courseId} videoRef={videoRef}
+              mode="sidebar" visible={sidebarVisible && sidebarView === 'chat'} onSeek={seekTo} />}
         </div>
         <div id="sidebar-panel-outline" role="tabpanel" aria-labelledby="sidebar-tab-outline" className="um-course-info" hidden={sidebarView !== 'outline'}>
         <section className="um-lesson-outline-section" aria-labelledby="lesson-outline-heading">

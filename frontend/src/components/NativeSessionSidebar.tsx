@@ -37,7 +37,7 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
     const timer = window.setTimeout(() => {
       if (!claimMenuRequest(location.key)) return;
       if (newAction === 'chat') onNew();
-      else setEditing({ name: '', instructions: initialInstructions || '' });
+      else setEditing({ name: '', instructions: initialInstructions || '', planning: true });
       setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete('new'); return next; }, { replace: true });
     }, 0);
     return () => window.clearTimeout(timer);
@@ -98,7 +98,7 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
     </div>
     <nav aria-label={t('会话列表')}>
       <>
-        <div className="um-agent-section-label"><span>{t('项目')}</span><button className="um-agent-icon-button" aria-label={t('创建项目')} title={t('创建项目')} disabled={controls.error} onClick={() => setEditing({ name: '', instructions: initialInstructions || '' })}><Plus size={15} /></button></div>
+        <div className="um-agent-section-label"><span>{t('项目')}</span><button className="um-agent-icon-button" aria-label={t('创建项目')} title={t('创建项目')} disabled={controls.error} onClick={() => setEditing({ name: '', instructions: initialInstructions || '', planning: true })}><Plus size={15} /></button></div>
         {controls.error && <button className="um-agent-project-retry" onClick={controls.reload}>{t('项目未加载，重试')}</button>}
         {controls.projects.map(project => {
           const closed = closedProjects.includes(project.id);
@@ -141,8 +141,8 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
         }}>
           <label>{t('项目名称')}<input autoFocus required aria-label={t('项目名称')} placeholder={t('例如：金融学考研复习')} maxLength={60} value={editing.name} disabled={controls.pending} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
           <label>{t('项目背景与要求（选填）')}<textarea aria-label={t('项目背景与要求')} maxLength={4000} rows={5} value={editing.instructions} disabled={controls.pending} onChange={event => setEditing({ ...editing, instructions: event.target.value })} /></label>
-          {editing.id === undefined && <fieldset className="um-project-mode" disabled={controls.pending}>
             <legend>{t('项目模式')}</legend>
+          {editing.id === undefined && <fieldset className="um-project-mode" disabled={controls.pending}>
             <label><input type="radio" name="project-mode" checked={!editing.planning} onChange={() => setEditing({ ...editing, planning: false })} />{t('自由对话')}</label>
             <label><input type="radio" name="project-mode" checked={!!editing.planning} onChange={() => setEditing({ ...editing, planning: true })} />{t('规划模式')}</label>
           </fieldset>}

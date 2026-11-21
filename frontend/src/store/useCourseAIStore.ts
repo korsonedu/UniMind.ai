@@ -19,6 +19,7 @@ interface CourseAIState {
   outlineStatus: 'idle' | 'loading' | 'available' | 'unavailable';
   outlineItems: OutlineItem[];
   transcriptStatus: 'idle' | 'loading' | 'available' | 'unavailable';
+  transcriptCourseId: number | null;
   transcriptSegments: TranscriptSegment[];
   fullText: string | null;
   fetchOutline: (courseId: number) => Promise<void>;
@@ -50,6 +51,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
   outlineStatus: 'idle',
   outlineItems: [],
   transcriptStatus: 'idle',
+  transcriptCourseId: null,
   transcriptSegments: [],
   fullText: null,
 
@@ -129,9 +131,10 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
       _pollTimers.delete(key);
     }
 
-    set({ transcriptStatus: 'loading' });
+    set({ transcriptCourseId: courseId, transcriptSegments: [], fullText: null, transcriptStatus: 'loading' });
     try {
       const res = await api.get(`/courses/${courseId}/transcript/`);
+      if (get().transcriptCourseId !== courseId) return;
       if (res.data.status === 'completed') {
         const segments = (res.data.segments || []).map((s: { start_time: number; end_time: number; start?: number; end?: number; text: string; index: number }) => ({
           start: s.start_time ?? s.start ?? 0,
@@ -150,6 +153,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
         // Still processing — keep loading and start polling with exponential backoff
         set({ transcriptStatus: 'loading' });
         const doPoll = async () => {
+          if (get().transcriptCourseId !== courseId) return;
           if (document.visibilityState === 'hidden') {
             const nextTimer = setTimeout(doPoll, _pollIntervals.get(key) || POLL_INITIAL);
             _pollTimers.set(key, nextTimer);
@@ -157,6 +161,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
           }
           try {
             const pollRes = await api.get(`/courses/${courseId}/transcript/`);
+            if (get().transcriptCourseId !== courseId) return;
             if (pollRes.data.status === 'completed') {
               _pollTimers.delete(key);
               _pollIntervals.delete(key);
@@ -194,7 +199,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
       }
     } catch {
       console.error('Fetch transcript failed');
-      set({ transcriptStatus: 'unavailable' });
+      if (get().transcriptCourseId === courseId) set({ transcriptStatus: 'unavailable' });
     }
   },
 
@@ -215,6 +220,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
       outlineStatus: 'idle',
       outlineItems: [],
       transcriptStatus: 'idle',
+      transcriptCourseId: null,
       transcriptSegments: [],
       fullText: null,
     });

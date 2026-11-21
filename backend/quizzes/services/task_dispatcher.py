@@ -3,6 +3,7 @@ import threading
 from typing import Any, Dict, List
 
 from django.conf import settings
+from django.db import connections
 
 from quizzes.ai_workflow import run_exam_grading
 from quizzes.tasks import run_exam_grading_task
@@ -12,9 +13,14 @@ logger = logging.getLogger(__name__)
 
 
 def _start_thread_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, Any]]) -> None:
+    def grade():
+        try:
+            run_exam_grading(user_id, exam_id, questions_data)
+        finally:
+            connections.close_all()
+
     thread = threading.Thread(
-        target=run_exam_grading,
-        args=(user_id, exam_id, questions_data),
+        target=grade,
         daemon=True,
     )
     thread.start()

@@ -1,6 +1,7 @@
 """Translations of fixed teaching suggestions; learner content is passed as values."""
 
 EN = {
+    "该复习“{0}”了。回顾本次学习记录，再做一次简短复测。": "Time to review “{0}”. Revisit your work and try a short reassessment.",
     "恢复学习后再根据实际情况继续。": "Resume learning, then continue based on your current situation.",
     "与小宇核对当前目标和接下来的学习。": "Review your current goal and next steps with XiaoYu.",
     "保留用户当前安排，不因任务完成自动恢复或结束目标。": "Keep your current plan. Completing a task does not automatically resume or finish the goal.",

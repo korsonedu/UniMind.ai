@@ -10,6 +10,7 @@ import { useChatUnreadStore } from '@/store/useChatUnreadStore';
 import { readRecovery, recoveryScope } from '@/lib/conversationRecovery';
 import { queryClient } from '@/lib/queryClient';
 import { learningKey, type ProjectLearning } from '@/lib/projectLearning';
+import { activeWorkspace } from '@/lib/activeWorkspace';
 import { XiaoYuChatContext, findAssistantBot, type PageChatHooks } from './xiaoYuChatContext';
 
 /**
@@ -53,7 +54,8 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
   });
   const { conversationId, setBot, setInitialized, setSessions, groupIntoSessions } = chat;
   const userId = useAuthStore(state => state.user?.id);
-  const shouldActivate = activated || new URLSearchParams(location.search).has('project');
+  const blockedCourse = activeWorkspace() === 'personal' && (location.pathname === '/courses' || location.pathname.startsWith('/course/'));
+  const shouldActivate = activated || (!blockedCourse && new URLSearchParams(location.search).has('project'));
 
   useEffect(() => {
     if (!userId) {
@@ -181,7 +183,7 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
   }, [chat.initialized, chat.projectId, chat.input, userId, location.pathname, location.search, openProject]);
 
   useEffect(() => {
-    if (!userId || !chat.initialized) return;
+    if (!userId || !chat.initialized || blockedCourse) return;
     const params = new URLSearchParams(location.search);
     const explicit = params.get('project');
     if (!explicit || !/^\d+$/.test(explicit)) return;
@@ -191,7 +193,14 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
     queueMicrotask(() => {
       if (cancelled) return;
       restored.current = key;
-      void openProject(Number(explicit), params.get('conversation') || undefined).then(() => {
+      const current = chatRef.current;
+      const targetConversation = params.get('conversation');
+      const sameConversation = current.projectId === Number(explicit) && (
+        targetConversation ? targetConversation === current.conversationId
+          : location.pathname === '/xiaoyu' && (params.has('learning_task') || params.has('learning_view'))
+      );
+      const restore = sameConversation ? Promise.resolve() : openProject(Number(explicit), targetConversation || undefined);
+      void restore.then(() => {
         if (cancelled) return;
         params.delete('project');
         params.delete('conversation');
@@ -200,9 +209,12 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
       });
     });
     return () => { cancelled = true; };
-  }, [userId, chat.initialized, location.key, location.pathname, location.search, navigate, openProject]);
+  }, [userId, chat.initialized, blockedCourse, location.key, location.pathname, location.search, navigate, openProject]);
   useEffect(() => {
-    if (!chat.loading && chat.projectId && userId) void queryClient.invalidateQueries({ queryKey: learningKey(userId, chat.projectId) });
+    if (!chat.loading && chat.projectId && userId) {
+      void queryClient.invalidateQueries({ queryKey: learningKey(userId, chat.projectId) });
+      void queryClient.invalidateQueries({ queryKey: ['learning-tasks', userId, chat.projectId] });
+    }
   }, [chat.loading, chat.messages.at(-1)?.id, chat.projectId, userId]);
   useEffect(() => () => { ++openSequence.current; }, [userId]);
 

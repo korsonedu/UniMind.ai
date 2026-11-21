@@ -41,7 +41,7 @@ class DefinitionInput(serializers.Serializer):
 class TaskInput(serializers.Serializer):
     version_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
     node_id = serializers.CharField(max_length=60, required=False, allow_blank=True, default='')
-    stage_id = serializers.CharField(max_length=60)
+    stage_id = serializers.CharField(max_length=60, allow_blank=True)
     title = serializers.CharField(max_length=200)
     instructions = serializers.CharField(max_length=8000)
     question_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), max_length=10, default=list)
@@ -54,6 +54,9 @@ class TaskInput(serializers.Serializer):
     def validate(self, data):
         if bool(data['question_ids']) == bool(data.get('definition')):
             raise ValidationError('请选择已有题目或准备一个开放任务，二者只能选一。')
+        if not data['stage_id'] and (data['purpose'] != 'diagnostic' or data.get('version_id')
+                or data['node_id'] or data.get('source_task_id') or data.get('strategy_use_id') or len(data['question_ids']) > 3):
+            raise ValidationError('起点小测限三题，不引用学习阶段、知识节点或此前任务。')
         return data
 
 
@@ -96,8 +99,10 @@ def _personal_snapshot(task):
     }
 
 
-def _validate_path(project, version_id, node_id, stage_id):
+def _validate_path(project, version_id, node_id, stage_id, purpose):
     state = get_object_or_404(ProjectLearning.objects.select_for_update(), project=project)
+    if _is_preplan_diagnostic(state, stage_id, purpose):
+        return None
     stage = next((item for item in state.plan.get('stages', []) if item['id'] == stage_id), None)
     if state.status != 'active' or not stage:
         raise ValidationError('任务需要对应当前生效计划的学习阶段。')
@@ -115,6 +120,11 @@ def _validate_path(project, version_id, node_id, stage_id):
     return version
 
 
+def _is_preplan_diagnostic(state, stage_id, purpose):
+    return (state.planning_enabled and state.status == 'preparing' and not state.plan.get('stages')
+            and not stage_id and purpose == 'diagnostic')
+
+
 @transaction.atomic
 def create_task(project, arguments):
     if not has_learning_feature(_current_user(project), 'quiz.exam'):
@@ -122,7 +132,7 @@ def create_task(project, arguments):
     serializer = TaskInput(data=arguments)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
-    version = _validate_path(project, data.pop('version_id', None), data['node_id'], data['stage_id'])
+    version = _validate_path(project, data.pop('version_id', None), data['node_id'], data['stage_id'], data['purpose'])
     source_id = data.pop('source_task_id', None)
     source = get_object_or_404(ProjectLearningTask, pk=source_id, project=project) if source_id else None
     use_id = data.pop('strategy_use_id', None)
@@ -187,7 +197,7 @@ def validate_task_submission(user, task_id, submission_id, questions_data, assis
     if str(task.pk) != str(submission_id):
         raise ValidationError('任务与本次提交编号不一致。')
     if not task.exam_id:
-        _validate_path(task.project, task.knowledge_version_id, task.node_id, task.stage_id)
+        _validate_path(task.project, task.knowledge_version_id, task.node_id, task.stage_id, task.purpose)
     elif task.assistance != assistance:
         raise ValidationError('已提交任务不能更换辅助情况。')
     if task.definition:
@@ -289,7 +299,9 @@ def task_data(task):
         reps__gt=0).order_by('next_review_at').values_list('next_review_at', flat=True).first() if exam and authorized and not task.definition else None
     status = ('processing' if exam.status in ('pending', 'grading') else exam.status) if exam else 'ready'
     state = ProjectLearning.objects.get(project=task.project)
-    current = task.knowledge_version_id == (state.plan.get('knowledge_path') or {}).get('version_id') and any(stage['id'] == task.stage_id for stage in state.plan.get('stages', []))
+    current = _is_preplan_diagnostic(state, task.stage_id, task.purpose) or (
+        task.knowledge_version_id == (state.plan.get('knowledge_path') or {}).get('version_id')
+        and any(stage['id'] == task.stage_id for stage in state.plan.get('stages', [])))
     return {
         'is_current': current,
         'id': str(task.pk), 'learning_task_id': str(task.pk), 'practice_id': str(task.pk),

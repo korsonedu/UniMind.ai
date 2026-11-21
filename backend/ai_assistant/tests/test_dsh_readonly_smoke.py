@@ -36,7 +36,7 @@ def test_readonly_student_queries(user, settings):
     course = Course.objects.create(is_published=True, title='M0久期课程', knowledge_point=kp)
     private_course = Course.objects.create(is_published=True, title='M0久期私人课程', institution=private)
     transcript = VideoTranscript.objects.create(course=course, asr_status='completed')
-    TranscriptSegment.objects.create(transcript=transcript, start_time=60, end_time=90, text='M0久期片段', index=0)
+    TranscriptSegment.objects.create(transcript=transcript, start_time=1260.123, end_time=1290, text='M0久期片段', index=0)
     now = timezone.now()
     LearningSession.objects.create(user=user, session_id=uuid4(), kind='video', course=course,
         started_at=now-timedelta(minutes=20), ended_at=now, active_seconds=1200)
@@ -71,6 +71,8 @@ def test_readonly_student_queries(user, settings):
     assert [c['id'] for c in results['search_courses']['courses']] == [course.pk]
     assert results['search_courses']['visual']['payload']['items'][0]['action_link'] == f'/course/{course.pk}'
     assert results['search_asr']['visual']['payload']['items'][0]['value'] == 'M0久期片段'
+    assert results['search_asr']['segments'][0]['url'] == f'/course/{course.pk}?t=1260.123'
+    assert results['search_asr']['visual']['payload']['items'][0]['action_link'] == f'/course/{course.pk}?t=1260.123'
     assert results['get_recent_practice_result']['visual']['type'] == 'practice_result'
     assert results['get_practice_questions']['visual']['type'] == 'practice_quiz'
     assert results['get_practice_questions']['visual']['payload']['practice_id']

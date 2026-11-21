@@ -1,11 +1,14 @@
 """Small cross-domain checks for owned open tasks and formal grading recovery."""
+import json
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.test import override_settings
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APITestCase
 
-from ai_assistant.models import ConversationProject, ProjectLearning, ProjectLearningEvent, ProjectLearningTask
+from ai_assistant.models import AIChatMessage, Bot, Conversation, ConversationProject, ProjectLearning, ProjectLearningEvent, ProjectLearningTask
+from ai_assistant.services.project_learning import change_learning
 from ai_assistant.services.learning_tasks import create_task, task_data, task_result_snapshot
 from quizzes.ai_workflow import run_exam_grading
 from quizzes.models import Question, KnowledgePoint, QuizExam, UserQuestionStatus
@@ -28,16 +31,44 @@ class GeneralLearningTasksSmoke(APITestCase):
                 'response_type': 'reasoning', 'criteria': ['说明输入输出关系', '给出能支持判断的理由'],
                 'reference_answer': '内部参考：固定输入应有唯一输出。'}}
 
-    def submit(self, task, answer='我先固定输入，再检查它是否唯一对应输出。'):
+    def submit(self, task, answer='我先固定输入，再检查它是否唯一对应输出。', question_id=0):
         with patch('quizzes.views_exam.dispatch_exam_grading'), self.captureOnCommitCallbacks(execute=True):
             return self.client.post('/api/quizzes/submit-exam/', {'learning_task_id': str(task.pk),
                 'submission_id': str(task.pk), 'assistance': 'independent',
-                'answers': [{'question_id': 0, 'answer': answer}]}, format='json')
+                'answers': [{'question_id': question_id, 'answer': answer}]}, format='json')
 
-    def grade(self, exam_id, failure=False):
-        returned = {'score': 8, 'feedback': '说明了主要条件，还可补充反例。', 'analysis': '按给出的标准逐项检查。', 'memorix_rating': 4}
+    def grade(self, exam_id, failure=False, score=8):
+        returned = {'score': score, 'feedback': '说明了主要条件，还可补充反例。', 'analysis': '按给出的标准逐项检查。', 'memorix_rating': 4}
         with patch('quizzes.ai_workflow.AIService.grade_question', side_effect=ValueError('synthetic temporary failure') if failure else None, return_value=returned), self.captureOnCommitCallbacks(execute=True):
             run_exam_grading(self.user.pk, exam_id)
+
+    def test_preplan_diagnostic_can_be_graded_before_the_plan_is_confirmed(self):
+        self.state.status = 'preparing'
+        self.state.plan = {}
+        self.state.planning_enabled = True
+        self.state.save()
+        arguments = {**self.arguments, 'stage_id': ''}
+        with self.assertRaises(ValidationError):
+            create_task(self.project, {**arguments, 'purpose': 'practice'})
+
+        task = create_task(self.project, arguments)
+        self.assertTrue(task_data(task)['is_current'])
+        submitted = self.submit(task)
+        self.assertEqual(submitted.status_code, 202, submitted.data)
+        self.grade(submitted.data['exam_id'])
+        task.refresh_from_db()
+        self.assertEqual(task_data(task)['status'], 'completed')
+
+        plan = {'goal': '理解函数', 'deadline': None, 'weekly_minutes': 60,
+            'stages': [{'id': 'start', 'title': '函数概念', 'outcome': '解释单值对应', 'task': '举例说明'}]}
+        proposal = change_learning(self.project, {'action': 'plan', 'revision': 0, 'plan': plan, 'require_confirmation': True})
+        self.assertEqual(proposal['status'], 'preparing')
+        self.assertTrue(proposal['pending_plan']['plan'])
+        accepted = change_learning(self.project, {'action': 'accept', 'revision': proposal['revision']})
+        self.assertEqual(accepted['status'], 'active')
+        self.assertEqual(accepted['current_stage'], 'start')
+        self.assertEqual(accepted['tasks'][0]['summary']['total_score'], 8)
+        self.assertFalse(task_data(task)['is_current'])
 
     def test_cross_domain_private_tasks_have_one_owned_recoverable_grade_without_bank_side_effects(self):
         elo = self.user.elo_score
@@ -143,11 +174,76 @@ class GeneralLearningTasksSmoke(APITestCase):
         self.assertNotEqual(task.exam.results.get().status, 'graded')
         self.assertFalse(ProjectLearningEvent.objects.filter(project=self.project,kind='assessment').exists())
 
-    def test_cross_source_recheck_cannot_copy_original_prompt(self):
-        bank = Question.objects.create(text='解释机会成本的含义。', q_type='subjective',grading_points='指出最佳替代用途。')
-        original = create_task(self.project, {key:value for key,value in self.arguments.items() if key!='definition'} | {'question_ids':[bank.pk]})
-        with self.assertRaises(ValidationError):
-            create_task(self.project, {**self.arguments,'purpose':'recheck','source_task_id':str(original.pk),'definition':{**self.arguments['definition'],'prompt':bank.text}})
+    def test_failed_plain_stage_allows_new_recheck_prompts_from_definition_or_bank(self):
+        definition = self.arguments['definition']
+        new_definition = {**definition, 'prompt': '同一个学号对应两名学生时，这个对应关系是函数吗？',
+                          'reference_answer': '不是，同一个输入有两个不同输出。'}
+        original_bank, new_bank = [Question.objects.create(text=item['prompt'], q_type='subjective',
+            subjective_type='short', grading_points='判断一个输入是否只有一个输出。')
+            for item in (definition, new_definition)]
+        base = {key: value for key, value in self.arguments.items() if key != 'definition'}
+        originals = [('definition', {'definition': definition}, 0),
+                     ('bank', {'question_ids': [original_bank.pk]}, original_bank.pk)]
+        for source_kind, original, question_id in originals:
+            source = create_task(self.project, {**base, **original, 'purpose': 'practice'})
+            response = self.submit(source, answer='每个输入可以有多个输出。', question_id=question_id)
+            self.assertEqual(response.status_code, 202, response.data)
+            with patch('quizzes.ai_workflow._queue_experience_verification'):
+                self.grade(response.data['exam_id'], score=5)
+            source.refresh_from_db()
+            data = task_data(source)
+            self.assertEqual(data['status'], 'completed')
+            self.assertEqual((data['summary']['total_score'], data['summary']['max_score']), (5, 10))
+            self.assertIsNone(source.knowledge_version_id)
+            self.assertEqual(source.node_id, '')
+            recheck = {**base, 'purpose': 'recheck', 'source_task_id': str(source.pk)}
+            variants = [('definition', {'definition': definition}, {'definition': new_definition}),
+                        ('bank', {'question_ids': [original_bank.pk]}, {'question_ids': [new_bank.pk]})]
+            for target_kind, copied, different in variants:
+                with self.subTest(source=source_kind, target=target_kind):
+                    with self.assertRaisesMessage(ValidationError, '不能重复原任务'):
+                        create_task(self.project, {**recheck, **copied})
+                    task = create_task(self.project, {**recheck, **different})
+                    self.assertEqual((task.source_task_id, task.stage_id, task.purpose), (source.pk, source.stage_id, 'recheck'))
+                    self.assertIsNone(task.knowledge_version_id)
+                    self.assertEqual(task.node_id, '')
+                    self.assertEqual(task_data(task)['status'], 'ready')
+
+    def test_task_tool_registers_one_clickable_card_in_both_chat_modes(self):
+        from ai_assistant.services.dsh_service import execute_tool, memory_snapshot, permitted_tools
+        from ai_assistant.services.tool_executor import PlannerToolExecutor, set_permitted_tools
+
+        self.state.planning_enabled = True
+        self.state.save(update_fields=['planning_enabled'])
+        bot = Bot.objects.create(name='小宇', bot_type='planner')
+        conversation = Conversation.objects.create(user=self.user, project=self.project, bot=bot, conversation_id=uuid4())
+        message = AIChatMessage.objects.create(user=self.user, bot=bot, conversation_id=conversation.conversation_id,
+            role='user', content='帮我准备学习任务。')
+        context = {'message_id': message.pk, 'conversation_id': str(conversation.conversation_id), 'bot_id': bot.pk}
+        name = 'manage_learning_tasks'
+        args = {**self.arguments, 'action': 'create', 'purpose': 'practice'}
+        executor = PlannerToolExecutor(self.user)
+        executor.learning_context = context
+        set_permitted_tools(executor, permitted_tools(self.user))
+
+        result = json.loads(executor(name, args))
+        self.assertNotIn('error', result)
+        card = result['visual']
+        self.assertEqual(card['type'], 'data_card')
+        self.assertEqual(card['payload']['cta'], {'label': '打开学习任务', 'link': result['href']})
+        self.assertEqual(result['href'], f'/xiaoyu?project={self.project.pk}&learning_task={result["id"]}')
+        self.assertEqual(executor.pending_visuals, [card])
+        self.assertEqual(executor.pop_pending_visuals(), [card])
+        read = json.loads(executor(name, {'action': 'read', 'task_id': result['id']}))
+        self.assertEqual(read['id'], result['id'])
+        self.assertNotIn('visual', read)
+        self.assertEqual(executor.pending_visuals, [])
+
+        with patch('ai_assistant.services.dsh_service.build_tool_card') as rebuild:
+            dsh = execute_tool(self.user, name, args, memory_snapshot(self.user)['version'], chat_context=context)
+        self.assertEqual(dsh['visual'], card)
+        rebuild.assert_not_called()
+        self.assertEqual(self.project.learning_tasks.count(), 1)
 
     def test_same_prompt_across_bank_and_personal_tasks_is_one_knowledge_observation(self):
         from django.utils import timezone

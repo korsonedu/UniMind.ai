@@ -6,12 +6,12 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework.exceptions import ValidationError
 from ai_assistant.models import AIChatMessage, Bot, Conversation, ConversationProject, ProjectLearning, ProjectLearningEvent
-from ai_assistant.services.project_learning import change_learning, current_project, turn_project_context
+from ai_assistant.services.project_learning import change_learning, current_project, project_context, turn_project_context
 from ai_assistant.services.dsh_service import build_context, execute_tool, memory_snapshot
 from ai_assistant.services.learning_resources import find_resources, public_text
 from ai_assistant.tasks_learning import send_project_learning_followups
 from notifications.models import Notification
-from users.models import User
+from users.models import User, CourseStudentStatus
 
 
 @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}},
@@ -65,6 +65,29 @@ class ProjectLearningSmoke(APITestCase):
         self.assertIsNone(disabled['followup_at'])
         ProjectLearning.objects.filter(pk=self.state.pk).update(followup_at=timezone.now())
         self.assertEqual(send_project_learning_followups()['sent'], 0)
+
+    def test_completed_goal_schedules_one_review_and_informs_the_next_project(self):
+        CourseStudentStatus.objects.create(user=self.user, is_course_student=True)
+        self.make_plan()
+        self.client.patch(self.url, {'action': 'reminders', 'enabled': True, 'revision': 1}, format='json')
+        review = timezone.now() + timedelta(days=3)
+        completed = self.client.patch(self.url, {'action': 'complete', 'revision': 2, 'review_at': review.isoformat()}, format='json')
+        self.assertEqual(completed.status_code, 200, completed.data)
+        self.assertEqual(completed.data['status'], 'completed')
+        self.assertEqual(completed.data['followup_at'], review)
+
+        next_project = ConversationProject.objects.create(user=self.user, name='新的目标')
+        ProjectLearning.objects.create(project=next_project, planning_enabled=True)
+        next_chat = Conversation.objects.create(user=self.user, bot=self.bot, project=next_project, conversation_id=uuid.uuid4())
+        context = project_context(self.user, next_chat.conversation_id)
+        self.assertIn('recent_learning_outcomes', context)
+        self.assertIn(self.plan['goal'], context)
+
+        ProjectLearning.objects.filter(pk=self.state.pk).update(followup_at=timezone.now())
+        self.assertEqual(send_project_learning_followups()['sent'], 1)
+        self.assertEqual(send_project_learning_followups()['sent'], 0)
+        self.state.refresh_from_db()
+        self.assertEqual(self.state.status, 'completed')
 
     def test_personal_access_project_privacy_and_revision(self):
         self.assertEqual(self.client.get(self.url).status_code, 200)

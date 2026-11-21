@@ -161,6 +161,16 @@ DATABASES = {
         "CONN_HEALTH_CHECKS": True,
     }
 }
+if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+    DATABASES["default"].update(
+        CONN_MAX_AGE=0,
+        OPTIONS={
+            "timeout": 30,
+            # SQLite ignores SELECT FOR UPDATE. Wait for the writer slot before reading.
+            "transaction_mode": "IMMEDIATE",
+            "init_command": "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=30000;",
+        },
+    )
 
 CACHES = {
     "default": {
