@@ -294,7 +294,7 @@ export const TestSessionPage: React.FC = () => {
                       : t('主观论述')}
               </span>
               <span className="text-[10px] font-medium text-muted-foreground">
-                {currentQ.difficulty_level_display || t('适当')} · ELO {currentQ.difficulty || 1200}
+                {currentQ.difficulty_level_display || t('适当')}
               </span>
             </div>
 

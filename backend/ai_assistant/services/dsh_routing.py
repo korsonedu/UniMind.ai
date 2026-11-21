@@ -18,17 +18,14 @@ GROUPS = {
     'authoring': ('编写交互与计算工具', '根据学习任务编写、检查或修改交互实验，以及注册新的会话计算工具。', (
         'build_learning_experiment', 'read_learning_experiment', 'register_session_tool', 'read_session_tool')),
     'presentation': ('教学展示与回复选项', '展示公式推导、解题步骤、函数采样图和回复选项，不改变学生数据。', ('present_learning_visual',)),
-    'support': ('人工答疑', '准备需要学生核对确认的人工答疑草稿，不自动发布。', ('create_faq_ticket',)),
-    'focus': ('自习专注', '查自习室当前专注状态与每日专注历史，区别于听课和做题记录。', (
-        'get_study_status', 'get_focus_history', 'get_learning_sessions')),
     'resources': ('课程与知识来源', '查课程、视频讲稿及知识点。', (
         'search_courses', 'search_asr', 'search_knowledge_tree')),
     'practice': ('题目与复习', '查错题、题目、到期复习、练习题和同类题，准备首次诊断作答卡。', (
         'get_user_wrong_questions', 'lookup_question', 'get_due_reviews',
         'get_practice_questions', 'search_similar_questions', 'search_knowledge_tree', 'run_diagnostic')),
-    'progress': ('学习进度与结果', '查实际学习时段、统计、最近练习、历史成绩、报告及成就。', (
+    'progress': ('学习进度与结果', '查实际学习时段、统计、最近练习、历史成绩和学习概况。', (
         'get_learning_stats', 'get_learning_sessions', 'get_recent_practice_result',
-        'get_exam_history', 'get_report_card', 'get_my_achievements', 'get_knowledge_mastery_map')),
+        'get_exam_history', 'get_report_card', 'get_knowledge_mastery_map')),
     'mastery': ('掌握度与薄弱点', '查掌握图谱、薄弱知识点、Memorix 分析和到期复习。', (
         'search_knowledge_tree', 'get_user_weak_points', 'get_knowledge_mastery_map',
         'get_knowledge_difficulty_analysis', 'get_due_reviews', 'get_learning_stats')),
@@ -52,21 +49,17 @@ def grouped_tools(allowed, message, recent_messages=None, project=False):
                'qa': 'practice', 'grading': 'practice', 'coach': 'progress'}.get(intent, '')
     if any(word in message for word in ('薄弱', '掌握率', '掌握度', '难度分析', '稳定性')):
         initial = 'mastery'
-    if any(word in message for word in ('自习', '专注', '番茄钟')):
-        initial = 'focus'
     if any(word in message for word in ('诊断', '初始评估')):
         initial = 'practice'
     if any(word in message for word in ('公式推导', '函数图', '解题步骤', '选项卡')):
         initial = 'presentation'
-    if any(word in message for word in ('人工', '老师答疑', '工单')):
-        initial = 'support'
     if 'authoring' in groups and any(word in message for word in ('计算工具', '会话工具', '交互实验', '注册工具')):
         initial = 'authoring'
     if 'interactive' in groups and '交互' in message and '题' in message:
         initial = 'interactive'
     if project and any(word in message for word in ('知识地图', '知识单元', '先修', '贝叶斯', '证据路径', '学习路径', '知识结构', '图谱', 'learning path', 'knowledge graph')):
         initial = 'knowledge'
-    if project and initial not in ('interactive', 'authoring', 'presentation', 'practice', 'knowledge'):
+    if project and initial not in ('interactive', 'authoring', 'presentation', 'practice', 'knowledge', 'progress'):
         initial = 'project'
     if any(word in message for word in ('学习目标', '阶段计划', '跟进', '暂停学习', '恢复学习', '学习安排')):
         initial = 'project'

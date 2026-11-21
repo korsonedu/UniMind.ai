@@ -34,7 +34,7 @@ class InstitutionStudentSerializer(serializers.ModelSerializer):
     avatar_url = serializers.ReadOnlyField()
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'nickname', 'elo_score', 'avatar_url',
+        fields = ['id', 'username', 'email', 'nickname', 'avatar_url',
                   'institution_role', 'date_joined', 'last_active']
 
 

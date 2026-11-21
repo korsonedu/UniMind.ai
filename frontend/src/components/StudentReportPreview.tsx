@@ -27,18 +27,11 @@ interface RadarEntry {
   kp_count: number;
 }
 
-interface Achievement {
-  name: string;
-  description: string;
-  unlocked_at?: string;
-}
-
 interface ExamRecord {
   id: number;
   total_score: number;
   max_score: number;
   percentage: number;
-  elo_change?: number;
   created_at: string;
 }
 
@@ -46,7 +39,6 @@ export function StudentReportPreview({ payload }: { payload: Record<string, unkn
   useLocale();
   const stats = (payload.stats || {}) as ReportStats;
   const radar = (payload.radar || []) as RadarEntry[];
-  const achievements = (payload.achievements || []) as Achievement[];
   const exams = (payload.exams || []) as ExamRecord[];
   const studentName = (payload.student_name as string) || '';
   const dateFrom = (payload.date_from as string) || '';
@@ -112,19 +104,6 @@ export function StudentReportPreview({ payload }: { payload: Record<string, unkn
                   <span className="text-muted-foreground w-8 text-right">{masteryValue(r).toFixed(0)}%</span>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {achievements.length > 0 && (
-        <div className="space-y-1">
-          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t('成就')}</h4>
-          <div className="flex flex-wrap gap-1">
-            {achievements.map((a) => (
-              <span key={t(a.name)} className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                {t(a.name)}
-              </span>
             ))}
           </div>
         </div>

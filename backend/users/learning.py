@@ -14,7 +14,7 @@ from .models import (LearningGrant, CourseStudentStatus, WeeklyAIQuotaConfig,
 LEARNING_FEATURES = [
     'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats', 'full.report',
     'memorix.review', 'ai.assistant', 'course.video',
-    'video.outline', 'faq.system', 'study.room', 'pdf.mock',
+    'video.outline', 'pdf.mock',
 ]
 
 

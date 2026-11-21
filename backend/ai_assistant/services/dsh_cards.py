@@ -1,7 +1,6 @@
 """User-visible cards derived from authorized business results, never model HTML."""
 import json
 import re
-import time
 
 from jsonschema import Draft202012Validator
 from rest_framework.exceptions import ValidationError
@@ -54,36 +53,17 @@ def build_tool_card(name, result):
         titles = {'lookup_question': '题目与参考答案', 'get_user_wrong_questions': '我的错题',
                   'search_similar_questions': '同类题预览'}
         return {'type': 'question_preview', 'payload': {'title': titles[name], 'questions': questions}}
-    if name == 'get_study_status':
-        current = result.get('current_session') or {}
-        expired = (current.get('status') == 'active' and current.get('timer_end_ts')
-                   and current['timer_end_ts'] <= time.time())
-        if expired:
-            return data_card('自习专注状态', [item('当前状态', '本次自习计时已到期'),
-                item('今日专注', f"{result.get('today_total_focus_minutes', 0)} 分钟"),
-                item('昨日专注', f"{result.get('yesterday_total_focus_minutes', 0)} 分钟")],
-                ('进入自习室', '/study'), '已到期任务计入今日汇总；仅统计自习室计时。')
-        return data_card('自习专注状态', [item('当前任务', current.get('task_name') or '暂无进行中的自习'),
-            item('本次已专注', f"{result.get('current_elapsed_minutes', 0)} 分钟"),
-            item('今日专注', f"{result.get('today_total_focus_minutes', 0)} 分钟"),
-            item('昨日专注', f"{result.get('yesterday_total_focus_minutes', 0)} 分钟")],
-            ('进入自习室', '/study'), '仅统计自习室计时，不包含听课、做题记录或线下学习。')
-    if name == 'get_focus_history':
-        return data_card('自习专注历史', [item(row['date'], f"{row['focus_minutes']} 分钟 · {row['sessions_count']} 次")
-            for row in result.get('history', [])[-30:]], ('进入自习室', '/study'),
-            '仅汇总已结束的自习计时；当前进行中的任务请查看自习专注状态。')
     if name == 'get_learning_sessions':
         return data_card('实际学习记录', [item(f"{s['started_at'][:16]} · {'听课' if s['kind'] == 'video' else '做题'}",
             f"{round(s['active_seconds'] / 60, 1)} 分钟") for s in result.get('sessions', [])[:10]],
-            ('学习记录', '/report-card'), result.get('notes', ''))
+            note=result.get('notes', ''))
     if name == 'get_exam_history':
         return data_card('我的考试记录', [item(e['created_at'][:10], f"{e['total_score']}/{e['max_score']}",
             f"/tests/results/{int(e['id'])}") for e in result.get('exams', [])[:10]],
             ('习题训练', '/tests'), '' if result.get('exams') else '暂无考试记录。')
     if name == 'get_user_weak_points':
         return data_card('薄弱知识点', [item(p['kp_name'], f"错答 {p['total_wrong']} 次")
-            for p in result.get('weak_points', [])[:10]], ('查看学习报告', '/report-card'),
-            '' if result.get('weak_points') else '暂无可供分析的错题记录。')
+            for p in result.get('weak_points', [])[:10]], note='' if result.get('weak_points') else '暂无可供分析的错题记录。')
     if name == 'search_knowledge_tree':
         return data_card('知识点查询', [item(p['name'], p.get('subject') or '未分类')
             for p in result.get('results', [])[:15]], note='' if result.get('results') else '没有找到匹配知识点。')
@@ -94,15 +74,11 @@ def build_tool_card(name, result):
         accuracy = result.get('last_accuracy')
         return data_card('学习报告', [item('已练题目', result.get('attempted_questions', 0)),
             item('最近正确率', f'{accuracy}%' if accuracy is not None else '暂无数据'),
-            item('已掌握题目', result.get('mastered_count', 0))], ('查看完整报告', '/report-card'))
-    if name == 'get_my_achievements':
-        return data_card('我的成就', [item(a['name'], a.get('description', '已解锁'))
-            for a in result.get('unlocked', [])[:8]], ('查看成就', '/achievements'),
-            '' if result.get('unlocked') else '尚未解锁成就。')
+            item('已掌握题目', result.get('mastered_count', 0))])
     return None
 
 # Presentation is a separate read-only tool, never a free-form business operation.
-INTERNAL_PATH = re.compile(r'/(?:courses|course/[1-9][0-9]*|tests(?:/results/[1-9][0-9]*|/session\?source=xiaoyu&preference=review_first)?|report-card|achievements|diagnostic|study|qa|knowledge-builder(?:/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?\?project=[1-9][0-9]*(?:&create=1)?|xiaoyu\?project=[1-9][0-9]*&learning_view=(?:proposal|knowledge))')
+INTERNAL_PATH = re.compile(r'/(?:courses|course/[1-9][0-9]*|tests(?:/results/[1-9][0-9]*|/session\?source=xiaoyu&preference=review_first)?|diagnostic|xiaoyu/knowledge-builder(?:/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?(?:\?project=[1-9][0-9]*(?:&create=1)?|\?create=1)|xiaoyu\?project=[1-9][0-9]*&learning_view=(?:proposal|knowledge))')
 
 
 def _object(properties, required):
@@ -142,7 +118,7 @@ VISUAL_SCHEMAS = {
 }
 PRESENTATION_TOOL = {'type': 'function', 'function': {
     'name': 'present_learning_visual',
-    'description': '展示受控教学卡片：公式推导、分步解题、有限采样点函数图或回复选项与站内导航。仅展示，不执行表达式，不代学生提交、写笔记或改变成绩。函数图每条曲线只提供2到100个有限坐标点，最多3条，不接受formula；导航只允许课程、习题、报告、成就、诊断、自习、答疑，以及工具返回的知识结构和小宇路径确认站内路由。reply的url是回复文字，input模式可为空；input与rating每组只能有一张卡，rating的url必须为评分：{rating}。',
+    'description': '展示受控教学卡片：公式推导、分步解题、有限采样点函数图或回复选项与站内导航。仅展示，不执行表达式，不代学生提交、写笔记或改变成绩。函数图每条曲线只提供2到100个有限坐标点，最多3条，不接受formula；导航只允许课程、习题、诊断，以及工具返回的知识结构和小宇路径确认站内路由。reply的url是回复文字，input模式可为空；input与rating每组只能有一张卡，rating的url必须为评分：{rating}。',
     'parameters': _object({'type': {'type': 'string', 'enum': list(VISUAL_SCHEMAS)},
         'payload': {'oneOf': list(VISUAL_SCHEMAS.values())}}, ['type', 'payload']),
 }}

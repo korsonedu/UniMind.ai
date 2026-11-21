@@ -12,7 +12,7 @@ class UserAdmin(PlatformAdminMixin, DjangoUserAdmin):
     list_display = ('username', 'email', 'nickname', 'institution', 'institution_role', 'is_staff', 'is_active')
     list_filter = ('is_staff', 'is_active', 'institution', 'institution_role')
     fieldsets = DjangoUserAdmin.fieldsets + (
-        ('学习账户', {'fields': ('nickname', 'email_verified', 'role', 'institution', 'institution_role', 'elo_score')}),
+        ('学习账户', {'fields': ('nickname', 'email_verified', 'role', 'institution', 'institution_role')}),
         ('历史权益', {'fields': ('is_member', 'personal_plan', 'membership_tier', 'membership_expires_at', 'membership_source')}),
     )
     add_fieldsets = DjangoUserAdmin.add_fieldsets + (

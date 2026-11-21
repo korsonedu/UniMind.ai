@@ -49,12 +49,14 @@ def test_readonly_student_queries(user, settings):
         'lookup_question': {'question_id': question.pk}, 'get_learning_sessions': {},
         'get_knowledge_mastery_map': {}, 'get_due_reviews': {}, 'get_knowledge_difficulty_analysis': {},
         'get_practice_questions': {'kp_name': 'M0久期', 'limit': 2}, 'get_exam_history': {},
-        'get_report_card': {}, 'get_my_achievements': {}, 'search_similar_questions': {'kp_code': 'M0-KP'},
+        'get_report_card': {}, 'search_similar_questions': {'kp_code': 'M0-KP'},
     }
     context = build_context(user, '')
+    assert '听课记录累计 20.0 分钟' in context['system_prompt']
+    assert '1666.7 分钟' not in context['system_prompt']
     assert set(calls) <= {t['function']['name'] for t in context['available_tools']}
     assert len(context['tools']) <= 8
-    assert set(calls) | {'get_study_status', 'get_focus_history', 'run_diagnostic', 'create_faq_ticket', 'present_learning_visual'} == {t['function']['name'] for group in context['tool_groups'].values() for t in group['tools']}
+    assert set(calls) | {'run_diagnostic', 'present_learning_visual'} == {t['function']['name'] for group in context['tool_groups'].values() for t in group['tools']}
     original = (QuizExam.objects.count(), UserQuestionStatus.objects.count(), LearningSession.objects.count())
     results = {}
     for name, arguments in calls.items():

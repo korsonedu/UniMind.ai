@@ -7,7 +7,7 @@ import React, { useState, useEffect, useSyncExternalStore, useCallback, useRef }
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Link, useLocation, Outlet, useNavigate, useNavigationType } from 'react-router-dom';
 
-import { User as UserIcon, SignOut, CreditCard, ChartBar, Trophy, ArrowLeft, ArrowRight, SidebarSimple, TreeStructure, Stack, ChatCircle, ListBullets, Files, NotePencil, BookOpen, SquaresFour, X } from '@phosphor-icons/react';
+import { User as UserIcon, SignOut, CreditCard, ArrowLeft, ArrowRight, SidebarSimple, ChatCircle, ListBullets, Files, NotePencil, BookOpen, SquaresFour, X } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { queryClient } from '@/lib/queryClient';
@@ -17,7 +17,6 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useSystemStore } from '@/store/useSystemStore';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { NotificationBell } from '@/components/NotificationBell';
-import { EloPopover } from '@/components/EloPopover';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -41,11 +40,8 @@ type NavItem = { to: string; icon: string; label: string; mobileLabel: string; f
 const NAV_ITEMS: NavItem[] = [
   { to: '/notes', icon: '0% 0%', label: '我的笔记', mobileLabel: '笔记' },
   { to: '/xiaoyu', icon: '50% 0%', label: '小宇', mobileLabel: '小宇', feature: 'ai.assistant' },
-  { to: '/report-card', icon: '100% 0%', label: '学习记录', mobileLabel: '记录', feature: 'full.report' },
-  { to: '/knowledge-builder', icon: '100% 0%', label: '知识结构', mobileLabel: '结构', feature: 'ai.assistant' },
   { to: '/courses', icon: '0% 100%', label: '课程中心', mobileLabel: '课程', feature: 'course.video' },
   { to: '/tests', icon: '50% 100%', label: '习题训练', mobileLabel: '做题', feature: 'quiz.exam' },
-  { to: '/community', icon: '100% 100%', label: '学习社区', mobileLabel: '社区' },
 ];
 
 function NavIcon({ position }: { position: string }) {
@@ -55,8 +51,8 @@ function NavIcon({ position }: { position: string }) {
 
 const TOUR_STEPS: TourStep[] = [
   { target: '[data-tour="xiaoyu-input"]', title: '跟小宇对话', content: '问知识点、刷题、看分析。试试「帮我复习一下三角函数」', placement: 'bottom' },
-  { target: '[data-tour="sidebar"]', title: '你的学习空间', content: '笔记、习题训练、学习记录和学习社区都在这里。', placement: 'right' },
-  { target: '[data-tour="header-right"]', title: '账号和消息', content: '修改资料、系统通知、签到', placement: 'bottom' },
+  { target: '[data-tour="sidebar"]', title: '你的学习空间', content: '从这里打开笔记、课程和习题训练。', placement: 'right' },
+  { target: '[data-tour="header-right"]', title: '账号和消息', content: '修改资料和查看系统通知', placement: 'bottom' },
 ];
 
 export const MainLayout: React.FC = () => {
@@ -65,7 +61,7 @@ export const MainLayout: React.FC = () => {
   const tourSteps = TOUR_STEPS.map(step => ({ ...step, title: t(step.title), content: t(step.content) }));
   const location = useLocation();
   const { chat: projectChat } = useXiaoYuChat();
-  const routeFor = (path: string) => ['/notes', '/knowledge-tree', '/knowledge-builder', '/xiaoyu'].includes(path)
+  const routeFor = (path: string) => ['/notes', '/xiaoyu'].includes(path)
     ? learningUrl(path, projectChat.projectId, projectChat.activeSessionId !== null ? projectChat.conversationId : undefined) : path;
   const navigationType = useNavigationType();
   const historyIndex: number = window.history.state?.idx ?? 0;
@@ -138,15 +134,13 @@ export const MainLayout: React.FC = () => {
   const [showTour, setShowTour] = useState(false);
   const [pendingTourDismiss, setPendingTourDismiss] = useState(false);
   const hasWorkspaceToolbar = ['/xiaoyu', '/courses', '/notes'].includes(location.pathname) || location.pathname.startsWith('/notes/') || /^\/course\/\d+/.test(location.pathname);
-  const isCommunityWorkspace = ['/community', '/qa', '/study'].includes(location.pathname) || location.pathname.startsWith('/qa/');
-  const isIntegratedWorkspace = isCommunityWorkspace || location.pathname.startsWith('/settings') || location.pathname === '/notes' || location.pathname.startsWith('/notes/')
+  const isIntegratedWorkspace = location.pathname.startsWith('/settings') || location.pathname === '/notes' || location.pathname.startsWith('/notes/')
     || (location.pathname === '/xiaoyu' && hasFeature('ai.assistant'))
-    || ((location.pathname === '/knowledge-builder' || location.pathname.startsWith('/knowledge-builder/')) && hasFeature('ai.assistant'))
+    || ((location.pathname === '/xiaoyu/knowledge-builder' || location.pathname.startsWith('/xiaoyu/knowledge-builder/')) && hasFeature('ai.assistant'))
     || ((location.pathname === '/courses' || /^\/course\/\d+/.test(location.pathname)) && hasFeature('course.video'));
-  const isMobileStudyPage = isMobile && location.pathname === '/study';
   const isMobileImmersivePage = isMobile && ((location.pathname.startsWith('/tests/session') && hasFeature('quiz.exam')) || (location.pathname.startsWith('/xiaoyu/practice') && hasFeature('ai.assistant')));
   const isMobileVideoPage = isMobile && location.pathname.startsWith('/course/') && hasFeature('course.video');
-  const hideMobileBottomNav = isMobile && (isMobileImmersivePage || isMobileVideoPage || (location.pathname === '/study' && hasFeature('study.room')));
+  const hideMobileBottomNav = isMobile && (isMobileImmersivePage || isMobileVideoPage);
   const shellRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!isMobile || !window.visualViewport) return;
@@ -245,20 +239,15 @@ export const MainLayout: React.FC = () => {
 
   const visibleNavItems = navItems;
   const canEnter = (item: NavItem) => {
-    if (item.to === '/community') return !featuresLoading && (hasFeature('faq.system') || hasFeature('study.room'));
     return !item.feature || (!featuresLoading && hasFeature(item.feature));
   };
   const isActive = (item: NavItem) => {
     const path = location.pathname;
-    if (item.to === '/community') return isCommunityWorkspace;
-    if (item.to === '/knowledge-builder' && path === '/knowledge-tree') return true;
     if (item.to === '/courses') return path === '/courses' || path.startsWith('/course/');
-    if (item.to === '/report-card') return path === '/report-card' || path === '/achievements';
     return path === item.to || path.startsWith(`${item.to}/`);
   };
 
   const workspaceHeader = user ? <div data-tour="header-right" className="um-app-header-actions">
-    <EloPopover />
     <NotificationBell />
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild><button id="avatar-btn" aria-label={t('账户菜单')} className="um-app-avatar-button"><Avatar className="h-7 w-7"><AvatarImage src={user.avatar_url} /><AvatarFallback className="text-[10px] font-bold">{user.username?.[0]}</AvatarFallback></Avatar></button></DropdownMenuTrigger>
@@ -267,9 +256,7 @@ export const MainLayout: React.FC = () => {
         {[
           { to: '/settings', icon: UserIcon, label: t('个人设置') },
           { to: '/billing', icon: CreditCard, label: t('我的服务') },
-          { to: '/achievements', icon: Trophy, label: t('成就') },
         ].map(item => <DropdownMenuItem key={item.to} onClick={() => navigate(item.to)} className="rounded-lg px-3 py-2 gap-3 cursor-pointer"><item.icon className="h-3.5 w-3.5" /><span className="font-medium text-[13px]">{item.label}</span></DropdownMenuItem>)}
-        <DropdownMenuItem onClick={() => window.dispatchEvent(new Event('open-weekly-report'))} className="rounded-lg px-3 py-2 gap-3 cursor-pointer"><ChartBar className="h-3.5 w-3.5" /><span className="font-medium text-[13px]">{t('周报')}</span></DropdownMenuItem>
         <DropdownMenuSeparator className="my-2 bg-border" />
         <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-lg px-3 py-2 gap-3 cursor-pointer text-destructive focus:bg-destructive focus:text-destructive-foreground"><SignOut className="h-3.5 w-3.5" /><span className="font-medium text-[13px]">{t('退出登录')}</span></DropdownMenuItem>
       </DropdownMenuContent>
@@ -302,14 +289,14 @@ export const MainLayout: React.FC = () => {
           </svg>
         </Link></div>
         <nav aria-label={t('功能导航')} className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
-          {visibleNavItems.filter(item => item.to !== '/xiaoyu').map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-9 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={routeFor(item.to)} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}>{item.to === '/knowledge-builder' ? <Stack size={18} /> : item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true">{item.to === '/knowledge-builder' ? <Stack size={18} /> : item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{!canEnter(item) && t(' · 暂未开通')}</TooltipContent></TooltipPortal></Tooltip></div>)}
+          {visibleNavItems.filter(item => item.to !== '/xiaoyu').map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-9 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={routeFor(item.to)} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}>{<NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true">{<NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{!canEnter(item) && t(' · 暂未开通')}</TooltipContent></TooltipPortal></Tooltip></div>)}
         </nav>
       </aside>
       <div className="um-window-panes" data-notes-open={sidebarVisible} style={{ '--um-notes-width': `${sidebarWidth}px` } as React.CSSProperties}>
       <main inert={isMobile && sidebarVisible} className={cn('um-app-main flex-1 min-w-0 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background',
-        isMobileImmersivePage || isMobileStudyPage ? 'overflow-hidden pb-0' : isIntegratedWorkspace ? hideMobileBottomNav ? 'overflow-hidden pb-0' : 'overflow-hidden pb-[calc(61px+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] md:pb-0' : 'overflow-y-auto pb-[calc(61px+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] md:pb-0')}>
+        isMobileImmersivePage ? 'overflow-hidden pb-0' : isIntegratedWorkspace ? hideMobileBottomNav ? 'overflow-hidden pb-0' : 'overflow-hidden pb-[calc(61px+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] md:pb-0' : 'overflow-y-auto pb-[calc(61px+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] md:pb-0')}>
         <ExamActivityBar />
-        <div className={cn('um-app-page-content flex-1 w-full relative min-h-0', isMobileImmersivePage || isMobileStudyPage ? 'px-0 py-0 h-full overflow-hidden' : isMobileVideoPage ? 'px-0 py-0' : !isIntegratedWorkspace && 'px-4 py-4 md:px-8 md:py-6')}>
+        <div className={cn('um-app-page-content flex-1 w-full relative min-h-0', isMobileImmersivePage ? 'px-0 py-0 h-full overflow-hidden' : isMobileVideoPage ? 'px-0 py-0' : !isIntegratedWorkspace && 'px-4 py-4 md:px-8 md:py-6')}>
           <WorkspaceToolbarHostContext.Provider value={{ host: toolbarHost, enabled: hasWorkspaceToolbar }}>
             <WorkspaceActiveContext.Provider value={xiaoyuVisible}>
               <NotesSidebarContext.Provider value={{ open: notesVisible, close: closeNotes, setAvailable: setNotesAvailable }}>
@@ -353,7 +340,7 @@ export const MainLayout: React.FC = () => {
       </div>
       </div>
       <nav className={cn('um-app-mobile-nav md:hidden fixed bottom-0 inset-x-0 z-[var(--z-dropdown)] border-t border-border bg-card/95 backdrop-blur-xl pb-[var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px))]', hideMobileBottomNav && 'hidden')}>
-        <div className="um-app-mobile-links flex items-center justify-start px-1 py-2">{visibleNavItems.map(item => canEnter(item) ? <Link key={item.to} to={routeFor(item.to)} aria-current={isActive(item) ? 'page' : undefined} className={cn('relative flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-lg transition-colors min-h-[44px] min-w-[44px] whitespace-nowrap shrink-0', isActive(item) ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}>{isActive(item) && <span className="absolute top-0 inset-x-3 h-0.5 bg-primary rounded-full" />}{item.to === '/knowledge-builder' ? <Stack size={18} /> : item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></Link> : <span key={item.to} role="link" aria-disabled="true" aria-label={t('{0}，暂未开通', { 0: item.label })} className="flex flex-col items-center justify-center gap-0.5 py-1 px-1 min-h-[44px] min-w-[44px] whitespace-nowrap shrink-0 text-muted-foreground opacity-40 cursor-not-allowed">{item.to === '/knowledge-builder' ? <Stack size={18} /> : item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></span>)}</div>
+        <div className="um-app-mobile-links flex items-center justify-start px-1 py-2">{visibleNavItems.map(item => canEnter(item) ? <Link key={item.to} to={routeFor(item.to)} aria-current={isActive(item) ? 'page' : undefined} className={cn('relative flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-lg transition-colors min-h-[44px] min-w-[44px] whitespace-nowrap shrink-0', isActive(item) ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}>{isActive(item) && <span className="absolute top-0 inset-x-3 h-0.5 bg-primary rounded-full" />}{<NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></Link> : <span key={item.to} role="link" aria-disabled="true" aria-label={t('{0}，暂未开通', { 0: item.label })} className="flex flex-col items-center justify-center gap-0.5 py-1 px-1 min-h-[44px] min-w-[44px] whitespace-nowrap shrink-0 text-muted-foreground opacity-40 cursor-not-allowed">{<NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></span>)}</div>
       </nav>
       <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}><AlertDialogContent className="rounded-lg border-border bg-card"><AlertDialogHeader><AlertDialogTitle>{t('确认退出登录？')}</AlertDialogTitle><AlertDialogDescription>{t('退出后需要重新登录才能访问学习记录和课程。')}{pendingLearningRecords > 0 && t(' 当前还有 {0} 条离线学习记录未同步，退出会清除这些记录，建议先返回桌面设置联网同步。', { 0: pendingLearningRecords })}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t('返回')}</AlertDialogCancel><AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch { /* Local logout remains available. */ } await queryClient.cancelQueries(); queryClient.clear(); logout(); navigate('/login', { replace: true }); }}>{t('确认退出')}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       {showTour && isTourPage && <GuidedTour steps={tourSteps} onDismiss={handleTourDismiss} />}

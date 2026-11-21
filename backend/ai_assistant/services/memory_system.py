@@ -541,7 +541,6 @@ class MemorySystem:
                     "total_score": e.total_score,
                     "max_score": e.max_score,
                     "percentage": round(e.total_score / e.max_score * 100, 1) if e.max_score else 0,
-                    "elo_change": e.elo_change,
                     "created_at": e.created_at.isoformat(),
                 }
                 for e in exams

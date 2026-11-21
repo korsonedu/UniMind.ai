@@ -79,8 +79,6 @@ if _APP_ON('users'):
     urlpatterns.append(path("api/users/", include("users.urls")))
 if _APP_ON('quizzes'):
     urlpatterns.append(path("api/quizzes/", include("quizzes.urls")))
-if _APP_ON('study_room'):
-    urlpatterns.append(path("api/study/", include("study_room.urls")))
 if _APP_ON('courses'):
     urlpatterns.append(path("api/courses/", include("courses.urls")))
     urlpatterns.append(path("api/backoffice/", include("backoffice.urls")))
@@ -90,8 +88,6 @@ if _APP_ON('ai_assistant'):
     urlpatterns.append(path("api/ai/", include("ai_assistant.urls")))
 if _APP_ON('notes'):
     urlpatterns.append(path("api/notes/", include("notes.urls")))
-if _APP_ON('faq_system'):
-    urlpatterns.append(path("api/qa/", include("faq_system.urls")))
 if _APP_ON('notifications'):
     urlpatterns.append(path("api/notifications/", include("notifications.urls")))
 if _APP_ON('payments'):

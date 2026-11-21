@@ -47,11 +47,6 @@ def _apply_memorix_status(user: User, question: Question, normalized_score: floa
     return status_obj
 
 
-def _calc_elo_change(user_elo: int, score_ratio: float, difficulty: float) -> int:
-    expected_score = 1 / (1 + 10 ** ((difficulty - user_elo) / 400))
-    return int(32 * (score_ratio - expected_score))
-
-
 def _grade_answer(question: Question, user_answer: Any, *, objective_only=False, language='zh-CN') -> Dict[str, Any]:
     max_score = question.get_max_score()
     correct_answer = question.correct_answer
@@ -118,19 +113,6 @@ def grade_answer_for_user(user: User, question: Question, user_answer: Any, set_
     result = _grade_answer(question, user_answer)
     _apply_memorix_status(user, question, result['normalized_score'], result['memorix_rating'])
     _queue_experience_verification(user.id, question, result['score'])
-    return result
-
-
-def grade_single_question_submission(user: User, question: Question, user_answer: Any) -> Dict[str, Any]:
-    result = _grade_answer(question, user_answer)
-    with transaction.atomic():
-        locked = User.objects.select_for_update().get(id=user.id)
-        _apply_memorix_status(locked, question, result['normalized_score'], result['memorix_rating'])
-        elo_change = _calc_elo_change(user_elo=locked.elo_score, score_ratio=result['normalized_score'], difficulty=float(question.difficulty or 1000))
-        locked.elo_score += elo_change
-        locked.save(update_fields=['elo_score'])
-        _queue_experience_verification(user.id, question, result['score'])
-    result['elo_change'] = elo_change
     return result
 
 
@@ -281,25 +263,6 @@ def _finalize_exam(user_id: int, exam_id: int) -> None:
             'status', 'summary', 'total_questions', 'graded_count', 'failed_count',
             'total_score', 'max_score', 'grading_completed_at',
         ]
-
-        from ai_assistant.models import ProjectLearningTask
-        personal_task = ProjectLearningTask.objects.filter(exam_id=exam.id).exclude(definition={}).exists()
-        if not failed and graded_items and not personal_task:
-            locked_user = User.objects.select_for_update().filter(id=user_id).first()
-            if locked_user:
-                avg_score = total_score / max_score if max_score else 0
-                avg_difficulty = sum(
-                    float(item.question.difficulty or 1000) if item.question_id else 1000
-                    for item in graded_items
-                ) / len(graded_items)
-                elo_change = _calc_elo_change(locked_user.elo_score, avg_score, avg_difficulty)
-                locked_user.elo_score += elo_change
-                locked_user.save(update_fields=['elo_score'])
-                exam.elo_change = elo_change
-                update_fields.append('elo_change')
-        elif exam.elo_change:
-            exam.elo_change = 0
-            update_fields.append('elo_change')
 
         exam.last_error = f'{failed} 道题未完成' if failed else ''
         update_fields.append('last_error')

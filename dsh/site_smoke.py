@@ -238,15 +238,6 @@ else:
             print(json.dumps({'official_xiaoyu_stream': True, 'native_title': True,
                 'owned_database_history': True, 'official_replay_no_extra_model': True,
                 'official_delete_tombstone': True}), flush=True)
-            focus_status, focus = request(identity['token'], 'chat', {
-                'message': 'M0专注迁移：查询我的自习专注状态和最近七天历史。', 'request_id': str(uuid4())})
-            assert focus_status == 200, (focus_status, focus)
-            focus_cards = focus['session']['messages'][-1]['cards']
-            assert {card['tool'] for card in focus_cards} == {'get_study_status', 'get_focus_history'}, focus_cards
-            assert all(card['payload']['cta']['link'] == '/study' for card in focus_cards)
-            assert 'OTHER_PRIVATE_FOCUS' not in json.dumps(focus)
-            print(json.dumps({'native_focus_tools': True, 'focus_cards': len(focus_cards),
-                'redis_snapshot': 'synthetic-none', 'scope': 'current-student'}), flush=True)
             status, diagnostic = request(identity['token'], 'chat', {
                 'message': '诊断确认冒烟：请给我首次诊断题。', 'request_id': str(uuid4())})
             assert status == 200, (status, diagnostic)
@@ -262,20 +253,8 @@ else:
             assert request(identity['token'], '/api/ai/dsh/actions/confirm/', answer_body) == (200, scored)
             assert request(identity['token'], '/api/ai/dsh/actions/' + payload['request_id'] + '/', None) == (200, scored)
             assert len(calls) == confirmation_calls
-            status, faq = request(identity['token'], 'chat', {
-                'message': '人工答疑确认冒烟：我想请老师答疑。', 'request_id': str(uuid4())})
-            assert status == 200, (status, faq)
-            faq_payload = faq['session']['messages'][-1]['cards'][0]['payload']
-            confirmation_calls = len(calls)
-            faq_body = {'token': faq_payload['token'], 'content': '学生核对后的合成人工答疑正文'}
-            assert request(identity['token'], '/api/ai/dsh/actions/confirm/', faq_body)[0] == 400
-            faq_body['confirmed'] = True
-            status, ticket = request(identity['token'], '/api/ai/dsh/actions/confirm/', faq_body)
-            assert status == 200 and ticket['ticket_id'] > 0, (status, ticket)
-            assert request(identity['token'], '/api/ai/dsh/actions/confirm/', faq_body) == (200, ticket)
-            assert len(calls) == confirmation_calls
             print(json.dumps({'native_diagnostic_card': True, 'deterministic_diagnostic_score': True,
-                'native_faq_draft': True, 'student_confirmed_once': True,
+                'student_confirmed_once': True,
                 'confirmation_without_model_call': True}), flush=True)
             print(json.dumps({'site_authentication': True, 'subjective_dsh_grade_saved_once': True,
                 'objective_score_deterministic': True, 'failed_grade_not_saved': True, 'asgi_stream_before_completion': True, 'stream_replay_no_extra_call': True, 'parallel_students_isolated': True,

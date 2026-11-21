@@ -15,9 +15,7 @@ TOOL_FEATURES = {
     'get_learning_sessions': 'basic.stats',
     'render_visual': 'ai.assistant', 'grade_student_answer': 'quiz.exam',
     'run_diagnostic': 'quiz.exam', 'get_report_card': 'full.report',
-    'get_my_achievements': 'full.report', 'create_faq_ticket': 'faq.system',
-    'search_similar_questions': 'quiz.exam', 'get_study_status': 'study.room',
-    'get_focus_history': 'study.room', 'save_session_note': 'study.room',
+    'search_similar_questions': 'quiz.exam',
 }
 
 

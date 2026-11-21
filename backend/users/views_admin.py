@@ -50,7 +50,6 @@ class SuperuserUserListView(APIView):
                 'extra_permissions': profile.extra_permissions if profile else [],
                 'blocked_permissions': profile.blocked_permissions if profile else [],
                 'profile_note': profile.note if profile else '',
-                'elo_score': u.elo_score,
             })
 
         return Response({'results': users_data, 'count': len(users_data)})

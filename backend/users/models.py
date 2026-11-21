@@ -85,7 +85,7 @@ class User(AbstractUser):
             super().save(*args, **kwargs)
 
     class Meta:
-        ordering = ['-elo_score']
+        ordering = ['id']
         constraints = [
             models.UniqueConstraint(
                 Lower('email'),

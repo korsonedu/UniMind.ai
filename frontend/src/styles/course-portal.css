@@ -25,7 +25,7 @@
 .um-portal-card .um-course-section-heading h2 { margin: 0; }
 .um-course-section-heading p { margin: 4px 0 0; color: var(--um-color-text-muted); font-size: 12px; }
 .um-portal-overview { margin-bottom: 16px; }
-.um-portal-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
+.um-portal-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; }
 .um-portal-metrics > div { padding: 2px 16px; border-left: 1px solid var(--um-color-border); }
 .um-portal-metrics > div:first-child { padding-left: 0; border: 0; }
 .um-portal-metrics dt { display: flex; align-items: center; gap: 7px; color: var(--um-color-text-muted); font-size: 12px; }

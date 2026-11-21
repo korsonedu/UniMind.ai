@@ -64,3 +64,16 @@ export function playbackTime(seconds: number): string {
   const value = Math.max(0, Math.floor(seconds));
   return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
 }
+
+export interface DashData {
+  stats: {
+    streak_days: number; weekly_activity: number; accuracy: number; total_attempted: number;
+    attempted_questions?: number; total_attempts?: number;
+    last_accuracy?: number | null; lifetime_accuracy?: number | null; has_attempts?: boolean;
+    heatmap_days: { date: string; count: number }[]; is_new_user: boolean;
+    today_checked_in: boolean; checkin_streak: number;
+    checkin_history: { date: string; checked_in: boolean }[];
+  };
+  reviews: { due_count: number };
+  exams: { id: number; total_score: number; max_score: number; percentage: number; elo_change: number; created_at: string }[];
+}

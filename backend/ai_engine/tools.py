@@ -651,22 +651,12 @@ def get_planner_tools():
             impl_summary="查找题目→GradingEngine.grade 判分→返回 score/feedback/analysis/remediation_questions/kp_breakdown。需要 question_id 和 user_answer。"),
         _make_tool("run_diagnostic", "启动诊断测试。generate 模式返回题目列表和时间限制；submit 模式提交答案，返回评分结果。用于新用户首次评估。", RUN_DIAGNOSTIC_SCHEMA,
             impl_summary="调用 diagnostic_service 的 generate_diagnostic_questions 和 grade_diagnostic_answers。generate 从题库随机抽取客观题；submit 评分后初始化 Memorix 状态。"),
-        _make_tool("get_report_card", "获取学生的学习报告/成绩单。包含打卡天数、总答题量、正确率、已掌握知识点数、ELO分数、最近考试记录和已解锁成就。用于回答'我的学习报告''我学得怎么样'等问题。", GET_REPORT_CARD_SCHEMA,
-            impl_summary="调用 users.views._build_report_data 获取学生完整报告数据，提取 stats、exams、achievements 等关键字段返回。"),
-        _make_tool("get_my_achievements", "获取学生的成就列表，包括已解锁和未解锁的成就及进度。用于回答'我的成就''我拿到了什么徽章'等问题。", GET_MY_ACHIEVEMENTS_SCHEMA,
-            impl_summary="查询 UserAchievement + Achievement 表，返回已解锁成就列表和全部成就的解锁状态。"),
+        _make_tool("get_report_card", "获取学生的学习报告/成绩单。包含总答题量、正确率、已掌握知识点数和最近考试记录。用于回答'我的学习报告''我学得怎么样'等问题。", GET_REPORT_CARD_SCHEMA,
+            impl_summary="调用 users.views._build_report_data 获取学生完整报告数据，提取 stats、exams 等关键字段返回。"),
         # ── F3: 答疑 ──
-        _make_tool("create_faq_ticket", "创建 FAQ 答疑工单，将学生问题升级为人工解答。学生追问3轮仍未解决、问题超出AI范围、或学生明确要求人工解答时使用。", CREATE_FAQ_TICKET_SCHEMA,
-            impl_summary="在 faq_system_question 表创建工单，记录学生原始问题、对话上下文摘要和升级原因。教师端可见。"),
         _make_tool("search_similar_questions", "搜索相同知识点下的相似题目推荐给学生。学生问'这道题怎么做'时，解答后调用此工具推荐同类题巩固练习。", SEARCH_SIMILAR_QUESTIONS_SCHEMA,
             impl_summary="根据知识点编码查询 question 表中同知识点的题目，返回题干摘要和 ID。用于答疑后推荐相似练习题。"),
         # ── F5: 督学工具 ──
-        _make_tool("get_study_status", "获取当前学习会话状态和今日累计专注数据。学生问'学了多久''今天学了多少'时使用。", GET_STUDY_STATUS_SCHEMA,
-            impl_summary="从 Redis (session_manager.get_session) 获取当前会话状态（进行中/暂停/无），从 DB (StudySession 表) 查询今日完成的会话数、总专注时长，计算与昨日的对比。需要 user_id。"),
-        _make_tool("get_focus_history", "获取近期每日专注时长汇总。学生问'这周学了多少''最近状态怎么样'时使用。", GET_FOCUS_HISTORY_SCHEMA,
-            impl_summary="查询 StudySession 表 WHERE user_id=current_user AND status='ended' AND ended_at >= now-days，按天 GROUP BY 汇总 total_focus_seconds。返回每日专注分钟数和会话数。"),
-        _make_tool("save_session_note", "保存学生学习心得/笔记到当前会话。学生说'帮我记一下''今天学会了XX'时使用。", SAVE_SESSION_NOTE_SCHEMA,
-            impl_summary="更新 StudySession 表的 metrics JSON 字段，追加 note 到 notes 列表中。如无活跃会话则创建一条短暂的笔记会话记录。"),
     ]
     return assistant + planner_only
 
@@ -839,8 +829,8 @@ def get_exam_generator_tools():
             impl_summary="主键查询 pipeline_task 表，返回 status（pending/running/completed/failed）、current_stage、progress 百分比、已生成题目数。"),
         _make_tool("get_workbench_stats", "获取题库统计数据。教师问'出了多少题''题库情况'时使用。", GET_WORKBENCH_STATS_SCHEMA,
             impl_summary="scope=summary 返回总题数和按学科/难度/题型分布；scope=recent 返回最近 20 道题；scope=insights 返回教师出题偏好分析。所有数据按机构隔离。"),
-        _make_tool("get_student_detail", "获取指定学生的详细学习数据：正确率、薄弱知识点、ELO、周活跃度。教师提到学生名字或问'某某学得怎么样'时使用。", GET_STUDENT_DETAIL_SCHEMA,
-            impl_summary="通过学生姓名或 ID 查找学生，汇总 UserQuestionStatus 中的答题正确率，聚合按知识点的错误计数，返回 ELO、周活跃度、Top 5 薄弱点。"),
+        _make_tool("get_student_detail", "获取指定学生的详细学习数据：正确率、薄弱知识点、周活跃度。教师提到学生名字或问'某某学得怎么样'时使用。", GET_STUDENT_DETAIL_SCHEMA,
+            impl_summary="通过学生姓名或 ID 查找学生，汇总 UserQuestionStatus 中的答题正确率，聚合按知识点的错误计数，返回周活跃度、Top 5 薄弱点。"),
         _make_tool("send_notification", "向指定学生发送学习提醒通知。教师说'提醒一下某某'时使用。", SEND_NOTIFICATION_SCHEMA,
             impl_summary="查找目标学生（按姓名或 ID），创建 Notification 记录（n_type=system），推送至学生端通知中心。"),
         # ── 新增内容浏览类 ──
@@ -854,7 +844,7 @@ def get_exam_generator_tools():
             impl_summary="将可视化数据（type + payload）返回给前端，前端根据 type 渲染到对话流中。常用 type=action_cards 用于让教师确认操作或选择选项。"),
         # ── F4: 学情报告 ──
         _make_tool("generate_student_report", "按需为指定学生生成学情报告（时间范围可选）。教师说'生成XXX的报告'或'看看XXX最近学得怎么样'时使用。", GENERATE_STUDENT_REPORT_SCHEMA,
-            impl_summary="聚合学生指定时间范围内的刷题统计、知识雷达图、错题分布、趋势线、成就列表。通过 _build_report_data(user, date_from, date_to) 获取数据，渲染为 student_report 可视化卡片。"),
+            impl_summary="聚合学生指定时间范围内的刷题统计、知识雷达图、错题分布、趋势线。通过 _build_report_data(user, date_from, date_to) 获取数据，渲染为 student_report 可视化卡片。"),
     ]
 
 # ── 小宇可视化工具 Schema ──────────────────────────────────────

@@ -3,8 +3,8 @@ import concurrent.futures
 _THREAD_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='ai-chat')
 
 from django.utils import timezone
-from django.db.models import Count, Q, Avg
-from quizzes.models import UserQuestionStatus, Question, KnowledgePoint
+from django.db.models import Count, Q
+from quizzes.models import UserQuestionStatus
 
 def get_student_academic_context(user):
     """
@@ -12,8 +12,6 @@ def get_student_academic_context(user):
     """
     now = timezone.now()
     
-    # 1. 基础积分与身份
-    elo_score = user.elo_score
     username = user.username
     
     # 2. 统计复习压力（Memorix 到期量）
@@ -63,7 +61,7 @@ def get_student_academic_context(user):
     if institution_name:
         context_segments.append(f"所属机构：{institution_name}。本机构专注学科领域：{institution_subject or '通用'}。制定学习计划、推荐内容、分析薄弱点时，必须以本机构的学科范围为准，不得跨越到无关考试或学科。")
     context_segments.append(f"当前学生用户: {username}。")
-    context_segments.append(f"学术天梯积分 (ELO): {elo_score}。")
+    context_segments.append(recent_learning_context(user))
     
     if weak_points:
         context_segments.append(f"薄弱知识点: {', '.join(weak_points)}。")
@@ -80,3 +78,35 @@ def get_student_academic_context(user):
         context_segments.append("该生今日复习任务已完成，状态良好。")
 
     return "\n".join(context_segments)
+
+
+def recent_learning_context(user):
+    from datetime import timedelta
+
+    from core.utils import get_content_institution_id
+    from django.db.models import Sum
+    from rest_framework.exceptions import PermissionDenied
+    from users.models import LearningSession
+
+    now = timezone.now()
+    since = now - timedelta(days=7)
+    try:
+        institution_id = get_content_institution_id(user)
+    except PermissionDenied:
+        return ''
+    attempts = UserQuestionStatus.objects.filter(
+        user=user, question__institution_id=institution_id, reps__gt=0,
+        last_review__gte=since, last_review__lte=now,
+    ).aggregate(questions=Count('id'), correct=Count('id', filter=Q(last_correct=True)))
+    sessions = LearningSession.objects.filter(
+        Q(kind='practice') | Q(kind='video', course__institution_id=institution_id),
+        user=user, ended_at__gte=since, ended_at__lte=now,
+    ).values('kind').annotate(seconds=Sum('active_seconds')).order_by('kind')
+    parts = []
+    if attempts['questions']:
+        parts.append(f"最近作答 {attempts['questions']} 道不同题目，按每题最后一次作答计答对 {attempts['correct']} 道")
+    labels = {'video': '听课', 'practice': '做题'}
+    parts.extend(f"{labels[row['kind']]}记录累计 {row['seconds'] / 60:.1f} 分钟" for row in sessions)
+    if not parts:
+        return '近 7 天暂无站内听课与练习记录。'
+    return '近 7 天站内学习记录：' + '；'.join(parts) + '。仅在相关时参考；详细时段和结果通过学习工具核实。'

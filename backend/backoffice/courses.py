@@ -59,7 +59,7 @@ class CourseInput(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = ('id', 'title', 'module', 'module_name', 'subject_name', 'description', 'album_obj', 'knowledge_point',
-                  'sort_order', 'elo_reward', 'ai_outline_enabled', 'updated_at',
+                  'sort_order', 'ai_outline_enabled', 'updated_at',
                   'is_published', 'transcript_status', 'transcript_edited', 'publish_error',
                   'video_name', 'cover_name', 'courseware_name', 'reference_name')
         read_only_fields = ('updated_at', 'is_published')

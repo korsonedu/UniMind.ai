@@ -3,7 +3,7 @@ import json
 import re
 
 
-CARD_TYPES = {'data_card', 'knowledge_map', 'practice_result', 'question_preview', 'practice_quiz', 'diagnostic_quiz', 'faq_draft', 'latex_derivation', 'step_solution', 'function_graph', 'action_cards', 'learning_experiment'}
+CARD_TYPES = {'data_card', 'knowledge_map', 'practice_result', 'question_preview', 'practice_quiz', 'diagnostic_quiz', 'latex_derivation', 'step_solution', 'function_graph', 'action_cards', 'learning_experiment'}
 INTERNAL_PATH = re.compile(r'/(?:courses|course/[1-9][0-9]*|tests(?:/results/[1-9][0-9]*|/session\?source=xiaoyu&preference=review_first)?|report-card|achievements|diagnostic|study|qa)')
 
 TASK_PATH = re.compile(r'/xiaoyu\?project=[1-9][0-9]*&learning_task=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')

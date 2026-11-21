@@ -1,4 +1,4 @@
-"""Two student-confirmed actions; model callbacks can only prepare signed drafts."""
+"""Prepare and grade student-confirmed diagnostics."""
 import hashlib
 import json
 import time
@@ -22,7 +22,7 @@ from .dsh_runtime import site_request_lock, quota_write_lock
 
 
 SALT = 'unimind.dsh.student-confirmation.v1'
-FEATURES = {'diagnostic': 'quiz.exam', 'faq': 'faq.system'}
+FEATURES = {'diagnostic': 'quiz.exam'}
 
 
 class Conflict(APIException):
@@ -39,7 +39,7 @@ def draft(user, kind, fields, source=None):
     check_feature(user, kind)
     identity = json.dumps([user.pk, kind, source, fields], sort_keys=True, ensure_ascii=False)
     request_id = str(uuid5(NAMESPACE_URL, identity) if source else uuid4())
-    expires = int(time.time()) + (DIAGNOSTIC_TIME_LIMIT_SECONDS if kind == 'diagnostic' else 86400)
+    expires = int(time.time()) + DIAGNOSTIC_TIME_LIMIT_SECONDS
     claims = {**fields, 'user': user.pk, 'kind': kind, 'request_id': request_id,
               'scope': get_content_institution_id(user), 'source': source, 'expires_at': expires}
     return {**fields, 'kind': kind, 'request_id': request_id, 'expires_at': expires,
@@ -63,15 +63,6 @@ def prepare_diagnostic(user, source=None):
             'visual': {'type': 'diagnostic_quiz', 'payload': payload}}
 
 
-def prepare_faq(user, arguments, source=None):
-    text = serializers.CharField(max_length=4000).run_validation(arguments.get('question_text'))
-    context = serializers.CharField(max_length=3000, allow_blank=True).run_validation(arguments.get('context_summary', ''))
-    content = f'【背景】{context}\n\n【问题】{text}' if context else text
-    payload = draft(user, 'faq', {'content': content}, source)
-    return {'message': '人工答疑草稿已准备，尚未发布；请学生核对并确认。',
-            'visual': {'type': 'faq_draft', 'payload': payload}}
-
-
 def load_claims(user, token):
     try:
         claims = signing.loads(token, salt=SALT, max_age=86400)
@@ -90,17 +81,13 @@ def confirm(user, data):
         raise ValidationError('请先核对内容并明确确认提交。')
     claims = load_claims(user, data.get('token'))
     kind = claims['kind']
-    if kind == 'faq':
-        content = serializers.CharField(max_length=7500).run_validation(data.get('content', claims['content']))
-        values = {'content': content}
-    else:
-        field = DiagnosticAnswerInput(data=data.get('answers'), many=True, allow_empty=False, max_length=10)
-        field.is_valid(raise_exception=True)
-        answers = field.validated_data
-        ids = [row['question']['id'] for row in answers]
-        if len(ids) != len(set(ids)) or set(ids) != set(claims['question_ids']):
-            raise ValidationError('须提交本次诊断的全部题目，不能替换或重复题目。')
-        values = {'answers': answers}
+    field = DiagnosticAnswerInput(data=data.get('answers'), many=True, allow_empty=False, max_length=10)
+    field.is_valid(raise_exception=True)
+    answers = field.validated_data
+    ids = [row['question']['id'] for row in answers]
+    if len(ids) != len(set(ids)) or set(ids) != set(claims['question_ids']):
+        raise ValidationError('须提交本次诊断的全部题目，不能替换或重复题目。')
+    values = {'answers': answers}
     fingerprint = hashlib.sha256(json.dumps([kind, values], sort_keys=True).encode()).hexdigest()
     with site_request_lock(user), quota_write_lock(), transaction.atomic():
         actor = get_user_model().objects.select_for_update().get(pk=user.pk)
@@ -115,19 +102,14 @@ def confirm(user, data):
             source = AIUsageReservation.objects.filter(pk=claims['source'], user=user, status='succeeded').first()
             if not source or source.response.get('engine') != 'dsh' or source.response.get('deleted'):
                 raise Conflict('原提问未完成或已删除，请重新准备草稿。')
-        if kind == 'faq':
-            from faq_system.models import Question
-            question = Question.objects.create(user=user, content=content, institution_id=get_content_institution_id(user))
-            result = {'kind': kind, 'ticket_id': question.pk, 'message': '已发布人工答疑问题。', 'link': '/qa'}
-        else:
-            if actor.has_completed_initial_assessment:
-                raise Conflict('首次诊断已完成，请到诊断页重新评估。')
-            results, scores = grade_diagnostic_answers(answers, user=user)
-            initialize_memorix_from_diagnostic(actor, scores)
-            actor.has_completed_initial_assessment = True
-            actor.save(update_fields=['has_completed_initial_assessment'])
-            result = {'kind': kind, 'total_score': sum(row['is_correct'] for row in results),
-                      'total_questions': len(results), 'results': results}
+        if actor.has_completed_initial_assessment:
+            raise Conflict('首次诊断已完成，请到诊断页重新评估。')
+        results, scores = grade_diagnostic_answers(answers, user=user)
+        initialize_memorix_from_diagnostic(actor, scores)
+        actor.has_completed_initial_assessment = True
+        actor.save(update_fields=['has_completed_initial_assessment'])
+        result = {'kind': kind, 'total_score': sum(row['is_correct'] for row in results),
+                  'total_questions': len(results), 'results': results}
         DshSubmission.objects.create(user=user, request_id=claims['request_id'], kind=kind,
                                      fingerprint=fingerprint, response=result)
         return result

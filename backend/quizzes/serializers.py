@@ -149,8 +149,8 @@ class UserQuestionStatusSerializer(serializers.ModelSerializer):
 class QuizAttemptSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuizAttempt
-        fields = ('id', 'user', 'score', 'elo_change', 'is_initial_placement', 'created_at')
-        read_only_fields = ('user', 'elo_change')
+        fields = ('id', 'user', 'score', 'is_initial_placement', 'created_at')
+        read_only_fields = ('user',)
 
 class ExamQuestionResultSerializer(serializers.ModelSerializer):
     question_detail = QuestionSerializer(source='question', read_only=True)
@@ -169,7 +169,7 @@ class QuizExamSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuizExam
         fields = (
-            'id', 'user', 'total_score', 'max_score', 'elo_change', 'summary', 'status',
+            'id', 'user', 'total_score', 'max_score', 'summary', 'status',
             'total_questions', 'graded_count', 'failed_count', 'last_error',
             'started_at', 'grading_completed_at', 'notified_at', 'created_at',
             'results', 'created_at_fmt',

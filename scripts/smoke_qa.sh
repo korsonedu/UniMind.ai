@@ -14,7 +14,6 @@ fi
 python3 manage.py shell <<'PY'
 from rest_framework.test import APIClient
 from users.models import User
-from faq_system.models import Question
 
 user, _ = User.objects.get_or_create(
     username="smoke_member",
@@ -27,16 +26,10 @@ if not user.is_member:
 client = APIClient()
 client.force_authenticate(user=user)
 
-r = client.get('/api/qa/questions/?filter=all&search=', HTTP_HOST='localhost')
-assert r.status_code == 200, f"GET /api/qa/questions expected 200, got {r.status_code}"
+for path in ('/api/qa/questions/', '/api/study/messages/'):
+    for response in (client.get(path, HTTP_HOST='localhost'),
+                     client.post(path, {'content': 'smoke test'}, format='json', HTTP_HOST='localhost')):
+        assert response.status_code == 404, f"{path} expected 404, got {response.status_code}"
 
-payload = {"content": "smoke test question"}
-r2 = client.post('/api/qa/questions/', payload, format='multipart', HTTP_HOST='localhost')
-assert r2.status_code == 201, f"POST /api/qa/questions expected 201, got {r2.status_code}"
-
-qid = r2.data.get('id')
-if qid:
-    Question.objects.filter(id=qid).delete()
-
-print('[OK] QA smoke passed')
+print('[OK] Retired community endpoints return 404')
 PY

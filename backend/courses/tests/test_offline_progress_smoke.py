@@ -28,17 +28,17 @@ def offline_event(auth_client, user, settings, tmp_path):
 
 
 @pytest.mark.django_db
-def test_offline_retry_time_reward_and_position(auth_client, user, offline_event):
+def test_offline_retry_time_completion_and_position(auth_client, user, offline_event):
     course, body, url = offline_event
     first = auth_client.post(url, body, format='json')
     assert first.status_code == 200, first.data
-    assert first.data['elo_added'] == 20
+    assert first.data['elo_added'] == 0
     assert auth_client.post(url, body, format='json').data['duplicate'] is True
     assert LearningActivity.objects.count() == LearningSession.objects.count() == 1
     assert LearningSession.objects.get().active_seconds == 15
     assert LearningSession.objects.get().focused_seconds == 10
     user.refresh_from_db()
-    assert user.elo_score == 1020
+    assert user.elo_score == 1000
 
     # Zero-time completion/checkpoints retain their event receipt without fake study time.
     finished = {**body, 'event_id': str(uuid.uuid4()), 'watched_seconds': 0, 'focused_seconds': 0}

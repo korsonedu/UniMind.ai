@@ -52,7 +52,8 @@ def test_learning_features_follow_the_selected_identity(spaces):
         assert [item['title'] for item in rows(client.get('/api/notes/items/'))] == [title]
         assert [item['name'] for item in rows(client.get('/api/ai/projects/'))] == [title]
         features = client.get('/api/users/institution/me/features/').data['features']
-        assert {'ai.assistant', 'course.video', 'quiz.exam', 'full.report', 'study.room', 'faq.system'} <= set(features)
+        assert {'ai.assistant', 'course.video', 'quiz.exam', 'full.report'} <= set(features)
+        assert {'study.room', 'faq.system'}.isdisjoint(features)
     private = Note.objects.get(user=root)
     school_note = Note.objects.get(user=learner)
     assert school.get(f'/api/notes/items/{private.pk}/').status_code == 404
@@ -102,11 +103,7 @@ def test_courses_community_and_revocation_stay_in_their_space(spaces):
     assert school.get(f'/api/courses/{course.pk}/').status_code == 200
     assert personal.get(f'/api/courses/{course.pk}/').status_code == 404
     assert school.get(f'/api/courses/{course.pk}/').data['video_file'].endswith(f'?space={workspace.pk}')
-    school_post = school.post('/api/qa/questions/', {'content': 'School discussion'}, format='json')
-    assert school_post.status_code == 201
-    from faq_system.models import Question
-    assert Question.objects.get(pk=school_post.data['id']).institution_id == workspace.institution_id
-    assert personal.get(f"/api/qa/questions/{school_post.data['id']}/").status_code == 404
+    assert school.post('/api/qa/questions/', {'content': 'School discussion'}, format='json').status_code == 404
     member.is_active = False
     member.save(update_fields=['is_active'])
     assert school.get('/api/notes/items/').status_code == 403
