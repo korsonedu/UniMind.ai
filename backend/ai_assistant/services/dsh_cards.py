@@ -34,12 +34,12 @@ def build_tool_card(name, result):
         return data_card(result['title'], [item('学习任务', '已准备，等待你实际作答')],
             ('打开学习任务', result['href']))
     if name == 'search_courses':
-        return data_card('相关课程', [item(c['title'], '打开课程', f"/course/{int(c['id'])}")
+        return data_card('相关课程', [item(c['title'], '打开课程', c['url'])
             for c in result.get('courses', [])[:10]], ('课程中心', '/courses'),
             '' if result.get('courses') else '没有找到匹配课程。')
     if name == 'search_asr':
         return data_card('课程讲稿来源', [item(f"{s['course_title']} · {s['start_time']}～{s['end_time']}",
-            s['text'], f"/course/{int(s['course_id'])}?t={float(s['start_seconds']):g}") for s in result.get('segments', [])[:10]],
+            s['text'], s['url']) for s in result.get('segments', [])[:10]],
             note='' if result.get('segments') else '没有找到匹配片段。')
     if name in {'lookup_question', 'get_user_wrong_questions', 'search_similar_questions'}:
         rows = [result] if name == 'lookup_question' else result.get('questions', [])

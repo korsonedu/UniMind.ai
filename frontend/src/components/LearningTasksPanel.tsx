@@ -1,32 +1,24 @@
 import { getLocale, t, useLocale } from '@/i18n';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { ArrowRight } from '@phosphor-icons/react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import { queryClient } from '@/lib/queryClient';
 import { formatApiErrorToast } from '@/lib/apiError';
-import { learningKey, learningUrl, type ProjectLearning } from '@/lib/projectLearning';
+import { failedLearningTask, findRemedialTask, learningKey, learningUrl, type LearningStudyRequest, type LearningTask, type ProjectLearning } from '@/lib/projectLearning';
 import { useAuthStore } from '@/store/useAuthStore';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { WorkspaceActiveContext } from './WorkspaceContext';
-import { PracticeQuizCard, type PracticePayload } from '@/pages/xiaoyu/visuals/PracticeQuizCard';
+import { PracticeQuizCard } from '@/pages/xiaoyu/visuals/PracticeQuizCard';
 
-export interface LearningTask {
-  is_current?: boolean; stage_id: string;
-  id: string; title: string; instructions: string; node_id: string; version_id: number | null;
-  purpose?: 'diagnostic' | 'practice' | 'recheck'; source_task_id?: string | null;
-  response_type?: 'objective' | 'explanation' | 'calculation' | 'reasoning' | 'case' | 'code'; criteria?: string[]; sources?: string[];
-  status: 'ready' | 'processing' | 'completed' | 'partial' | 'failed' | 'unavailable';
-  exam_id: number | null; assistance: string; review_due_at: string | null;
-  summary: { total_score: number; max_score: number; graded_count: number; total_questions: number; label_source?: string } | null;
-  payload: PracticePayload;
-}
+export type { LearningTask } from '@/lib/projectLearning';
 const purposes = { diagnostic: '起点任务', practice: '学习任务', recheck: '换题检验' };
 const responseTypes = { objective: '选择题', explanation: '解释', calculation: '计算过程', reasoning: '推理', case: '案例分析', code: '代码文本' };
 const statuses = { ready: '待作答', processing: '批改中', completed: '已完成本次作答', partial: '批改未全部完成', failed: '批改待重试', unavailable: '内容当前不可用' };
 
-export function LearningTasksPanel({ project, onStudy }: { project: ProjectLearning; onStudy: (text: string) => void }) {
+export function LearningTasksPanel({ project, onStudy }: { project: ProjectLearning; onStudy: LearningStudyRequest }) {
   useLocale();
   const userId = useAuthStore(state => state.user?.id);
   const [searchParams] = useSearchParams();
@@ -72,18 +64,29 @@ export function LearningTasksPanel({ project, onStudy }: { project: ProjectLearn
   </section>;
 }
 
-export function LearningTaskDetail({ project, task, tasks, onStudy, onSelect, refresh, onClose, active = true }: { active?: boolean; onClose?: () => void; project: ProjectLearning; task: LearningTask; tasks: LearningTask[]; onStudy: (text: string, activity: { task_id: string }) => void; onSelect: (id: string | null) => void; refresh: () => void }) {
+export function LearningTaskDetail({ project, task, tasks, onStudy, onSelect, refresh, onClose, active = true }: { active?: boolean; onClose?: () => void; project: ProjectLearning; task: LearningTask; tasks: LearningTask[]; onStudy: LearningStudyRequest; onSelect: (id: string | null) => void; refresh: () => void }) {
   useLocale();
   const userId = useAuthStore(state => state.user?.id);
   const workspaceActive = useContext(WorkspaceActiveContext);
   const canAnswer = project.status === 'active' || (project.status === 'preparing' && task.purpose === 'diagnostic');
   const canShowQuiz = task.status !== 'unavailable' && (!!task.exam_id || (task.is_current !== false && canAnswer));
+  const needsRepair = project.status === 'active' && failedLearningTask(task);
+  const remedialTask = needsRepair ? findRemedialTask(tasks, task) : undefined;
   return <WorkspaceActiveContext.Provider value={workspaceActive && active}><article className="um-learning-task-detail" aria-label={t('学习任务：{0}', { 0: task.title })}><h4>{task.title}</h4>{task.status === 'unavailable' || (task.is_current === false && !task.exam_id) ? <p>{t('这项任务已停止使用，已有作答继续保留。请从当前学习安排接续。')}</p> : <MarkdownContent content={task.instructions} />}
       {task.status !== 'unavailable' && (task.is_current !== false || !!task.exam_id) && !!task.criteria?.length && <div className="um-learning-task-criteria"><h5>{t('评价标准')}{task.response_type && ` · ${responseTypes[task.response_type]}`}</h5><ol>{task.criteria.map((criterion, index) => <li key={index}><MarkdownContent content={criterion} /></li>)}</ol></div>}
       {task.source_task_id && <button className="um-learning-text-button" disabled={!tasks.some(item => item.id === task.source_task_id)} onClick={() => onSelect(task.source_task_id || null)}>{t('回看关联任务')}</button>}
       {task.status !== 'unavailable' && task.is_current !== false && !task.exam_id && !canAnswer && <p>{t('恢复学习后可以继续作答。')}</p>}
       {canShowQuiz && <PracticeQuizCard key={`${userId}:${task.id}`} payload={{ ...task.payload, learning_task_id: task.id, assistance: task.assistance, project_id: project.project_id, conversation_id: project.conversation_id || undefined, response_type: task.response_type, label_source: task.summary?.label_source }} onResult={refresh} />}
-      <div className="um-learning-controls">{task.status === 'completed' && <button className="um-agent-button" onClick={() => onStudy(t('帮我复盘刚才这道题'), { task_id: task.id })}>{t('让小宇复盘')}</button>}
+      <div className="um-learning-controls">
+        {needsRepair && (remedialTask ? <button className="um-agent-button um-agent-button-primary" onClick={() => onSelect(remedialTask.id)}>
+          {t('开始补救练习')}<ArrowRight size={16} />
+        </button> : <button className="um-agent-button um-agent-button-primary" onClick={() => onStudy(
+          t('帮我复盘刚才这道题的错因，并出一道新的补救题再测一次'), { task_id: task.id, stage_id: task.stage_id || undefined })}>
+          {t('复盘错因并换题再测')}
+        </button>)}
+        {task.status === 'completed' && <button className="um-agent-button" onClick={() => onStudy(t('帮我复盘刚才这道题'), { task_id: task.id })}>
+          {t(needsRepair && !remedialTask ? '仅复盘错因' : '让小宇复盘')}
+        </button>}
         {onClose ? <button className="um-agent-button" onClick={onClose}>{t('返回学习路径')}</button> : <Link to={learningUrl('/xiaoyu', project.project_id, project.conversation_id || undefined)}>{t('回到项目对话')}</Link>}
       </div>
     </article></WorkspaceActiveContext.Provider>;

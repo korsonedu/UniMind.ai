@@ -11,9 +11,8 @@ function sameOriginCourseUrl(href?: string) {
 }
 
 export function projectCoursePath(href: string, projectId?: number | null, conversationId?: string) {
-  if (!projectId) return null;
   const url = sameOriginCourseUrl(href);
-  return url ? learningUrl(url.pathname + url.search + url.hash, projectId, conversationId) : null;
+  return url ? learningUrl(url.pathname + url.search + url.hash, projectId ?? null, conversationId) : null;
 }
 
 /** Keep only same-origin course navigation inside the current learning project. */
@@ -23,9 +22,12 @@ export function projectCourseLinks(projectId: number | null, conversationId: str
       const url = sameOriginCourseUrl(href);
       if (projectId && url) {
         const coursePath = url.pathname + url.search + url.hash;
-        if (Number(url.pathname.split('/')[2]) === currentCourseId && (url.searchParams.has('t') || url.hash.startsWith('#segment-'))) {
+        if (Number(url.pathname.split('/')[2]) === currentCourseId && url.hash.startsWith('#segment-')) {
           const Citation = citations?.a;
-          if (typeof Citation === 'function') return <Citation {...props} href={coursePath} title={title} target={target} rel={rel}>{children}</Citation>;
+          const timestamp = url.searchParams.get('t');
+          if (typeof Citation === 'function' && timestamp !== null) {
+            return <Citation {...props} href={`/course/${currentCourseId}?t=${timestamp}${url.hash}`} title={title} target={target} rel={rel}>{children}</Citation>;
+          }
         }
         const courseId = Number(url.pathname.split('/')[2]);
         const to = learningUrl(coursePath, projectId, conversationId);

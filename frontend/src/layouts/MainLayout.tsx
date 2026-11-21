@@ -247,8 +247,9 @@ export const MainLayout: React.FC = () => {
   }, [pendingTourDismiss, updateUser]);
 
   const visibleNavItems = navItems;
+  const personalSpace = activeWorkspace() === 'personal';
   const canEnter = (item: NavItem) => {
-    return !item.feature || (!featuresLoading && hasFeature(item.feature));
+    return (personalSpace && item.to === '/courses') || !item.feature || (!featuresLoading && hasFeature(item.feature));
   };
   const isActive = (item: NavItem) => {
     const path = location.pathname;
@@ -298,7 +299,7 @@ export const MainLayout: React.FC = () => {
           </svg>
         </Link></div>
         <nav aria-label={t('功能导航')} className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
-          {visibleNavItems.filter(item => item.to !== '/xiaoyu').map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-9 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={routeFor(item.to)} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}>{<NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true">{<NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{!canEnter(item) && t(' · 暂未开通')}</TooltipContent></TooltipPortal></Tooltip></div>)}
+          {visibleNavItems.filter(item => item.to !== '/xiaoyu').map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-9 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={routeFor(item.to)} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}>{<NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true">{<NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{personalSpace && item.to === '/courses' ? t(' · 请切换到课程空间') : !canEnter(item) && t(' · 暂未开通')}</TooltipContent></TooltipPortal></Tooltip></div>)}
         </nav>
       </aside>
       <div className="um-window-panes" data-notes-open={sidebarVisible} style={{ '--um-notes-width': `${rightSidebarWidth}px` } as React.CSSProperties}>

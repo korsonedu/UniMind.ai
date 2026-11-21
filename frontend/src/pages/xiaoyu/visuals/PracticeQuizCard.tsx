@@ -87,8 +87,8 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
   const answeredCount = questions.filter(item => draft.answers[item.id]?.trim()).length;
   const submission = useQuery<SubmittedPractice | null>({
     queryKey: queryKeys.exams.submission(userId, payload.practice_id),
-    queryFn: async () => {
-      try { return (await api.get(`/quizzes/submissions/${payload.practice_id}/`)).data; }
+    queryFn: async ({ signal }) => {
+      try { return (await api.get(`/quizzes/submissions/${payload.practice_id}/`, { signal })).data; }
       catch (failure) {
         if (isAxiosError(failure) && failure.response?.status === 404) return null;
         throw failure;
@@ -98,10 +98,10 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
     retry: 1,
     staleTime: 0,
   });
-  const recovering = !draft.examId && (submission.isPending || submission.isError);
-  const locked = draft.submitted || !!draft.examId || recovering;
-
   const saved = submission.data;
+  const recovering = !draft.examId && (submission.isPending || submission.isError || (draft.submitted && submission.isFetching));
+  const locked = submitting || !!draft.examId || !!saved || recovering;
+
   if (saved && draft.examId !== saved.exam_id) {
     setDraft({ ...draft, examId: saved.exam_id, submitted: true, assistance: saved.assistance || draft.assistance,
       answers: Object.fromEntries(questions.map((item, position) => [item.id,
@@ -150,7 +150,7 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
     if (!locked) window.dispatchEvent(new CustomEvent('unimind:practice-active', { detail: storageKey }));
   };
   const submit = async () => {
-    if (inFlight.current || draft.examId || recovering || answeredCount !== questions.length) return;
+    if (inFlight.current || locked || answeredCount !== questions.length) return;
     inFlight.current = true;
     setSubmitting(true);
     setActive(false);
@@ -172,6 +172,8 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
       useExamActivityStore.getState().start({ examId, total: questions.length, href: learningUrl(`/tests/results/${examId}`, payload.project_id || null, payload.conversation_id) });
     } catch (failure) {
       setError(formatApiErrorToast(failure, t('提交失败，请重试。')));
+      // 超时或 5xx 仍可能已有考试记录。按原提交编号查回结果，再开放编辑。
+      await submission.refetch();
     } finally { inFlight.current = false; setSubmitting(false); }
   };
 
@@ -232,13 +234,13 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
         {locked && draft.assistance === 'unknown' && <option value="unknown">{t('尚未说明')}</option>}<option value="independent">{t('独立作答')}</option><option value="hint">{t('获得提示')}</option><option value="guided">{t('逐步引导完成')}</option>
       </select>
     </label>}
-    {error && <p className="um-inline-practice-error" role="alert">{error}</p>}
+    {error && !draft.examId && <p className="um-inline-practice-error" role="alert">{error}</p>}
     {!draft.examId && submission.isPending && <p>{t('正在读取提交状态…')}</p>}
     {!draft.examId && submission.isError && <p role="alert">{t('暂时无法读取提交状态。')}<button type="button" onClick={() => void submission.refetch()}>{t('重试读取')}</button></p>}
     <footer className="um-inline-practice-footer">
       <div><button type="button" className="um-inline-practice-nav-button" disabled={index === 0} onClick={() => setDraft(previous => ({ ...previous, index: index - 1 }))}><CaretLeft size={14} aria-hidden="true" />{t('上一题')}</button>
         <button type="button" className="um-inline-practice-nav-button" disabled={index === questions.length - 1} onClick={() => setDraft(previous => ({ ...previous, index: index + 1 }))}>{t('下一题')}<CaretRight size={14} aria-hidden="true" /></button></div>
-      {!draft.examId && <button type="button" className="um-inline-practice-submit" disabled={submitting || recovering || answeredCount !== questions.length}
+      {!draft.examId && <button type="button" className="um-inline-practice-submit" disabled={locked || answeredCount !== questions.length}
         onClick={() => void submit()}>{submitting ? t('提交中…') : draft.submitted ? t('重试提交') : t('提交批改')}</button>}
     </footer>
   </section>;

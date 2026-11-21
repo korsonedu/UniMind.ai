@@ -1,55 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useCourseAIStore } from '@/store/useCourseAIStore';
 
 interface SubtitlesOverlayProps {
   courseId: number;
-  videoRef: React.RefObject<HTMLVideoElement | null>;
+  currentTime: number;
   visible?: boolean;
 }
 
-export const SubtitlesOverlay: React.FC<SubtitlesOverlayProps> = ({
+export function SubtitlesOverlay({
   courseId,
-  videoRef,
+  currentTime,
   visible = false,
-}) => {
-  const { transcriptSegments, fetchTranscript, clearCourseTimers } =
+}: SubtitlesOverlayProps) {
+  const { transcriptCourseId, transcriptSegments, fetchTranscript, clearCourseTimers } =
     useCourseAIStore();
-  const activeIdxRef = useRef(-1);
-  const [activeIdx, setActiveIdx] = useState(-1);
 
   useEffect(() => {
     fetchTranscript(courseId);
     return () => { clearCourseTimers(courseId); };
   }, [courseId, fetchTranscript, clearCourseTimers]);
 
-  useEffect(() => {
-    if (!visible || transcriptSegments.length === 0) return;
-    const video = videoRef.current;
-    if (!video) return;
-
-    let raf = 0;
-    const tick = () => {
-      if (video.paused) { raf = requestAnimationFrame(tick); return; }
-      const t = video.currentTime;
-      let found = -1;
-      for (let i = 0; i < transcriptSegments.length; i++) {
-        if (t >= transcriptSegments[i].start && t <= transcriptSegments[i].end) {
-          found = i;
-          break;
-        }
-      }
-      if (found !== activeIdxRef.current) {
-        activeIdxRef.current = found;
-        setActiveIdx(found);
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [visible, transcriptSegments, videoRef]);
-
-  if (!visible || activeIdx < 0) return null;
-
+  if (!visible || transcriptCourseId !== courseId) return null;
+  const segment = transcriptSegments.find(({ start, end }) => currentTime >= start && currentTime < end);
+  if (!segment) return null;
 
   return (
     <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-10 max-w-[85%]">
@@ -60,8 +33,8 @@ export const SubtitlesOverlay: React.FC<SubtitlesOverlayProps> = ({
             '0 1px 3px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.6)',
         }}
       >
-        {transcriptSegments[activeIdx]?.text}
+        {segment.text}
       </p>
     </div>
   );
-};
+}

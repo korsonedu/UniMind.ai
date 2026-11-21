@@ -6,14 +6,14 @@ import { t, useLocale } from '@/i18n';
 import type { Message } from '@/hooks/useAgentConversation';
 import api from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
-import type { LearningResource, LearningStage, ProjectLearning } from '@/lib/projectLearning';
+import { failedLearningTask, findRemedialTask, passedLearningTask, playableLearningTask, type LearningResource, type LearningStage, type LearningTask, type ProjectLearning } from '@/lib/projectLearning';
 import type { PracticeResult } from '@/pages/xiaoyu/visuals/PracticeQuizCard';
 import type { DshCard } from './DshToolCard';
 import { projectCoursePath } from './course/projectCourseLinks';
 import { LearningKnowledgeView } from './LearningKnowledgeView';
 import { LearningLibraryPanel } from './LearningLibraryPanel';
-import { LearningTaskDetail, type LearningTask } from './LearningTasksPanel';
-import { passedLearningTask, type LearningWorkspace } from './LearningWorkspace';
+import { LearningTaskDetail } from './LearningTasksPanel';
+import type { LearningWorkspace } from './LearningWorkspace';
 import { MarkdownContent } from './MarkdownContent';
 import { Switch } from './ui/switch';
 import '@/styles/learning-workspace.css';
@@ -44,12 +44,15 @@ function conversationCourses(messages: Message[], project: ProjectLearning, conv
       continue;
     }
     if (message.visible === false) continue;
-    for (const card of (message.metadata?.dsh_cards as DshCard[] | undefined) || []) {
-      if (card.tool !== 'search_courses' && card.tool !== 'search_asr' && !['相关课程', '课程讲稿来源'].includes(String(card.payload.title))) continue;
+    const toolCards = (message.metadata?.dsh_cards as DshCard[] | undefined) || [];
+    const step = message.toolStep?.status === 'succeeded' ? message.toolStep : undefined;
+    const visuals = step?.visuals?.length ? step.visuals : step?.visual ? [step.visual] : [];
+    for (const card of [...toolCards, ...visuals.map(visual => ({ ...visual, tool: step?.name }) as DshCard)]) {
+      if (card.type !== 'data_card' || (card.tool !== 'search_courses' && card.tool !== 'search_asr' && !['相关课程', '课程讲稿来源'].includes(String(card.payload.title)))) continue;
       const items = card.payload.items as { label?: string; action_link?: string }[] | undefined;
       for (const item of items || []) if (item.action_link) add(item.action_link, item.label || t('课程片段'));
     }
-    for (const match of message.content.matchAll(/\[([^\]]+)\]\((\/course\/\d+(?:[?#][^\s)]*)?)\)/g)) add(match[2], match[1]);
+    for (const match of message.content.matchAll(/\[([^\]]+)\]\(((?:https?:\/\/[^/\s)]+)?\/course\/\d+\/?(?:[?#][^\s)]*)?)\)/g)) add(match[2], match[1]);
   }
   return [...links.values()];
 }
@@ -100,7 +103,7 @@ function StageGraph({ stages, state, select }: {
 }
 
 function TaskRow({ task, openTask }: { task: LearningTask; openTask: (id: string) => void }) {
-  const status = task.status !== 'completed' ? taskLabels[task.status] : task.purpose === 'diagnostic' ? '摸底已完成' : passedLearningTask(task) ? '已通过' : '定位卡点 · 补救中';
+  const status = task.status !== 'completed' ? taskLabels[task.status] : task.purpose === 'diagnostic' ? '摸底已完成' : passedLearningTask(task) ? '已通过' : '未通过';
   return <button type="button" className="um-path-task" onClick={() => openTask(task.id)}>
     <span>{task.title}<small>{t(status)}{task.summary?.max_score ? ` · ${task.summary.total_score}/${task.summary.max_score}` : ''}</small></span><ArrowRight size={15} />
   </button>;
@@ -182,14 +185,16 @@ export function LearningPathCanvas({ workspace, messages, conversationId }: {
   const diagnosticRequest = project.events.find(event => event.kind === 'task' && diagnosticIds.has(String(event.content.task_id)))?.source?.text;
   const goal = (proposal ? pending.goal : project.plan.goal) || project.instructions || diagnosticRequest || project.name;
   const unassignedResources = project.resources.filter(resource => !stages.some(stage => stage.sources.includes(resource.id)));
-  const nextTask = nextStage && [...activeTasks].reverse().find(task => task.stage_id === nextStage.id && ['ready', 'processing', 'partial', 'failed'].includes(task.status));
-  const needsRepair = (stageId: string) => {
-    const latest = [...activeTasks].reverse().find(task => task.stage_id === stageId && task.status === 'completed' && task.purpose !== 'diagnostic');
-    return !!latest && !passedLearningTask(latest);
-  };
+  const newestTasks = [...activeTasks].reverse();
+  const stageFailure = (stageId: string) => completedStages.has(stageId) ? undefined :
+    newestTasks.find(task => task.stage_id === stageId && failedLearningTask(task));
+  const nextFailure = nextStage && stageFailure(nextStage.id);
+  const nextTask = nextStage && (nextFailure ? findRemedialTask(activeTasks.filter(task => task.stage_id === nextStage.id), nextFailure) :
+    newestTasks.find(task => task.stage_id === nextStage.id && playableLearningTask(task)));
+  const nextTaskIsRemedial = nextTask && (nextFailure || nextTask.purpose === 'recheck' || nextTask.source_task_id);
   const state = (stage: LearningStage): StageState => {
     if (!proposal && completedStages.has(stage.id)) return 'passed';
-    if (!proposal && needsRepair(stage.id)) return 'remediate';
+    if (!proposal && stageFailure(stage.id)) return 'remediate';
     if (!proposal && stage.id === nextStage?.id && project.status === 'active') return 'current';
     if (proposal && diagnostics.some(task => task.stage_id === stage.id && passedLearningTask(task))) return 'passed';
     return 'upcoming';
@@ -199,14 +204,16 @@ export function LearningPathCanvas({ workspace, messages, conversationId }: {
     setExpanded(previous => ({ ...previous, [stageId]: true }));
     stageCards.current.get(stageId)?.scrollIntoView({ block: 'nearest' });
   };
+  const requestRemedialTask = (stage: LearningStage, failedTask: LearningTask) => ask(
+    t('帮我复盘「{0}」刚做错的题，并出一道新的补救题再测一次', { 0: stage.title }),
+    { task_id: failedTask.id, stage_id: stage.id });
   const continueStage = async () => {
     if (!nextStage) return;
     if (nextTask) {
       if (project.current_stage !== nextTask.stage_id && !(await act('focus', { task_id: nextTask.id }))) return;
       openTask(nextTask.id);
-    } else if (needsRepair(nextStage.id)) {
-      const latest = [...activeTasks].reverse().find(task => task.stage_id === nextStage.id && task.status === 'completed' && task.purpose !== 'diagnostic');
-      if (latest) openTask(latest.id);
+    } else if (nextFailure) {
+      requestRemedialTask(nextStage, nextFailure);
     } else {
       ask(t('帮我开始「{0}」这一阶段的学习', { 0: nextStage.title }), { stage_id: nextStage.id });
     }
@@ -288,6 +295,8 @@ export function LearningPathCanvas({ workspace, messages, conversationId }: {
           {visibleStages.map((stage, index) => {
             const status = state(stage);
             const stageTasks = activeTasks.filter(task => task.stage_id === stage.id);
+            const latestFailedTask = status === 'remediate' ? stageFailure(stage.id) : undefined;
+            const stagePlayableTask = latestFailedTask ? findRemedialTask(stageTasks, latestFailedTask) : undefined;
             const resources = project.resources.filter(resource => stage.sources.includes(resource.id));
             const recommended = courses.filter(link => link.stageId === stage.id);
             const nodes = project.knowledge?.nodes.filter(item => stage.knowledge_nodes?.includes(item.id)) || [];
@@ -319,8 +328,11 @@ export function LearningPathCanvas({ workspace, messages, conversationId }: {
                 </section>}
                 {!proposal && <section><h4>{t('本阶段任务与作答')}</h4>
                   {stageTasks.map(item => <TaskRow key={item.id} task={item} openTask={openTask} />)}
-                  {project.status === 'active' && <button className="um-agent-button" onClick={() => ask(
-                    t('帮我为「{0}」准备一道练习题', { 0: stage.title }), { stage_id: stage.id })}>{t('请小宇出题')}</button>}
+                  {project.status === 'active' && (latestFailedTask ? <button className="um-agent-button um-agent-button-primary"
+                    onClick={() => stagePlayableTask ? openTask(stagePlayableTask.id) : requestRemedialTask(stage, latestFailedTask)}>
+                    {t(stagePlayableTask ? '开始补救练习' : '换题补救再测')}
+                  </button> : <button className="um-agent-button" onClick={() => ask(
+                    t('帮我为「{0}」准备一道练习题', { 0: stage.title }), { stage_id: stage.id })}>{t('请小宇出题')}</button>)}
                 </section>}
               </div>
             </details>;
@@ -360,7 +372,7 @@ export function LearningPathCanvas({ workspace, messages, conversationId }: {
         : pending ? <button className="um-agent-button um-agent-button-primary" onClick={() => show('proposal')}>{t('查看待确认路径')}<ArrowRight size={16} /></button>
         : project.status === 'paused' ? <button className="um-agent-button um-agent-button-primary" disabled={busy} onClick={() => void act('resume')}>{t('恢复学习')}<ArrowRight size={16} /></button>
         : nextStage ? <button className="um-agent-button um-agent-button-primary" disabled={busy || loadingTasks || taskQuery.isError} onClick={() => void continueStage()}>
-          {t(nextTask ? '继续当前任务' : needsRepair(nextStage.id) ? '复盘本阶段作答' : '开始本阶段学习')}<ArrowRight size={16} /></button>
+          {t(nextTaskIsRemedial ? '开始补救练习' : nextTask ? '继续当前任务' : nextFailure ? '复盘并换题再测' : '开始本阶段学习')}<ArrowRight size={16} /></button>
         : pendingDiagnostic ? <button className="um-agent-button um-agent-button-primary" onClick={() => openTask(pendingDiagnostic.id)}>{t('打开摸底任务')}<ArrowRight size={16} /></button>
         : latestDiagnostic ? <button className="um-agent-button um-agent-button-primary" onClick={() => ask(t('根据我的摸底结果制定学习路径吧'), { task_id: latestDiagnostic.id })}>{t('生成学习路径')}<ArrowRight size={16} /></button>
         : <button className="um-agent-button um-agent-button-primary" onClick={() => prefill(t('我想系统学习'))}>{t('告诉小宇学习目标')}<ArrowRight size={16} /></button>}

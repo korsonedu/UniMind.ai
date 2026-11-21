@@ -550,7 +550,12 @@ class PlannerToolExecutor(BaseToolExecutor):
         return self._project_learning('manage_learning_resources', args)
 
     def _handle_manage_learning_tasks(self, args):
-        return self._project_learning('manage_learning_tasks', args)
+        from .dsh_cards import build_tool_card
+        name = 'manage_learning_tasks'
+        result = self._project_learning(name, args)
+        if 'error' not in result and (card := build_tool_card(name, result)):
+            return self._attach_visual(result, lambda: card)
+        return result
 
     def _handle_manage_learning_knowledge(self, args):
         return self._project_learning('manage_learning_knowledge', args)
@@ -733,7 +738,7 @@ class PlannerToolExecutor(BaseToolExecutor):
 
     def _handle_search_asr(self, args: Dict) -> Dict:
         """搜索 ASR 转录文本，找到知识点在视频中的时间位置。"""
-        from courses.models import TranscriptSegment, VideoTranscript, Course
+        from courses.models import TranscriptSegment
 
         query = (args.get('query') or '').strip()
         course_id = args.get('course_id')
@@ -772,7 +777,7 @@ class PlannerToolExecutor(BaseToolExecutor):
                     "end_time": format_time(s.end_time),
                     "start_seconds": s.start_time,
                     "text": s.text[:200],
-                    "url": f"/course/{s.transcript.course_id}?t={s.start_time:g}",
+                    "url": f"/course/{s.transcript.course_id}?t={str(s.start_time).removesuffix('.0')}",
                 }
                 for s in segments
             ],

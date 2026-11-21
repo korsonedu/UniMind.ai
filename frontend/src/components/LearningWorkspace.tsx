@@ -4,23 +4,17 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import { normalizeApiError } from '@/lib/apiError';
-import { learningKey, useProjectLearning, type ProjectLearning } from '@/lib/projectLearning';
+import { learningKey, passedLearningTask, useProjectLearning, type LearningTask, type ProjectLearning } from '@/lib/projectLearning';
 import { queryClient } from '@/lib/queryClient';
 import { t, useLocale } from '@/i18n';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { LearningPathSidebarContext } from './WorkspaceContext';
-import type { LearningTask } from './LearningTasksPanel';
 
 export const learningComposerId = 'xiaoyu-learning-composer';
 
 type Overview = 'path' | 'proposal' | 'knowledge' | 'report';
 type View = { kind: Overview } | { kind: 'task'; id: string; back: Overview };
-
-export function passedLearningTask(task: LearningTask) {
-  const score = task.summary;
-  return task.status === 'completed' && !!score?.max_score && score.total_score / score.max_score >= 0.6;
-}
 
 export function useLearningWorkspace() {
   const locale = useLocale();
@@ -65,6 +59,7 @@ export function useLearningWorkspace() {
 
   const deepTask = params.get('learning_task');
   const deepView = params.get('learning_view');
+  const overview = deepView === 'knowledge' || deepView === 'proposal' || deepView === 'path' ? deepView : null;
   const explicitProject = params.has('project');
   const proposalRevision = project?.pending_plan.plan ? project.pending_plan.base_revision ?? project.revision : null;
   const diagnostic = [...tasks].reverse().find(task => task.purpose === 'diagnostic');
@@ -76,8 +71,8 @@ export function useLearningWorkspace() {
   const [handledEvent, setHandledEvent] = useState<string | null>(null);
   if (eventReady && event !== handledEvent) {
     setHandledEvent(event);
-    if (!deepTask && deepView !== 'knowledge' && proposalRevision !== null) setView({ kind: 'proposal' });
-    else if (!deepTask && deepView !== 'knowledge' && project?.status === 'completed') setView({ kind: 'report' });
+    if (!deepTask && !overview && proposalRevision !== null) setView({ kind: 'proposal' });
+    else if (!deepTask && !overview && project?.status === 'completed') setView({ kind: 'report' });
   }
   const seenEvent = useRef<string | null>(null);
   useEffect(() => {
@@ -86,7 +81,7 @@ export function useLearningWorkspace() {
     open();
   }, [eventReady, event, open]);
 
-  const deepReady = !explicitProject && !openingProject && !!chat.projectId && (!!deepTask || deepView === 'knowledge' || deepView === 'proposal');
+  const deepReady = !explicitProject && !openingProject && !!chat.projectId && (!!deepTask || !!overview);
   const deepKey = deepReady ? `${chat.projectId}:${deepTask || ''}:${deepView || ''}` : null;
   const [handledDeep, setHandledDeep] = useState<string | null>(null);
   if (deepKey !== handledDeep) {
@@ -94,8 +89,8 @@ export function useLearningWorkspace() {
     if (deepKey) {
       if (deepTask) {
         setView({ kind: 'task', id: deepTask, back: project?.pending_plan.plan ? 'proposal' : project?.status === 'completed' ? 'report' : 'path' });
-      } else {
-        setView({ kind: deepView === 'knowledge' ? 'knowledge' : 'proposal' });
+      } else if (overview) {
+        setView({ kind: overview });
       }
     }
   }

@@ -3,7 +3,7 @@ import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { OfflineTrialPage } from '@/components/OfflineTrialPage';
 import { getLocale, t, useLocale } from '@/i18n';
 import { saveLanguagePreference } from '@/lib/languagePreference';
-import { createBrowserRouter, RouterProvider, Navigate, Outlet, matchPath, useLocation } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { registerSW } from 'virtual:pwa-register';
 import axios from 'axios';
@@ -26,6 +26,7 @@ import { keepNativeSession } from '@/lib/offlineSession';
 import { isNativePlatform } from '@/lib/serverConfig';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { XiaoYuChatHost } from './pages/xiaoyu/XiaoYuChatProvider';
+import { useWorkspace } from '@/lib/workspace';
 
 let serviceWorkerRegistered = false;
 
@@ -206,8 +207,6 @@ const WorkspaceEntry = () => {
   const [entered, setEntered] = useState(false);
   const needsChat = pathname === '/xiaoyu' && hasFeature('ai.assistant');
   const waiting = loading || (needsChat && !chat.initialized);
-  const redirecting = !entered && activeWorkspace() === 'personal'
-    && (matchPath('/courses', pathname) || matchPath('/course/:id', pathname));
 
   useEffect(() => {
     if (useInstitutionStore.getState().loading) void fetchFeatures();
@@ -221,14 +220,31 @@ const WorkspaceEntry = () => {
 
   return <RequireAuth>
     {!entered && <PageLoader />}
-    {redirecting ? <HomeRedirect /> : <Suspense fallback={entered ? <PageLoader /> : null}>
+    <Suspense fallback={entered ? <PageLoader /> : null}>
       {(entered || !waiting) && <div className="contents" ref={reveal}><MainLayout /></div>}
-    </Suspense>}
+    </Suspense>
   </RequireAuth>;
 };
 
 const workspacePage = (Component: React.ComponentType) => <ErrorBoundary><Component /></ErrorBoundary>;
-const InstitutionCourses = () => activeWorkspace() === 'personal' ? <Navigate to="/xiaoyu" replace /> : <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{workspacePage(CourseCenter)}</FeatureGuard>;
+const PersonalCourseRedirect = () => {
+  const { data, isPending } = useWorkspace();
+  const { pathname, key } = useLocation();
+  const hasCourseSpace = data?.workspaces?.some(space => space.service_active);
+  useEffect(() => {
+    if (isPending) return;
+    const message = hasCourseSpace
+      ? pathname === '/courses'
+        ? '请从左上角切换到课程空间，打开课程中心。'
+        : '课程视频位于课程空间，请从左上角切换到对应课程空间查看。'
+      : '请先加入可用的课程空间。';
+    toast.info(t(message), { id: `course-space-${key}` });
+  }, [hasCourseSpace, isPending, key, pathname]);
+  return isPending ? <PageLoader /> : <Navigate to="/xiaoyu" replace />;
+};
+const InstitutionCourses = () => activeWorkspace() === 'personal'
+  ? <PersonalCourseRedirect />
+  : <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{workspacePage(CourseCenter)}</FeatureGuard>;
 
 const lazyPage = (Component: React.ComponentType) => (
   <ErrorBoundary>

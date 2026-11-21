@@ -11,12 +11,8 @@ export type NormalizedApiError = {
 
 function getHeaderValue(headers: unknown, key: string): string | undefined {
   if (!headers || typeof headers !== 'object') return undefined;
-  const map = headers as Record<string, unknown>;
-  const exact = map[key];
-  if (typeof exact === 'string' && exact.trim()) return exact.trim();
-  const lower = map[key.toLowerCase()];
-  if (typeof lower === 'string' && lower.trim()) return lower.trim();
-  return undefined;
+  const value = Object.entries(headers).find(([name]) => name.toLowerCase() === key)?.[1];
+  return typeof value === 'string' ? value.trim() || undefined : undefined;
 }
 
 /**
@@ -24,7 +20,10 @@ function getHeaderValue(headers: unknown, key: string): string | undefined {
  * DRF 可能把 error/detail 序列化为字符串、数组、或嵌套对象。
  */
 function extractDRFMessage(payload: unknown): string | null {
-  if (typeof payload === 'string') return payload.trim() ? t(payload.trim()) : null;
+  if (typeof payload === 'string') {
+    const message = payload.trim();
+    return message && !/^<!doctype\b|<(?:html|head|body)(?=[\s/>])/i.test(message) ? t(message) : null;
+  }
   if (Array.isArray(payload)) {
     for (const item of payload) {
       const message = extractDRFMessage(item);
@@ -62,7 +61,9 @@ export function normalizeApiError(error: unknown, fallbackMessage = '请求失�
   const requestId = getHeaderValue(error.response?.headers, 'x-request-id')
     || (typeof payload?.request_id === 'string' ? payload.request_id : undefined);
 
-  const drfMessage = extractDRFMessage(payload);
+  const contentType = getHeaderValue(error.response?.headers, 'content-type') || '';
+  const isHtml = /^(?:text\/html|application\/xhtml\+xml)\s*(?:;|$)/i.test(contentType);
+  const drfMessage = isHtml ? null : extractDRFMessage(payload);
   const message = drfMessage || t(fallbackMessage);
 
   const code =
