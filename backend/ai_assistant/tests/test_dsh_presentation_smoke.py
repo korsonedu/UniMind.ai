@@ -71,7 +71,7 @@ def test_visual_schema_and_navigation_bounds():
 
 
 def test_discovery_is_not_business_execution():
-    assert len(M0_TOOLS) == 30
+    assert {'find_learning_tools', 'present_learning_visual'}.isdisjoint(M0_TOOLS)
     selected, groups, initial = grouped_tools([PRESENTATION_TOOL], '解释一下')
     assert initial == '' and set(groups) == {'presentation'}
     assert selected[0]['function']['name'] == 'find_learning_tools'
