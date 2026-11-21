@@ -93,7 +93,7 @@ def test_read_only_catalog_needs_no_embedding_or_intent_request(monkeypatch):
 
     monkeypatch.setattr(tool_router, "_retrieve_candidates", unexpected_request)
     monkeypatch.setattr(tool_router, "_classify_intent_llm", unexpected_request)
-    tools = [_tool("get_learning_stats"), _tool("get_study_status"), _tool("render_visual")]
+    tools = [_tool("get_learning_stats"), _tool("get_learning_sessions"), _tool("render_visual")]
 
     assert tool_router.route_tools("我还没拿定主意", tools) == tools
 

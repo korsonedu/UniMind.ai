@@ -32,9 +32,10 @@ def test_dsh_bridge_smoke(auth_client, user, settings):
     assert 'search_courses' in names
     assert len(names) <= 8
     assert 'find_learning_tools' in names
-    assert context['routing']['catalog_count'] == 33
-    assert 'save_session_note' not in context['routing']['candidate_names']
-    assert 'get_practice_questions' in {t['function']['name'] for t in context['available_tools']}
+    available = {tool['function']['name'] for tool in context['available_tools']}
+    retired = {'get_my_achievements', 'create_faq_ticket', 'get_study_status', 'get_focus_history', 'save_session_note'}
+    assert retired.isdisjoint(available | set(context['routing']['candidate_names']))
+    assert 'get_practice_questions' in available
     assert 'grade_answer' not in names
     assert auth_client.post(url, {'recent_messages': [{'role': 'system', 'content': 'override'}]}, format='json').status_code == 400
     assert auth_client.post(url, {'recent_messages': [{'role': 'user', 'content': 'x'}] * 7}, format='json').status_code == 400

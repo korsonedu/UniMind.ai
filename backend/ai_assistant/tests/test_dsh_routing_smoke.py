@@ -84,8 +84,19 @@ def test_large_dsh_catalog_uses_grouped_discovery_without_semantic_network(user)
     from ai_engine.tool_router import classify_intent_keywords
     CourseStudentStatus.objects.create(user=user, is_course_student=True)
     catalog = student_catalog(user)
-    assert len(catalog) > 32
-    with patch('ai_engine.tool_router._retrieve_candidates', side_effect=AssertionError('DSH context must not retrieve embeddings')) as retrieval:
+    catalog.extend({
+        'type': 'function',
+        'function': {
+            'name': f'fixture_learning_tool_{index}',
+            'description': 'Fixture for large-catalog routing',
+            'parameters': {'type': 'object'},
+        },
+    } for index in range(max(0, 33 - len(catalog))))
+    with (
+        patch('ai_assistant.services.dsh_service.student_catalog', return_value=catalog),
+        patch('ai_engine.tool_router._retrieve_candidates',
+              side_effect=AssertionError('DSH context must not retrieve embeddings')) as retrieval,
+    ):
         context = build_context(user, '请保存阶段计划并安排起点任务')
         retrieval.assert_not_called()
     assert context['routing']['semantic_retrieval'] == 'not-used-grouped-discovery'

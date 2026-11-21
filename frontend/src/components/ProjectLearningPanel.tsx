@@ -102,7 +102,7 @@ export function ProjectLearningContent({ knowledgeOnly = false, onStart }: { kno
         {guidance?.reason && <details><summary>{t('这次安排的依据')}</summary><p>{guidance.reason}</p>{guidance.stalled && <p>{t('目前这一步仍有卡点，先调整讲解或任务，再继续检验。')}</p>}</details>}
       </section>
       <div className="um-learning-plan-tools">
-        <Link to={learningUrl('/knowledge-tree', projectId, chat.conversationId)}><TreeStructure size={16} />{t('知识关系')}</Link>
+        <Link to={learningUrl('/xiaoyu?learning_view=knowledge', projectId, chat.conversationId)}><TreeStructure size={16} />{t('知识关系')}</Link>
         <Link to={learningUrl('/courses', projectId, chat.conversationId)}><BookOpen size={16} />{hasCourseCatalog ? t('课程与材料') : t('已保存课程')}</Link>
         <div className="um-learning-controls">
           <button className="um-agent-button" disabled={busy || data.status === 'preparing'} onClick={() => void act(data.status === 'paused' || data.status === 'completed' ? 'resume' : 'pause')}>{data.status === 'paused' || data.status === 'completed' ? t('恢复学习') : t('暂停学习')}</button>

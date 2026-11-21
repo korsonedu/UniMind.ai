@@ -4,7 +4,7 @@ import { OfflineTrialPage } from '@/components/OfflineTrialPage';
 import { getLocale, t, useLocale } from '@/i18n';
 import { saveLanguagePreference } from '@/lib/languagePreference';
 import { createBrowserRouter, RouterProvider, Navigate, Outlet, matchPath, useLocation } from 'react-router-dom';
-import { lazy, Suspense, useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { registerSW } from 'virtual:pwa-register';
 import axios from 'axios';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -12,11 +12,8 @@ import { useQuery } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 import { queryKeys } from '@/lib/queryKeys';
 import { HOME_PATH, getLoginPath } from '@/lib/routing';
-import { useStudyRoomWs } from '@/hooks/useStudyRoomWs';
 import { FEATURES } from './store/useInstitutionStore';
 const MainLayout = lazy(() => import('./layouts/MainLayout').then(m => ({ default: m.MainLayout })));
-const CommunityLayout = lazy(() => import('./layouts/CommunityLayout').then(m => ({ default: m.CommunityLayout })));
-const CommunityEntry = lazy(() => import('./layouts/CommunityLayout').then(m => ({ default: m.CommunityEntry })));
 import { useAuthStore } from './store/useAuthStore';
 import { useInstitutionStore } from './store/useInstitutionStore';
 import { FeatureGuard } from './components/FeatureGuard';
@@ -25,7 +22,7 @@ import { PageLoader } from '@/components/PageLoader';
 import api from '@/lib/api';
 import { Toaster, toast } from 'sonner';
 import { App as NativeApp } from '@capacitor/app';
-import { keepNativeSession, isNativeOffline, isOfflineDemo, subscribeOffline } from '@/lib/offlineSession';
+import { keepNativeSession } from '@/lib/offlineSession';
 import { isNativePlatform } from '@/lib/serverConfig';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { XiaoYuChatHost } from './pages/xiaoyu/XiaoYuChatProvider';
@@ -36,7 +33,6 @@ let serviceWorkerRegistered = false;
 const Landing = lazy(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
 const CourseCenter = lazy(() => import('./pages/CourseCenter').then(module => ({ default: module.CourseCenter })));
 const TestLadder = lazy(() => import('./pages/TestLadder').then(module => ({ default: module.TestLadder })));
-const StudyRoom = lazy(() => import('./pages/StudyRoom').then(module => ({ default: module.StudyRoom })));
 const InstitutionManagement = lazy(() => import('./pages/InstitutionManagement'));
 const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })));
 const Login = lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
@@ -44,15 +40,11 @@ const DesktopAuthorize = lazy(() => import('./pages/DesktopAuthorize').then(modu
 const AccountCallback = lazy(() => import('./pages/AccountCallback').then(module => ({ default: module.AccountCallback })));
 const Register = lazy(() => import('./pages/Register').then(module => ({ default: module.Register })));
 const VerifyCode = lazy(() => import('./pages/VerifyCode').then(module => ({ default: module.VerifyCode })));
-const QASystem = lazy(() => import('./pages/QASystem').then(module => ({ default: module.QASystem })));
-const QuestionDetail = lazy(() => import('./pages/QASystem').then(module => ({ default: module.QuestionDetail })));
 const TestSessionPage = lazy(() => import('./pages/TestSessionPage').then(module => ({ default: module.TestSessionPage })));
 const ExamResultPage = lazy(() => import('./pages/ExamResultPage').then(module => ({ default: module.ExamResultPage })));
 const ExamHistoryPage = lazy(() => import('./pages/ExamHistoryPage').then(module => ({ default: module.ExamHistoryPage })));
 
 const WrongQuestionReviewPage = lazy(() => import('./pages/WrongQuestionReviewPage').then(module => ({ default: module.WrongQuestionReviewPage })));
-const ReportCard = lazy(() => import('./pages/ReportCard').then(module => ({ default: module.ReportCard })));
-const Achievements = lazy(() => import('./pages/Achievements').then(module => ({ default: module.Achievements })));
 
 const BillingPage = lazy(() => import('./pages/Billing').then(module => ({ default: module.BillingPage })));
 const PaymentResult = lazy(() => import('./pages/PaymentResult').then(module => ({ default: module.PaymentResult })));
@@ -100,9 +92,19 @@ const LegacyRedirect = ({ to }: { to: string }) => {
   return <Navigate to={{ pathname: to, search, hash }} replace />;
 };
 
+const KnowledgeBuilderRedirect = () => {
+  const { pathname, search, hash } = useLocation();
+  return <Navigate to={{ pathname: `/xiaoyu${pathname}`, search, hash }} replace />;
+};
+
 const legacyRoutes = [
   ['workbench/*', HOME_PATH],
   ['assets/*', HOME_PATH],
+  ['community/*', HOME_PATH],
+  ['study/*', HOME_PATH],
+  ['qa/*', HOME_PATH],
+  ['achievements', HOME_PATH],
+  ['report-card', HOME_PATH],
   ['knowledge-map/*', '/knowledge-tree'],
   ['learning-products/*', HOME_PATH],
   ['articles/*', HOME_PATH],
@@ -239,6 +241,7 @@ const router = createBrowserRouter([
     element: <XiaoYuChatHost />,
     children: [
   ...(import.meta.env.DEV ? [{ path: '/dev/dsh', element: lazyPage(lazy(() => import('./pages/DshM0'))) }] : []),
+  { path: "/knowledge-builder/*", element: <KnowledgeBuilderRedirect /> },
   ...legacyRoutes.map(([path, to]) => ({ path, element: <LegacyRedirect to={to} /> })),
   {
     path: "/",
@@ -249,15 +252,6 @@ const router = createBrowserRouter([
         element: <WorkspaceEntry />,
         children: [
           { path: "courses", element: <InstitutionCourses /> },
-          {
-            element: workspacePage(CommunityLayout),
-            children: [
-              { path: "community", element: workspacePage(CommunityEntry) },
-              { path: "qa", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{workspacePage(QASystem)}</FeatureGuard> },
-              { path: "qa/:id", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{workspacePage(QuestionDetail)}</FeatureGuard> },
-              { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}>{workspacePage(StudyRoom)}</FeatureGuard> },
-            ],
-          },
           { path: "tests", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{workspacePage(TestLadder)}</FeatureGuard> },
           { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{workspacePage(TestSessionPage)}</FeatureGuard> },
           { path: "tests/results/:examId", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{workspacePage(ExamResultPage)}</FeatureGuard> },
@@ -267,8 +261,8 @@ const router = createBrowserRouter([
           { path: "practice", element: <RequireAuth><OfflineTrialPage /></RequireAuth> },
           { path: "calendar", element: <RequireAuth><OfflineTrialPage calendar /></RequireAuth> },
           { path: "knowledge-tree", element: <FeatureGuard feature="ai.assistant">{workspacePage(ProjectKnowledge)}</FeatureGuard> },
-          { path: "knowledge-builder", element: <FeatureGuard feature="ai.assistant">{workspacePage(KnowledgeBuilder)}</FeatureGuard> },
-          { path: "knowledge-builder/:buildId", element: <FeatureGuard feature="ai.assistant">{workspacePage(KnowledgeBuilder)}</FeatureGuard> },
+          { path: "xiaoyu/knowledge-builder", element: <FeatureGuard feature="ai.assistant">{workspacePage(KnowledgeBuilder)}</FeatureGuard> },
+          { path: "xiaoyu/knowledge-builder/:buildId", element: <FeatureGuard feature="ai.assistant">{workspacePage(KnowledgeBuilder)}</FeatureGuard> },
           { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant">{workspacePage(XiaoYu)}</FeatureGuard> },
           { path: "xiaoyu/practice/:sessionId", element: <FeatureGuard feature="ai.assistant">{workspacePage(PracticeSession)}</FeatureGuard> },
           { path: "settings", element: workspacePage(Settings) },
@@ -276,10 +270,6 @@ const router = createBrowserRouter([
           { path: "billing", element: workspacePage(BillingPage) },
           { path: "course/:id", element: <InstitutionCourses /> },
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{workspacePage(WrongQuestionReviewPage)}</FeatureGuard> },
-          { path: "achievements", element: workspacePage(Achievements) },
-
-          { path: "report-card", element: <FeatureGuard feature={FEATURES.FULL_REPORT}>{workspacePage(ReportCard)}</FeatureGuard> },
-
           { path: "*", element: workspacePage(NotFound) },
         ],
       },
@@ -304,18 +294,6 @@ const router = createBrowserRouter([
     ],
   },
 ]);
-
-function StudyRoomWsBridge() {
-  const user = useAuthStore(s => s.user);
-  const features = useInstitutionStore(s => s.features);
-  const isPlatformAdmin = useInstitutionStore(s => s.isPlatformAdmin);
-  const enabled = !!user && (
-    isPlatformAdmin || features.includes(FEATURES.STUDY_ROOM)
-  );
-  const nativeOffline = useSyncExternalStore(subscribeOffline, isNativeOffline);
-  useStudyRoomWs(enabled && !nativeOffline && !isOfflineDemo());
-  return null;
-}
 
 function App() {
   const hydrated = useAuthStore(state => state.tokenHydrated);
@@ -349,7 +327,6 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
         <Toaster position="top-center" richColors />
-        <StudyRoomWsBridge />
         <RouterProvider router={router} />
       </ErrorBoundary>
     </QueryClientProvider>

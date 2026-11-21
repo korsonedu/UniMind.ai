@@ -5,16 +5,14 @@ from .views_learning import (LearningCatalogView, MyLearningAccessView, Learning
 from .views import (
     RegisterView, LoginView, LoginByCodeView, UserDetailView, UpdateProfileView,
     TourDismissView, TourPanelDismissView,
-    OnlineUserListView, UpdateEmailView, UpdatePasswordView,
-    DailyPlanListView, DailyPlanDetailView,
+    UpdateEmailView, UpdatePasswordView,
     BIAnalyticsView,
     MyKnowledgeMasteryView, SendVerificationCodeView, LogoutView,
     DiagnosticGenerateView, DiagnosticSubmitView, DiagnosticReassessView,
     AnalyticsDashboardView, AnalyticsExportView, PlatformRevenueView,
     AccountDeleteView, DataExportView,
     AvatarProxyView,
-    UserCheckInView, AchievementListView, UserAchievementView,
-    StudentReportCardView, StudentReportCardPDFView,
+    UserCheckInView,
     PushSubscribeView,
 )
 from .views_admin import (
@@ -64,9 +62,6 @@ urlpatterns = [
     path('me/diagnostic/reassess/', DiagnosticReassessView.as_view(), name='diagnostic-reassess'),
 
     # System
-    path('online/', OnlineUserListView.as_view(), name='online-users'),
-    path('plans/', DailyPlanListView.as_view(), name='daily-plan-list'),
-    path('plans/<int:pk>/', DailyPlanDetailView.as_view(), name='daily-plan-detail'),
 
     # Admin
     path('admin/bi/', BIAnalyticsView.as_view(), name='admin-bi'),
@@ -142,14 +137,8 @@ urlpatterns = [
     # Avatar proxy
     path('avatar/<str:style>/<str:seed>/', AvatarProxyView.as_view(), name='avatar-proxy'),
 
-    # Check-in & achievements
+    # Check-in
     path('me/checkin/', UserCheckInView.as_view(), name='user-checkin'),
-    path('achievements/', AchievementListView.as_view(), name='achievement-list'),
-    path('me/achievements/', UserAchievementView.as_view(), name='user-achievements'),
-
-    # Report card
-    path('me/report-card/', StudentReportCardView.as_view(), name='student-report-card'),
-    path('me/report-card/pdf/', StudentReportCardPDFView.as_view(), name='student-report-card-pdf'),
 
 
     # API platform

@@ -1,7 +1,7 @@
 export const DEMO_USER_ID = -1;
 export const DEMO_USER = {
   id: DEMO_USER_ID, username: 'offline-demo', nickname: '离线体验者', role: 'student' as const,
-  elo_score: 1000, avatar_url: '', avatar_style: 'bottts', avatar_seed: 'offline-demo', bio: '离线试用数据仅保存在本机',
+  avatar_url: '', avatar_style: 'bottts', avatar_seed: 'offline-demo', bio: '离线试用数据仅保存在本机',
   allow_broadcast: false, show_others_broadcast: false, is_member: false,
   has_completed_initial_assessment: true, tour_dismissed_at: '2026-01-01', tour_panel_dismissed_at: '2026-01-01',
 };

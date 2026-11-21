@@ -28,19 +28,19 @@ class CoursePortalTests(TestCase):
         return view.as_view()(request, **({'pk': pk} if pk else {}))
 
     @patch('courses.views.record_event')
-    def test_retry_deduplicates_watch_time_and_reward(self, _):
+    def test_retry_deduplicates_watch_time_and_completion(self, _):
         event = {'position': 15, 'duration': 120, 'watched_seconds': 15, 'event_id': str(uuid.uuid4())}
         self.assertEqual(self.call(VideoProgressUpdateView, 'post', event, self.course.pk).status_code, 200)
         self.call(VideoProgressUpdateView, 'post', event, self.course.pk)
         first = self.call(VideoProgressUpdateView, 'post', {'is_finished': True}, self.course.pk)
         second = self.call(VideoProgressUpdateView, 'post', {'is_finished': True}, self.course.pk)
-        self.assertEqual(first.data['elo_added'], 20)
+        self.assertEqual(first.data['elo_added'], 0)
         self.assertEqual(second.data['elo_added'], 0)
         self.user.refresh_from_db()
-        self.assertEqual(self.user.elo_score, 1020)
+        self.assertEqual(self.user.elo_score, 1000)
         activity = self.call(LearningActivityView).data
         self.assertEqual(activity['totals'][0]['watched_seconds'], 15)
-        self.assertEqual(activity['totals'][0]['elo_earned'], 20)
+        self.assertEqual(activity['totals'][0]['elo_earned'], 0)
         self.assertEqual(activity['totals'][0]['completions'], 1)
 
     def test_progress_is_private_and_institution_scoped(self):

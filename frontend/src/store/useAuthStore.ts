@@ -37,7 +37,6 @@ interface User {
   email?: string;
   nickname: string;
   role: 'student' | 'admin';
-  elo_score: number;
   avatar_url: string;
   avatar_style: string;
   avatar_seed: string;

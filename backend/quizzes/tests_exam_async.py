@@ -133,7 +133,7 @@ class ExamAsyncTests(APITestCase):
         self.assertEqual(history.status_code, 200, history.data)
         self.assertEqual(history.data['items'][0]['id'], exam.pk)
 
-    def test_partial_failure_skips_elo_and_retry_completes(self):
+    def test_partial_failure_and_retry_complete_without_elo(self):
         response, _ = self.submit()
         exam = QuizExam.objects.get(pk=response.data['exam_id'])
         original_elo = self.user.elo_score
@@ -178,7 +178,7 @@ class ExamAsyncTests(APITestCase):
         self.assertEqual(exam.status, 'completed')
         self.assertEqual(exam.results.count(), 2)
         self.assertEqual(exam.results.filter(status='graded').count(), 2)
-        self.assertNotEqual(self.user.elo_score, original_elo)
+        self.assertEqual(self.user.elo_score, original_elo)
 
     def test_content_scope_change_marks_items_failed(self):
         response, _ = self.submit()

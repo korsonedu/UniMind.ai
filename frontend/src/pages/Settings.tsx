@@ -14,7 +14,6 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { getLearningReminderSettings, updateLearningReminderSetting } from '@/lib/learningReminders';
-import { useInstitutionStore, FEATURES } from '@/store/useInstitutionStore';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore, flushNativeToken } from '@/store/useAuthStore';
 import { useSystemStore, DEFAULT_EXPERIENCE, type ExperiencePreferences } from '@/store/useSystemStore';
@@ -59,7 +58,6 @@ export const Settings: React.FC = () => {
   const requestedSection = params.get('section') || 'general';
   const section = ['profile', 'security'].includes(requestedSection) ? 'account' : ['chat', 'desktop'].includes(requestedSection) ? 'general' : requestedSection;
   const setSection = (value: string) => setParams(previous => { const next = new URLSearchParams(previous); next.set('section', value); return next; }, { replace: true });
-  const hasStudyRoom = useInstitutionStore(state => state.hasFeature(FEATURES.STUDY_ROOM));
   const [editing, setEditing] = useState<'profile' | 'email' | 'password' | null>(null);
   const [reminders, setReminders] = useState(getLearningReminderSettings);
   const [accountError, setAccountError] = useState(false);
@@ -98,14 +96,6 @@ export const Settings: React.FC = () => {
     setAvatar({ style: user?.avatar_style || 'avataaars', seed: user?.avatar_seed || user?.username || '' });
     setEmail(user?.email || ''); setPasswords({ old: '', new: '' }); setEditing(value);
   };
-  const updateBroadcast = async (field: 'allow_broadcast' | 'show_others_broadcast', value: boolean) => {
-    if (busy) return;
-    setBusy(field);
-    try { await api.patch('/users/me/update/', { [field]: value }); updateUser({ [field]: value }); }
-    catch (error) { toast.error(formatApiErrorToast(error, t("偏好保存失败，请重试。"))); }
-    finally { setBusy(null); }
-  };
-
   const handleSaveProfile = async (event: React.FormEvent) => {
     event.preventDefault();
     if (busy) return;
@@ -193,7 +183,7 @@ export const Settings: React.FC = () => {
           {accountError && <p className="um-desktop-error" role="alert">{t("账户资料刷新失败，请刷新页面重试。")}</p>}
           <h3 className="um-settings-group-title">{t("个人资料")}</h3>
           <section className="um-settings-group" aria-label={t("当前个人资料")}>
-            <div className="um-settings-row um-settings-profile-summary"><Avatar className="h-14 w-14"><AvatarImage src={user?.avatar_url || `https://api.dicebear.com/7.x/${user?.avatar_style || 'avataaars'}/svg?seed=${encodeURIComponent(user?.avatar_seed || user?.username || '')}`} alt={t("当前头像")} /><AvatarFallback>{(user?.nickname || user?.username || '?')[0]}</AvatarFallback></Avatar><div><strong>{user?.nickname || user?.username}</strong><p>ELO {user?.elo_score ?? 0}</p></div><Button type="button" variant="outline" onClick={() => startEditing('profile')}>{t("修改资料")}</Button></div>
+            <div className="um-settings-row um-settings-profile-summary"><Avatar className="h-14 w-14"><AvatarImage src={user?.avatar_url || `https://api.dicebear.com/7.x/${user?.avatar_style || 'avataaars'}/svg?seed=${encodeURIComponent(user?.avatar_seed || user?.username || '')}`} alt={t("当前头像")} /><AvatarFallback>{(user?.nickname || user?.username || '?')[0]}</AvatarFallback></Avatar><div><strong>{user?.nickname || user?.username}</strong></div><Button type="button" variant="outline" onClick={() => startEditing('profile')}>{t("修改资料")}</Button></div>
             <div className="um-settings-row"><span>{t("昵称")}</span><span className="um-settings-value">{user?.nickname || t("未设置")}</span></div>
             <div className="um-settings-row"><span>{t("登录账号")}</span><span className="um-settings-value">{user?.username}</span></div>
             <div className="um-settings-row"><span>{t("个人简介")}</span><span className="um-settings-value">{user?.bio || t("未填写")}</span></div>
@@ -254,11 +244,6 @@ export const Settings: React.FC = () => {
           <footer className="um-settings-footer"><Button type="button" variant="outline" onClick={() => { setExperience({ practiceCount: DEFAULT_EXPERIENCE.practiceCount, practicePreference: DEFAULT_EXPERIENCE.practicePreference, videoSpeed: DEFAULT_EXPERIENCE.videoSpeed, videoSubtitles: DEFAULT_EXPERIENCE.videoSubtitles }); toast.success(t("已恢复学习默认设置")); }}><ArrowCounterClockwise size={16} />{t("恢复学习默认")}</Button></footer>
         </>}
         {current?.id === 'notes' && <>
-          {hasStudyRoom && <><h3 className="um-settings-group-title">{t("共学区")}</h3><section className="um-settings-group">
-            <div className="um-settings-row"><div><label htmlFor="settings-broadcast">{t("广播我的任务")}</label></div><Switch id="settings-broadcast" checked={user?.allow_broadcast ?? false} disabled={!!busy} onCheckedChange={value => void updateBroadcast('allow_broadcast', value)} /></div>
-            <div className="um-settings-row"><div><label htmlFor="settings-receive-broadcast">{t("接收他人广播")}</label></div><Switch id="settings-receive-broadcast" checked={user?.show_others_broadcast ?? false} disabled={!!busy} onCheckedChange={value => void updateBroadcast('show_others_broadcast', value)} /></div>
-          </section></>}
-
           <h3 className="um-settings-group-title">{t("笔记参考")}</h3>
           <section className="um-settings-group"><div className="um-settings-note-ai"><NoteAISettings /></div></section>
         </>}
@@ -282,7 +267,7 @@ export const Settings: React.FC = () => {
         {editing === 'profile' && <form onSubmit={event => void handleSaveProfile(event)}>
           <h3 className="um-settings-group-title">{t("个人信息")}</h3>
           <section className="um-settings-group" aria-label={t("个人信息")}>
-            <div className="um-settings-row um-settings-profile-summary"><Avatar className="h-14 w-14"><AvatarImage src={previewUrl} alt={t("头像预览")} /><AvatarFallback>{(profile.nickname || user?.username || '?')[0]}</AvatarFallback></Avatar><div><strong>{user?.nickname || user?.username}</strong><p>ELO {user?.elo_score ?? 0}</p></div></div>
+            <div className="um-settings-row um-settings-profile-summary"><Avatar className="h-14 w-14"><AvatarImage src={previewUrl} alt={t("头像预览")} /><AvatarFallback>{(profile.nickname || user?.username || '?')[0]}</AvatarFallback></Avatar><div><strong>{user?.nickname || user?.username}</strong></div></div>
             <div className="um-settings-row"><div><label htmlFor="settings-nickname">{t("昵称")}</label></div><Input id="settings-nickname" value={profile.nickname} onChange={event => setProfile({ ...profile, nickname: event.target.value })} autoComplete="nickname" /></div>
             <div className="um-settings-row"><div><span>{t("登录账号")}</span></div><span className="um-settings-value">{user?.username}</span></div>
             <div className="um-settings-row um-settings-row-top"><div><label htmlFor="settings-bio">{t("个人简介")}</label></div><textarea id="settings-bio" value={profile.bio} onChange={event => setProfile({ ...profile, bio: event.target.value })} rows={4} placeholder={t("写下你的学习目标与兴趣…")} /></div>

@@ -85,9 +85,7 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'list_questions': lambda a: "浏览题库" + (f"（{a.get('kp_name', '')}）" if a.get('kp_name') else ""),
         'list_articles': lambda a: "浏览文章库" + (f"（搜索: {a.get('query', '')}）" if a.get('query') else ""),
         'get_report_card': lambda a: "生成学习报告",
-        'get_my_achievements': lambda a: "查看我的成就",
         # ── F3: 答疑 ──
-        'create_faq_ticket': lambda a: f"创建答疑工单「{a.get('question_text', '')[:30]}」",
         # ── F4: 学情报告 ──
         'generate_student_report': lambda a: f"生成「{a.get('student_name', a.get('student_id', '学生'))}」学情报告",
     }
@@ -171,9 +169,7 @@ def summarize_tool_result(tool_name: str, result) -> str:
             f"已练 {r.get('attempted_questions', 0)} 题 · 最近正确率 {r.get('last_accuracy')}%"
             if r.get('has_attempts') else "尚未开始练习"
         ),
-        'get_my_achievements': lambda r: f"已解锁 {r.get('unlocked_count', len(r.get('unlocked', [])))} 个成就",
         # ── F3: 答疑 ──
-        'create_faq_ticket': lambda r: f"工单 #{r.get('ticket_id', '')} 已创建 · {r.get('message', '')[:30]}",
         # ── F4: 学情报告 ──
         'generate_student_report': lambda r: f"{r.get('student_name', '学生')} 学情报告 · {r.get('action', 'preview')}",
     }
@@ -478,89 +474,15 @@ class BaseToolExecutor:
                 'lifetime_accuracy': stats.get('lifetime_accuracy'),
                 'has_attempts': stats.get('has_attempts', stats.get('total_distinct', 0) > 0),
                 'mastered_count': stats.get('mastered_count', 0),
-                'elo_score': data.get('student', {}).get('elo_score', 0),
                 'subjects': [r['subject'] for r in data.get('radar', [])],
                 'recent_exams': [
                     {'score': e['total_score'], 'max': e['max_score'], 'date': e['created_at'][:10]}
                     for e in data.get('exams', [])[:5]
                 ],
-                'achievements': [
-                    {'name': a['name'], 'icon': a['icon'], 'date': a['unlocked_at'][:10]}
-                    for a in data.get('achievements', [])[:5]
-                ],
             }
         except Exception:
             logger.exception("get_report_card failed")
             return {"error": {"code": "report_card_failed", "message": "获取学习报告失败，请稍后重试"}}
-
-    def _handle_get_my_achievements(self, args: Dict) -> Dict:
-        """获取学生已解锁的成就列表。"""
-        from users.models import UserAchievement
-        qs = UserAchievement.objects.filter(
-            user=self.user,
-        ).select_related('achievement').order_by('-unlocked_at')
-
-        unlocked = [
-            {
-                'name': ua.achievement.name,
-                'description': ua.achievement.description,
-                'icon': ua.achievement.icon,
-                'category': ua.achievement.category,
-                'unlocked_at': ua.unlocked_at.isoformat() if ua.unlocked_at else '',
-            }
-            for ua in qs
-        ]
-
-        # Also get all achievements with progress
-        from users.models import Achievement, DailyCheckIn
-        all_achs = Achievement.objects.filter(is_active=True).order_by('category', 'threshold')
-        all_list = []
-        unlocked_keys = {ua.achievement.key for ua in qs}
-        checkin = DailyCheckIn.objects.filter(user=self.user).order_by('-date').first()
-        streak_val = checkin.streak if checkin else 0
-
-        for a in all_achs:
-            entry = {
-                'name': a.name,
-                'description': a.description,
-                'icon': a.icon,
-                'category': a.category,
-                'unlocked': a.key in unlocked_keys,
-            }
-            all_list.append(entry)
-
-        return {
-            'unlocked_count': len(unlocked),
-            'unlocked': unlocked[:8],
-            'all': all_list,
-        }
-
-    def _handle_create_faq_ticket(self, args: Dict) -> Dict:
-        """创建答疑工单。"""
-        from faq_system.models import Question as FAQQuestion
-
-        question_text = (args.get('question_text') or '').strip()
-        context_summary = (args.get('context_summary') or '').strip()
-        reason = (args.get('reason') or '').strip()
-
-        if not question_text:
-            return {"error": "请提供 question_text"}
-
-        content = question_text
-        if context_summary:
-            content = f"【背景】{context_summary}\n\n【问题】{question_text}"
-
-        ticket = FAQQuestion.objects.create(
-            user=self.user,
-            content=content,
-            institution=self.institution,
-        )
-
-        return {
-            "ticket_id": ticket.id,
-            "message": "已创建答疑工单，教师将尽快回复",
-            "reason": reason,
-        }
 
     def _handle_search_similar_questions(self, args: Dict) -> Dict:
         """按知识点搜索相似题目。"""
@@ -708,7 +630,7 @@ class PlannerToolExecutor(BaseToolExecutor):
                     '题干里写明总分和各问分值（如 20 分，6+7+7）。'
                     '需要示意图时用 Markdown text 围栏代码块或 LaTeX array；等学生作答后再给分和讲解。'
                     '评分时先核对参考答案和评分点，先列每问得分/满分/依据，再给总分，一次性给最终分。'
-                    '这道题的评分只在对话内有效，不写入练习记录、错题本、掌握度、ELO 或 Memorix；'
+                    '这道题的评分只在对话内有效，不写入练习记录、错题本、掌握度或 Memorix；'
                     '不伪造题目ID，不调用 grade_student_answer，不声称来自题库、考纲或平台。'
                 ),
             }
@@ -1084,80 +1006,3 @@ class PlannerToolExecutor(BaseToolExecutor):
         return {"error": f"未知模式: {mode}，支持 generate 或 submit"}
 
     # ── F5: 督学工具 handler ──────────────────────────
-
-    def _handle_get_study_status(self, args: Dict) -> Dict:
-        """获取当前学习会话状态 + 今日累计专注数据。"""
-        from study_room.session_manager import get_today_focus_stats
-
-        stats = get_today_focus_stats(self.user.id)
-        return {
-            "current_session": stats.get("current_session"),
-            "current_elapsed_seconds": stats.get("current_elapsed_seconds", 0),
-            "current_elapsed_minutes": stats.get("current_elapsed_seconds", 0) // 60,
-            "today_sessions_count": stats.get("today_sessions_count", 0),
-            "today_total_focus_minutes": stats.get("today_total_focus_minutes", 0),
-            "yesterday_total_focus_minutes": stats.get("yesterday_total_focus_minutes", 0),
-            "trend": stats.get("trend", "neutral"),
-        }
-
-    def _handle_get_focus_history(self, args: Dict) -> Dict:
-        """获取近期每日专注汇总。"""
-        from study_room.session_manager import get_focus_history
-
-        days = min(int(args.get("days", 7)), 30)
-        history = get_focus_history(self.user.id, days)
-
-        total_minutes = sum(d["focus_minutes"] for d in history)
-        total_sessions = sum(d["sessions_count"] for d in history)
-        active_days = sum(1 for d in history if d["focus_minutes"] > 0)
-
-        return {
-            "days": days,
-            "history": history,
-            "total_focus_minutes": total_minutes,
-            "total_sessions": total_sessions,
-            "active_days": active_days,
-        }
-
-    def _handle_save_session_note(self, args: Dict) -> Dict:
-        """保存学习心得到当前会话。"""
-        from study_room.models import StudySession
-        from django.utils import timezone
-
-        note_text = (args.get("note_text") or "").strip()
-        if not note_text:
-            return {"error": "note_text 不能为空"}
-
-        # 找最近活跃的会话
-        session = StudySession.objects.filter(
-            user=self.user,
-            status__in=("active", "paused"),
-        ).order_by("-started_at").first()
-
-        if not session:
-            # 没有活跃会话时创建一条短暂的笔记记录
-            session = StudySession.objects.create(
-                user=self.user,
-                status="ended",
-                task_name="学习笔记",
-                duration_minutes=0,
-                ended_at=timezone.now(),
-                total_focus_seconds=0,
-            )
-
-        # 追加到 metrics.notes
-        metrics = session.metrics or {}
-        notes = metrics.get("notes", [])
-        notes.append({
-            "text": note_text,
-            "created_at": timezone.now().isoformat(),
-        })
-        metrics["notes"] = notes
-        session.metrics = metrics
-        session.save(update_fields=["metrics"])
-
-        return {
-            "ok": True,
-            "note_count": len(notes),
-            "message": "已保存学习心得",
-        }

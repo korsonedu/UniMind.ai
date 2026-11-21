@@ -10,7 +10,8 @@ type Question = { id?: number; text: string; kp_name?: string; options?: string[
 
 export function DshToolCard({ card }: { card: DshCard }) {
   useLocale();
-  if (card.type === 'diagnostic_quiz' || card.type === 'faq_draft') return <DshActionCard payload={card.payload as unknown as ActionPayload} />;
+  if (card.type === 'faq_draft') return null;
+  if (card.type === 'diagnostic_quiz') return <DshActionCard payload={card.payload as unknown as ActionPayload} />;
   if (card.type === 'question_preview') {
     const questions = card.payload.questions as Question[];
     return <div className="um-visual-card"><div className="um-visual-body"><div className="um-visual-question-preview space-y-4">

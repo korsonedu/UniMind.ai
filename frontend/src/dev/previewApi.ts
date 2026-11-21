@@ -3,16 +3,15 @@ import api from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { FEATURES } from '@/store/useInstitutionStore';
 import { AxiosError } from 'axios';
-import type { DashData } from '@/pages/course-center/LearningOverview';
+import type { DashData } from '@/pages/course-center/types';
 import type { Message } from '@/hooks/useAgentConversation';
-import './previewSocket';
 import { agentDemoScenes, buildDemoHistory, demoSceneForMessage } from './agentDemoFixtures';
 
 if (!import.meta.env.DEV) throw new Error('Development fixtures only.');
 
 // Local fixtures only. Never persist a preview identity or call a production API.
 useAuthStore.persist.setOptions({ storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } });
-useAuthStore.setState({ user: { id: 0, username: 'learner_demo', nickname: '小林', role: 'student', elo_score: 1680, avatar_url: '', avatar_style: '', avatar_seed: 'learner_demo', bio: '', allow_broadcast: false, show_others_broadcast: false, is_member: true, has_completed_initial_assessment: true, institution_id: 0, institution_role: 'student', institution: { id: 0, name: '演示学习空间', slug: 'demo-learning', plan: 'growth', plan_label: 'Growth', is_plan_active: true, max_students: 100, student_count: 36, invite_slug: '' }, tour_dismissed_at: new Date().toISOString(), tour_panel_dismissed_at: new Date().toISOString() }, token: null });
+useAuthStore.setState({ user: { id: 0, username: 'learner_demo', nickname: '小林', role: 'student', avatar_url: '', avatar_style: '', avatar_seed: 'learner_demo', bio: '', allow_broadcast: false, show_others_broadcast: false, is_member: true, has_completed_initial_assessment: true, institution_id: 0, institution_role: 'student', institution: { id: 0, name: '演示学习空间', slug: 'demo-learning', plan: 'growth', plan_label: 'Growth', is_plan_active: true, max_students: 100, student_count: 36, invite_slug: '' }, tour_dismissed_at: new Date().toISOString(), tour_panel_dismissed_at: new Date().toISOString() }, token: null });
 const date = (offset = 0) => { const value = new Date(); value.setDate(value.getDate() + offset); return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(value); };
 // 180 days, 128 active dates, and exactly 2,460 practice attempts.
 const activeDayIndices = [...Array.from({ length: 110 }, (_, index) => Math.floor(index * 161 / 110)), ...Array.from({ length: 18 }, (_, index) => index + 162)];
@@ -76,35 +75,8 @@ const courses = courseTitles.map((title, index) => {
   const references = 'data:text/plain;charset=utf-8,' + encodeURIComponent(`${title} · 课后练习与阅读提要\n\n1. 整理${courseTopics[index]}之间的逻辑关系。\n2. 改变例题中的一个条件，重新判断结论。\n3. 对照课程讲义，解释计算结果的经济含义。\n\n本资料为虚构演示账号的本地示例，不包含真实学员资料。`);
   return { id: index + 1, title, description: `围绕${courseTopics[index]}，结合概念讲解、推导和案例练习建立完整理解。`, subject_name: index < 9 ? '金融学' : '经济学', module: album.id, module_name: album.name, module_sort_order: album.id - 1, album, album_name: album.name, tags: [index < 9 ? '金融学' : '经济学', index < 3 ? '基础' : '进阶'], courseware, reference_materials: references, knowledge_points: [index % 7 + 2], video_file: '/demos/demo-knowledge.mp4', cover_image: '', created_at: `${date(-179 + index * 7)}T01:00:00Z`, knowledge_point: index % 7 + 2, video_url: '', thumbnail: '', duration, elo_reward: 20, sort_order: index, materials: [], progress: index < 6 ? { last_position: duration, is_finished: true, updated_at: `${completionDates[index]}T09:20:00Z` } : index < 9 ? { last_position: Math.round(duration * [.63, .32, .18][index - 6]), is_finished: false, updated_at: `${date(-1 - (index - 6) * 2)}T10:15:00Z` } : null };
 });
-const achievements = [
-  { key: 'diagnostic', name: '首次诊断', description: '完成首次学习诊断', category: 'diagnostic', threshold: 1, progress: 1, unlocked: -179 },
-  { key: 'practice100', name: '练习起步', description: '累计完成 100 次练习', category: 'practice', threshold: 100, progress: 2460, unlocked: -163 },
-  { key: 'streak7', name: '连续学习 7 天', description: '连续学习七天', category: 'streak', threshold: 7, progress: 18, unlocked: -11 },
-  { key: 'practice1000', name: '千题积累', description: '累计完成 1,000 次练习', category: 'practice', threshold: 1000, progress: 2460, unlocked: -86 },
-  { key: 'courses6', name: '学以致用', description: '完成六门课程', category: 'course', threshold: 6, progress: 6, unlocked: -45 },
-  { key: 'streak14', name: '连续学习 14 天', description: '连续学习十四天', category: 'streak', threshold: 14, progress: 18, unlocked: -4 },
-  { key: 'streak30', name: '连续学习 30 天', description: '距离三十天的持续积累再近一步', category: 'streak', threshold: 30, progress: 18, unlocked: null },
-  { key: 'practice3000', name: '三千次积累', description: '累计完成 3,000 次练习', category: 'practice', threshold: 3000, progress: 2460, unlocked: null },
-].map((item, index) => ({ id: index + 1, ...item, icon: '', category_label: item.category === 'streak' ? '连续学习' : item.category === 'practice' ? '练习积累' : '学习历程', is_unlocked: item.unlocked !== null, unlocked_at: item.unlocked !== null ? `${date(item.unlocked)}T08:00:00Z` : null }));
 const articles = [{ id: 1, title: '理解货币政策的传导', content: '<p>从政策利率、融资成本与消费投资三个环节理解货币政策。</p>', summary: '政策利率如何影响经济活动', tags: ['金融学'], author_display_name: 'UniMind', created_at: date(-2), updated_at: date(-1), view_count: 36 }];
-const plans: { id: number; content: string; is_completed: boolean }[] = [{ id: 1, content: '复习货币政策传导与预期渠道', is_completed: true }, { id: 2, content: '完成债券定价的到期复习', is_completed: false }, { id: 3, content: '继续学习资本预算，整理净现值判断条件', is_completed: false }];
-const messages: { id: number; content: string; timestamp: string; user_detail: typeof user }[] = [{ id: 1, content: '今天准备把债券定价这一章学完，一起专注 25 分钟。', timestamp: `${date()}T07:40:00Z`, user_detail: { ...user, id: 3, nickname: '同学 A', username: 'classmate_a_demo', avatar_seed: 'classmate_a_demo' } }, { id: 2, content: '刚完成到期复习，继续加油。', timestamp: `${date()}T07:45:00Z`, user_detail: { ...user, id: 4, nickname: '同学 B', username: 'classmate_b_demo', avatar_seed: 'classmate_b_demo' } }];
-const qaTeacher = { ...user, id: 2, username: 'teacher_demo', email: 'teacher_demo@example.com', nickname: '示例老师', avatar_seed: 'teacher_demo' };
-const qaAnswers = [
-  { id: 701, question: 601, content: '先区分政策利率和市场利率。政策利率影响银行的资金成本，再通过信贷、资产价格和预期影响消费与投资。\n\n传导需要时间，也会受到银行放贷意愿与企业投资预期的影响。', is_teacher: true, created_at: `${date()}T02:20:00Z`, user_detail: qaTeacher, likes_count: 3, is_liked: false },
-  { id: 702, question: 601, content: '明白了，如果企业对未来收益预期较弱，即使融资成本降低，也可能不增加投资，对吗？', is_teacher: false, created_at: `${date()}T02:30:00Z`, user_detail: user, likes_count: 0, is_liked: false },
-  { id: 703, question: 601, content: '对，这就是预期影响传导效果的一个例子。回答时可以把融资成本和预期分别解释，再说明两者如何共同影响投资决策。', is_teacher: true, created_at: `${date()}T02:40:00Z`, user_detail: qaTeacher, likes_count: 1, is_liked: false },
-];
-const qaQuestions: Array<{
-  id: number; content: string; attachment: string | null; is_solved: boolean; is_starred: boolean;
-  created_at: string; user_detail: typeof user; answers: typeof qaAnswers;
-  first_answer: (typeof qaAnswers)[number] | null; reply_count: number;
-  likes_count: number; is_liked: boolean; is_followed: boolean;
-}> = [
-  { id: 601, content: '政策利率下降后，为什么消费和投资不一定马上增加？\n\n我理解融资成本会降低，但不太清楚银行信贷和市场预期在这里分别起什么作用。', attachment: null, is_solved: true, is_starred: true, created_at: `${date()}T02:00:00Z`, user_detail: user, answers: qaAnswers, first_answer: qaAnswers[0], reply_count: 3, likes_count: 5, is_liked: false, is_followed: false },
-  { id: 602, content: '如何理解现值计算中的折现率？\n\n我在比较两笔未来现金流时有些困惑。未来两年后收到的金额相同，但其中一笔来自国债，另一笔来自企业债券。\n\n如果直接使用相同的折现率，计算出来的现值也会一样。但企业债券的违约风险更高，我感觉这个风险应该在计算中有所体现。\n\n我的问题是：折现率应该只考虑资金的时间价值，还是同时考虑风险补偿？选择折现率时，应该先确定一个无风险利率，再加入风险溢价吗？\n\n另外，如果市场利率变化，已经发行的固定利率债券价格也会变化。这个变化能否直接从现值公式中解释？\n\n希望老师能结合一个简单例子，把现金流、折现率和债券价格之间的关系串起来。', attachment: null, is_solved: false, is_starred: false, created_at: `${date()}T01:00:00Z`, user_detail: { ...user, id: 3, nickname: '同学 A', username: 'classmate_a_demo', avatar_seed: 'classmate_a_demo' }, answers: [], first_answer: null, reply_count: 0, likes_count: 0, is_liked: false, is_followed: false },
-];
-const notifications = [{ id: 1, ntype: 'exam', title: '你的随堂练习已完成批改', content: '债券定价 · 3 道题，打开查看逐题复盘与下一步建议。', link: '/tests/results/1', is_read: false, created_at: `${date()}T07:30:00Z` }, { id: 2, ntype: 'qa', title: '示例老师回复了你的问题', content: '政策利率与市场融资成本之间，还需要考虑银行信贷和预期。', link: '/qa/601', is_read: true, created_at: `${date()}T02:40:00Z` }];
+const notifications = [{ id: 1, ntype: 'exam', title: '你的随堂练习已完成批改', content: '债券定价 · 3 道题，打开查看逐题复盘与下一步建议。', link: '/tests/results/1', is_read: false, created_at: `${date()}T07:30:00Z` }];
 const watchLater: { course: number; created_at: string }[] = [8, 10, 11, 12].map((course, index) => ({ course, created_at: `${date(-index - 1)}T08:00:00Z` }));
 const courseActivity = activeDays.map((day, index) => {
   const completed = completionDates.indexOf(day);
@@ -112,9 +84,8 @@ const courseActivity = activeDays.map((day, index) => {
 });
 let learningGoal: { title: string; deadline: string; courses: number[] } | null = JSON.parse(sessionStorage.getItem('unimind-preview-demo-goal') || JSON.stringify({ title: '金融学核心体系 · 第三阶段', deadline: date(21), courses: [1, 2, 3, 4, 5, 6, 7, 8, 9] }));
 const dashboard: DashData = {
-  stats: { streak_days: 18, weekly_activity: heatmapDays.slice(-7).reduce((sum, day) => sum + day.count, 0), accuracy: 82, total_attempted: 2460, attempted_questions: 1280, total_attempts: 2460, last_accuracy: 82, lifetime_accuracy: 79.5, has_attempts: true, is_new_user: new URLSearchParams(location.search).has('new'), today_checked_in: true, checkin_streak: 18, checkin_history: heatmapDays.map(day => ({ date: day.date, checked_in: day.count > 0 })), unlocked_achievement_count: achievements.filter(item => item.is_unlocked).length,
+  stats: { streak_days: 18, weekly_activity: heatmapDays.slice(-7).reduce((sum, day) => sum + day.count, 0), accuracy: 82, total_attempted: 2460, attempted_questions: 1280, total_attempts: 2460, last_accuracy: 82, lifetime_accuracy: 79.5, has_attempts: true, is_new_user: new URLSearchParams(location.search).has('new'), today_checked_in: true, checkin_streak: 18, checkin_history: heatmapDays.map(day => ({ date: day.date, checked_in: day.count > 0 })),
     heatmap_days: heatmapDays,
-    next_achievements: achievements.filter(item => !item.is_unlocked).map(item => ({ key: item.key, name: item.name, description: item.description, icon: item.icon, category: item.category })),
   }, reviews: { due_count: 8 }, exams: exams.map(exam => ({ id: exam.id, total_score: exam.total_score, max_score: exam.max_score, percentage: exam.correct_rate, elo_change: exam.elo_change, created_at: exam.created_at })),
 };
 let history: Message[] = buildDemoHistory(date());
@@ -172,8 +143,6 @@ api.defaults.adapter = async config => {
     case '/notifications/': data = notifications; break;
     case '/notifications/read/': notifications.forEach(item => { item.is_read = true; }); break;
     case '/notifications/clear/': notifications.splice(0); break;
-    case '/users/achievements/': data = achievements; break;
-    case '/users/me/achievements/': data = achievements.filter(item => item.is_unlocked); break;
     case '/courses/tags/': data = [...new Set(courses.flatMap(course => course.tags))].map(name => ({ name, count: courses.filter(course => course.tags.includes(name)).length })); break;
     case '/courses/learning-progress/': data = courses.filter(c => c.progress).map(c => ({ course: c.id, ...c.progress, duration: c.duration })); break;
     case '/courses/learning-goal/': {
@@ -190,27 +159,7 @@ api.defaults.adapter = async config => {
     }
     case '/quizzes/knowledge-points/': data = kps; break;
     case '/users/me/knowledge-mastery/': data = { '1': 'learning', '2': 'learning', '3': 'mastered', '4': 'mastered', '5': 'learning', '6': 'learning', '7': 'unlearned', '8': 'learning' }; break;
-    case '/users/me/report-card/': data = { student: { ...user, date_joined: `${date(-179)}T01:00:00Z` }, stats: { total_attempted: 2460, total_distinct: 1280, attempted_questions: 1280, total_attempts: 2460, correct_count: 1050, wrong_count: 230, mastered_count: 980, accuracy: 82, last_accuracy: 82, lifetime_accuracy: 79.5, study_streak: 18, checkin_streak: 18, diagnostic_mastered_count: 22, diagnostic_kp_count: 30 }, radar: [{ subject: '金融学', avg_mastery: 72, kp_count: 12 }, { subject: '经济学', avg_mastery: 65, kp_count: 8 }, { subject: '数学', avg_mastery: 84, kp_count: 10 }], daily_activity: dashboard.stats.heatmap_days, exams: dashboard.exams, achievements: achievements.filter(a => a.is_unlocked) }; break;
     case '/articles/': data = { articles, tag_stats: [{ tag: '金融学', count: 1 }], total_pages: 1 }; break;
-    case '/qa/questions/': {
-      if (config.method === 'post') {
-        const question = { id: Date.now(), content: String((config.data as FormData).get('content')), attachment: null, is_solved: false, is_starred: false, created_at: new Date().toISOString(), user_detail: user, answers: [], first_answer: null, reply_count: 0, likes_count: 0, is_liked: false, is_followed: false };
-        qaQuestions.unshift(question); data = question;
-      } else data = qaQuestions.filter(q => (!params.get('search') || `${q.content}${q.user_detail.nickname}`.includes(params.get('search')!)) && (params.get('filter') === 'solved' ? q.is_solved : params.get('filter') === 'unsolved' ? !q.is_solved : params.get('filter') === 'followed' ? q.is_followed : params.get('filter') === 'starred' ? q.is_starred : true));
-      break;
-    }
-    case '/qa/answers/': {
-      const question = qaQuestions.find(q => q.id === payload.question)!;
-      const isTeacher = role === 'teacher' || role === 'admin';
-      if (!question.answers.length && !isTeacher) throw new AxiosError('首个回答必须由教师完成', 'PREVIEW_FORBIDDEN', config);
-      const answer = { id: Date.now(), question: question.id, content: payload.content, is_teacher: isTeacher, created_at: new Date().toISOString(), user_detail: user, likes_count: 0, is_liked: false };
-      question.answers.push(answer); question.reply_count = question.answers.length;
-      if (!question.first_answer) { question.first_answer = answer; question.is_solved = true; }
-      data = answer; break;
-    }
-    case '/users/online/': data = [user]; break;
-    case '/study/messages/': if (config.method === 'post') messages.push({ id: Date.now(), content: payload.content, timestamp: new Date().toISOString(), user_detail: user }); data = messages; break;
-    case '/users/plans/': if (config.method === 'post') { const plan = { id: Date.now(), content: payload.content, is_completed: false }; plans.push(plan); data = plan; } else data = plans; break;
     case '/quizzes/stats/': data = { review_goal: 8, new_questions: 10, at_risk_count: 3, recommended_questions: 18, estimated_minutes: 20, weak_focus_count: 2 }; break;
     case '/quizzes/questions/': {
       const ids = params.get('ids')?.split(',').map(Number);
@@ -235,28 +184,6 @@ api.defaults.adapter = async config => {
     default:
       if (/^\/notifications\/read\/\d+\/$/.test(path)) { const notification = notifications.find(item => item.id === Number(path.split('/')[3])); if (notification) notification.is_read = true; }
       else if (/^\/quizzes\/exams\/\d+\/(status\/|retry\/)?$/.test(path)) data = exams.find(exam => exam.id === Number(path.split('/')[3])) || exams[0];
-      else if (/^\/qa\/questions\/\d+\/$/.test(path)) {
-        const index = qaQuestions.findIndex(q => q.id === Number(path.split('/')[3]));
-        if (index < 0) throw new AxiosError('问题不存在', 'PREVIEW_NOT_FOUND', config);
-        const question = qaQuestions[index];
-        if (config.method === 'delete') qaQuestions.splice(index, 1);
-        else {
-          if (config.method === 'patch') question.content = payload.content;
-          data = question;
-        }
-      }
-      else if (/^\/qa\/questions\/\d+\/action\/$/.test(path)) {
-        const question = qaQuestions.find(q => q.id === Number(path.split('/')[3]))!;
-        if (payload.toggle_follow) question.is_followed = !question.is_followed;
-        if (payload.toggle_like) { question.is_liked = !question.is_liked; question.likes_count += question.is_liked ? 1 : -1; }
-        if (payload.toggle_star) question.is_starred = !question.is_starred;
-        if (payload.toggle_solved) question.is_solved = !question.is_solved;
-        data = question;
-      }
-      else if (/^\/qa\/answers\/\d+\/action\/$/.test(path)) {
-        const answer = qaQuestions.flatMap(q => q.answers).find(a => a.id === Number(path.split('/')[3]))!;
-        answer.is_liked = !answer.is_liked; answer.likes_count += answer.is_liked ? 1 : -1; data = answer;
-      }
       else if (/^\/ai\/conversations\/[^/]+\/$/.test(path)) {
         const id = path.split('/')[3];
         const existing = history.find(message => message.conversation_id === id);
@@ -281,7 +208,6 @@ api.defaults.adapter = async config => {
       else if (/^\/courses\/\d+\/watch-later\/$/.test(path)) { const course = Number(path.split('/')[2]); if (config.method === 'delete') { const index = watchLater.findIndex(item => item.course === course); if (index >= 0) watchLater.splice(index, 1); } else { const item = { course, created_at: new Date().toISOString() }; if (!watchLater.some(item => item.course === course)) watchLater.push(item); data = item; } }
       else if (/^\/courses\/albums\/\d+\/courses\/$/.test(path)) data = courses.filter(course => course.album.id === Number(path.split('/')[3]));
       else if (/^\/articles\/\d+\/$/.test(path)) data = articles[0];
-      else if (/^\/users\/plans\/\d+\/$/.test(path)) { const plan = plans.find(p => p.id === Number(path.split('/')[3])); if (plan && payload) Object.assign(plan, payload); data = plan; }
       else throw new AxiosError('此操作需要连接真实后端', 'PREVIEW_UNAVAILABLE', config, undefined, { data: { detail: '此操作需要连接真实后端' }, status: 501, statusText: 'Preview', headers: {}, config });
   }
   return { data: structuredClone(data), status: 200, statusText: 'OK', headers: {}, config };

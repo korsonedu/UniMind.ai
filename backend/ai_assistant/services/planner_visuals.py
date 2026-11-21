@@ -38,11 +38,7 @@ def build_learning_stats_visual(stats: dict) -> dict:
         'subtitle': '仅统计已作答题目',
         'items': items,
         'note': '累计正确率按复习次数与错误次数估算；掌握度基于最近一次诊断。',
-        'cta': (
-            {'label': '查看成绩报告', 'link': '/report-card'}
-            if stats.get('has_attempts')
-            else {'label': '开始诊断', 'link': '/diagnostic'}
-        ),
+        **({'cta': {'label': '开始诊断', 'link': '/diagnostic'}} if not stats.get('has_attempts') else {}),
     }
     return {'type': 'data_card', 'payload': payload, 'priority': 'normal'}
 

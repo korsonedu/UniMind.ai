@@ -122,40 +122,15 @@ PLANNER_TOOLS_META = [
     ToolMeta(
         name="get_report_card",
         description="获取学生学习报告/成绩单",
-        body="查看完整学习报告。触发词：学习报告、成绩单、我学得怎么样、我的学习数据、学习统计。参数: 无。返回：打卡天数、总答题量、正确率、已掌握知识点、ELO分数、最近考试、已解锁成就。适用于：学生主动询问学习进展时。",
-    ),
-    ToolMeta(
-        name="get_my_achievements",
-        description="获取学生成就列表和进度",
-        body="查看成就/徽章。触发词：我的成就、徽章、拿到了什么、成就进度。参数: 无。返回：已解锁成就列表、全部成就及解锁状态。适用于：学生询问成就进展时。",
+        body="查看完整学习报告。触发词：学习报告、成绩单、我学得怎么样、我的学习数据、学习统计。参数: 无。返回：打卡天数、总答题量、正确率、已掌握知识点、最近考试。适用于：学生主动询问学习进展时。",
     ),
     # ── F3: 答疑 ──
-    ToolMeta(
-        name="create_faq_ticket",
-        description="创建FAQ答疑工单，升级为人工解答",
-        body="将AI无法解决的问题升级为FAQ工单。触发词：人工、找老师、帮我问问、找真人、我不满意。参数: question_text(str)=问题文本, context_summary(str)=上下文摘要, reason(str)=升级原因(unresolved_after_3_rounds/out_of_scope/student_request)。适用于：学生追问3轮仍未解决、问题超出AI范围、学生明确要求人工解答。不适用于：AI可直接解答的问题。",
-    ),
     ToolMeta(
         name="search_similar_questions",
         description="搜索同知识点下的相似题目，用于答疑后推荐练习",
         body="搜索同知识点的相似题目推荐给学生。触发词：类似题、相似题、同类题、再练几道。参数: kp_code(str)=知识点编码, limit(int)=数量(默认3)。返回：题目ID、题干摘要、题型、难度。适用于：答疑后推荐巩固练习、学生要求更多同类题。不适用于：搜索知识点（用search_knowledge_tree）。",
     ),
     # ── F5: 督学 ──
-    ToolMeta(
-        name="get_study_status",
-        description="获取当前学习会话状态和今日累计专注数据",
-        body="获取当前学习会话状态和今日累计数据。参数: 无。返回: 当前会话（status/task_name/elapsed/remaining）、今日累计（sessions_count/total_focus_minutes/yesterday_total_minutes/trend）。适用于：学生问'学了多久''今天学了多少''还有多长时间'、学习结束时总结数据。不适用于：查看历史趋势（用get_focus_history）。",
-    ),
-    ToolMeta(
-        name="get_focus_history",
-        description="获取近期每日专注时长汇总（默认7天）",
-        body="获取近期每日专注数据。参数: days(int)=查询天数(默认7,最多30)。返回: 每日专注分钟数、每日会话数、期间总计。适用于：学生问'这周学了多少''最近状态怎么样'、查看专注趋势。不适用于：当前会话状态（用get_study_status）。",
-    ),
-    ToolMeta(
-        name="save_session_note",
-        description="保存学生的学习心得/笔记到当前会话",
-        body="记录学生的学习心得。参数: note_text(str)=心得内容。将笔记追加到当前活跃会话的 notes 中。适用于：学生说'帮我记一下''今天学会了XX'。不适用于：查询笔记、修改已保存的笔记。",
-    ),
 ]
 
 EXAM_GENERATOR_TOOLS_META = [
@@ -223,7 +198,7 @@ EXAM_GENERATOR_TOOLS_META = [
     ToolMeta(
         name="generate_student_report",
         description="按需生成学生学情报告（支持时间范围和预览/PDF/发送）",
-        body="生成学生学情报告。触发词：生成报告、学情报告、学习报告、看看XXX学得怎么样、XXX最近表现、成绩单。参数: student_name(str)或student_id(int)=目标学生, date_from(str)=开始日期, date_to(str)=结束日期, action(str)=preview/export_pdf/send_to_student。preview：渲染 student_report 可视化卡片（统计+雷达图+错题+成就）。export_pdf：导出PDF文件。send_to_student：发送报告给学生端并通知。适用于：教师查看学生学习情况、家长会准备、学期总结。",
+        body="生成学生学情报告。触发词：生成报告、学情报告、学习报告、看看XXX学得怎么样、XXX最近表现、成绩单。参数: student_name(str)或student_id(int)=目标学生, date_from(str)=开始日期, date_to(str)=结束日期, action(str)=preview/export_pdf/send_to_student。preview：渲染 student_report 可视化卡片（统计+雷达图+错题）。export_pdf：导出PDF文件。send_to_student：发送报告给学生端并通知。适用于：教师查看学生学习情况、家长会准备、学期总结。",
     ),
 ]
 
@@ -338,12 +313,12 @@ PLANNER_INTENT_MAP = {
         ],
     },
     "analysis": {
-        "keywords": ["分析", "掌握率", "薄弱", "趋势", "成绩", "正确率", "统计", "报告", "难度", "成就", "徽章", "学习报告", "学得怎么样", "练习结果", "刚才练习", "上次练习", "考了多少", "得分", "多少分"],
+        "keywords": ["分析", "掌握率", "薄弱", "趋势", "成绩", "正确率", "统计", "报告", "难度", "学习报告", "学得怎么样", "练习结果", "刚才练习", "上次练习", "考了多少", "得分", "多少分"],
         "tools": [
             "get_learning_stats", "get_knowledge_mastery_map",
             "get_exam_history", "get_recent_practice_result", "get_knowledge_difficulty_analysis",
             "get_user_weak_points", "get_user_wrong_questions", "render_visual",
-            "get_report_card", "get_my_achievements",
+            "get_report_card",
         ],
     },
     "quiz": {
@@ -384,7 +359,7 @@ PLANNER_INTENT_MAP = {
         "keywords": ["为什么", "怎么做", "这道题", "不会", "不懂", "求解", "证明", "推导", "帮我讲", "什么意思", "解释", "理解不了"],
         "tools": [
             "search_knowledge_tree", "lookup_question", "search_similar_questions",
-            "render_visual", "create_faq_ticket",
+            "render_visual",
         ],
     },
     # ── F5: 督学 ──
@@ -394,7 +369,7 @@ PLANNER_INTENT_MAP = {
                      "今天状态", "加油", "无聊", "不想学", "陪我", "聊会天", "烦",
                      "焦虑", "学不进去", "结束", "不学了", "今天就到这", "学完了",
                      "小结", "总结", "下了", "拜拜", "再见", "感觉", "收获", "笔记"],
-        "tools": ["get_study_status", "get_focus_history", "save_session_note", "render_visual"],
+        "tools": ["get_learning_sessions", "get_learning_stats", "render_visual"],
     },
 }
 

@@ -318,7 +318,6 @@ class OSSMultipartCompleteView(APIView):
         # 校验课程元数据
         title = str(request.data.get("title", "")).strip()
         description = request.data.get("description", "")
-        elo_reward = _safe_int(request.data.get("elo_reward"), 50)
         album_obj_id = request.data.get("album_obj")
         knowledge_point_id = request.data.get("knowledge_point")
         cover_image = request.FILES.get("cover_image")
@@ -342,7 +341,6 @@ class OSSMultipartCompleteView(APIView):
             title=title,
             module_id=request.data.get('module'),
             description=description,
-            elo_reward=elo_reward,
             author=request.user,
             institution=inst,
             sort_order=_next_course_sort_order(inst),
@@ -479,12 +477,11 @@ class VideoProgressUpdateView(APIView):
 
     def save_progress(self, request, course, data, learning_session=None):
         from django.db import transaction
-        from django.utils import timezone
         from users.models import LearningSession
         from .models import LearningActivity
         from .portal import ProgressSerializer
         with transaction.atomic():
-            # Serialize per-user progress updates and completion awards.
+            # Serialize per-user progress updates.
             user = request.user.__class__.objects.select_for_update().get(pk=request.user.pk)
             prior = None
             if data.get('event_id'):
@@ -495,18 +492,12 @@ class VideoProgressUpdateView(APIView):
                 return Response({'error': '活动编号已用于其他学习记录'}, status=400)
             progress, created = VideoProgress.objects.get_or_create(user=user, course=course)
             if prior:
-                return Response({'status': 'ok', 'duplicate': True, 'is_finished': progress.is_finished, 'elo_added': 0, 'new_score': user.elo_score, 'progress': ProgressSerializer(progress).data})
+                return Response({'status': 'ok', 'duplicate': True, 'is_finished': progress.is_finished, 'elo_added': 0, 'progress': ProgressSerializer(progress).data})
             if created:
                 record_event('course_view', user=user, properties={'course_id': course.id})
             completed = data['is_finished'] and not progress.is_finished
-            elo_added = 0
             if completed:
                 progress.is_finished = True
-                if not progress.elo_claimed_at:
-                    user.elo_score += course.elo_reward
-                    user.save(update_fields=['elo_score'])
-                    progress.elo_claimed_at = timezone.now()
-                    elo_added = course.elo_reward
                 record_event('course_complete', user=user, properties={'course_id': course.id})
             update_position = learning_session is None or created or learning_session['ended_at'] >= progress.updated_at
             previous_updated_at = progress.updated_at
@@ -519,7 +510,7 @@ class VideoProgressUpdateView(APIView):
                 progress.updated_at = learning_session['ended_at'] if update_position else previous_updated_at
                 VideoProgress.objects.filter(pk=progress.pk).update(updated_at=progress.updated_at)
             if data['watched_seconds'] > 0 or completed or learning_session is not None:
-                event = dict(user=user, course=course, watched_seconds=data['watched_seconds'], completed=completed, elo_earned=elo_added)
+                event = dict(user=user, course=course, watched_seconds=data['watched_seconds'], completed=completed)
                 if data.get('event_id'):
                     event['event_id'] = data['event_id']
                 activity = LearningActivity.objects.create(**event)
@@ -528,7 +519,7 @@ class VideoProgressUpdateView(APIView):
                     if int(data['watched_seconds']):
                         LearningSession.objects.create(user=user, session_id=data['event_id'], kind='video', course=course,
                                                        active_seconds=int(data['watched_seconds']), **learning_session)
-        return Response({'status': 'ok', 'duplicate': False, 'is_finished': progress.is_finished, 'elo_added': elo_added, 'new_score': user.elo_score, 'progress': ProgressSerializer(progress).data})
+        return Response({'status': 'ok', 'duplicate': False, 'is_finished': progress.is_finished, 'elo_added': 0, 'progress': ProgressSerializer(progress).data})
 
 class StartupMaterialListCreateView(generics.ListCreateAPIView):
     serializer_class = StartupMaterialSerializer
