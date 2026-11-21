@@ -94,8 +94,8 @@ def check_views():
 
 def check_tool_executors():
     """验证 tool executor handler 存在"""
-    from ai_assistant.services.tool_executor import BaseToolExecutor
-    handlers = [m for m in dir(BaseToolExecutor) if m.startswith('_handle_')]
+    from ai_assistant.services.tool_executor import PlannerToolExecutor
+    handlers = [m for m in dir(PlannerToolExecutor) if m.startswith('_handle_')]
     new_handlers = ['_handle_get_report_card', '_handle_get_learning_sessions']
     print(f"\n  ToolExecutor handlers 总数: {len(handlers)}")
     for h in new_handlers:
