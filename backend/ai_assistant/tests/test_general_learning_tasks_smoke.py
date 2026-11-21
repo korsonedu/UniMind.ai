@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.test import APITestCase
 
 from ai_assistant.models import ConversationProject, ProjectLearning, ProjectLearningEvent, ProjectLearningTask
+from ai_assistant.services.project_learning import change_learning
 from ai_assistant.services.learning_tasks import create_task, task_data, task_result_snapshot
 from quizzes.ai_workflow import run_exam_grading
 from quizzes.models import Question, KnowledgePoint, QuizExam, UserQuestionStatus
@@ -38,6 +39,34 @@ class GeneralLearningTasksSmoke(APITestCase):
         returned = {'score': 8, 'feedback': '说明了主要条件，还可补充反例。', 'analysis': '按给出的标准逐项检查。', 'memorix_rating': 4}
         with patch('quizzes.ai_workflow.AIService.grade_question', side_effect=ValueError('synthetic temporary failure') if failure else None, return_value=returned), self.captureOnCommitCallbacks(execute=True):
             run_exam_grading(self.user.pk, exam_id)
+
+    def test_preplan_diagnostic_can_be_graded_before_the_plan_is_confirmed(self):
+        self.state.status = 'preparing'
+        self.state.plan = {}
+        self.state.planning_enabled = True
+        self.state.save()
+        arguments = {**self.arguments, 'stage_id': ''}
+        with self.assertRaises(ValidationError):
+            create_task(self.project, {**arguments, 'purpose': 'practice'})
+
+        task = create_task(self.project, arguments)
+        self.assertTrue(task_data(task)['is_current'])
+        submitted = self.submit(task)
+        self.assertEqual(submitted.status_code, 202, submitted.data)
+        self.grade(submitted.data['exam_id'])
+        task.refresh_from_db()
+        self.assertEqual(task_data(task)['status'], 'completed')
+
+        plan = {'goal': '理解函数', 'deadline': None, 'weekly_minutes': 60,
+            'stages': [{'id': 'start', 'title': '函数概念', 'outcome': '解释单值对应', 'task': '举例说明'}]}
+        proposal = change_learning(self.project, {'action': 'plan', 'revision': 0, 'plan': plan, 'require_confirmation': True})
+        self.assertEqual(proposal['status'], 'preparing')
+        self.assertTrue(proposal['pending_plan']['plan'])
+        accepted = change_learning(self.project, {'action': 'accept', 'revision': proposal['revision']})
+        self.assertEqual(accepted['status'], 'active')
+        self.assertEqual(accepted['current_stage'], 'start')
+        self.assertEqual(accepted['tasks'][0]['summary']['total_score'], 8)
+        self.assertFalse(task_data(task)['is_current'])
 
     def test_cross_domain_private_tasks_have_one_owned_recoverable_grade_without_bank_side_effects(self):
         elo = self.user.elo_score

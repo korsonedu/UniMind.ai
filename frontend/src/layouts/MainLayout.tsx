@@ -25,7 +25,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import GuidedTour, { type TourStep } from '@/components/GuidedTour';
 import { ExamActivityBar } from '@/components/ExamActivityBar';
 import { WorkspaceTrail } from '@/components/WorkspaceTrail';
-import { ProjectChatSidebarContext, CourseSidebarContext, type SidebarView, type SidebarRecentItem, NotesSidebarContext, WorkspaceActiveContext, WorkspaceToolbarHostContext } from '@/components/WorkspaceContext';
+import { LearningPathSidebarContext, ProjectChatSidebarContext, CourseSidebarContext, type SidebarView, type SidebarRecentItem, NotesSidebarContext, WorkspaceActiveContext, WorkspaceToolbarHostContext } from '@/components/WorkspaceContext';
 import { useExamActivity } from '@/hooks/useExamActivity';
 import '@/styles/app-shell.css';
 import NotesSidebar from '@/pages/notes/NotesSidebar';
@@ -96,6 +96,9 @@ export const MainLayout: React.FC = () => {
   const [courseSidebarHost, setCourseSidebarHost] = useState<HTMLDivElement | null>(null);
   const [courseSidebarAvailability, setCourseSidebarAvailability] = useState({ key: '', available: false });
   const setCourseSidebarAvailable = useCallback((available: boolean) => { setCourseSidebarAvailability({ key: location.key, available }); }, [location.key]);
+  const [learningPathHost, setLearningPathHost] = useState<HTMLDivElement | null>(null);
+  const [learningPathAvailability, setLearningPathAvailability] = useState(false);
+  const [learningPathWidth, setLearningPathWidth] = useState(480);
   const selectSidebarView = useCallback((view: SidebarView) => {
     setSidebarView(view); setNotesOpen(true);
     if (view !== 'home') {
@@ -104,6 +107,8 @@ export const MainLayout: React.FC = () => {
     }
     if (view === 'notes') setNotesMounted(true);
   }, []);
+  const openLearningPath = useCallback(() => selectSidebarView('learning-path'), [selectSidebarView]);
+  const openSidebarNotes = useCallback(() => selectSidebarView('notes'), [selectSidebarView]);
   const openProjectChat = useCallback(() => selectSidebarView('chat'), [selectSidebarView]);
   const [historyKey, setHistoryKey] = useState(location.key);
   if (historyKey !== location.key) {
@@ -180,17 +185,21 @@ export const MainLayout: React.FC = () => {
   const courseSidebarAvailable = courseSidebarAvailability.key === location.key && courseSidebarAvailability.available;
   const savedCoursesAvailable = !hasCourseCatalog && hasFeature('course.video') && (xiaoyuVisible || location.pathname === '/courses' || /^\/course\/\d+/.test(location.pathname));
   const projectChatAvailable = xiaoyuVisible && projectChatAvailability.key === location.key && projectChatAvailability.available;
-  const sidebarAvailable = projectChatAvailable || notesAvailable || courseSidebarAvailable || savedCoursesAvailable;
+  const learningPathAvailable = xiaoyuVisible && learningPathAvailability;
+  const sidebarAvailable = learningPathAvailable || projectChatAvailable || notesAvailable || courseSidebarAvailable || savedCoursesAvailable;
   const sidebarVisible = notesOpen && sidebarAvailable;
-  const activeSidebarView = (projectChatAvailable && sidebarView === 'chat') || courseSidebarAvailable || sidebarView === 'notes' || (savedCoursesAvailable && sidebarView === 'saved-courses') ? sidebarView : 'home';
+  const activeSidebarView = sidebarView === 'learning-path' ? (learningPathAvailable ? sidebarView : 'home') : (projectChatAvailable && sidebarView === 'chat') || courseSidebarAvailable || sidebarView === 'notes' || (savedCoursesAvailable && sidebarView === 'saved-courses') ? sidebarView : 'home';
   const notesVisible = sidebarVisible && activeSidebarView === 'notes';
-  const sidebarTools = [...(courseSidebarAvailable ? [
+  const sidebarTools: { id: SidebarView; label: string; icon: typeof NotePencil }[] = [...(courseSidebarAvailable ? [
     { id: 'chat' as const, label: t('小宇'), icon: ChatCircle },
     { id: 'outline' as const, label: t('课程大纲'), icon: ListBullets },
     { id: 'materials' as const, label: t('资料'), icon: Files },
     { id: 'notes' as const, label: t('笔记'), icon: NotePencil },
   ] : [...(projectChatAvailable ? [{ id: 'chat' as const, label: t('小宇'), icon: ChatCircle }] : []), { id: 'notes' as const, label: t('笔记'), icon: NotePencil }]), ...(savedCoursesAvailable ? [{ id: 'saved-courses' as const, label: t('已保存课程'), icon: BookOpen }] : [])];
-  const sidebarTabs = openedSidebarTools.map(id => sidebarTools.find(tool => tool.id === id)).filter(tool => !!tool);
+  const rightSidebarWidth = activeSidebarView === 'learning-path' ? learningPathWidth : sidebarWidth;
+  if (learningPathAvailable) sidebarTools.push({ id: 'learning-path', label: t('学习路径'), icon: TreeStructure });
+  const visibleTabIds = learningPathAvailable ? [...new Set<SidebarView>(['notes', 'learning-path', ...openedSidebarTools])] : openedSidebarTools;
+  const sidebarTabs = visibleTabIds.map(id => sidebarTools.find(tool => tool.id === id)).filter(tool => !!tool);
   if (!featuresLoading && sidebarLocationKey !== location.key) {
     setSidebarLocationKey(location.key);
     if (savedCoursesAvailable && new URLSearchParams(location.search).get('panel') === 'saved-courses') selectSidebarView('saved-courses');
@@ -305,7 +314,7 @@ export const MainLayout: React.FC = () => {
           {visibleNavItems.filter(item => item.to !== '/xiaoyu').map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-9 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={routeFor(item.to)} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}>{item.to === '/knowledge-builder' ? <Stack size={18} /> : item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true">{item.to === '/knowledge-builder' ? <Stack size={18} /> : item.to === '/knowledge-tree' ? <TreeStructure size={18} /> : <NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{!canEnter(item) && t(' · 暂未开通')}</TooltipContent></TooltipPortal></Tooltip></div>)}
         </nav>
       </aside>
-      <div className="um-window-panes" data-notes-open={sidebarVisible} style={{ '--um-notes-width': `${sidebarWidth}px` } as React.CSSProperties}>
+      <div className="um-window-panes" data-notes-open={sidebarVisible} style={{ '--um-notes-width': `${rightSidebarWidth}px` } as React.CSSProperties}>
       <main inert={isMobile && sidebarVisible} className={cn('um-app-main flex-1 min-w-0 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background',
         isMobileImmersivePage || isMobileStudyPage ? 'overflow-hidden pb-0' : isIntegratedWorkspace ? hideMobileBottomNav ? 'overflow-hidden pb-0' : 'overflow-hidden pb-[calc(61px+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] md:pb-0' : 'overflow-y-auto pb-[calc(61px+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] md:pb-0')}>
         <ExamActivityBar />
@@ -315,7 +324,9 @@ export const MainLayout: React.FC = () => {
               <NotesSidebarContext.Provider value={{ open: notesVisible, close: closeNotes, setAvailable: setNotesAvailable }}>
                 <CourseSidebarContext.Provider value={{ host: courseSidebarHost, view: activeSidebarView, visible: sidebarVisible, recordRecent: recordSidebarRecent, setAvailable: setCourseSidebarAvailable }}>
                   <ProjectChatSidebarContext.Provider value={{ host: projectChatHost, visible: sidebarVisible && activeSidebarView === 'chat', open: openProjectChat, close: closeNotes, setAvailable: setProjectChatAvailable }}>
-                    <Outlet context={{ toolbarHost }} />
+                    <LearningPathSidebarContext.Provider value={{ host: learningPathHost, visible: sidebarVisible && activeSidebarView === 'learning-path', open: openLearningPath, openNotes: openSidebarNotes, close: closeNotes, setAvailable: setLearningPathAvailability }}>
+                      <Outlet context={{ toolbarHost }} />
+                    </LearningPathSidebarContext.Provider>
                   </ProjectChatSidebarContext.Provider>
                 </CourseSidebarContext.Provider>
               </NotesSidebarContext.Provider>
@@ -324,7 +335,7 @@ export const MainLayout: React.FC = () => {
         </div>
       </main>
       {sidebarVisible && <button className="um-notes-mobile-backdrop" aria-label={t('收起右侧栏')} onClick={closeNotes} />}
-      {sidebarVisible && !isMobile && <SidebarResizeHandle width={sidebarWidth} onChange={setSidebarWidth} onCommit={saveSidebarWidth} onCollapse={closeNotes} />}
+      {sidebarVisible && !isMobile && <SidebarResizeHandle width={rightSidebarWidth} maxWidth={activeSidebarView === 'learning-path' ? 680 : 640} onChange={activeSidebarView === 'learning-path' ? setLearningPathWidth : setSidebarWidth} onCommit={activeSidebarView === 'learning-path' ? setLearningPathWidth : saveSidebarWidth} onCollapse={closeNotes} />}
       <div id="um-right-panel" className="um-notes-sidebar-host um-unified-sidebar" data-open={sidebarVisible} aria-hidden={!sidebarVisible} inert={!sidebarVisible} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); closeNotes(); } }}>
         <header className="um-right-panel-header">
           <button type="button" className="um-agent-icon-button" aria-label={t('工具入口')} aria-pressed={activeSidebarView === 'home'} onClick={() => selectSidebarView('home')}><SquaresFour size={18} /></button>
@@ -334,13 +345,14 @@ export const MainLayout: React.FC = () => {
             const next = event.key === 'Home' ? 0 : event.key === 'End' ? sidebarTabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + sidebarTabs.length) % sidebarTabs.length;
             selectSidebarView(sidebarTabs[next].id);
             document.getElementById(`sidebar-tab-${sidebarTabs[next].id}`)?.focus();
-          }}><tab.icon size={16} /><span>{tab.label}</span></button><button type="button" className="um-sidebar-tab-close" aria-label={t('关闭{0}标签', { 0: tab.label })} onClick={() => {
+          }}><tab.icon size={16} /><span>{tab.label}</span></button>{!(learningPathAvailable && (tab.id === 'learning-path' || tab.id === 'notes')) && <button type="button" className="um-sidebar-tab-close" aria-label={t('关闭{0}标签', { 0: tab.label })} onClick={() => {
             setOpenedSidebarTools(previous => previous.filter(id => id !== tab.id));
             if (activeSidebarView === tab.id) setSidebarView('home');
-          }}><X size={12} /></button></div>)}</div>
+          }}><X size={12} /></button>}</div>)}</div>
           <button type="button" className="um-agent-icon-button" aria-label={t('关闭右侧栏')} onClick={closeNotes}><X size={17} /></button>
         </header>
         {activeSidebarView === 'home' && <SidebarHome tools={sidebarTools} added={addedSidebarTools} recent={sidebarRecent} onSelect={selectSidebarView} onOpenRecent={openSidebarRecent} />}
+        <div ref={setLearningPathHost} id="sidebar-panel-learning-path" role="tabpanel" aria-labelledby="sidebar-tab-learning-path" className="um-right-panel-content um-native-agent" hidden={activeSidebarView !== 'learning-path'} />
         <div ref={setProjectChatHost} id={projectChatAvailable ? 'sidebar-panel-chat' : undefined} role="tabpanel" aria-labelledby="sidebar-tab-chat" className="um-right-panel-content um-native-agent" hidden={!projectChatAvailable || activeSidebarView !== 'chat'} />
         <div ref={setCourseSidebarHost} className="um-course-sidebar-host" hidden={!courseSidebarAvailable || activeSidebarView === 'notes' || activeSidebarView === 'home' || activeSidebarView === 'saved-courses'} />
         <div id="sidebar-panel-saved-courses" role="tabpanel" aria-labelledby="sidebar-tab-saved-courses" className="um-right-panel-content" hidden={activeSidebarView !== 'saved-courses'}>

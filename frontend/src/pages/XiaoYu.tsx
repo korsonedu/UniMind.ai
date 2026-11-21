@@ -1,5 +1,7 @@
 import { t, useLocale } from '@/i18n';
-import { useLearningWorkspace } from '@/components/LearningWorkspace';
+import { createPortal } from 'react-dom';
+import { LearningPathCanvas } from '@/components/LearningPathCanvas';
+import { learningComposerId, useLearningWorkspace } from '@/components/LearningWorkspace';
 import { Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain, Stethoscope, WarningCircle, PlayCircle } from '@phosphor-icons/react';
 import AgentChatLayout from '@/components/AgentChatLayout';
 import NativeSessionSidebar from '@/components/NativeSessionSidebar';
@@ -8,7 +10,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useXiaoYuChat } from './xiaoyu/xiaoYuChatContext';
 
 const SKILLS = [
-  { icon: Target, label: '确定学习路径', prompt: '我想系统学习一个目标，请先和我明确用途、范围和基础，再给我一段可以开始的学习路径。' },
+  { icon: Target, label: '制定学习路径', prompt: '我想系统学一个目标，能帮我制定学习路径吗？' },
   { icon: Target, label: '分析薄弱点', prompt: '帮我分析薄弱知识点，给出提升建议' },
   { icon: CalendarCheck, label: '制定复习安排', prompt: '根据我的薄弱点和到期复习情况，帮我安排今天的复习' },
   { icon: CheckCircle, label: '查看复习任务', prompt: '帮我看看今天有哪些需要复习的内容' },
@@ -32,11 +34,13 @@ export const XiaoYu = () => {
 function XiaoYuProject() {
   useLocale();
   const { chat } = useXiaoYuChat();
+  const workspace = useLearningWorkspace();
   useNotesSidebarAvailability(chat.hasConversation);
-  const { workspace, getExtraPayload, openLearning } = useLearningWorkspace();
-  return <AgentChatLayout
-    workspace={workspace} getExtraPayload={getExtraPayload}
-    toolbarAction={{ icon: BookOpen, label: t('学习工作区'), tooltip: t('查看项目学习内容'), onClick: openLearning }}
+  return <>
+    {workspace.sidebar.host && createPortal(<LearningPathCanvas workspace={workspace} messages={chat.messages} conversationId={chat.conversationId} />, workspace.sidebar.host)}
+    <AgentChatLayout
+    composerId={learningComposerId} getExtraPayload={workspace.getExtraPayload}
+    toolbarAction={{ icon: BookOpen, label: t('学习路径'), tooltip: t('在右侧查看学习路径'), onClick: workspace.openLearning }}
     appearance="native" layout="inline" enableNoteMentions inputTourClass="xiaoyu-input"
     sidebar={props => <NativeSessionSidebar initialInstructions={chat.input} claimMenuRequest={props.claimMenuRequest} sessions={props.sessions} activeSessionId={props.activeSessionId} thinkingIds={props.thinkingIds} unreadIds={props.unreadIds} onSelect={props.onLoadSession} onUpdate={props.onUpdateSession} onDelete={props.onDeleteSession} onNew={props.onNewConversation} botDisplayName={props.botDisplayName} projectControls={props.projectControls} onNewInProject={props.onNewInProject} />}
     skills={SKILLS.map(skill => ({ ...skill, label: t(skill.label), prompt: t(skill.prompt) }))} typewriterWords={[t('让小宇分析薄弱知识点'), t('让小宇安排今天的复习'), t('让小宇推荐适合的课程'), t('让小宇看看复习进度')]}
@@ -44,7 +48,8 @@ function XiaoYuProject() {
     landingTitle={t('小宇')} landingDescription="" botDisplayName={t('小宇')}
     onDeleteSession={() => {}}
     onLoadSession={(session, handler) => handler(session)}
-  />;
-};
+    />
+  </>;
+}
 
 export default XiaoYu;

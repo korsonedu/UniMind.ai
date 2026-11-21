@@ -33,7 +33,7 @@ def build_tool_card(name, result):
             ('查看并确认学习路径', result['href']), '确认后开始，原学习安排在确认前保持不变。')
     if name == 'manage_learning_tasks' and result.get('href'):
         return data_card(result['title'], [item('学习任务', '已准备，等待你实际作答')],
-            ('打开学习任务', result['href']), '提交后按已保存的标准评价，完成任务不代表已经掌握。')
+            ('打开学习任务', result['href']))
     if name == 'search_courses':
         return data_card('相关课程', [item(c['title'], '打开课程', f"/course/{int(c['id'])}")
             for c in result.get('courses', [])[:10]], ('课程中心', '/courses'),

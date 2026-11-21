@@ -191,7 +191,13 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
     queueMicrotask(() => {
       if (cancelled) return;
       restored.current = key;
-      void openProject(Number(explicit), params.get('conversation') || undefined).then(() => {
+      const current = chatRef.current;
+      const targetConversation = params.get('conversation');
+      const sameLearningView = location.pathname === '/xiaoyu' && current.projectId === Number(explicit)
+        && (!targetConversation || targetConversation === current.conversationId)
+        && (params.has('learning_task') || params.has('learning_view'));
+      const restore = sameLearningView ? Promise.resolve() : openProject(Number(explicit), targetConversation || undefined);
+      void restore.then(() => {
         if (cancelled) return;
         params.delete('project');
         params.delete('conversation');
@@ -202,7 +208,10 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [userId, chat.initialized, location.key, location.pathname, location.search, navigate, openProject]);
   useEffect(() => {
-    if (!chat.loading && chat.projectId && userId) void queryClient.invalidateQueries({ queryKey: learningKey(userId, chat.projectId) });
+    if (!chat.loading && chat.projectId && userId) {
+      void queryClient.invalidateQueries({ queryKey: learningKey(userId, chat.projectId) });
+      void queryClient.invalidateQueries({ queryKey: ['learning-tasks', userId, chat.projectId] });
+    }
   }, [chat.loading, chat.messages.at(-1)?.id, chat.projectId, userId]);
   useEffect(() => () => { ++openSequence.current; }, [userId]);
 

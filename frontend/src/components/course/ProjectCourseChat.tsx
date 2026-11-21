@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { Link } from 'react-router-dom';
 import { Sparkle, X } from '@phosphor-icons/react';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
-import { useProjectLearning } from '@/lib/projectLearning';
+import { learningUrl, useProjectLearning } from '@/lib/projectLearning';
 import ChatBubble from '@/components/ChatBubble';
 import { ToolStepMessage } from '@/components/AgentStepCard';
 import { DshToolCard, type DshCard } from '@/components/DshToolCard';
@@ -59,7 +59,7 @@ export default function ProjectCourseChat({ projectId, courseId, videoRef, mode,
   return <div className="um-course-assistant" data-mode={mode} data-expanded={floating && open || undefined} hidden={!visible}>
     {floating && !open && <button className="um-course-assistant-launcher" aria-label={t('打开小宇项目学习助手')} onClick={() => setOpen(true)}><Sparkle size={18} /><span>{t('继续项目学习')}</span></button>}
     <section className="um-course-chat" hidden={floating && !open} role={floating ? 'dialog' : 'region'} aria-label={t('小宇项目课程学习')}>
-      <header className="um-course-chat-header"><Sparkle size={18} /><div className="um-course-chat-heading"><h2>{t('小宇')}</h2><p>{query.data?.name || t('项目学习')} {t('· 当前课程')}</p></div><Link to="/xiaoyu">{t('返回项目')}</Link>{floating && <button className="um-course-assistant-icon" aria-label={t('收起项目课程助手')} onClick={() => setOpen(false)}><X size={16} /></button>}</header>
+      <header className="um-course-chat-header"><Sparkle size={18} /><div className="um-course-chat-heading"><h2>{t('小宇')}</h2><p>{query.data?.name || t('项目学习')} {t('· 当前课程')}</p></div><Link to={learningUrl('/xiaoyu', projectId, chat.conversationId || undefined)}>{t('返回项目')}</Link>{floating && <button className="um-course-assistant-icon" aria-label={t('收起项目课程助手')} onClick={() => setOpen(false)}><X size={16} /></button>}</header>
       <AgentReplyContext.Provider value={{ onReply: send, projectId: chat.projectId === projectId ? projectId : null, conversationId: chat.conversationId }}><div className="um-course-chat-messages">{!ready ? <p role="status">{openingProject ? t('正在恢复项目学习…') : t('请返回小宇选择可用的学习项目。')}</p> : chat.messages.filter(message => message.role === 'user' || message.visible !== false).slice(-16).map((message, index) => {
         const visuals = message.toolStep?.visuals?.length ? message.toolStep.visuals : message.toolStep?.visual ? [message.toolStep.visual] : [];
         return <article key={message.id ?? message._id ?? index} className="um-course-project-message" data-role={message.role}><small>{message.role === 'user' ? t('你') : t('小宇')}</small>

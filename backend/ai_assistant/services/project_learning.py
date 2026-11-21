@@ -11,6 +11,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import APIException, NotFound, PermissionDenied, ValidationError
 
 from ai_assistant.models import AIChatMessage, Conversation, ConversationProject, ProjectLearning, ProjectLearningEvent
+from .guidance_messages import guidance_text
 
 
 class LearningConflict(APIException):
@@ -77,7 +78,6 @@ def _focused_task(project, state):
 
 
 def learning_data(project, language='zh-CN'):
-    from .guidance_messages import guidance_text
     state, _ = ProjectLearning.objects.get_or_create(project=project)
     from users.feature_access import has_learning_feature
     event_rows = ProjectLearningEvent.objects.filter(project=project).exclude(kind='turn')
@@ -91,7 +91,7 @@ def learning_data(project, language='zh-CN'):
     from .learning_knowledge import knowledge_state
     from .learning_tasks import task_data
     version_id = (state.plan.get('knowledge_path') or {}).get('version_id')
-    tasks = [task_data(task) for task in project.learning_tasks.filter(knowledge_version_id=version_id).select_related('project', 'exam').order_by('created_at', 'pk')]
+    tasks = [task_data(task) for task in project.learning_tasks.filter(Q(knowledge_version_id=version_id) | Q(purpose='diagnostic', stage_id='')).select_related('project', 'exam').order_by('created_at', 'pk')]
     completed_tasks = [task for task in tasks if task['status'] == 'completed']
     next_task = next((task for task in tasks if task['status'] in ('ready', 'partial', 'failed', 'processing')), None)
     latest = max(completed_tasks, key=lambda task: str(task['summary'].get('completed_at') or ''), default=None)
@@ -156,7 +156,7 @@ def activity_snapshot(project, raw):
             from quizzes.services.practice_results import exam_result_payload
             result['results'] = exam_result_payload(task.exam)
         return json.loads(json.dumps(result, default=str))
-    if raw.get('stage_id') or raw.get('resource_id'):
+    if raw.get('resource_id') or (raw.get('stage_id') and not raw.get('version_id')):
         from django.http import Http404
         state = project.learning
         key = 'stage_id' if raw.get('stage_id') else 'resource_id'
@@ -187,8 +187,13 @@ def project_context(user, conversation_id):
         return '\n自由对话的项目背景（查看内容不启用规划或改变项目模式）：' + json.dumps({'name': conversation.project.name,
             'instructions': conversation.project.instructions,
             'viewed_activity': message.metadata.get('learning_activity') if message else None}, ensure_ascii=False, default=str)
-    data = learning_data(conversation.project)
-    data = compact_learning(data)
+    data = compact_learning(learning_data(conversation.project))
+    from users.feature_access import has_learning_feature
+    if data['status'] == 'preparing' and has_learning_feature(user, 'quiz.exam'):
+        recent = ProjectLearningEvent.objects.filter(project__user=user, project__learning__status='completed',
+            kind='complete', content__has_key='summary').exclude(project_id=conversation.project_id)[:3]
+        if summaries := [event.content['summary'] for event in recent]:
+            data['recent_learning_outcomes'] = summaries
     message = AIChatMessage.objects.filter(user=user, conversation_id=conversation_id, role='user').order_by('-id').first()
     if message and message.metadata.get('learning_activity'):
         data['viewed_activity'] = message.metadata['learning_activity']
@@ -253,6 +258,11 @@ def _schedule(state, data):
         state.followup_text = str(data.get('followup_text') or state.next_action)[:2000]
 
 
+def _schedule_review(state, review_at, language):
+    state.followup_at = _time(review_at)
+    state.followup_text = guidance_text('该复习“{0}”了。回顾本次学习记录，再做一次简短复测。', language, state.plan.get('goal') or state.project.name)
+
+
 def _major(old, new):
     if not old:
         return False
@@ -294,6 +304,7 @@ def change_learning(project, data, *, message=None, model=False, language='zh-CN
         raise LearningConflict()
     action = data.get('action')
     event = {'reason': str(data.get('reason', ''))[:2000]}
+    review_at = data.get('review_at') if not model and action in ('reminders', 'complete') else None
     if not state.planning_enabled:
         raise ValidationError('当前项目使用自由对话。')
     if action == 'focus' and not model:
@@ -310,6 +321,8 @@ def change_learning(project, data, *, message=None, model=False, language='zh-CN
         if not state.reminders_enabled:
             state.followup_at = None
             state.followup_text = ''
+        elif state.status == 'completed' and review_at:
+            _schedule_review(state, review_at, language)
         elif not state.followup_at:
             if state.status == 'paused':
                 state.followup_at = state.resume_at
@@ -381,6 +394,8 @@ def change_learning(project, data, *, message=None, model=False, language='zh-CN
         elif action == 'complete':
             state.status = 'completed'
             _clear_followup(state)
+            if state.reminders_enabled and review_at:
+                _schedule_review(state, review_at, language)
         else:
             if not state.plan:
                 raise ValidationError('请先形成学习安排。')
@@ -409,8 +424,24 @@ def change_learning(project, data, *, message=None, model=False, language='zh-CN
         state.pending_plan = {}
     state.revision += 1
     state.save()
-    ProjectLearningEvent.objects.create(project=project, message=message, kind=action, content=event, request_key=request_key)
-    return learning_data(project, language=language)
+    record = ProjectLearningEvent.objects.create(project=project, message=message, kind=action, content=event, request_key=request_key)
+    data = learning_data(project, language=language)
+    if action == 'complete':
+        stages = []
+        for stage in state.plan.get('stages', []):
+            scores = [task['summary'] for task in data['tasks'] if task['stage_id'] == stage['id']
+                and task['status'] == 'completed' and task['purpose'] != 'diagnostic' and task['summary']['max_score']]
+            best = max(scores, key=lambda score: score['total_score'] / score['max_score'], default=None)
+            stages.append({'title': stage['title'], 'score': best['total_score'] if best else None,
+                'max_score': best['max_score'] if best else None})
+        record.content['summary'] = {'goal': state.plan.get('goal') or project.name, 'stages': stages}
+        record.save(update_fields=['content'])
+        # The response was serialized to derive the archived grades.
+        for item in data['events']:
+            if item['id'] == record.pk:
+                item['content'] = record.content
+                break
+    return data
 
 
 def tool_operation(executor, name, arguments):

@@ -13,13 +13,14 @@ export interface TeachingGuidance {
   feedback: string; next_action: string; task_id: string | null; stage_id: string; reason: string; stalled: boolean;
 }
 export interface ProjectLearning {
+  revision: number; conversation_id: string | null; server_time: string;
   focus_task_id?: string | null; planning_enabled: boolean; reminders_enabled: boolean;
   teaching_guidance?: TeachingGuidance;
   knowledge?: LearningKnowledge;
   task_progress?: { completed: number; total: number; feedback: string; next_action: string; next_task_id: string | null };
   project_id: number; name: string; instructions: string; status: 'preparing' | 'active' | 'paused' | 'completed';
   plan: Partial<LearningPlan>; resources: LearningResource[]; current_stage: string; feedback: string; next_action: string;
-  pending_plan: { plan?: LearningPlan; reason?: string; knowledge?: { title: string; revision: number; targets: string[]; depth: 'apply' | 'transfer' } }; revision: number; conversation_id: string | null;
+  pending_plan: { base_revision?: number; plan?: LearningPlan; reason?: string; knowledge?: { title: string; revision: number; targets: string[]; depth: 'apply' | 'transfer' } };
   followup_at: string | null; followup_text: string; resume_at: string | null; events: LearningEvent[];
 }
 export const learningKey = (userId: number | undefined, projectId: number | null, locale?: Locale) =>

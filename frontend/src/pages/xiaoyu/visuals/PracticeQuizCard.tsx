@@ -45,12 +45,13 @@ interface Draft {
   assistance: string;
 }
 
-interface PracticeResult {
+export interface PracticeResult {
   status: ExamActivityStatus;
   total_score: number;
   max_score: number;
   graded_count: number;
   total_questions: number;
+  correct_count: number;
   label_source?: string;
   results: { position: number; status: string; score: number; max_score: number;
     is_correct: boolean; label_source?: string; correct_answer: string; feedback: string; analysis: string }[];
@@ -67,8 +68,12 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
   const userId = useAuthStore(state => state.user?.id);
   const storageKey = `unimind:inline-practice:${userId}:${payload.practice_id}`;
   const [draft, setDraft] = useState<Draft>(() => {
-    const empty: Draft = { answers: {}, notes: {}, index: 0, examId: null, submitted: false, assistance: payload.assistance || 'unknown' };
-    try { return { ...empty, ...JSON.parse(localStorage.getItem(storageKey) || 'null') }; }
+    const empty: Draft = { answers: {}, notes: {}, index: 0, examId: null, submitted: false, assistance: payload.learning_task_id && (!payload.assistance || payload.assistance === 'unknown') ? 'independent' : payload.assistance || 'unknown' };
+    try {
+      const saved = { ...empty, ...JSON.parse(localStorage.getItem(storageKey) || 'null') } as Draft;
+      if (payload.learning_task_id && !saved.submitted && !saved.examId && saved.assistance === 'unknown') saved.assistance = 'independent';
+      return saved;
+    }
     catch { return empty; }
   });
   const [active, setActive] = useState(true);
@@ -163,6 +168,7 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
       const examId = Number(data.exam_id);
       if (!Number.isInteger(examId) || examId <= 0) throw new Error(t('未收到练习结果编号，请重试提交。'));
       setDraft(previous => ({ ...previous, examId }));
+      onResult?.();
       useExamActivityStore.getState().start({ examId, total: questions.length, href: learningUrl(`/tests/results/${examId}`, payload.project_id || null, payload.conversation_id) });
     } catch (failure) {
       setError(formatApiErrorToast(failure, t('提交失败，请重试。')));
@@ -210,10 +216,10 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
       {!result ? <p>{detail.isError ? t('暂时无法读取结果。') : t('正在读取批改结果…')}{detail.isError && <button type="button" onClick={() => void detail.refetch()}>{t('重试')}</button>}</p>
         : <>
           <p className="um-inline-practice-score">{isActiveExamStatus(result.status) ? t('批改中 · {0}/{1} 题', { 0: result.graded_count, 1: result.total_questions })
-            : `${result.status === 'partial' || result.status === 'failed' ? t('批改未全部完成 · ') : modelResult ? t('模型参考评分 · ') : t('本次得分 · ')}${result.total_score}/${result.max_score}`}</p>
+            : `${result.status === 'partial' || result.status === 'failed' ? t('批改未全部完成 · ') : modelResult ? t('AI 评分参考 · ') : t('本次得分 · ')}${result.total_score}/${result.max_score}`}</p>
           {graded ? <>
             <p>{t('本题')} {itemResult.score}/{itemResult.max_score} {t('分')}</p>
-            {payload.learning_task_id && <p className="um-inline-practice-caption">{modelEvaluation ? t('模型依据任务标准评价，尚未独立复核。') : t('按标准答案比对评分。')}{payload.response_type === 'code' && t('代码仅作文本审阅，未执行或验证测试结果。')}</p>}
+            {payload.learning_task_id && <p className="um-inline-practice-caption">{modelEvaluation ? <span title={t('模型依据任务标准评价，尚未独立复核。')}>{t('AI 评分参考')}</span> : t('按标准答案评分')}{payload.response_type === 'code' && t('代码仅作文本审阅，未执行或验证测试结果。')}</p>}
             {itemResult.correct_answer && <div><span className="um-inline-practice-caption">{t('参考答案')}</span><MarkdownContent content={processMathContent(itemResult.correct_answer)} /></div>}
             {itemResult.feedback && <MarkdownContent content={processMathContent(itemResult.feedback)} />}
             {itemResult.analysis && <div><span className="um-inline-practice-caption">{t('解析')}</span><MarkdownContent content={processMathContent(itemResult.analysis)} /></div>}
@@ -221,12 +227,11 @@ export function PracticeQuizCard({ payload, onResult }: { payload: PracticePaylo
           <Link className="um-inline-practice-text-button" to={learningUrl(`/tests/results/${draft.examId}`, payload.project_id || null, payload.conversation_id)}>{t('打开逐题复盘')}</Link>
         </>}
     </section>}
-    {payload.learning_task_id && <label className="um-inline-practice-assistance">{t('本次作答获得了哪些帮助？')}
+    {payload.learning_task_id && <label className="um-inline-practice-assistance">{t('作答方式')}
       <select aria-label={t('本次作答帮助程度')} disabled={locked} value={draft.assistance} onChange={event => setDraft(previous => ({ ...previous, assistance: event.target.value }))}>
-        <option value="unknown">{t('尚未说明')}</option><option value="independent">{t('独立作答')}</option><option value="hint">{t('获得提示')}</option><option value="guided">{t('逐步引导完成')}</option>
+        {locked && draft.assistance === 'unknown' && <option value="unknown">{t('尚未说明')}</option>}<option value="independent">{t('独立作答')}</option><option value="hint">{t('获得提示')}</option><option value="guided">{t('逐步引导完成')}</option>
       </select>
     </label>}
-    {payload.learning_task_id && draft.assistance === 'unknown' && <p className="um-learning-muted">{t('本次成绩会保存；帮助程度尚未说明，暂不计入独立表现。')}</p>}
     {error && <p className="um-inline-practice-error" role="alert">{error}</p>}
     {!draft.examId && submission.isPending && <p>{t('正在读取提交状态…')}</p>}
     {!draft.examId && submission.isError && <p role="alert">{t('暂时无法读取提交状态。')}<button type="button" onClick={() => void submission.refetch()}>{t('重试读取')}</button></p>}

@@ -1,17 +1,17 @@
 import { t, useLocale } from '@/i18n';
 import { useRef } from 'react';
 
-export function SidebarResizeHandle({ width, onChange, onCommit, onCollapse }: {
-  width: number; onChange: (width: number) => void; onCommit: (width: number) => void; onCollapse: () => void;
+export function SidebarResizeHandle({ width, maxWidth = 640, onChange, onCommit, onCollapse }: {
+  width: number; maxWidth?: number; onChange: (width: number) => void; onCommit: (width: number) => void; onCollapse: () => void;
 }) {
   useLocale();
   const start = useRef({ x: 0, width: 0 });
-  const clamp = (value: number) => Math.max(320, Math.min(640, value));
-  return <div className="um-right-panel-resize" role="separator" aria-label={t('调整右侧栏宽度')} aria-orientation="vertical" aria-valuemin={320} aria-valuemax={640} aria-valuenow={width} tabIndex={0}
+  const clamp = (value: number) => Math.max(320, Math.min(maxWidth, value));
+  return <div className="um-right-panel-resize" role="separator" aria-label={t('调整右侧栏宽度')} aria-orientation="vertical" aria-valuemin={320} aria-valuemax={maxWidth} aria-valuenow={width} tabIndex={0}
     onKeyDown={event => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
       event.preventDefault();
-      onCommit(event.key === 'Home' ? 320 : event.key === 'End' ? 640 : clamp(width + (event.key === 'ArrowLeft' ? 16 : -16)));
+      onCommit(event.key === 'Home' ? 320 : event.key === 'End' ? maxWidth : clamp(width + (event.key === 'ArrowLeft' ? 16 : -16)));
     }}
     onPointerDown={event => {
       if (event.button !== 0) return;

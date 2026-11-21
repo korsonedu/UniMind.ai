@@ -16,7 +16,7 @@ def send_project_learning_followups():
     ProjectLearning.objects.filter(status='paused', planning_enabled=True, reminders_enabled=False,
         resume_at__lte=now).update(status='active', resume_at=None, revision=F('revision') + 1)
     ids = ProjectLearning.objects.filter(planning_enabled=True, reminders_enabled=True, followup_at__lte=now,
-        status__in=['active', 'paused']).values_list('pk', flat=True)[:100]
+        status__in=['active', 'paused', 'completed']).values_list('pk', flat=True)[:100]
     for pk in list(ids):
         with transaction.atomic():
             state = ProjectLearning.objects.select_for_update(of=('self',)).select_related(
@@ -34,7 +34,7 @@ def send_project_learning_followups():
                     continue
                 state.status = 'active'
                 state.resume_at = None
-            if state.status != 'active' or not conversation or conversation.project_id != state.project_id:
+            if state.status not in ('active', 'completed') or not conversation or conversation.project_id != state.project_id:
                 state.followup_at = None
                 state.save(update_fields=['followup_at'])
                 continue
