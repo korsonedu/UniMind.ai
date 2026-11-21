@@ -1,5 +1,5 @@
 import { isNativeOffline, subscribeOffline, setNativeOffline } from '@/lib/offlineSession';
-import { spaceStorageKey } from '@/lib/activeWorkspace';
+import { activeWorkspace, spaceStorageKey } from '@/lib/activeWorkspace';
 import { t, useLocale } from '@/i18n';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { learningUrl } from '@/lib/projectLearning';
@@ -171,7 +171,7 @@ export const MainLayout: React.FC = () => {
       if (shell) delete shell.dataset.keyboardOpen;
     };
   }, [isMobile]);
-  const isTourPage = location.pathname === '/xiaoyu';
+  const isTourPage = location.pathname === '/xiaoyu' && activeWorkspace() === 'personal';
   if (showTour && !isTourPage) { setShowTour(false); setPendingTourDismiss(true); }
   const xiaoyuVisible = location.pathname === '/xiaoyu';
   const [notesPageAvailability, setNotesPageAvailability] = useState({ key: '', available: false });
