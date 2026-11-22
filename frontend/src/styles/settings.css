@@ -35,7 +35,7 @@
 .um-settings-row input { height: 36px; padding: 8px 10px; }
 .um-settings-row textarea { min-height: 104px; max-height: 360px; padding: 10px 12px; resize: vertical; line-height: 1.75; }
 .um-settings-row .um-select-trigger { width: auto; min-height: 36px; max-width: 100%; padding: 6px 12px; cursor: pointer; }
-.um-settings-row kbd { flex-shrink: 0; padding: 4px 10px; border-radius: 6px; background: var(--um-color-hover); color: var(--um-color-text-muted); font-size: 12px; }
+.um-settings-row kbd { flex-shrink: 0; padding: 4px 10px; border-radius: 6px; background: var(--um-color-hover); color: var(--um-color-text-muted); font: 500 14px/1.4 var(--um-font-family); }
 .um-settings-row-top { align-items: flex-start; }
 .um-settings-control { display: flex; align-items: center; gap: 6px; }
 .um-settings-control input { flex: 1; min-width: 0; width: 0; }

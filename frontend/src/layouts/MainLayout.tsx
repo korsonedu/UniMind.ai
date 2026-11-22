@@ -268,7 +268,7 @@ export const MainLayout: React.FC = () => {
           { to: '/billing', icon: CreditCard, label: t('我的服务') },
         ].map(item => <DropdownMenuItem key={item.to} onClick={() => navigate(item.to)} className="rounded-lg px-3 py-2 gap-3 cursor-pointer"><item.icon className="h-3.5 w-3.5" /><span className="font-medium text-[13px]">{item.label}</span></DropdownMenuItem>)}
         <DropdownMenuSeparator className="my-2 bg-border" />
-        <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-lg px-3 py-2 gap-3 cursor-pointer text-destructive focus:bg-destructive focus:text-destructive-foreground"><SignOut className="h-3.5 w-3.5" /><span className="font-medium text-[13px]">{t('退出登录')}</span></DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-lg px-3 py-2 gap-3 cursor-pointer text-[var(--um-color-danger)] focus:bg-[var(--um-color-danger)] focus:text-[var(--um-color-on-danger)]"><SignOut className="h-3.5 w-3.5" /><span className="font-medium text-[13px]">{t('退出登录')}</span></DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   </div> : null;
