@@ -19,12 +19,13 @@ def run(data):
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True, chromium_sandbox=True)
         context = browser.new_context(service_workers='block', accept_downloads=False,
-            device_scale_factor=1, viewport={'width': 740, 'height': 480})
+            device_scale_factor=1, viewport={'width': 740, 'height': 620})
         context.route('**/*', lambda route: route.abort())
         page = context.new_page()
-        page.set_default_timeout(1200)
+        page.set_default_timeout(2000)
         page.on('pageerror', lambda error: errors.append(str(error)[:500]))
-        page.set_content('<iframe sandbox="allow-scripts" style="border:0;width:700px;height:360px"></iframe>')
+        page.set_content('<style>html,body{margin:0;padding:0;overflow:hidden}</style>'
+            '<iframe sandbox="allow-scripts" style="display:block;border:0;width:700px;height:360px"></iframe>')
         page.evaluate('''() => window.addEventListener('message', event => {
             if (event.source === document.querySelector('iframe').contentWindow && event.data?.channel === 'unimind-experiment') {
                 const messages = window.experimentMessages ||= [];
@@ -39,7 +40,9 @@ def run(data):
                 element.style.width = `${size[0]}px`;
                 element.style.height = `${size[1]}px`;
             }''', [width, height])
-            page.wait_for_timeout(100)
+            frame.locator('html').evaluate('''() => new Promise(resolve => {
+                requestAnimationFrame(() => requestAnimationFrame(resolve));
+            })''')
             overflow = frame.locator('html').evaluate('''element => {
                 const clipped = [...document.querySelectorAll('*')].filter(node => {
                     const style = getComputedStyle(node);
@@ -84,7 +87,7 @@ def run(data):
                 if error not in errors:
                     errors.append(error)
             if capture and phase and not errors:
-                png = page.locator('iframe').screenshot(type='png', scale='css',
+                png = page.screenshot(clip={'x': 0, 'y': 0, 'width': width, 'height': height}, type='png', scale='css',
                     animations='disabled', caret='hide', timeout=3000)
                 if (len(screenshots) >= 8 or len(png) > 512 * 1024
                         or sum(item['bytes'] for item in screenshots) + len(png) > 2 * 1024 * 1024):
@@ -96,7 +99,7 @@ def run(data):
 
         check_layout(700, phase='initial')
         if capture:
-            check_layout(360, 420, phase='initial')
+            check_layout(360, 540, phase='initial')
             check_layout(700)
         for index, check in enumerate(data['checks']):
             try:
@@ -117,7 +120,7 @@ def run(data):
             except Exception as error:
                 results.append({'selector': check['selector'], 'ok': False, 'error': str(error)[:600]})
         check_layout(700)
-        check_layout(360, 420, phase='final')
+        check_layout(360, 540, phase='final')
         messages = page.evaluate('window.experimentMessages || []')
         errors.extend(str(item.get('message', ''))[:500] for item in messages if item.get('type') == 'error')
         text = frame.locator('body').inner_text()[:1800]

@@ -3,7 +3,10 @@ from unittest.mock import patch
 from contextlib import ExitStack
 from uuid import uuid4
 import asyncio
+import base64
+import hashlib
 import json
+import struct
 
 import pytest
 from rest_framework.exceptions import NotFound, PermissionDenied
@@ -98,6 +101,33 @@ def test_experiment_chat_state_and_revision(user, auth_client, settings):
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize('identifiers', [
+    {'experiment_id': '11111111-1111-4111-8111-111111111111', 'base_revision': 1},
+    {'experiment_id': '11111111-1111-4111-8111-111111111111'},
+    {'base_revision': 99},
+])
+def test_first_experiment_ignores_caller_identifiers(user, settings, identifiers):
+    settings.DEBUG = settings.UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE = True
+    user.is_member = True
+    user.save(update_fields=['is_member'])
+    bot = Bot.objects.create(name='小宇', bot_type='planner')
+    message = AIChatMessage.objects.create(user=user, bot=bot, role='user', content='解释久期')
+    claims = {'message_id': message.pk, 'conversation_id': str(message.conversation_id), 'bot_id': bot.pk}
+    arguments = {'title': '久期实验', 'html': '<button id="run">运行</button>', **identifiers,
+        'checks': [{'selector': '#run', 'action': 'click', 'expect_selector': '#run', 'expect_text': '运行'}]}
+    with patch.object(experiments, 'preview', return_value={'ok': True, 'checks': []}) as preview:
+        result = experiments.execute(user, 'build_learning_experiment', arguments, claims)
+    assert result['experiment_id'] != '11111111-1111-4111-8111-111111111111'
+    assert result['revision'] == 1
+    assert result['visual']['payload']['experiment_id'] == result['experiment_id']
+    assert all(arguments[key] == value for key, value in identifiers.items())
+    assert preview.call_args.args[1] == {}
+    message.refresh_from_db()
+    assert set(message.metadata['learning_experiments']) == {result['experiment_id']}
+    assert message.metadata['learning_experiments'][result['experiment_id']]['revision'] == 1
+
+
+@pytest.mark.django_db
 def test_experiment_attachment_and_disabled_default(user, settings):
     from ai_assistant.services.tool_executor import PlannerToolExecutor, set_permitted_tools
     settings.DEBUG = settings.UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE = True
@@ -114,12 +144,18 @@ def test_experiment_attachment_and_disabled_default(user, settings):
         'build_learning_experiment', 'read_learning_experiment', 'register_session_tool', 'read_session_tool'}
     assert '自主交互讲解' in messages[0]['content']
     assert executor.experiment_context['message_id'] == current.pk
-    invalid = json.loads(executor('build_learning_experiment', {
-        'title': '不存在的实验', 'html': '<button id="run">运行</button>',
-        'experiment_id': str(uuid4()), 'base_revision': 1,
-        'checks': [{'selector': '#run', 'action': 'click', 'expect_selector': 'body', 'expect_text': '运行'}]}))
+    arguments = {'title': '已有实验', 'html': '<button id="run">运行</button>',
+        'checks': [{'selector': '#run', 'action': 'click', 'expect_selector': 'body', 'expect_text': '运行'}]}
+    with patch.object(experiments, 'preview', return_value={'ok': True, 'checks': []}):
+        existing = experiments.execute(user, 'build_learning_experiment', arguments, executor.experiment_context)
+    with patch.object(experiments, 'preview') as preview:
+        invalid = json.loads(executor('build_learning_experiment', {
+            **arguments, 'experiment_id': str(uuid4()), 'base_revision': 1}))
+        preview.assert_not_called()
     assert '必须省略 experiment_id 和 base_revision' in invalid['error']
     assert not executor.pending_visuals
+    current.refresh_from_db()
+    assert set(current.metadata['learning_experiments']) == {existing['experiment_id']}
     settings.UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE = False
     assert not experiments.available_to(user)
     with pytest.raises(NotFound):
@@ -132,6 +168,69 @@ def test_experiment_document_is_opaque_and_state_is_escaped():
     assert "default-src 'none'" in document
     assert '</script><script>bad()' not in document
     assert 'window.unimind' in document
+
+
+def test_duration_rate_preview_layout_and_screenshots():
+    from ai_assistant.services.learning_experiment_preview import run
+    html = '''
+<style>
+.um-layout { grid-template-columns: 190px minmax(0, 1fr); }
+.um-result-main b { display: block; }
+@media (max-width: 480px) {
+  .um-layout, .um-controls { grid-template-columns: 1fr; }
+}
+</style>
+<div class="um-layout">
+  <div class="um-controls">
+    <label>久期（年）<i id="duration-value">5</i>
+      <input id="duration" type="range" min="1" max="10" step="1" value="5">
+    </label>
+    <label>利率变动（百分点）<i id="rate-value">1</i>
+      <input id="rate" type="range" min="0" max="3" step="0.25" value="1">
+    </label>
+    <div class="um-result-main">估算价格变动<b id="result"></b></div>
+    <div class="um-hint">小幅利率变动时，价格变动比例约为负的久期乘以利率变动。</div>
+  </div>
+  <div class="um-stage"><div id="chart"></div></div>
+</div>
+<script>
+const duration = document.querySelector('#duration'), rate = document.querySelector('#rate');
+function draw() {
+  const years = Number(duration.value), change = Number(rate.value);
+  document.querySelector('#duration-value').textContent = years;
+  document.querySelector('#rate-value').textContent = change;
+  document.querySelector('#result').textContent = (-years * change).toFixed(2) + '%';
+  unimind.chart(document.querySelector('#chart'), {
+    type: 'line', labels: ['0%', '1%', '2%', '3%'],
+    series: [{label: '久期估算', values: [0, -years, -years * 2, -years * 3]}],
+    xLabel: '利率变动（百分点）', yLabel: '价格变动（%）'
+  });
+}
+duration.addEventListener('input', draw);
+rate.addEventListener('input', draw);
+draw();
+</script>'''
+    report = run({'document': experiments.experiment_document(html, {}), 'capture_screenshots': True,
+        'checks': [
+            {'selector': '#duration', 'action': 'input', 'value': '8',
+                'expect_selector': '#result', 'expect_text': '-8.00%'},
+            {'selector': '#rate', 'action': 'input', 'value': '2',
+                'expect_selector': '#result', 'expect_text': '-16.00%'},
+        ]})
+    assert report['ok'], report
+    assert not report['errors']
+    assert all(check['ok'] for check in report['checks'])
+    frames = report['screenshots']
+    assert [(frame['id'], frame['width'], frame['height']) for frame in frames] == [
+        ('initial-700', 700, 360), ('initial-360', 360, 540),
+        ('check-1-700', 700, 360), ('check-2-700', 700, 360), ('final-360', 360, 540),
+    ]
+    for frame in frames:
+        raw = base64.b64decode(frame['png'], validate=True)
+        assert raw.startswith(b'\x89PNG\r\n\x1a\n')
+        assert struct.unpack('>II', raw[16:24]) == (frame['width'], frame['height'])
+        assert hashlib.sha256(raw).hexdigest() == frame['sha256']
+        assert len(raw) == frame['bytes']
 
 
 def test_browser_failure_reaches_model_and_mount_finishes_turn(monkeypatch):

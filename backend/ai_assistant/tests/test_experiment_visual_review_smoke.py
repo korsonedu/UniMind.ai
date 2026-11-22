@@ -25,7 +25,7 @@ def screenshots():
         return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0))
                 + chunk(b'IDAT', zlib.compress(pixels)) + chunk(b'IEND', b''))
     frames = []
-    for phase, width, height in [('initial', 700, 360), ('initial', 360, 420), ('check-1', 700, 360), ('final', 360, 420)]:
+    for phase, width, height in [('initial', 700, 360), ('initial', 360, 540), ('check-1', 700, 360), ('final', 360, 540)]:
         raw = png(width, height)
         frames.append({'id': f'{phase}-{width}', 'phase': phase, 'width': width, 'height': height,
             'sha256': hashlib.sha256(raw).hexdigest(), 'png': base64.b64encode(raw).decode()})

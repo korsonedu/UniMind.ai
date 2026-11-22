@@ -185,13 +185,16 @@ def execute(user, name, arguments, chat_context):
     experiment_id = arguments.get('experiment_id')
     if name == 'read_learning_experiment':
         return load_experiment(anchor, experiment_id)
+    existing_experiments = anchor.metadata.get('learning_experiments', {})
+    if not existing_experiments:
+        experiment_id = None
     try:
         previous = load_experiment(anchor, experiment_id) if experiment_id else None
     except NotFound:
         raise ValidationError('该实验 ID 不存在。新建实验必须省略 experiment_id 和 base_revision，由平台生成 ID；修改实验请先读取当前对话内已有实验。') from None
     if previous and arguments.get('base_revision') != previous['revision']:
         raise ExperimentConflict()
-    if not previous and len(anchor.metadata.get('learning_experiments', {})) >= 6:
+    if not previous and len(existing_experiments) >= 6:
         raise ValidationError('本原型每个对话最多创建 6 个实验，请修改已有实验。')
     report = preview(arguments['html'], previous['state'] if previous else {}, arguments['checks'], current=current)
     if not report['ok']:
@@ -237,7 +240,7 @@ def conversation_experiments(user, conversation_id):
 EXPERIMENT_TOOLS = [
     {'type': 'function', 'function': {
         'name': 'build_learning_experiment',
-        'description': '仅在解答具体问题或讲解概念时编写交互卡片，出题、统计、报告、计划等不得使用。通过检查后挂载当前对话。自包含HTML/CSS/JavaScript，无外部资源；以图形、参数控件和数值为主，沿用平台CSS变量及控件样式，桌面正文700×360、窄屏360×420像素内完整显示，不裁剪内容，长解释放聊天正文。不做答题或判分。失败返回诊断；更新前先read并沿用ID和版本。用unimind.getState()/setState(object)保存演示参数，report(简短观察)准备讲解线索；不修改学习记录。checks至少检查一个真实控件与结果。',
+        'description': '仅在解答具体问题或讲解概念时编写交互卡片，出题、统计、报告、计划等不得使用。通过检查后挂载当前对话。自包含HTML/CSS/JavaScript，无外部资源；以图形、参数控件和数值为主，沿用平台CSS变量及控件样式，桌面正文700×360、窄屏360×540像素内完整显示，不裁剪内容，长解释放聊天正文。不做答题或判分。失败返回诊断；更新前先read并沿用ID和版本。用unimind.getState()/setState(object)保存演示参数，report(简短观察)准备讲解线索；不修改学习记录。checks至少检查一个真实控件与结果。',
         'parameters': {'type': 'object', 'additionalProperties': False, 'properties': {
             'title': {'type': 'string', 'minLength': 1, 'maxLength': 100},
             'html': {'type': 'string', 'minLength': 1, 'maxLength': 24000},

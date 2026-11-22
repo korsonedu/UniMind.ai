@@ -48,7 +48,7 @@ function renderChart(host, options) {
     host.appendChild(svg);
     svg.setAttribute('role', 'img');
     svg.setAttribute('aria-label', [config.yLabel, config.xLabel, ...config.series.map(series => series.label)].filter(Boolean).join('；'));
-    const width = Math.max(160, host.clientWidth), height = 182;
+    const width = Math.max(160, host.clientWidth), height = width < 420 ? 140 : 182;
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     const add = (tag, attributes, text) => {
       const node = document.createElementNS(svg.namespaceURI, tag);
@@ -67,7 +67,7 @@ function renderChart(host, options) {
     measure.font = `12px ${getComputedStyle(host).fontFamily}`;
     const ticks = [low, (low + high) / 2, high];
     const left = Math.ceil(Math.max(...ticks.map(value => measure.measureText(format(value * magnitude)).width))) + 10;
-    const right = width - 8, top = 12, bottom = 148, band = (right - left) / config.labels.length;
+    const right = width - 8, top = 12, bottom = width < 420 ? 108 : 148, band = (right - left) / config.labels.length;
     const y = value => bottom - (value / magnitude - low) / (high - low) * (bottom - top);
     const x = index => left + (index + .5) * band;
     ticks.forEach(value => {
