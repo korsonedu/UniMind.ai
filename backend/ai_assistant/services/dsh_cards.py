@@ -118,7 +118,8 @@ VISUAL_SCHEMAS = {
 }
 PRESENTATION_TOOL = {'type': 'function', 'function': {
     'name': 'present_learning_visual',
-    'description': '展示受控教学卡片：公式推导、分步解题、有限采样点函数图或回复选项与站内导航。仅展示，不执行表达式，不代学生提交、写笔记或改变成绩。函数图每条曲线只提供2到100个有限坐标点，最多3条，不接受formula；导航只允许课程、习题、诊断，以及工具返回的知识结构和小宇路径确认站内路由。reply的url是回复文字，input模式可为空；input与rating每组只能有一张卡，rating的url必须为评分：{rating}。',
+    'description': '展示受控教学卡片：公式推导、分步解题、有限采样点函数图或回复选项与站内导航。仅展示，不执行表达式，不代学生提交、写笔记或改变成绩。函数图每条曲线只提供2到100个有限坐标点，最多3条，不接受formula；导航只允许课程、习题、诊断，以及工具返回的知识结构和小宇路径确认站内路由。reply的url是回复文字，input模式可为空；input与rating每组只能有一张卡，rating的url必须为评分：{rating}。'
+                   '参数顶层只允许type和payload，如{"type":"latex_derivation","payload":{"title":"恒等式","steps":[{"latex":"A=L+E","note":"简短说明"}]}}。',
     'parameters': _object({'type': {'type': 'string', 'enum': list(VISUAL_SCHEMAS)},
         'payload': {'oneOf': list(VISUAL_SCHEMAS.values())}}, ['type', 'payload']),
 }}

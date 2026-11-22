@@ -1,6 +1,8 @@
 """Small model-visible groups; discovery only reveals already authorized tools."""
 from ai_engine.tool_router import classify_intent_keywords
 
+from .learning_experiments import EXERCISE_REQUEST, VISUAL_DEMO_REQUEST
+
 
 GROUPS = {
     'project': ('目标学习与跟进', '读取当前项目；规划阶段、查公开资源、记录实际学习反馈、调整与主动跟进。', (
@@ -40,6 +42,9 @@ def grouped_tools(allowed, message, recent_messages=None, project=False):
     groups = {key: group for key, group in groups.items() if group['tools']}
     if 'build_learning_experiment' not in definitions:
         groups.pop('interactive', None)
+        if 'authoring' in groups:
+            groups['authoring'].update(title='会话计算工具与实验读取',
+                description='读取已有实验，或注册和读取当前对话的会话计算工具。')
     if 'read_session_tool' in definitions:
         groups['session'] = {'title': '当前对话的计算工具', 'description': '调用本对话已经注册的计算工具，或读取源码和版本。',
             'tools': [definitions['read_session_tool'], *[tool for name, tool in definitions.items() if name.startswith('session_')]]}
@@ -53,9 +58,10 @@ def grouped_tools(allowed, message, recent_messages=None, project=False):
         initial = 'practice'
     if any(word in message for word in ('公式推导', '函数图', '解题步骤', '选项卡')):
         initial = 'presentation'
-    if 'authoring' in groups and any(word in message for word in ('计算工具', '会话工具', '交互实验', '注册工具')):
+    exercise_request = EXERCISE_REQUEST.search(message)
+    if 'authoring' in groups and not exercise_request and any(word in message for word in ('计算工具', '会话工具', '交互实验', '注册工具')):
         initial = 'authoring'
-    if 'interactive' in groups and '交互' in message and '题' in message:
+    if 'interactive' in groups and not exercise_request and '交互' in message and '题' in message:
         initial = 'interactive'
     if project and any(word in message for word in ('知识地图', '知识单元', '先修', '贝叶斯', '证据路径', '学习路径', '知识结构', '图谱', 'learning path', 'knowledge graph')):
         initial = 'knowledge'
@@ -65,6 +71,8 @@ def grouped_tools(allowed, message, recent_messages=None, project=False):
         initial = 'project'
     if project and initial not in ('interactive', 'authoring', 'presentation', 'knowledge') and any(word in message for word in ('任务', '原作答', '评价', '成果', '复盘', '补救', '复测', '提交')):
         initial = 'tasks'
+    if 'build_learning_experiment' in definitions and not exercise_request and VISUAL_DEMO_REQUEST.search(message):
+        initial = 'interactive' if '题' in message else 'authoring'
     initial = initial if initial in groups else ''
     selected = list(groups[initial]['tools']) if initial else []
     if groups:

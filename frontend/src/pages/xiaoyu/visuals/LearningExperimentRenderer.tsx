@@ -10,6 +10,7 @@ interface ExperimentPayload {
   title: string;
   conversation_id: string;
   experiment_id: string;
+  revision?: number;
 }
 interface Experiment {
   title: string;
@@ -21,7 +22,7 @@ interface Experiment {
 
 export function LearningExperimentRenderer({ payload }: { payload: ExperimentPayload }) {
   const userId = useAuthStore(state => state.user?.id);
-  return <ExperimentFrame key={`${userId}:${payload.conversation_id}:${payload.experiment_id}`} payload={payload} />;
+  return <ExperimentFrame key={`${userId}:${payload.conversation_id}:${payload.experiment_id}:${payload.revision ?? 0}`} payload={payload} />;
 }
 
 function ExperimentFrame({ payload }: { payload: ExperimentPayload }) {
