@@ -6,6 +6,7 @@ export interface WorkspaceToolbarHost {
 }
 
 export const WorkspaceToolbarHostContext = createContext<WorkspaceToolbarHost | null>(null);
+export const RightSidebarLayoutContext = createContext<{ fullscreen: boolean; exitFullscreen: () => void }>({ fullscreen: false, exitFullscreen: () => {} });
 export const WorkspaceActiveContext = createContext(true);
 export const NotesSidebarContext = createContext<{ open: boolean; close: () => void; setAvailable: (available: boolean) => void }>({ open: false, close: () => {}, setAvailable: () => {} });
 

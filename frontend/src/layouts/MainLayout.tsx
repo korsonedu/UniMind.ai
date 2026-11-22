@@ -3,11 +3,11 @@ import { activeWorkspace, spaceStorageKey } from '@/lib/activeWorkspace';
 import { t, useLocale } from '@/i18n';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { learningUrl } from '@/lib/projectLearning';
-import React, { useState, useEffect, useSyncExternalStore, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useSyncExternalStore, useCallback, useRef } from 'react';
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Link, useLocation, Outlet, useNavigate, useNavigationType } from 'react-router-dom';
 
-import { User as UserIcon, SignOut, CreditCard, ArrowLeft, ArrowRight, SidebarSimple, ChatCircle, ListBullets, Files, NotePencil, BookOpen, SquaresFour, TreeStructure, X } from '@phosphor-icons/react';
+import { User as UserIcon, SignOut, CreditCard, ArrowLeft, ArrowRight, ArrowsOutSimple, ArrowsInSimple, SidebarSimple, ChatCircle, ListBullets, Files, NotePencil, BookOpen, SquaresFour, TreeStructure, X } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { queryClient } from '@/lib/queryClient';
@@ -24,7 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import GuidedTour, { type TourStep } from '@/components/GuidedTour';
 import { ExamActivityBar } from '@/components/ExamActivityBar';
 import { WorkspaceTrail } from '@/components/WorkspaceTrail';
-import { LearningPathSidebarContext, ProjectChatSidebarContext, CourseSidebarContext, type SidebarView, type SidebarRecentItem, NotesSidebarContext, WorkspaceActiveContext, WorkspaceToolbarHostContext } from '@/components/WorkspaceContext';
+import { LearningPathSidebarContext, ProjectChatSidebarContext, CourseSidebarContext, type SidebarView, type SidebarRecentItem, NotesSidebarContext, RightSidebarLayoutContext, WorkspaceActiveContext, WorkspaceToolbarHostContext } from '@/components/WorkspaceContext';
 import { useExamActivity } from '@/hooks/useExamActivity';
 import '@/styles/app-shell.css';
 import NotesSidebar from '@/pages/notes/NotesSidebar';
@@ -32,6 +32,7 @@ import { SavedCoursesPanel } from '@/components/course/SavedCoursesPanel';
 import { SpaceSwitcher } from '@/components/SpaceSwitcher';
 import { SidebarHome } from '@/components/SidebarHome';
 import { SidebarResizeHandle } from '@/components/SidebarResizeHandle';
+import { clampSidebarWidth, MIN_SIDEBAR_WIDTH, type SidebarDragPreview } from '@/lib/rightSidebarLayout';
 import { useDesktopStore } from '@/lib/desktop';
 import { useDesktopRuntime } from '@/hooks/useDesktopRuntime';
 
@@ -80,11 +81,25 @@ export const MainLayout: React.FC = () => {
   }, []);
   const [noteOpenRequest, setNoteOpenRequest] = useState<{ id: number; sequence: number } | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
-    try { const saved = Number(localStorage.getItem(spaceStorageKey('unimind-right-sidebar-width'))); return saved >= 320 && saved <= 640 ? saved : 400; } catch { return 400; }
+    try { const saved = Number(localStorage.getItem(spaceStorageKey('unimind-right-sidebar-width'))); return Number.isFinite(saved) && saved >= MIN_SIDEBAR_WIDTH ? saved : 400; } catch { return 400; }
   });
+  const [sidebarFullscreen, setSidebarFullscreen] = useState(false);
+  const [sidebarPreview, setSidebarPreview] = useState<SidebarDragPreview | null>(null);
+  const panesRef = useRef<HTMLDivElement>(null);
+  const [panesWidth, setPanesWidth] = useState(0);
+  useLayoutEffect(() => {
+    const panes = panesRef.current;
+    if (!panes) return;
+    setPanesWidth(panes.getBoundingClientRect().width);
+    const observer = new ResizeObserver(([entry]) => setPanesWidth(entry.contentRect.width));
+    observer.observe(panes);
+    return () => observer.disconnect();
+  }, []);
   const saveSidebarWidth = (value: number) => {
     setSidebarWidth(value);
-    try { localStorage.setItem(spaceStorageKey('unimind-right-sidebar-width'), String(value)); } catch { /* Best effort. */ }
+    if (value >= MIN_SIDEBAR_WIDTH) {
+      try { localStorage.setItem(spaceStorageKey('unimind-right-sidebar-width'), String(value)); } catch { /* Best effort. */ }
+    }
   };
   const [projectChatHost, setProjectChatHost] = useState<HTMLDivElement | null>(null);
   const [projectChatAvailability, setProjectChatAvailability] = useState({ key: '', available: false });
@@ -125,6 +140,8 @@ export const MainLayout: React.FC = () => {
   };
   const closeNotes = useCallback(() => {
     setNotesOpen(false);
+    setSidebarFullscreen(false);
+    setSidebarPreview(null);
     document.getElementById('um-notes-toggle')?.focus({ preventScroll: true });
   }, []);
   const inNotesPage = location.pathname === '/notes' || location.pathname.startsWith('/notes/');
@@ -190,7 +207,17 @@ export const MainLayout: React.FC = () => {
     { id: 'materials' as const, label: t('资料'), icon: Files },
     { id: 'notes' as const, label: t('笔记'), icon: NotePencil },
   ] : [...(projectChatAvailable ? [{ id: 'chat' as const, label: t('小宇'), icon: ChatCircle }] : []), { id: 'notes' as const, label: t('笔记'), icon: NotePencil }]), ...(savedCoursesAvailable ? [{ id: 'saved-courses' as const, label: t('已保存课程'), icon: BookOpen }] : [])];
-  const rightSidebarWidth = activeSidebarView === 'learning-path' ? learningPathWidth : sidebarWidth;
+  const rawSplitWidth = activeSidebarView === 'learning-path' ? learningPathWidth : sidebarWidth;
+  const lastSplitWidth = panesWidth > 0 ? clampSidebarWidth(rawSplitWidth, panesWidth) : rawSplitWidth;
+  const rightSidebarWidth = isMobile ? rawSplitWidth
+    : sidebarPreview ? Math.min(sidebarPreview.width, panesWidth) : sidebarFullscreen ? panesWidth : lastSplitWidth;
+  const workspaceFullscreen = !isMobile && sidebarVisible && panesWidth > 0 && (sidebarPreview ? rightSidebarWidth === panesWidth : sidebarFullscreen);
+  const commitSidebarLayout = (width: number, fullscreen: boolean) => {
+    const splitWidth = clampSidebarWidth(width, panesWidth);
+    if (activeSidebarView === 'learning-path') setLearningPathWidth(splitWidth);
+    else saveSidebarWidth(splitWidth);
+    setSidebarFullscreen(fullscreen);
+  };
   if (learningPathAvailable) sidebarTools.push({ id: 'learning-path', label: t('学习路径'), icon: TreeStructure });
   const visibleTabIds = learningPathAvailable ? [...new Set<SidebarView>(['notes', 'learning-path', ...openedSidebarTools])] : openedSidebarTools;
   const sidebarTabs = visibleTabIds.map(id => sidebarTools.find(tool => tool.id === id)).filter(tool => !!tool);
@@ -282,7 +309,7 @@ export const MainLayout: React.FC = () => {
         <div className="um-window-navigation"><button aria-label={t('返回')} title={t('返回')} disabled={historyIndex <= 0} onClick={() => navigate(-1)}><ArrowLeft size={17} /></button><button aria-label={t('前进')} title={t('前进')} disabled={historyIndex >= historyEnd} onClick={() => navigate(1)}><ArrowRight size={17} /></button></div>
         <div className="um-window-workspace" ref={setToolbarHost}>{!hasWorkspaceToolbar && <><button className="um-agent-icon-button hidden md:inline-flex" aria-label={t('切换导航栏')} onClick={() => setRailHidden(old => !old)}><SidebarSimple size={18} /></button><WorkspaceTrail title={pageTitle || t('学习空间')} crumbs={[]} /></>}</div>
         {workspaceHeader}
-        {sidebarAvailable && <button id="um-notes-toggle" data-native-back-close={sidebarVisible ? true : undefined} type="button" className="um-right-sidebar-toggle um-agent-icon-button" aria-label={t('切换右侧栏')} title={sidebarVisible ? t('收起右侧栏') : t('展开右侧栏')} aria-expanded={sidebarVisible} aria-controls="um-right-panel" onClick={() => { setNotesOpen(value => !value); }}><SidebarSimple size={19} style={{ transform: 'scaleX(-1)' }} /></button>}
+        {sidebarAvailable && <button id="um-notes-toggle" data-native-back-close={sidebarVisible ? true : undefined} type="button" className="um-right-sidebar-toggle um-agent-icon-button" aria-label={t('切换右侧栏')} title={sidebarVisible ? t('收起右侧栏') : t('展开右侧栏')} aria-expanded={sidebarVisible} aria-controls="um-right-panel" onClick={() => { if (sidebarVisible) closeNotes(); else setNotesOpen(true); }}><SidebarSimple size={19} style={{ transform: 'scaleX(-1)' }} /></button>}
       </header>
       {(nativeOffline || demoActive) && <div role="status" className="flex shrink-0 items-center justify-between gap-2 bg-amber-50 text-amber-950 px-3 py-1 text-xs"><span>{demoActive ? t('离线试用 · 数据仅保存在本机') : t('离线缓存 · 已使用本地离线缓存')}</span><button type="button" className="min-h-11 underline shrink-0" onClick={() => { if (demoActive) { void useAuthStore.getState().exitDemo().then(() => { queryClient.clear(); navigate('/login', { replace: true }); }); } else { setNativeOffline(false); navigate('/settings'); void queryClient.invalidateQueries(); } }}>{demoActive ? t('连接服务器 / 退出试用') : t('重新连接 / 服务器设置')}</button></div>}
       <div className="um-window-body flex flex-1 min-h-0 overflow-hidden">
@@ -302,29 +329,33 @@ export const MainLayout: React.FC = () => {
           {visibleNavItems.filter(item => item.to !== '/xiaoyu').map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-9 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={routeFor(item.to)} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}>{<NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true">{<NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{personalSpace && item.to === '/courses' ? t(' · 请切换到课程空间') : !canEnter(item) && t(' · 暂未开通')}</TooltipContent></TooltipPortal></Tooltip></div>)}
         </nav>
       </aside>
-      <div className="um-window-panes" data-notes-open={sidebarVisible} style={{ '--um-notes-width': `${rightSidebarWidth}px` } as React.CSSProperties}>
-      <main inert={isMobile && sidebarVisible} className={cn('um-app-main flex-1 min-w-0 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background',
+      <div ref={panesRef} className="um-window-panes" data-notes-open={sidebarVisible} data-fullscreen={workspaceFullscreen} data-resizing={!!sidebarPreview} data-snap={sidebarPreview?.snap ?? undefined} style={{ '--um-notes-width': `${rightSidebarWidth}px` } as React.CSSProperties}>
+      <main inert={(isMobile && sidebarVisible) || workspaceFullscreen} aria-hidden={workspaceFullscreen || undefined} className={cn('um-app-main flex-1 min-w-0 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background',
         isMobileImmersivePage ? 'overflow-hidden pb-0' : isIntegratedWorkspace ? hideMobileBottomNav ? 'overflow-hidden pb-0' : 'overflow-hidden pb-[calc(61px+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] md:pb-0' : 'overflow-y-auto pb-[calc(61px+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] md:pb-0')}>
         <ExamActivityBar />
         <div className={cn('um-app-page-content flex-1 w-full relative min-h-0', isMobileImmersivePage ? 'px-0 py-0 h-full overflow-hidden' : isMobileVideoPage ? 'px-0 py-0' : !isIntegratedWorkspace && 'px-4 py-4 md:px-8 md:py-6')}>
-          <WorkspaceToolbarHostContext.Provider value={{ host: toolbarHost, enabled: hasWorkspaceToolbar }}>
-            <WorkspaceActiveContext.Provider value={xiaoyuVisible}>
-              <NotesSidebarContext.Provider value={{ open: notesVisible, close: closeNotes, setAvailable: setNotesAvailable }}>
-                <CourseSidebarContext.Provider value={{ host: courseSidebarHost, view: activeSidebarView, visible: sidebarVisible, recordRecent: recordSidebarRecent, setAvailable: setCourseSidebarAvailable }}>
-                  <ProjectChatSidebarContext.Provider value={{ host: projectChatHost, visible: sidebarVisible && activeSidebarView === 'chat', open: openProjectChat, close: closeNotes, setAvailable: setProjectChatAvailable }}>
-                    <LearningPathSidebarContext.Provider value={{ host: learningPathHost, visible: sidebarVisible && activeSidebarView === 'learning-path', open: openLearningPath, openNotes: openSidebarNotes, close: closeNotes, setAvailable: setLearningPathAvailability }}>
-                      <Outlet context={{ toolbarHost }} />
-                    </LearningPathSidebarContext.Provider>
-                  </ProjectChatSidebarContext.Provider>
-                </CourseSidebarContext.Provider>
-              </NotesSidebarContext.Provider>
-            </WorkspaceActiveContext.Provider>
-          </WorkspaceToolbarHostContext.Provider>
+          <RightSidebarLayoutContext.Provider value={{ fullscreen: workspaceFullscreen, exitFullscreen: () => { setSidebarPreview(null); setSidebarFullscreen(false); } }}>
+            <WorkspaceToolbarHostContext.Provider value={{ host: toolbarHost, enabled: hasWorkspaceToolbar }}>
+              <WorkspaceActiveContext.Provider value={xiaoyuVisible}>
+                <NotesSidebarContext.Provider value={{ open: notesVisible, close: closeNotes, setAvailable: setNotesAvailable }}>
+                  <CourseSidebarContext.Provider value={{ host: courseSidebarHost, view: activeSidebarView, visible: sidebarVisible, recordRecent: recordSidebarRecent, setAvailable: setCourseSidebarAvailable }}>
+                    <ProjectChatSidebarContext.Provider value={{ host: projectChatHost, visible: sidebarVisible && activeSidebarView === 'chat', open: openProjectChat, close: closeNotes, setAvailable: setProjectChatAvailable }}>
+                      <LearningPathSidebarContext.Provider value={{ host: learningPathHost, visible: sidebarVisible && activeSidebarView === 'learning-path', open: openLearningPath, openNotes: openSidebarNotes, close: closeNotes, setAvailable: setLearningPathAvailability }}>
+                        <Outlet context={{ toolbarHost }} />
+                      </LearningPathSidebarContext.Provider>
+                    </ProjectChatSidebarContext.Provider>
+                  </CourseSidebarContext.Provider>
+                </NotesSidebarContext.Provider>
+              </WorkspaceActiveContext.Provider>
+            </WorkspaceToolbarHostContext.Provider>
+          </RightSidebarLayoutContext.Provider>
         </div>
       </main>
       {sidebarVisible && <button className="um-notes-mobile-backdrop" aria-label={t('收起右侧栏')} onClick={closeNotes} />}
-      {sidebarVisible && !isMobile && <SidebarResizeHandle width={rightSidebarWidth} maxWidth={activeSidebarView === 'learning-path' ? 680 : 640} onChange={activeSidebarView === 'learning-path' ? setLearningPathWidth : setSidebarWidth} onCommit={activeSidebarView === 'learning-path' ? setLearningPathWidth : saveSidebarWidth} onCollapse={closeNotes} />}
-      <div id="um-right-panel" className="um-notes-sidebar-host um-unified-sidebar" data-open={sidebarVisible} aria-hidden={!sidebarVisible} inert={!sidebarVisible} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); closeNotes(); } }}>
+      {sidebarVisible && !isMobile && <SidebarResizeHandle width={rightSidebarWidth} splitWidth={lastSplitWidth} containerWidth={panesWidth} fullscreen={sidebarFullscreen} preview={sidebarPreview} onPreview={setSidebarPreview} onCommit={commitSidebarLayout} onCollapse={closeNotes} />}
+      <div id="um-right-panel" className="um-notes-sidebar-host um-unified-sidebar" data-open={sidebarVisible} data-fullscreen={workspaceFullscreen} aria-hidden={!sidebarVisible} inert={!sidebarVisible} onKeyDownCapture={event => {
+        if (event.key === 'Escape' && workspaceFullscreen) { event.preventDefault(); event.stopPropagation(); setSidebarFullscreen(false); }
+      }} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); closeNotes(); } }}>
         <header className="um-right-panel-header">
           <button type="button" className="um-agent-icon-button" aria-label={t('工具入口')} aria-pressed={activeSidebarView === 'home'} onClick={() => selectSidebarView('home')}><SquaresFour size={18} /></button>
           <div role="tablist" aria-label={t('侧栏功能')}>{sidebarTabs.map((tab, index) => <div className="um-sidebar-tab" key={tab.id}><button id={`sidebar-tab-${tab.id}`} role="tab" type="button" aria-selected={activeSidebarView === tab.id} aria-controls={`sidebar-panel-${tab.id}`} tabIndex={activeSidebarView === tab.id || (activeSidebarView === 'home' && index === 0) ? 0 : -1} onClick={() => selectSidebarView(tab.id)} onKeyDown={event => {
@@ -337,6 +368,7 @@ export const MainLayout: React.FC = () => {
             setOpenedSidebarTools(previous => previous.filter(id => id !== tab.id));
             if (activeSidebarView === tab.id) setSidebarView('home');
           }}><X size={12} /></button>}</div>)}</div>
+          {!isMobile && <button type="button" className="um-agent-icon-button" aria-label={sidebarFullscreen ? t('恢复分屏') : t('全屏展开')} title={sidebarFullscreen ? t('恢复分屏') : t('全屏展开')} aria-pressed={sidebarFullscreen} onClick={() => setSidebarFullscreen(value => !value)}>{sidebarFullscreen ? <ArrowsInSimple size={17} /> : <ArrowsOutSimple size={17} />}</button>}
           <button type="button" className="um-agent-icon-button" aria-label={t('关闭右侧栏')} onClick={closeNotes}><X size={17} /></button>
         </header>
         {activeSidebarView === 'home' && <SidebarHome tools={sidebarTools} added={addedSidebarTools} recent={sidebarRecent} onSelect={selectSidebarView} onOpenRecent={openSidebarRecent} />}
