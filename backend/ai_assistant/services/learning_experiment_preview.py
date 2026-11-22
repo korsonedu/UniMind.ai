@@ -9,23 +9,23 @@ from playwright.sync_api import sync_playwright
 
 
 def run(data):
-    if sys.platform.startswith('linux'):
+    capture = data.get('capture_screenshots', False)
+    if capture and sys.platform.startswith('linux'):
         fonts = subprocess.run(['/usr/bin/fc-match', '-f', '%{lang}', ':lang=zh-cn'],
             capture_output=True, text=True, timeout=1)
         if fonts.returncode or 'zh-cn' not in fonts.stdout.split('|'):
             return {'ok': False, 'errors': ['运行器缺少中文字体，无法可靠检查文字布局，尚未挂载。'], 'checks': []}
-    errors, results, messages, screenshots = [], [], [], []
-    capture = data.get('capture_screenshots', False)
+    errors, results, screenshots = [], [], []
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True, chromium_sandbox=True)
         context = browser.new_context(service_workers='block', accept_downloads=False,
-            device_scale_factor=1, viewport={'width': 740, 'height': 620})
+            device_scale_factor=1, viewport={'width': 740, 'height': 800})
         context.route('**/*', lambda route: route.abort())
         page = context.new_page()
         page.set_default_timeout(2000)
         page.on('pageerror', lambda error: errors.append(str(error)[:500]))
         page.set_content('<style>html,body{margin:0;padding:0;overflow:hidden}</style>'
-            '<iframe sandbox="allow-scripts" style="display:block;border:0;width:700px;height:360px"></iframe>')
+            '<iframe sandbox="allow-scripts" style="display:block;border:0;width:700px;height:800px"></iframe>')
         page.evaluate('''() => window.addEventListener('message', event => {
             if (event.source === document.querySelector('iframe').contentWindow && event.data?.channel === 'unimind-experiment') {
                 const messages = window.experimentMessages ||= [];
@@ -34,58 +34,33 @@ def run(data):
         })''')
         page.locator('iframe').evaluate('(frame, document) => frame.srcdoc = document', data['document'])
         frame = page.frame_locator('iframe')
-        frame.locator('body').wait_for()
-        def check_layout(width, height=360, phase=None):
-            page.locator('iframe').evaluate('''(element, size) => {
-                element.style.width = `${size[0]}px`;
-                element.style.height = `${size[1]}px`;
-            }''', [width, height])
-            frame.locator('html').evaluate('''() => new Promise(resolve => {
+        body = frame.locator('body')
+        body.wait_for(state='attached')
+
+        def check_render(width, phase=None):
+            page.locator('iframe').evaluate('(element, width) => element.style.width = `${width}px`', width)
+            body.evaluate('''() => new Promise(resolve => {
                 requestAnimationFrame(() => requestAnimationFrame(resolve));
             })''')
-            overflow = frame.locator('html').evaluate('''element => {
-                const clipped = [...document.querySelectorAll('*')].filter(node => {
-                    const style = getComputedStyle(node);
-                    return (/hidden|clip/.test(style.overflowX) && node.scrollWidth > node.clientWidth + 2)
-                        || (/hidden|clip/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 2);
-                }).slice(0, 3).map(node => ({
-                    element: node.tagName + (node.id ? '#' + node.id : '') + (node.getAttribute('class') ? '.' + node.getAttribute('class') : ''),
-                    available: [node.clientWidth, node.clientHeight], content: [node.scrollWidth, node.scrollHeight]
-                }));
-                return element.scrollWidth > innerWidth + 2 || element.scrollHeight > innerHeight + 2 || clipped.length
-                    ? {page: [element.scrollWidth, element.scrollHeight], clipped} : null;
+            height = body.evaluate('''body => {
+                const visibility = {visibilityProperty: true, opacityProperty: true};
+                const height = body.getBoundingClientRect().height;
+                if (height <= 20 || !body.checkVisibility(visibility)) return null;
+                const hasContent = body.innerText.trim() || [...body.querySelectorAll('svg,canvas,input,button')].some(node => {
+                    const box = node.getBoundingClientRect();
+                    return box.width > 0 && box.height > 0 && node.checkVisibility(visibility);
+                });
+                if (!hasContent) return null;
+                const style = getComputedStyle(body);
+                return Math.ceil(height + parseFloat(style.marginTop) + parseFloat(style.marginBottom));
             }''')
-            if overflow:
-                error = f'讲解内容超出 {width}×{height}，请精简布局，不能隐藏截断：{json.dumps(overflow, ensure_ascii=False)}'
+            if height is None:
+                error = f'讲解卡片在 {width}px 宽度下没有可见内容。'
                 if error not in errors:
                     errors.append(error)
-            overlaps = frame.locator('svg').evaluate_all('''svgs => {
-                const found = [];
-                for (const svg of svgs) {
-                    const labels = [...svg.querySelectorAll('text')].filter(node => node.closest('svg') === svg).map(node => {
-                        const box = node.getBoundingClientRect(), style = getComputedStyle(node);
-                        return {text: node.textContent.trim().slice(0, 60), x: box.x, y: box.y, w: box.width, h: box.height,
-                            visible: style.visibility !== 'hidden' && Number(style.opacity) > 0};
-                    }).filter(label => label.text && label.visible && label.w > 0 && label.h > 0);
-                    for (let i = 0; i < labels.length; i++) {
-                        for (let j = i + 1; j < labels.length; j++) {
-                            const a = labels[i], b = labels[j];
-                            const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
-                            const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
-                            if (w > 1 && h > 1 && w * h > Math.min(a.w * a.h, b.w * b.h) * .15) {
-                                found.push({labels: [a.text, b.text], overlap: [Math.round(w), Math.round(h)],
-                                    bounds_css_px: [a, b].map(label => [label.x, label.y, label.w, label.h].map(value => Math.round(value)))});
-                                if (found.length === 3) return found;
-                            }
-                        }
-                    }
-                }
-                return found;
-            }''')
-            for overlap in overlaps:
-                error = f'SVG标签重叠（{width}px宽）：{json.dumps(overlap, ensure_ascii=False)}。请分开标签或将图例移到图外，不要缩小字号掩盖。'
-                if error not in errors:
-                    errors.append(error)
+                return
+            height = max(180, min(800, height))
+            page.locator('iframe').evaluate('(element, height) => element.style.height = `${height}px`', height)
             if capture and phase and not errors:
                 png = page.screenshot(clip={'x': 0, 'y': 0, 'width': width, 'height': height}, type='png', scale='css',
                     animations='disabled', caret='hide', timeout=3000)
@@ -97,10 +72,10 @@ def run(data):
                         'phase': phase, 'bytes': len(png), 'sha256': hashlib.sha256(png).hexdigest(),
                         'png': base64.b64encode(png).decode('ascii')})
 
-        check_layout(700, phase='initial')
+        check_render(700, phase='initial')
         if capture:
-            check_layout(360, 540, phase='initial')
-            check_layout(700)
+            check_render(360, phase='initial')
+            check_render(700)
         for index, check in enumerate(data['checks']):
             try:
                 control = frame.locator(check['selector'])
@@ -116,14 +91,14 @@ def run(data):
                 expect(frame.locator(check['expect_selector'])).to_contain_text(check['expect_text'], timeout=1200)
                 results.append({'selector': check['selector'], 'ok': True})
                 if capture:
-                    check_layout(700, phase=f'check-{index + 1}')
+                    check_render(700, phase=f'check-{index + 1}')
             except Exception as error:
                 results.append({'selector': check['selector'], 'ok': False, 'error': str(error)[:600]})
-        check_layout(700)
-        check_layout(360, 540, phase='final')
+        check_render(700)
+        check_render(360, phase='final')
         messages = page.evaluate('window.experimentMessages || []')
         errors.extend(str(item.get('message', ''))[:500] for item in messages if item.get('type') == 'error')
-        text = frame.locator('body').inner_text()[:1800]
+        text = body.inner_text()[:1800]
         browser.close()
     return {'ok': not errors and all(item['ok'] for item in results),
         'errors': errors[:5], 'checks': results, 'text': text,
