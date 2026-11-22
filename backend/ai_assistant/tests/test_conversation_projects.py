@@ -14,7 +14,7 @@ class ConversationProjectTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='project_owner', is_member=True)
         self.other = User.objects.create_user(username='project_other', is_member=True)
-        self.bot = Bot.objects.create(name='小宇')
+        self.bot = Bot.objects.create(is_xiaoyu=True, name='小宇')
         self.project = ConversationProject.objects.create(user=self.user, name='金融学复习')
         self.foreign_project = ConversationProject.objects.create(user=self.other, name='私人项目')
         self.conversation = Conversation.objects.create(user=self.user, bot=self.bot, conversation_id=uuid.uuid4())

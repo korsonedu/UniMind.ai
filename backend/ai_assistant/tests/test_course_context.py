@@ -28,7 +28,7 @@ def lesson(user, settings):
     ]):
         TranscriptSegment.objects.create(transcript=transcript, start_time=start,
             end_time=end, text=text, index=index)
-    bot = Bot.objects.create(name='小宇', bot_type='planner')
+    bot = Bot.objects.create(is_xiaoyu=True, name='XiaoYu', bot_type='planner')
     return course, transcript, bot
 
 

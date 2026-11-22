@@ -227,7 +227,7 @@ Classifier: 本地匹配知识点 code → kp_id（不调 AI）
 
 **Agent 行为**：小宇在回复前可自主调用工具查询知识库和用户数据，基于准确数据回复。支持情境行为：讲知识时引导式，看数据时分析式。
 
-**多步可见 Agent**：exam_generator 和 planner bot 使用 `call_ai_with_streaming_tools`，每步 tool call 实时推送给前端（折叠卡片形式），文本回复逐 token 流式输出。exam_generator 通过 WebSocket（`ws/ai/chat/<bot_id>/`），小宇通过 SSE（`POST /api/ai/chat/stream/`），详见 `docs/tech/features/MULTI_STEP_AGENT.md`。
+**多步可见 Agent**：小宇通过 SSE（`POST /api/ai/chat/stream/`）推送工具进度和回复。教学工作台通过 Directus 发起后台任务，见 [管理扩展](../../admin-extension/README.md)。
 
 **可视化 Dashboard**：小宇可通过 `render_visual` 工具在 Dashboard 画布上渲染 LaTeX 推导、解题步骤、知识图谱、数据卡片。Visual 数据随消息持久化，历史会话自动恢复。
 

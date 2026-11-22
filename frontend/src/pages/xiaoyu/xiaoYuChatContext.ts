@@ -1,8 +1,6 @@
 import { createContext, useContext } from 'react';
-import type { Bot, useAgentConversation } from '@/hooks/useAgentConversation';
+import type { useAgentConversation } from '@/hooks/useAgentConversation';
 import type { AgentStep } from '@/types/toolRun';
-
-export const findAssistantBot = (bots: Bot[]) => bots.filter(bot => bot.name === '小宇' && bot.bot_type === 'planner' && bot.institution == null && bot.is_active !== false).sort((a, b) => a.id - b.id)[0];
 
 export interface PageChatHooks {
   beforeSend?: () => Promise<void>;

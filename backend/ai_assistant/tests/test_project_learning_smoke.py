@@ -20,7 +20,7 @@ class ProjectLearningSmoke(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='goal_learner', is_member=False)
         self.other = User.objects.create_user(username='other_goal_learner', is_member=False)
-        self.bot = Bot.objects.create(name='小宇', bot_type='planner')
+        self.bot = Bot.objects.create(is_xiaoyu=True, name='小宇', bot_type='planner')
         self.project = ConversationProject.objects.create(user=self.user, name='高中数学', instructions='学会函数概念')
         self.conversation = Conversation.objects.create(user=self.user, bot=self.bot, project=self.project, conversation_id=uuid.uuid4())
         self.message = AIChatMessage.objects.create(user=self.user, bot=self.bot, conversation_id=self.conversation.conversation_id,

@@ -6,14 +6,13 @@ import time
 from asgiref.sync import sync_to_async
 from django.utils.decorators import method_decorator
 from django.conf import settings
-from django.db import models, close_old_connections
-from users.permissions import IsAdmin, HasQuota, HasPlanFeature, IsInstitutionAdmin, IsMemberOrReadOnlyList
-from rest_framework import generics, permissions, serializers
-from rest_framework.exceptions import PermissionDenied
+from django.db import close_old_connections
+from users.permissions import HasQuota
+from rest_framework import generics, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from users.workspaces.identity import selected_institution
-from .models import AIChatMessage, AgentMemory, Bot, BotVisibility, Conversation
+from .models import AIChatMessage, AgentMemory, Bot, Conversation
 from .services.language import request_language
 from .serializers import AIChatMessageSerializer, AgentMemorySerializer, BotSerializer, ConversationSerializer
 from .utils import get_student_academic_context
@@ -21,31 +20,16 @@ from .views_projects import add_project_context, save_new_conversation_project, 
 from notes.context import prepare_note_context, conversation_uses_notes
 from notes.awareness import note_message_metadata
 from django.db import transaction
-from .prompt_sync import (
-    delete_bot_prompt_file,
-    get_bot_prompt_template_name,
-    sync_bot_prompt,
-    write_bot_prompt_file,
-)
+from .prompt_sync import sync_bot_prompt
 from users.views import IsMember
 from core.analytics import record_event
 from core.rate_limit import user_rate_limit
-from ai_service import AIService
-from ai_assistant.services.tool_executor import BaseToolExecutor
 
 logger = logging.getLogger(__name__)
 
 _AI_CHAT_SEMAPHORE = threading.Semaphore(
     int(os.getenv('AI_MAX_CONCURRENT_CHATS', '50'))
 )
-
-
-def _get_chat_semaphore(bot):
-    """按 bot_type 返回对应信号量，未匹配时回退到全局信号量。"""
-    bot_type = getattr(bot, 'bot_type', None) if bot else 'planner'
-    if bot_type == 'exam_generator':
-        return _AI_CHAT_SEMAPHORE  # 共享池，exam_generator 调用频率低
-    return _AI_CHAT_SEMAPHORE
 
 
 def _get_chat_history(user, bot, conversation_id, exclude_ids=(), limit=10):
@@ -133,15 +117,12 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
     if note_context:
         project_history = project_history + [{'role': 'user', 'content': note_context}]
 
-    student_context = ""
-    if bot and bot.bot_type == 'planner' and _can_use_learning_context(user):
-        student_context = get_student_academic_context(user)
-
-    # 获取记忆上下文 (dual-layer: structured + mem0 semantic + adaptive directives)
+    # 获取学情与记忆上下文
     from ai_assistant.services.memory_service import build_memory_context
-    memory_context, adaptive_directives = '', ''
+    student_context, memory_context, adaptive_directives = '', '', ''
     if _can_use_learning_context(user):
-        memory_context, adaptive_directives = build_memory_context(user, user_message, bot_type=bot.bot_type if bot else 'planner')
+        student_context = get_student_academic_context(user)
+        memory_context, adaptive_directives = build_memory_context(user, user_message, bot_type=bot.bot_type)
 
     from ai_assistant.services.chat_dispatch import dispatch_bot_chat
 
@@ -272,152 +253,10 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
         close_old_connections()
 
 
-def _user_can_access_bot(user, bot):
-    """验证用户是否有权使用指定 bot。"""
-    if bot.bot_type == 'exam_generator' or not bot.is_active:
-        return False
-    # 全局 bot：检查可见性
-    if bot.institution is None:
-        if not bot.is_active:
-            return False
-        # planner/exam_generator 始终可见，不允许租户隐藏
-        if bot.bot_type in ('planner', 'exam_generator'):
-            return True
-        if selected_institution(user):
-            vis = BotVisibility.objects.filter(
-                institution=selected_institution(user), bot=bot
-            ).first()
-            if vis and not vis.is_visible:
-                return False
-        return True
-    # 机构 bot：必须匹配用户机构
-    return bot.institution == selected_institution(user)
-
-
-class BotListCreateView(generics.ListCreateAPIView):
+class BotListView(generics.ListAPIView):
     serializer_class = BotSerializer
-
-    def get_permissions(self):
-        if self.request.method == 'POST':
-            return [IsAdmin(), HasPlanFeature()]
-        return [IsMemberOrReadOnlyList()]
-
-    required_feature = 'ai.bot.custom'
-
-    def get_queryset(self):
-        user = self.request.user
-        if selected_institution(user):
-            # planner/exam_generator 始终可见，不参与隐藏过滤
-            hidden_ids = BotVisibility.objects.filter(
-                institution=selected_institution(user), is_visible=False,
-            ).exclude(bot__bot_type__in=('planner', 'exam_generator')).values_list('bot_id', flat=True)
-            qs = Bot.objects.filter(
-                models.Q(institution__isnull=True, is_active=True) |
-                models.Q(institution=selected_institution(user), is_active=True)
-            ).exclude(
-                models.Q(institution__isnull=True) & models.Q(id__in=hidden_ids)
-            )
-        else:
-            qs = Bot.objects.filter(institution__isnull=True, is_active=True)
-
-        return qs.exclude(bot_type='exam_generator')
-
-    def perform_create(self, serializer):
-        user = self.request.user
-        from users.permissions import is_platform_admin
-        from users.quota import check_quota
-
-        if is_platform_admin(user):
-            bot = serializer.save(institution=None)
-        else:
-            inst = selected_institution(user)
-            if not inst:
-                raise serializers.ValidationError("您需要先加入机构。")
-            if not check_quota(inst, 'custom_bot'):
-                raise serializers.ValidationError("自定义机器人数量已达上限，请升级方案。")
-            bot = serializer.save(institution=inst)
-
-        sync_bot_prompt(bot)
-        logger.info("Bot created: bot_id=%s, institution=%s", bot.id, bot.institution_id)
-
-
-class BotDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Bot.objects.all()
-    serializer_class = BotSerializer
-
-    def get_permissions(self):
-        if self.request.method in ('PUT', 'PATCH', 'DELETE'):
-            return [IsAdmin()]
-        return [IsMemberOrReadOnlyList()]
-
-    def check_object_permissions(self, request, obj):
-        super().check_object_permissions(request, obj)
-        user = request.user
-        from users.permissions import is_platform_admin
-        if is_platform_admin(user):
-            return
-        if obj.institution is None:
-            raise PermissionDenied("无法编辑全局机器人。")
-        if selected_institution(user) != obj.institution:
-            raise PermissionDenied("无法编辑其他机构的机器人。")
-
-    def perform_update(self, serializer):
-        bot = serializer.save()
-        write_bot_prompt_file(bot, bot.system_prompt or '')
-        sync_bot_prompt(bot)
-
-    def perform_destroy(self, instance):
-        delete_bot_prompt_file(instance)
-        instance.delete()
-
-
-class BotVisibilityView(APIView):
-    """机构对全局 bot 的可见性管理。"""
-    permission_classes = [permissions.IsAuthenticated, IsInstitutionAdmin]
-
-    def get(self, request):
-        inst = selected_institution(request.user)
-        # 排除始终可见的 planner/exam_generator
-        global_bots = Bot.objects.filter(
-            institution__isnull=True,
-        ).exclude(bot_type__in=('planner', 'exam_generator'))
-        vis_map = {
-            v.bot_id: v.is_visible
-            for v in BotVisibility.objects.filter(institution=inst)
-        }
-        result = []
-        for bot in global_bots:
-            result.append({
-                'bot_id': bot.id,
-                'name': bot.name,
-                'avatar': bot.avatar.url if bot.avatar else None,
-                'is_visible': vis_map.get(bot.id, True),
-            })
-        return Response(result)
-
-    def patch(self, request):
-        inst = selected_institution(request.user)
-        bot_id = request.data.get('bot_id')
-        is_visible = request.data.get('is_visible')
-
-        if bot_id is None or is_visible is None:
-            return Response({'error': 'bot_id and is_visible required'}, status=400)
-
-        bot = Bot.objects.filter(id=bot_id, institution__isnull=True).first()
-        if not bot:
-            return Response({'error': '全局机器人不存在'}, status=404)
-
-        if bot.bot_type in ('planner', 'exam_generator'):
-            return Response({'error': '该机器人始终可见，不允许调整'}, status=403)
-
-        vis, _ = BotVisibility.objects.update_or_create(
-            institution=inst, bot=bot,
-            defaults={'is_visible': bool(is_visible)},
-        )
-        return Response({
-            'bot_id': bot.id,
-            'is_visible': vis.is_visible,
-        })
+    permission_classes = [IsMember]
+    queryset = Bot.objects.filter(is_xiaoyu=True, is_active=True)
 
 
 class AIChatView(APIView):
@@ -440,11 +279,9 @@ class AIChatView(APIView):
         else:
             conversation_id = _uuid.uuid4()
 
-        bot = Bot.objects.filter(id=bot_id).first()
+        bot = Bot.objects.filter(pk=bot_id, is_xiaoyu=True, is_active=True).first()
         if not bot:
             return Response({'error': 'Bot not found'}, status=404)
-        if not _user_can_access_bot(request.user, bot):
-            return Response({'error': '无权使用此机器人'}, status=403)
         sync_bot_prompt(bot)
 
         reservation = _reserve_chat_request(request.user, request.data, bot)
@@ -625,24 +462,20 @@ class AIChatStreamView(APIView):
         else:
             conversation_id = _uuid.uuid4()
 
-        bot = Bot.objects.filter(id=bot_id).first()
+        bot = Bot.objects.filter(pk=bot_id, is_xiaoyu=True, is_active=True).first()
         if not bot:
             return Response({'error': 'Bot not found'}, status=404)
 
-        if not _user_can_access_bot(request.user, bot):
-            return Response({'error': '无权使用此机器人'}, status=403)
 
         from .services.course_context import prepare_course_context, course_context_text, course_visual_messages
         course_context = prepare_course_context(request, bot, conversation_id)
 
-        from django.conf import settings
-        from .services.learning_experiments import available_to, attach_to_chat
-        experiment_prototype = bot.bot_type == 'planner' and available_to(request.user)
-        if (getattr(settings, 'UNIMIND_DSH_XIAOYU_ENABLED', False)
-                and bot.bot_type == 'planner' and bot.institution_id is None and bot.name == '小宇'):
+        if settings.UNIMIND_DSH_XIAOYU_ENABLED:
             from .services.dsh_xiaoyu import response
             return response(request, bot, conversation_id, user_message, course_context=course_context)
 
+        from .services.learning_experiments import available_to, attach_to_chat
+        experiment_prototype = available_to(request.user)
         sync_bot_prompt(bot)
 
         reservation = _reserve_chat_request(request.user, request.data, bot)
@@ -694,13 +527,10 @@ class AIChatStreamView(APIView):
                 if visual:
                     project_history.append({'role': 'user', 'content': visual})
 
-            student_context = ""
-            if bot.bot_type == 'planner' and _can_use_learning_context(request.user):
-                student_context = get_student_academic_context(request.user)
-
             from ai_assistant.services.memory_service import build_memory_context
-            memory_context, adaptive_directives = '', ''
+            student_context, memory_context, adaptive_directives = '', '', ''
             if _can_use_learning_context(request.user):
+                student_context = get_student_academic_context(request.user)
                 memory_context, adaptive_directives = build_memory_context(request.user, user_message, bot_type=bot.bot_type)
 
             from ai_assistant.services.chat_dispatch import dispatch_bot_chat_sync
@@ -717,7 +547,7 @@ class AIChatStreamView(APIView):
                 adaptive_directives=adaptive_directives,
             )
 
-            # 意图路由（与 WS/Polling 路径一致）
+            # 意图路由（与轮询路径一致）
             if profile.use_intent_router and user_message:
                 from ai_engine.tool_router import route_tools
                 tools = route_tools(user_message, tools, recent_messages=history_msgs, bot_type=bot.bot_type)
@@ -805,12 +635,6 @@ class AIChatStreamView(APIView):
                 # 挂到 tool_executor，让工具内部也能发进度事件
                 tool_executor.on_step = on_step
 
-                from ai_assistant.services.chat_dispatch import resolve_tool_choice
-                forced_tool_choice = resolve_tool_choice(profile, bot.bot_type)
-                # 意图路由后工具为空时，降级为 auto
-                if not tools:
-                    forced_tool_choice = "auto"
-
                 def _run_agent():
                     try:
                         with _AI_CHAT_SEMAPHORE:
@@ -820,11 +644,11 @@ class AIChatStreamView(APIView):
                                 tool_executor=tool_executor,
                                 on_step=on_step,
                                 on_message=on_message,
-                                tool_choice=forced_tool_choice,
+                                tool_choice="auto",
                                 temperature=0.6,
                                 max_tokens=8192 if experiment_prototype else 2500,
                                 operation=f'assistant.chat.{bot.bot_type}',
-                                max_tool_rounds=8 if bot.bot_type == 'exam_generator' else 12,
+                                max_tool_rounds=12,
                             )
                     except Exception as e:
                         logger.exception("Agent thread error: %s", e)

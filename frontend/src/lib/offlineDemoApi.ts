@@ -19,7 +19,6 @@ export async function demoRequest(method: string, path: string, payload: unknown
   }
   if (path === '/notes/ai-settings/' && verb === 'get') return { enabled: false, acknowledged: true };
   if (path === '/notes/references/' && verb === 'get') return { note_ids: [] };
-  if (path === '/notes/bindings/' && verb === 'get') return [];
   if (path === '/notes/tags/' && verb === 'get') return cache.tags;
   if (path === '/notes/lookup/' && verb === 'get') return cache.notes.filter(n => !n.deleted_at);
   if (path === '/notes/items/' && verb === 'get') {

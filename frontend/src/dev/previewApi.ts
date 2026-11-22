@@ -129,7 +129,7 @@ api.defaults.adapter = async config => {
     case '/users/me/learning-sessions/': data = { id: payload?.session_id || 'preview-session', ...payload }; break;
     case '/notes/references/': data = { note_ids: [] }; break;
     case '/notes/notebooks/': data = []; break;
-    case '/ai/bots/': data = [{ id: 1, name: '小宇', bot_type: 'planner', avatar: null }, { id: 2, name: '出题助手', bot_type: 'exam_generator', avatar: null }]; break;
+    case '/ai/bots/': data = [{ id: 1, name: '小宇', bot_type: 'planner', avatar: null }]; break;
     case '/ai/history/': data = history; break;
     case '/ai/projects/': if (config.method === 'post') { const project = { id: Date.now(), name: payload.name, instructions: payload.instructions || '' }; projectFixtures.projects.push(project); saveProjects(); data = project; } else data = projectFixtures.projects; break;
     case '/ai/dashboard/': data = dashboard; break;

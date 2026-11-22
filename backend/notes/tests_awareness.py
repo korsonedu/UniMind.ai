@@ -6,6 +6,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from django.http import Http404
 from rest_framework.test import APIClient
 
 from ai_assistant.models import Bot
@@ -21,7 +22,7 @@ class NoteAwarenessSmoke(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='awareness-owner')
         self.other = get_user_model().objects.create_user(username='awareness-other')
-        self.bot = Bot.objects.create(name='小宇', bot_type='planner', system_prompt='')
+        self.bot = Bot.objects.create(is_xiaoyu=True, name='小宇', bot_type='planner', system_prompt='')
         self.other_bot = Bot.objects.create(name='课程助手', bot_type='planner', system_prompt='')
         self.note = Note.objects.create(user=self.user, title='久期', content='久期衡量利率敏感性。我不理解凸性。')
         self.client = APIClient()
@@ -64,17 +65,14 @@ class NoteAwarenessSmoke(TestCase):
             {'note_id': self.note.pk, 'title': '久期', 'version': 1}])
         self.model.assert_not_called()
 
-    def test_disabled_xiaoyu_ignores_legacy_binding_but_other_agents_keep_it(self):
+    def test_disabled_xiaoyu_ignores_legacy_binding(self):
         AgentNoteBinding.objects.create(user=self.user, bot=self.bot, note=self.note)
-        AgentNoteBinding.objects.create(user=self.user, bot=self.other_bot, note=self.note)
         self.assertEqual(self.context(), ('', []))
-        self.assertEqual(self.context(bot=self.other_bot)[1][0]['kind'], 'permanent')
         self.enable()
         self.assertEqual(self.context()[1][0]['kind'], 'automatic')
         self.client.patch('/api/notes/ai-settings/', {'enabled': False}, format='json')
         self.assertEqual(self.context(), ('', []))
         self.assertEqual(self.context(note_ids=[self.note.pk])[1][0]['kind'], 'temporary')
-        self.assertEqual(self.context(bot=self.other_bot)[1][0]['kind'], 'permanent')
 
     def test_enabled_understanding_retrieval_dedup_and_other_agent_scope(self):
         settings = self.enable()
@@ -85,8 +83,8 @@ class NoteAwarenessSmoke(TestCase):
         self.assertEqual(sources[0]['version'], 1)
         self.assertEqual(note_message_metadata(context, sources)['note_attachments'], [])
         self.assertEqual(self.context(message='今天天气怎样'), ('', []))
-        self.assertEqual(self.context(bot=self.other_bot), ('', []))
-        self.assertEqual(self.context(bot=self.other_bot, note_ids=[self.note.pk])[1][0]['kind'], 'temporary')
+        with self.assertRaises(Http404):
+            self.context(bot=self.other_bot, note_ids=[self.note.pk])
         self.note.version = 2
         self.note.save(update_fields=['version'])
         schedule_note(self.note)

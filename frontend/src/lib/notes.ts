@@ -9,7 +9,7 @@ export interface Note {
 }
 export type NoteSummary = Pick<Note, 'id' | 'title' | 'notebook' | 'version'>;
 export interface NoteAISetting { enabled: boolean; acknowledged: boolean }
-export interface NoteBinding { id: number; bot: number; note: number | null; notebook: number | null }
+
 export type NoteDraft = Pick<Note, 'title' | 'content' | 'notebook' | 'tags' | 'is_favorite'>;
 // A write with an unknown outcome must be reviewed, not automatically repeated.
 const writeConfig = { __retryCount: 2, timeout: 30000 };
@@ -30,9 +30,6 @@ export const notesApi = {
   updateNotebook: (id: number, data: Partial<Notebook>) => api.patch(`/notes/notebooks/${id}/`, data, writeConfig),
   removeNotebook: (id: number) => api.delete(`/notes/notebooks/${id}/`, writeConfig),
   tags: () => api.get<{ id: number; name: string }[]>('/notes/tags/').then(r => r.data),
-  bindings: (bot: number) => api.get<NoteBinding[]>('/notes/bindings/', { params: { bot } }).then(r => r.data),
-  bind: (bot: number, source: { note: number } | { notebook: number }) => api.post<NoteBinding>('/notes/bindings/', { bot, ...source }, writeConfig).then(r => r.data),
-  unbind: (id: number) => api.delete(`/notes/bindings/${id}/`, writeConfig),
   references: (bot: number, conversation_id: string, signal?: AbortSignal) => api.get<{ note_ids: number[] }>('/notes/references/', { params: { bot, conversation_id }, signal }).then(r => r.data.note_ids),
   saveReferences: (bot: number, conversation_id: string, note_ids: number[]) => api.put('/notes/references/', { note_ids }, { ...writeConfig, params: { bot, conversation_id } }),
   export: async (kind: 'items' | 'notebooks', id: number) => {

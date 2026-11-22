@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.db.models import Count, Avg
 from core.admin_base import InstitutionContentAdmin
 
-from .models import Experience, ExperienceVerification, Bot, BotVisibility
+from .models import Experience, ExperienceVerification, Bot
 
 
 @admin.register(Bot)
@@ -11,16 +11,17 @@ class BotAdmin(InstitutionContentAdmin):
     list_filter = ('bot_type', 'institution', 'is_active')
     search_fields = ('name',)
 
+    def get_readonly_fields(self, request, obj=None):
+        fields = super().get_readonly_fields(request, obj)
+        return (*fields, 'bot_type') if obj and obj.is_xiaoyu else fields
+
+    def has_delete_permission(self, request, obj=None):
+        return not (obj and obj.is_xiaoyu) and super().has_delete_permission(request, obj)
+
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
         from .prompt_sync import sync_bot_prompt
         sync_bot_prompt(obj)
-
-
-@admin.register(BotVisibility)
-class BotVisibilityAdmin(InstitutionContentAdmin):
-    list_display = ('institution', 'bot', 'is_visible')
-    autocomplete_fields = ('bot',)
 
 
 class ExperienceDimensionFilter(admin.SimpleListFilter):

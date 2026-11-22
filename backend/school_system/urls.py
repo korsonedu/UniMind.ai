@@ -3,8 +3,7 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf import settings
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
-from django.http import HttpResponse, JsonResponse
-from pathlib import Path
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from school_system.media_serve import media_serve
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
@@ -25,9 +24,18 @@ def _build_meta_html(meta: dict) -> str:
     return '\n'.join(lines)
 
 
-def serve_spa(request, *args, **kwargs):
-    """Serve the learning platform entrypoint for client-side routing."""
-    index_path = Path(settings.BASE_DIR) / 'static' / 'index.html'
+def serve_spa(request, path):
+    """Serve the current Vite build and support client-side routing."""
+    dist = (settings.BASE_DIR.parent / 'frontend' / 'dist').resolve()
+    asset = (dist / path).resolve()
+    if not asset.is_relative_to(dist):
+        raise Http404
+    index_path = dist / 'index.html'
+    if asset != index_path and asset.is_file():
+        return FileResponse(asset.open('rb'))
+    if path.startswith('assets/'):
+        raise Http404
+
     if not index_path.exists():
         return HttpResponse('SPA entrypoint not found.', status=404)
 
@@ -103,7 +111,7 @@ urlpatterns += [
 urlpatterns.append(path("api/", include("core.urls")))
 urlpatterns += [
     re_path(r'^media/(?P<path>.*)$', media_serve, name='media-serve'),
-    re_path(r'^(?!api/|admin/|media/|static/|accounts/|account-api/).*$', serve_spa, name='spa-catchall'),
+    re_path(r'^(?!api/|admin/|media/|static/|accounts/|account-api/)(?P<path>.*)$', serve_spa, name='spa-catchall'),
 ]
 if settings.DEBUG:
     urlpatterns += staticfiles_urlpatterns()

@@ -12,7 +12,6 @@ import { useAuthStore } from '@/store/useAuthStore';
 import type { ExperiencePreferences } from '@/store/useSystemStore';
 import { useAgentConversation, type Bot, type Message } from '@/hooks/useAgentConversation';
 import { CourseSidebarContext } from '@/components/WorkspaceContext';
-import { findAssistantBot } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { AgentReplyContext } from '@/pages/xiaoyu/visuals/agentReplyContext';
 import { InlineVisualCard } from '@/components/InlineVisualCard';
 import { ToolStepMessage } from '@/components/AgentStepCard';
@@ -74,7 +73,6 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
     conversationId, input, setInput, messages, loading, initialized, scrollRef, doSend,
     handleReset, sessions, handleRefreshSessions,
     coursePosition, setCoursePosition } = useAgentConversation({
-    findBot: findAssistantBot,
     courseId,
     initialConversationId: linkedConversation,
     getExtraPayload: () => ({ course_context: {
@@ -94,10 +92,8 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
     setInitialized(false);
     const load = async () => {
       try {
-        const response = await api.get('/ai/bots/');
+        const { data: [bot] } = await api.get<Bot[]>('/ai/bots/');
         if (cancelled) return;
-        const bots: Bot[] = Array.isArray(response.data) ? response.data : response.data.results;
-        const bot = findAssistantBot(bots);
         if (!bot) throw new Error(t('暂时无法连接小宇。'));
         setBot(bot);
         const history = await api.get('/ai/history/', { params: { bot_id: bot.id, course_id: courseId } });
