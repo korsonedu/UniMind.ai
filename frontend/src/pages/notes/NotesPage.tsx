@@ -2,7 +2,8 @@ import { isOfflineDemo, isNativeOffline } from '@/lib/offlineSession';
 import { getLocale, t, useLocale } from '@/i18n';
 import { SelectField, SelectOption } from '@/components/ui/select';
 import { WorkspaceToolbar } from '@/components/WorkspaceToolbar';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { RightSidebarLayoutContext } from '@/components/WorkspaceContext';
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { FilePlus, FolderPlus, Notebook as NotebookIcon, MagnifyingGlass, ArrowClockwise, ArrowCounterClockwise, ClockCounterClockwise, DownloadSimple, Export, Folders, FunnelX, NotePencil, PencilSimple, Stack, Star, Trash, SidebarSimple } from '@phosphor-icons/react';
@@ -55,6 +56,7 @@ export default function NotesPage() {
   const [listError, setListError] = useState('');
   const [busy, setBusy] = useState(false);
   const [directoryHidden, setDirectoryHidden] = useState(false);
+  const { fullscreen: rightSidebarFullscreen, exitFullscreen } = useContext(RightSidebarLayoutContext);
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const mounted = useRef(true);
   const onSaved = useCallback((saved: Note) => {
@@ -294,7 +296,17 @@ export default function NotesPage() {
     </aside>
     <main className="notes-main" aria-busy={loading}>
       <WorkspaceToolbar className="notes-note-header">
-        <button className="um-agent-icon-button" aria-label={t('切换笔记目录')} onClick={() => { const hidden = window.matchMedia('(max-width:900px)').matches ? mobileView === 'directory' : !directoryHidden; setDirectoryHidden(hidden); setMobileView(hidden ? 'editor' : 'directory'); }}><SidebarSimple size={18} /></button>
+        <button className="um-agent-icon-button" aria-label={t('切换笔记目录')} onClick={() => {
+          if (rightSidebarFullscreen) {
+            exitFullscreen();
+            setDirectoryHidden(false);
+            setMobileView('directory');
+          } else {
+            const hidden = window.matchMedia('(max-width:900px)').matches ? mobileView === 'directory' : !directoryHidden;
+            setDirectoryHidden(hidden);
+            setMobileView(hidden ? 'editor' : 'directory');
+          }
+        }}><SidebarSimple size={18} /></button>
         <WorkspaceTrail title={note?.title || (note ? t('未命名笔记') : t('全部笔记'))} crumbs={[{ label: t('笔记'), to: '/notes' }, ...(note ? [{ label: notebookPath(note.notebook, notebooks) }] : [])]} />
         <div><span aria-live="polite" className="notes-save-status">{note ? `${t(status)}${dirty && status === '已保存' ? t(' · 未保存') : ''}` : ''}</span>{note && !pageError && <><button aria-label={t('导出笔记')} title={t('导出笔记')} disabled={busy} onClick={() => void run(() => notesApi.export('items', note.id))}><Export size={19} /></button>{note.deleted_at && <button aria-label={t('恢复笔记')} title={t('恢复笔记')} disabled={busy} onClick={() => void run(async () => { load(await notesApi.restore(note.id)); setView('all'); reload(); })}><ArrowCounterClockwise size={19} /></button>}<button aria-label={note.deleted_at ? t('永久删除') : t('移入回收站')} title={note.deleted_at ? t('永久删除') : t('移入回收站')} disabled={busy} className="notes-danger" onClick={() => removeNote()}><Trash size={19} /></button></>}</div>
       </WorkspaceToolbar>

@@ -1,5 +1,9 @@
 // English messages keyed by their Chinese source text.
 const en: Record<string, string> = {
+  '全屏展开': 'Expand to workspace fullscreen',
+  '恢复分屏': 'Restore split view',
+  '松开全屏展开': 'Release to expand to fullscreen',
+  '松开收起右侧栏': 'Release to close the right sidebar',
   "请从左上角切换到课程空间，打开课程中心。": "Switch to a course space from the top-left menu to open the Course Center.",
   "课程视频位于课程空间，请从左上角切换到对应课程空间查看。": "Switch to the course's space from the top-left menu to watch this video.",
   "请先加入可用的课程空间。": "Join an active course space first.",

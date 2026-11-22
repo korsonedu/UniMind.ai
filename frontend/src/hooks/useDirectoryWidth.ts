@@ -68,5 +68,5 @@ export function useDirectoryWidth(collapseThreshold = COLLAPSE_WIDTH) {
     const next = previewDirectoryWidth(value, collapseThreshold);
     commit(next, next === 0);
   };
-  return { width, contentWidth: animated ? lastWidth : Math.max(MIN_WIDTH, width || lastWidth), collapsed, animated, changeWidth, previewWidth, toggle: () => changeWidth(collapsed ? lastWidth : 0) };
+  return { width, contentWidth: animated ? lastWidth : Math.max(MIN_WIDTH, width || lastWidth), collapsed, animated, changeWidth, previewWidth, expand: () => changeWidth(lastWidth), toggle: () => changeWidth(collapsed ? lastWidth : 0) };
 }

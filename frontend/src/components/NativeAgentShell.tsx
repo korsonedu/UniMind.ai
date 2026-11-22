@@ -7,7 +7,7 @@ import { useDirectoryWidth } from '@/hooks/useDirectoryWidth';
 import { DirectoryResizeHandle } from './DirectoryResizeHandle';
 import { WorkspaceTrail } from './WorkspaceTrail';
 import { createPortal } from 'react-dom';
-import { ProjectChatSidebarContext, WorkspaceActiveContext } from './WorkspaceContext';
+import { ProjectChatSidebarContext, RightSidebarLayoutContext, WorkspaceActiveContext } from './WorkspaceContext';
 
 export interface AgentWorkspace { active: boolean; header: ReactNode; activity: ReactNode; chatContext?: ReactNode; }
 
@@ -18,6 +18,7 @@ export function NativeAgentShell({ native, sidebar, onNew, children, title = t('
   useLocale();
   const [open, setOpen] = useState(false);
   const workspaceActive = useContext(WorkspaceActiveContext);
+  const { fullscreen: rightSidebarFullscreen, exitFullscreen } = useContext(RightSidebarLayoutContext);
   const { host: chatHost, visible: chatVisible, open: openChat, close: closeChat, setAvailable } = useContext(ProjectChatSidebarContext);
   const activityOpen = !!workspace?.active;
   useEffect(() => {
@@ -27,6 +28,7 @@ export function NativeAgentShell({ native, sidebar, onNew, children, title = t('
   }, [workspaceActive, activityOpen, setAvailable, openChat]);
   const conversation = <div className="um-agent-conversation" aria-label={t('小宇对话')} onKeyDown={event => { if (activityOpen && event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); closeChat(); } }}><WorkspaceActiveContext.Provider value={workspaceActive && (!activityOpen || chatVisible)}>{workspace?.chatContext}{children}</WorkspaceActiveContext.Provider></div>;
   const directory = useDirectoryWidth();
+  const directoryHidden = directory.collapsed || rightSidebarFullscreen;
   if (!native) return <div className="h-full flex um-motion-surface animate-in fade-in duration-[180ms] ease-out">{sidebar}{children}</div>;
   return <div className="um-native-agent um-agent-workspace" data-directory-hidden={directory.collapsed} data-directory-animated={directory.animated || undefined}>
     <div className="um-agent-directory" style={{ width: directory.width, '--um-directory-content-width': `${directory.contentWidth}px` } as CSSProperties}>
@@ -36,7 +38,12 @@ export function NativeAgentShell({ native, sidebar, onNew, children, title = t('
     <section className="um-agent-main" aria-label={t('小宇工作区')}>
       <WorkspaceToolbar className="um-agent-toolbar">
         <div>
-          <button className="um-agent-icon-button um-agent-directory-toggle" onClick={directory.toggle} aria-label={!directory.collapsed ? t('收起历史对话') : t('展开历史对话')} title={!directory.collapsed ? t('收起历史对话') : t('展开历史对话')}><SidebarSimple size={18} /></button>
+          <button className="um-agent-icon-button um-agent-directory-toggle" onClick={() => {
+            if (rightSidebarFullscreen) {
+              exitFullscreen();
+              if (directory.collapsed) directory.expand();
+            } else directory.toggle();
+          }} aria-label={directoryHidden ? t('展开历史对话') : t('收起历史对话')} title={directoryHidden ? t('展开历史对话') : t('收起历史对话')} aria-expanded={!directoryHidden}><SidebarSimple size={18} /></button>
           <Dialog.Root open={open} onOpenChange={setOpen}>
             <Dialog.Trigger asChild><button className="um-agent-history-button" aria-label={t('打开历史对话')}><SidebarSimple size={18} /></button></Dialog.Trigger>
             <Dialog.Portal><Dialog.Overlay className="um-agent-drawer-overlay" /><Dialog.Content className="um-native-agent um-agent-drawer">
@@ -48,7 +55,7 @@ export function NativeAgentShell({ native, sidebar, onNew, children, title = t('
           </Dialog.Root>
           <WorkspaceTrail title={title} crumbs={[{ label }]} />
         </div>
-        <div className="um-agent-toolbar-actions">{action}<button className="um-agent-icon-button um-agent-toolbar-new" onClick={onNew} aria-label={t('新对话')} title={t('新对话')}><Plus size={17} /></button></div>
+        <div className="um-agent-toolbar-actions">{action}<button className="um-agent-icon-button um-agent-toolbar-new" onClick={() => { if (rightSidebarFullscreen) exitFullscreen(); onNew(); }} aria-label={t('新对话')} title={t('新对话')}><Plus size={17} /></button></div>
       </WorkspaceToolbar>
       {workspace?.header}
       <div className="um-agent-work-panels">
