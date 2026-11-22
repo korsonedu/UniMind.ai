@@ -89,7 +89,7 @@ function ExperimentFrame({ payload }: { payload: ExperimentPayload }) {
       const message = event.data;
       if (!message || message.channel !== 'unimind-experiment') return;
       if (message.type === 'height' && Number.isFinite(message.height)) {
-        setHeight(Math.max(180, Math.min(420, message.height)));
+        setHeight(Math.max(180, Math.min(560, message.height)));
       }
       if (message.type === 'error') setRuntimeError(String(message.message || t('实验运行出错')).slice(0, 500));
       if (message.type === 'state' || message.type === 'report') {
