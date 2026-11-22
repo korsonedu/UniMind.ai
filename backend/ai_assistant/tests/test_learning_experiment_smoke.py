@@ -30,17 +30,24 @@ def test_interaction_is_only_offered_and_executed_for_explanation(user, settings
     for text, expected in [
         ('给我讲一道金融硕士题目，用到交互', True), ('解释统计学中的抽样分布', True),
         ('分析这道债券题为什么错了', True), ('用交互出一道题让我做', False),
+        ('出一道高中物理大题（带图）', False),
         ('统计本周做题情况，用交互', False), ('解释我的学习报告，用交互', False),
         ('用交互制定学习计划', False), ('批改我的答案并解释错因', False),
         ('你好，生成交互卡片', False), ('不要交互，解释久期', False),
     ]:
         current.content = text
         current.save(update_fields=['content'])
-        context = build_context(user, '解释债券定价', chat_context=claims)
+        assert experiments.allows_interaction(current) is expected, text
+        context = build_context(user, text, chat_context=claims)
         names = {tool['function']['name'] for tool in context['available_tools']}
         assert ('build_learning_experiment' in names) is expected, text
         if not expected:
             assert 'interactive' not in context['tool_groups']
+            assert '自主交互讲解' not in context['system_prompt']
+            assert '当前对话内动态计算工具' in context['system_prompt']
+            assert '本轮不属于解答讲解，不生成交互卡片' in context['system_prompt']
+            authoring = context['tool_groups']['authoring']['description']
+            assert '编写' not in authoring and '交互实验' not in authoring
             with patch.object(experiments, 'preview') as preview:
                 with pytest.raises(PermissionDenied):
                     experiments.execute(user, 'build_learning_experiment', arguments, claims)
@@ -57,6 +64,42 @@ def test_interaction_is_only_offered_and_executed_for_explanation(user, settings
     assert experiments.allows_interaction(followup)
     followup.content = '修改学习计划，用交互卡片'
     assert not experiments.allows_interaction(followup)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('planning', [False, True], ids=['free-chat', 'planning-project'])
+@pytest.mark.parametrize(('text', 'initial_group'), [
+    ('对于中央银行的资产负债表，你可以做一个可视化的演示让我学一下吗', 'authoring'),
+    ('画个图讲这道债券题', 'interactive'),
+], ids=['central-bank-demo', 'question-diagram'])
+def test_visual_demo_offers_experiment_on_first_request(user, settings, planning, text, initial_group):
+    from ai_assistant.models import Conversation, ConversationProject, ProjectLearning
+    from ai_assistant.services.dsh_service import build_context
+
+    settings.UNIMIND_LEARNING_EXPERIMENTS_ENABLED = True
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    user.is_member = True
+    user.save(update_fields=['is_member'])
+    bot = Bot.objects.create(name='小宇', bot_type='planner')
+    current = AIChatMessage.objects.create(user=user, bot=bot, role='user', content=text)
+    if planning:
+        project = ConversationProject.objects.create(user=user, name='中央银行')
+        conversation = Conversation.objects.create(user=user, bot=bot, project=project,
+            conversation_id=current.conversation_id)
+        ProjectLearning.objects.create(project=project, planning_enabled=True, last_conversation=conversation)
+    claims = {'message_id': current.pk, 'conversation_id': str(current.conversation_id), 'bot_id': bot.pk}
+
+    assert experiments.allows_interaction(current)
+    context = build_context(user, text, chat_context=claims)
+    assert ('project' in context['tool_groups']) is planning
+    assert context['routing']['initial_group'] == initial_group
+    assert 'build_learning_experiment' in {tool['function']['name'] for tool in context['tools']}
+    assert '自主交互讲解' in context['system_prompt']
+    assert context['model_policy']['max_requests'] == 6
+    refreshed = build_context(user, text, recent_messages=[{'role': 'assistant', 'content': '你也可以做几道练习题。'}],
+        chat_context=claims)
+    assert refreshed['permissions_version'] == context['permissions_version']
+    assert refreshed['system_prompt'] == context['system_prompt']
 
 
 @pytest.mark.django_db
@@ -156,6 +199,14 @@ def test_experiment_attachment_and_disabled_default(user, settings):
     assert not executor.pending_visuals
     current.refresh_from_db()
     assert set(current.metadata['learning_experiments']) == {existing['experiment_id']}
+    current.content = '不要交互，解释久期'
+    set_permitted_tools(executor, [])
+    messages = [{'role': 'system', 'content': '小宇'}]
+    tools = experiments.attach_to_chat(user, current, messages, [], executor)
+    assert {item['function']['name'] for item in tools} == {
+        'read_learning_experiment', 'register_session_tool', 'read_session_tool'}
+    assert '自主交互讲解' not in messages[0]['content']
+    assert '当前对话内动态计算工具' in messages[0]['content']
     settings.UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE = False
     assert not experiments.available_to(user)
     with pytest.raises(NotFound):
