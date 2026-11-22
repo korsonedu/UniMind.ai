@@ -3,7 +3,7 @@ import { ArrowsInSimple, ArrowsOutSimple, MagnifyingGlass, X } from '@phosphor-i
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import type { BaselineSummary, KnowledgeTreeBuildDetail } from '@/types/knowledgeBuilder';
-import { resolvePublicAssetLink } from '@/lib/knowledgeBuilderApi';
+import { inferAtomDifficultyTier, resolvePublicAssetLink } from '@/lib/knowledgeBuilderApi';
 import {
   adaptKnowledgeTree,
   computeColumnLayout,
@@ -24,7 +24,7 @@ interface KnowledgeBuilderGraphProps {
   headerRightSlot?: ReactNode;
   selectedBlockIds?: ReadonlySet<number>;
   onToggleBlockSelection?: (id: number) => void;
-  onStudyBlock?: (id: number) => void;
+  onStudyBlock?: (blockId: number, atomId?: number | null) => void;
 }
 
 interface TooltipState {
@@ -739,7 +739,11 @@ export function KnowledgeBuilderGraph({
                 <div className="kb-level">{t('第 {0} 层', { 0: col.layer })}</div>
 
                 {col.blocks.map(block => {
-                  const resources = tree.blocks.find(item => item.id === block.id)?.resources ?? [];
+                  const sourceBlock = tree.blocks.find(item => item.id === block.id);
+                  const resources = sourceBlock?.resources ?? [];
+                  const l3Count = sourceBlock?.difficulty_summary?.L3 ?? new Set(block.steps.flatMap(step =>
+                    step.atoms.filter(item => inferAtomDifficultyTier(item.atom).tier === 'L3').map(item => item.atom.id)
+                  )).size;
                   const spine = resources.find(resource => resource.asset_track === 'spine');
                   const hasSpotlight = resources.some(resource => resource.asset_track === 'spotlight');
                   const hasWiki = resources.some(resource => resource.asset_track === 'wiki');
@@ -816,6 +820,7 @@ export function KnowledgeBuilderGraph({
                         <span className="kb-badges">
                           <span className="kb-cardtype">{block.domainTitle}</span>
                           <span className="kb-badge">{t('{0} 个资源', { 0: resources.length })}</span>
+                          {l3Count > 0 && <span className="kb-badge kb-diff-badge kb-diff-badge--l3">🔴 {l3Count} 攻坚</span>}
                           {spine && <span className="kb-badge kb-asset-badge--spine" title={`主线配套课${spine.locator ? ` · ${spine.locator}` : ''}`}>{spine.locator || '主线'}</span>}
                           {hasSpotlight && <span className="kb-badge kb-asset-badge--spotlight" title="单点神作">神作</span>}
                           {hasWiki && <span className="kb-badge kb-asset-badge--wiki" title={tree.region_pref === 'intl' ? 'Wikipedia 概念词条' : 'OI-Wiki / 开源学科词条'}>{tree.region_pref === 'intl' ? 'Wikipedia 词条' : '专业开源 Wiki 词条'}</span>}
@@ -938,17 +943,41 @@ export function KnowledgeBuilderGraph({
                                 ))}
 
                                 <div className="kb-pointgroup" data-step-group={step.stepIndex}>
-                                  {step.atoms.map(item => (
-                                    <div
-                                      key={item.atom.id}
-                                      data-point={item.atom.code}
-                                      title={item.tooltip}
-                                      className={`kb-point${item.membership === 'extension' ? ' ext' : ''}`}
-                                    >
-                                      <div>{item.atom.name}</div>
-                                      <span className="kb-badges">{renderTopicBadges([item.atom.name])}</span>
-                                    </div>
-                                  ))}
+                                  {step.atoms.map(item => {
+                                    const diff = inferAtomDifficultyTier(item.atom);
+                                    const atomResources = resources.filter(resource => resource.atom === item.atom.id);
+                                    const hasAtomVideo = atomResources.some(resource => resource.asset_track === 'spine' || resource.asset_track === 'spotlight');
+                                    return (
+                                      <div
+                                        key={item.atom.id}
+                                        data-point={item.atom.code}
+                                        title={item.tooltip}
+                                        className={`kb-point kb-point--${diff.tier.toLowerCase()}${item.membership === 'extension' ? ' ext' : ''}`}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={`${item.atom.name}（${diff.label}，双击打开知识点与小宇伴学）`}
+                                        onDoubleClick={event => {
+                                          event.stopPropagation();
+                                          onStudyBlock?.(block.id, item.atom.id);
+                                        }}
+                                        onKeyDown={event => {
+                                          if (event.key === 'Enter' || event.key === ' ') {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            onStudyBlock?.(block.id, item.atom.id);
+                                          }
+                                        }}
+                                      >
+                                        <div>{item.atom.name}</div>
+                                        <span className="kb-badges">
+                                          <span className={`kb-badge kb-diff-badge kb-diff-badge--${diff.tier.toLowerCase()}`}>{diff.tier === 'L1' ? '🟢 基础' : diff.tier === 'L2' ? '🟡 辨析' : '🔴 攻坚'}</span>
+                                          {diff.tier === 'L1' && <span className="kb-badge kb-point-action-hint">💬 问小宇</span>}
+                                          {diff.tier !== 'L1' && hasAtomVideo && <span className="kb-badge kb-point-action-hint">🎬 视频</span>}
+                                          {renderTopicBadges([item.atom.name])}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             ))}

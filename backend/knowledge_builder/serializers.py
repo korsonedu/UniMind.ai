@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from . import models
 from .archetypes import PROFILES
+from .public_asset_service import compute_atom_difficulty
 
 
 def validate_json_object(value):
@@ -66,9 +67,18 @@ class ModuleSerializer(serializers.ModelSerializer):
 
 
 class AtomSerializer(serializers.ModelSerializer):
+    difficulty_tier = serializers.SerializerMethodField()
+    difficulty_label = serializers.SerializerMethodField()
+
+    def get_difficulty_tier(self, instance):
+        return compute_atom_difficulty(instance)[0]
+
+    def get_difficulty_label(self, instance):
+        return compute_atom_difficulty(instance)[1]
+
     class Meta:
         model = models.TreeAtomPoint
-        fields = ('id', 'module', 'code', 'name', 'goal_statement', 'parent_path', 'goal_type', 'granularity_minutes', 'cognitive_level', 'key_elements', 'prerequisites_hint', 'common_misconceptions', 'branch_condition', 'order')
+        fields = ('id', 'module', 'code', 'name', 'goal_statement', 'parent_path', 'goal_type', 'granularity_minutes', 'cognitive_level', 'key_elements', 'prerequisites_hint', 'common_misconceptions', 'branch_condition', 'order', 'difficulty_tier', 'difficulty_label')
 
 
 class AtomEdgeSerializer(serializers.ModelSerializer):
@@ -190,8 +200,21 @@ class BlockQuizRequestSerializer(serializers.Serializer):
 
 
 class BlockSerializer(serializers.ModelSerializer):
+    difficulty_summary = serializers.SerializerMethodField()
     steps = StepSerializer(many=True, read_only=True)
     resources = BlockResourceSerializer(many=True, read_only=True)
+
+    def get_difficulty_summary(self, instance):
+        summary = {'L1': 0, 'L2': 0, 'L3': 0}
+        seen = set()
+        for step in instance.steps.all():
+            for membership in step.step_atoms.all():
+                if membership.atom_id in seen:
+                    continue
+                seen.add(membership.atom_id)
+                tier, _ = compute_atom_difficulty(membership.atom)
+                summary[tier] += 1
+        return summary
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -203,7 +226,7 @@ class BlockSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.LearningBlock
-        fields = ('id', 'code', 'short_title', 'narrative_summary', 'layer', 'contraction_group', 'is_entry_block', 'node_shape', 'order', 'steps', 'resources')
+        fields = ('id', 'code', 'short_title', 'narrative_summary', 'layer', 'contraction_group', 'is_entry_block', 'node_shape', 'order', 'difficulty_summary', 'steps', 'resources')
 
 
 class BlockEdgeSerializer(serializers.ModelSerializer):

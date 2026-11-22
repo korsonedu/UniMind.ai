@@ -44,6 +44,30 @@ export interface TreeModule {
   order: number;
 }
 
+export type AtomDifficultyTier = 'L1' | 'L2' | 'L3';
+
+export interface AtomDifficultyInfo {
+  tier: AtomDifficultyTier;
+  label: string;
+  shortLabel: string;
+}
+
+export interface BlockDifficultySummary {
+  L1: number;
+  L2: number;
+  L3: number;
+}
+
+export interface EnsureBlockProjectResponse {
+  project_id: number;
+  conversation_id: string | null;
+  bot_id: number | null;
+  project_name: string;
+  status: 'active' | 'preparing' | 'paused' | 'completed';
+  block_id: number;
+  atom_id: number | null;
+}
+
 export interface TreeAtomPoint {
   id: number;
   module: number;
@@ -54,6 +78,8 @@ export interface TreeAtomPoint {
   goal_type: string;
   granularity_minutes: number;
   cognitive_level: string;
+  difficulty_tier?: AtomDifficultyTier;
+  difficulty_label?: string;
   key_elements: string[];
   prerequisites_hint: string[];
   common_misconceptions: string[];
@@ -106,6 +132,7 @@ export interface BlockNodeShape {
 
 export interface LearningBlock {
   resources?: BlockResourceItem[];
+  difficulty_summary?: BlockDifficultySummary;
   id: number;
   code: string;
   short_title: string;

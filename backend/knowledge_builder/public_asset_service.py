@@ -17,6 +17,42 @@ CATALOG_FIELDS = (
 )
 
 
+def compute_atom_difficulty(atom):
+    """Compute the shared difficulty tier directly from an atom's learning goals."""
+    goal_type = (getattr(atom, 'goal_type', '') or '').strip()
+    cognitive_level = (getattr(atom, 'cognitive_level', '') or '').strip()
+    granularity_minutes = int(getattr(atom, 'granularity_minutes', 4) or 4)
+    if (goal_type in ('实操计算', '综合应用')
+            or cognitive_level in ('评价', '创造')
+            or (granularity_minutes >= 6 and cognitive_level == '分析' and goal_type != '概念辨析')):
+        return 'L3', '硬核攻坚'
+    if cognitive_level in ('记忆', '理解') and goal_type in ('概念辨析', '概念', ''):
+        return 'L1', '基础速通'
+    return 'L2', '机制辨析'
+
+
+def _requires_difficult_atom(data):
+    return data.get('respect_difficulty') and (data.get('source_kind') in ('bilibili', 'youtube')
+        or (data.get('asset_track') in ('spine', 'spotlight')
+            and data.get('source_kind') not in ('course', 'library')))
+
+
+def _difficulty_filtered_details(details, data):
+    """Restrict discovery videos to the harder concepts that they can teach."""
+    if not _requires_difficult_atom(data):
+        return details
+    result = []
+    for block, steps, assignments, _ in details:
+        assignments = [row for row in assignments if compute_atom_difficulty(row.atom)[0] != 'L1']
+        if assignments:
+            labels = [label for row in assignments for label in (row.atom.name, row.atom.key_elements)]
+            # The specific-term matcher prioritizes its first professional label.
+            # Include every eligible concept there so later hard atoms retain coverage.
+            labels.insert(0, ' '.join(_text(label) for label in labels))
+            result.append((block, steps, assignments, labels))
+    return result
+
+
 def _resolvers():
     name = f'{__package__}.public_asset_resolvers'
     try:
@@ -176,10 +212,29 @@ def _binding(details, text, target_atom_id=None):
 
 
 def _mount(build, details, data, user=None, public_asset=None, *, segment=None, target_atom_id=None):
+    eligible = _difficulty_filtered_details([details], data)
+    if not eligible:
+        return None
+    details = eligible[0]
+    if (_requires_difficult_atom(data) and target_atom_id is not None
+            and not any(row.atom_id == target_atom_id for row in details[2])):
+        return None
     block = details[0]
     segment = segment or {}
     text = f"{segment.get('title', '')} {segment.get('summary', '')}" if segment else _asset_text(data)
+    if _requires_difficult_atom(data):
+        from .public_asset_discovery import _specific_score
+        assignments = [row for row in details[2]
+                       if target_atom_id is None or row.atom_id == target_atom_id]
+        matched = [row for row in assignments if _specific_score(text, [row.atom.name, row.atom.key_elements]) > 0]
+        if not matched:
+            return None
+        target_atom_id = max(matched, key=lambda row: (
+            _specific_score(text, [row.atom.name, row.atom.key_elements]),
+            _score(text, [row.atom.name, row.atom.key_elements]))).atom_id
     step, atom = _binding(details, text, target_atom_id)
+    if _requires_difficult_atom(data) and atom is None:
+        return None
     track = 'spine' if segment else data.get('asset_track', 'spotlight')
     locator = (segment.get('locator') or f"P{segment.get('index', 1)}") if segment else data.get('locator', '')
     title = f"{data['title']} · {segment['title']}" if segment else data['title']
@@ -206,6 +261,9 @@ def _mount(build, details, data, user=None, public_asset=None, *, segment=None, 
         # Automatic reruns must never resurrect dismissed or globally rejected alignments.
         existing = BlockResource.objects.filter(**identity).first()
         if existing is not None:
+            if (_requires_difficult_atom(data)
+                    and (existing.atom is None or compute_atom_difficulty(existing.atom)[0] == 'L1')):
+                return None
             return existing
         if public_asset is not None:
             from .models import ConceptAssetIndex
@@ -221,8 +279,10 @@ def _mount(build, details, data, user=None, public_asset=None, *, segment=None, 
 
 
 def align_and_mount_spine_series(build, asset_data, user=None, public_asset=None):
-    details = _blocks(build)
+    details = _difficulty_filtered_details(_blocks(build), asset_data)
     if not details:
+        if _requires_difficult_atom(asset_data):
+            return []
         raise ValidationError('当前知识树没有可挂载资源的知识块。')
     segments = sorted(asset_data.get('segments', []), key=lambda item: item.get('index', 1))
     anchors = {}
@@ -264,12 +324,14 @@ def align_and_mount_spine_series(build, asset_data, user=None, public_asset=None
 
 
 def mount_single_public_asset(build, asset_data, user=None, public_asset=None, target_block=None, target_atom_id=None):
-    details = _blocks(build)
+    details = _difficulty_filtered_details(_blocks(build), asset_data)
     if target_block is not None:
         details = [item for item in details if item[0].pk == target_block.pk]
     elif target_atom_id is not None:
         details = [item for item in details if any(row.atom_id == target_atom_id for row in item[2])]
     if not details:
+        if _requires_difficult_atom(asset_data):
+            return None
         raise ValidationError('挂载目标不属于当前知识树，或知识树没有知识块。')
     best = max(details, key=lambda item: _score(_asset_text(asset_data), item[3]))
     return _mount(build, best, asset_data, user, public_asset, target_atom_id=target_atom_id)
@@ -381,7 +443,7 @@ def resolve_and_store_asset(build, url, payload=None, user=None, region_pref='cn
     return data, asset
 
 
-def auto_mount_public_assets(build):
+def auto_mount_public_assets(build, *, respect_difficulty=False):
     region = get_region_preference(build.created_by)
     # Indexed assets must be reused through their verified concept alignment, not
     # broad catalog token overlap; this also preserves disabled feedback tombstones.
@@ -396,7 +458,8 @@ def auto_mount_public_assets(build):
     spine = next((asset for asset in assets if asset.asset_track == 'spine' and asset.segments
                   and (existing_spine is None or existing_spine.public_asset_id == asset.pk)), None)
     def automatic_data(asset):
-        data = {**asset_data_from_catalog(asset), 'origin': 'auto', 'match_method': 'seed_catalog'}
+        data = {**asset_data_from_catalog(asset), 'origin': 'auto', 'match_method': 'seed_catalog',
+                'respect_difficulty': respect_difficulty}
         data['segments'] = [segment for segment in data.get('segments', [])
             if not PART_MARKETING.search(segment.get('title', ''))
             and not (0 < float(segment.get('duration', 0) or 0) < 90)
@@ -411,14 +474,17 @@ def auto_mount_public_assets(build):
             if asset.asset_track == 'spine':
                 continue
             data = automatic_data(asset)
-            ranked = sorted(details, key=lambda item: _score(_asset_text(data), item[3]), reverse=True)
+            eligible = _difficulty_filtered_details(details, data)
+            ranked = sorted(eligible, key=lambda item: _score(_asset_text(data), item[3]), reverse=True)
             if ranked and _score(_asset_text(data), ranked[0][3]) > 0:
                 limit = 2 if asset.asset_track == 'wiki' else 3
                 if ranked[0][0].resources.filter(origin='auto', asset_track=asset.asset_track, is_dismissed=False).count() < limit:
                     mount_single_public_asset(build, data, build.created_by, asset, target_block=ranked[0][0])
         for listing in marketplace_candidates(build):
-            data = {**_marketplace_data(listing), 'origin': 'auto', 'match_method': 'seed_catalog'}
-            ranked = sorted(details, key=lambda item: _score(_asset_text(data), item[3]), reverse=True)
+            data = {**_marketplace_data(listing), 'origin': 'auto', 'match_method': 'seed_catalog',
+                    'respect_difficulty': respect_difficulty}
+            eligible = _difficulty_filtered_details(details, data)
+            ranked = sorted(eligible, key=lambda item: _score(_asset_text(data), item[3]), reverse=True)
             if ranked and _score(_asset_text(data), ranked[0][3]) > 0:
                 if ranked[0][0].resources.filter(origin='auto', asset_track='spotlight', is_dismissed=False).count() < 3:
                     mount_single_public_asset(build, data, build.created_by, target_block=ranked[0][0])

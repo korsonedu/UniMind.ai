@@ -921,6 +921,7 @@ def test_vote_respects_build_block_and_library_visibility(tree, user, auth_clien
 def test_auto_discovery_caps_tracks_and_never_restores_dismissed_resource(user, monkeypatch):
     from knowledge_builder import public_asset_discovery as discovery
     build = make_tree(user, subject='私募股权投资基金', titles=('合格投资者',))
+    build.atoms.update(goal_type='机制辨析')
     monkeypatch.setattr(discovery, 'auto_mount_public_assets', lambda *args, **kwargs: [])
     monkeypatch.setattr('knowledge_builder.block_study.auto_mount_internal_resources', lambda *args, **kwargs: [])
     def search(query, **kwargs):
@@ -980,6 +981,7 @@ def test_live_regression_spine_episode_targets_block_instead_of_shared_subject(u
     titles = ('私募基金概述', '基金组织形式', '基金募集', '基金设立', '投资策略',
               '尽职调查', '投资决策', '基金估值', '投后管理')
     build = make_tree(user, subject='基金从业《私募股权投资基金基础知识》', titles=titles)
+    build.atoms.update(goal_type='机制辨析')
     monkeypatch.setattr(discovery, 'auto_mount_public_assets', lambda *args, **kwargs: [])
     monkeypatch.setattr('knowledge_builder.block_study.auto_mount_internal_resources', lambda *args, **kwargs: [])
     base = 'https://www.bilibili.com/video/BV1placement'
@@ -1005,6 +1007,7 @@ def test_live_regression_spine_episode_targets_block_instead_of_shared_subject(u
 def test_live_regression_targeted_spotlight_extracts_matching_page_from_series(user, monkeypatch):
     from knowledge_builder import public_asset_discovery as discovery
     build = make_tree(user, subject='私募股权投资基金', titles=('合格投资者',))
+    build.atoms.update(goal_type='机制辨析')
     block = build.blocks.get()
     # The tree already has its one spine; a second series can still supply a targeted lecture.
     existing = catalog(build, title='私募股权主线课', asset_track='spine')
@@ -1087,3 +1090,93 @@ def test_wiki_rejects_explicitly_obsolete_revision_and_book_recommendation(title
     assert evaluate_candidate_quality(dict(title=title, summary=summary,
         date='2026-11-18', url='https://www.amac.org.cn/investread/article.html', asset_track='wiki'),
         '私募股权投资基金', labels) == 0
+
+
+@pytest.mark.parametrize('goal,cognitive,minutes,expected', [
+    ('概念辨析', '理解', 4, ('L1', '基础速通')),
+    ('概念', '记忆', 4, ('L1', '基础速通')),
+    ('', '理解', 4, ('L1', '基础速通')),
+    (' 概念辨析 ', ' 理解 ', 8, ('L1', '基础速通')),
+    ('实操计算', '理解', 4, ('L3', '硬核攻坚')),
+    ('综合应用', '记忆', 4, ('L3', '硬核攻坚')),
+    ('概念辨析', '评价', 4, ('L3', '硬核攻坚')),
+    ('概念', '创造', 4, ('L3', '硬核攻坚')),
+    ('机制辨析', '分析', 6, ('L3', '硬核攻坚')),
+    ('机制辨析', '分析', 5, ('L2', '机制辨析')),
+    ('概念辨析', '分析', 6, ('L2', '机制辨析')),
+    ('机制', '理解', 4, ('L2', '机制辨析')),
+    (None, None, None, ('L2', '机制辨析')),
+])
+def test_compute_atom_difficulty_rules(goal, cognitive, minutes, expected):
+    from knowledge_builder.public_asset_service import compute_atom_difficulty
+    atom = SimpleNamespace(goal_type=goal, cognitive_level=cognitive, granularity_minutes=minutes)
+    assert compute_atom_difficulty(atom) == expected
+
+
+@override_settings(UNIMIND_PUBLIC_ASSET_EDITION='cn')
+@pytest.mark.parametrize('track', ['spotlight', 'spine'])
+def test_auto_discovery_videos_target_only_matching_difficult_atoms(user, monkeypatch, track):
+    from knowledge_builder import public_asset_discovery as discovery
+
+    build = make_tree(user, subject='私募股权投资基金', titles=('合格投资者',))
+    block = build.blocks.get()
+    basic = build.atoms.get()
+    basic.goal_type = '概念辨析'
+    basic.save(update_fields=['goal_type'])
+    step = block.steps.get()
+    difficult = []
+    for index, (name, goal) in enumerate((('收益分配机制', '机制辨析'), ('基金估值计算', '实操计算')), 2):
+        atom = models.TreeAtomPoint.objects.create(
+            build=build, module=basic.module, code=f'A{index}', name=name,
+            goal_statement=f'掌握{name}', goal_type=goal, cognitive_level='分析',
+            granularity_minutes=4, key_elements=[name])
+        models.BlockStepAtom.objects.create(step=step, atom=atom, membership_type='core', position=index)
+        difficult.append(atom)
+    monkeypatch.setattr(discovery, 'auto_mount_public_assets', lambda *args, **kwargs: [])
+    monkeypatch.setattr('knowledge_builder.block_study.auto_mount_internal_resources', lambda *args, **kwargs: [])
+    videos = [dict(title=f'私募股权投资基金{name}详解', summary=f'{name}的定义和适用条件',
+                   url=f'https://www.bilibili.com/video/BV1tier{index}',
+                   source_kind='bilibili', asset_track='spotlight', provider='deepseek')
+              for index, name in enumerate((basic.name, *(atom.name for atom in difficult)), 1)]
+    wiki = dict(title='私募股权基金合格投资者定义', summary='合格投资者认定条件及资产要求',
+                url='https://www.csrc.gov.cn/rules/qualified-investor',
+                source_kind='web', asset_track='wiki', authority=3, provider='deepseek')
+    if track == 'spine':
+        series = dict(title='私募股权投资基金全套精讲', summary='私募股权投资基金完整课程',
+                      url='https://www.bilibili.com/video/BV1tierSeries',
+                      source_kind='bilibili', asset_track='spine', provider='deepseek',
+                      segments=[dict(index=index, title=video['title'], summary=video['summary'],
+                                     locator=f'P{index}', url=f"https://www.bilibili.com/video/BV1tierSeries?p={index}")
+                                for index, video in enumerate(videos, 1)])
+        candidates = [series, wiki]
+    else:
+        candidates = [*videos, wiki]
+    monkeypatch.setattr(discovery, 'search_public_web', lambda *args, **kwargs: candidates)
+    monkeypatch.setattr(discovery, 'enrich_bilibili_candidate', lambda row: row)
+
+    discovery.auto_discover_and_mount_public_assets(build)
+
+    mounted = list(block.resources.filter(asset_track=track))
+    assert mounted and {row.atom_id for row in mounted} == {atom.pk for atom in difficult}
+    assert not block.resources.filter(source_kind='bilibili', atom=basic).exists()
+    basic_video_url = series['segments'][0]['url'] if track == 'spine' else videos[0]['url']
+    assert not block.resources.filter(url=basic_video_url).exists()
+    assert block.resources.filter(asset_track='wiki', atom=basic, url=wiki['url']).exists()
+
+
+@override_settings(UNIMIND_PUBLIC_ASSET_EDITION='cn')
+def test_auto_discovery_rejects_l1_concept_video_indexes_and_seed_mounts(tree, user, monkeypatch):
+    from knowledge_builder import public_asset_discovery as discovery
+
+    atom = tree.atoms.get(name='极限')
+    video = catalog(tree)
+    seed = catalog(tree, title='导数精讲', description='导数的定义和适用条件',
+                   topic_keywords=['导数'], url='https://www.bilibili.com/video/BV1tierSeed')
+    models.ConceptAssetIndex.objects.create(
+        subject_domain=discovery.subject_domain(tree.subject), concept_name=atom.name,
+        public_asset=video, segment_title=video.title, segment_url=video.url,
+        asset_track='spotlight', quality_score=10)
+    monkeypatch.setattr('knowledge_builder.block_study.auto_mount_internal_resources', lambda *args, **kwargs: [])
+    monkeypatch.setattr(discovery, 'search_public_web', lambda *args, **kwargs: [])
+    discovery.auto_discover_and_mount_public_assets(tree, user=user)
+    assert not tree.block_resources.filter(public_asset_id__in=[video.pk, seed.pk]).exists()
