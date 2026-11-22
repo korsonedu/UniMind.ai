@@ -91,7 +91,7 @@ UniMindCode/                  ← git 仓库根目录
 | `/api/backoffice/operations/<operation>/` | 签名管理桥接，固定操作名 |
 | `/api/ai/chat/`、`/api/ai/chat/stream/`、`/api/ai/history/` | 学习端对话与本人历史 |
 | `/api/ai/feedback/` | Agent 回复赞踩，继续保留 |
-| `/api/notes/` | 笔记、引用与绑定 API |
+| `/api/notes/` | 笔记与会话引用 API |
 | `/api/users/learning/access/`、`/api/users/learning/catalog/` | 学员服务与 AI 加量目录 |
 | `/api/users/admin/analytics/dashboard/`、`/api/users/admin/analytics/export/` | 管理分析与 CSV 导出，只保留 trends/events |
 | `/api/payments/` | AI 加量订单及历史支付兼容 |

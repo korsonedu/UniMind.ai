@@ -373,7 +373,7 @@ def test_existing_chat_stream_mounts_experiment(user, auth_client, settings):
     user.is_member = True
     user.save(update_fields=['is_member'])
     WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'experience_calls': 20, 'course_calls': 200})
-    bot = Bot.objects.create(name='小宇', bot_type='planner', system_prompt='冒烟')
+    bot = Bot.objects.create(is_xiaoyu=True, name='小宇', bot_type='planner', system_prompt='冒烟')
     conversation_id = str(uuid4())
 
     def model(**kwargs):

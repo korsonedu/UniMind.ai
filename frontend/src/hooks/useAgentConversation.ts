@@ -75,8 +75,6 @@ export interface Bot {
 interface UseAgentConversationOptions {
   courseId?: number;
   enableProjects?: boolean;
-  /** Find the target bot from the bots list */
-  findBot: (bots: Bot[]) => Bot | undefined;
   /** Extra SSE payload fields (appended by doSend automatically) */
   getExtraPayload?: () => Record<string, unknown>;
   beforeSend?: () => Promise<void>;
@@ -102,7 +100,7 @@ interface UseAgentConversationOptions {
 
 export function useAgentConversation(options: UseAgentConversationOptions) {
   useLocale();
-  const { findBot, resetMessage = t('已开始新对话') } = options;
+  const { resetMessage = t('已开始新对话') } = options;
 
   // Stabilize callback refs to avoid dependency churn in doSend
   const onDoneRef = useRef(options.onDone);
@@ -950,6 +948,5 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     groupIntoSessions,
 
     // Convenience
-    findBot,
   };
 }

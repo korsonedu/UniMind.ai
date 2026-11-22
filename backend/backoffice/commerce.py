@@ -56,8 +56,8 @@ def list_orders(request, data):
 
 def _bots():
     institution = content_institution(required=True)
-    return Bot.objects.filter(Q(institution=institution) | Q(institution__isnull=True),
-                              bot_type__in=['planner', 'exam_generator']).order_by('bot_type', 'id')
+    exam_scope = Q(institution=institution) | Q(institution__isnull=True)
+    return Bot.objects.filter(Q(is_xiaoyu=True) | (Q(bot_type='exam_generator') & exam_scope)).order_by('bot_type', 'id')
 
 
 def ai_config(request, data):

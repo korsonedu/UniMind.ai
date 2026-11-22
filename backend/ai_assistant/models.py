@@ -63,6 +63,7 @@ class Bot(models.Model):
     avatar = models.ImageField(upload_to='bot_avatars/', blank=True, null=True)
     system_prompt = models.TextField()
     bot_type = models.CharField(max_length=20, choices=BOT_TYPE_CHOICES, default='planner', verbose_name="机器人类型")
+    is_xiaoyu = models.BooleanField(default=False, editable=False)
     is_active = models.BooleanField(default=True)
     institution = models.ForeignKey(
         'users.Institution', on_delete=models.CASCADE,
@@ -75,6 +76,11 @@ class Bot(models.Model):
         help_text="机构自定义人格配置：教学风格、知识范围、语气等",
     )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['is_xiaoyu'], condition=models.Q(is_xiaoyu=True), name='one_xiaoyu_bot'),
+        ]
 
     def __str__(self):
         return self.name

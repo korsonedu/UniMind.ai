@@ -18,7 +18,7 @@ class PrivateNotesSmokeTests(TestCase):
         self.other = get_user_model().objects.create_user(username='other-owner', role='admin', institution_role='owner')
         self.client = APIClient()
         self.client.force_authenticate(self.user)
-        self.bot = Bot.objects.create(name='笔记 Agent', system_prompt='', bot_type='planner')
+        self.bot = Bot.objects.create(is_xiaoyu=True, name='笔记 Agent', system_prompt='', bot_type='planner')
 
     def create_note(self, **fields):
         response = self.client.post('/api/notes/items/', {'title': '原题', **fields}, format='json')
@@ -94,25 +94,6 @@ class PrivateNotesSmokeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('notebook:', response.content.decode())
 
-    def test_binding_union_subtree_and_target_validation(self):
-        root = Notebook.objects.create(user=self.user, name='课程')
-        child = Notebook.objects.create(user=self.user, parent=root, name='子课程')
-        own = self.create_note(notebook=child.pk)
-        foreign = Note.objects.create(user=self.other)
-        url = '/api/notes/bindings/'
-        for fields in ({}, {'note': own['id'], 'notebook': root.pk}, {'note': foreign.pk}):
-            self.assertEqual(self.client.post(url, {'bot': self.bot.pk, **fields}, format='json').status_code, 400)
-        for fields in ({'note': own['id']}, {'notebook': root.pk}):
-            self.assertEqual(self.client.post(url, {'bot': self.bot.pk, **fields}, format='json').status_code, 201)
-        self.assertEqual(len(self.client.get(f'/api/notes/items/?bot={self.bot.pk}').data), 1)
-        self.client.delete(f'/api/notes/items/{own["id"]}/')
-        self.assertEqual(self.client.get(f'/api/notes/items/?bot={self.bot.pk}').data, [])
-        self.client.post(f'/api/notes/items/{own["id"]}/restore/')
-        self.assertEqual(len(self.client.get(f'/api/notes/items/?bot={self.bot.pk}').data), 1)
-        self.bot.is_active = False
-        self.bot.save()
-        self.assertEqual(self.client.get(f'{url}?bot={self.bot.pk}').status_code, 404)
-
     def test_reference_owner_bot_and_conversation_isolation(self):
         own = self.create_note()
         foreign = Note.objects.create(user=self.other)
@@ -149,7 +130,8 @@ class PrivateNotesSmokeTests(TestCase):
         with self.assertRaises(PermissionDenied):
             accessible_bot(self.user, self.bot.pk)
         self.assertEqual(self.client.get('/api/notes/items/').status_code, 200)
-        self.assertEqual(self.client.post('/api/notes/bindings/', {'bot': self.bot.pk, 'note': own['id']}, format='json').status_code, 403)
+        url = f'/api/notes/references/?bot={self.bot.pk}&conversation_id={uuid.uuid4()}'
+        self.assertEqual(self.client.put(url, {'note_ids': [own['id']]}, format='json').status_code, 403)
 
     def test_code_examples_and_utf8_export_names(self):
         root = Notebook.objects.create(user=self.user, name='课程' * 100)

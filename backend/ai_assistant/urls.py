@@ -2,13 +2,13 @@ from django.urls import path
 from .views import (
     AIChatView, AIChatListView, AIChatResetView, AIChatDeleteConversationView, AIChatStreamView,
     AgentMemoryListCreateView, AgentMemoryDetailView,
-    BotListCreateView, BotDetailView, BotVisibilityView,
+    BotListView,
     ConversationListView,
     SemanticMemoryListView, SemanticMemoryDeleteView,
     ActionCardInteractionView,
 )
 from .views_recovery import ChatRequestStatusView
-from .views_dashboard import XiaoYuDashboardView, ExamWorkbenchDashboardView
+from .views_dashboard import XiaoYuDashboardView
 from .views_projects import ConversationDetailView, ProjectListCreateView, ProjectDetailView
 from .views_dsh import DshContextView, DshToolView, DshChatView, DshSessionView, DshStatusView, DshChatStreamView, DshSessionListView, DshConfirmView, DshSubmissionView
 from .views_api import (
@@ -38,7 +38,6 @@ urlpatterns = [
     path('dsh/sessions/', DshSessionListView.as_view(), name='dsh-sessions'),
     path('dsh/session/<str:action>/', DshSessionView.as_view(), name='dsh-session'),
     path('dashboard/', XiaoYuDashboardView.as_view(), name='xiaoyu-dashboard'),
-    path('workbench/dashboard/', ExamWorkbenchDashboardView.as_view(), name='exam-workbench-dashboard'),
     path('chat/', AIChatView.as_view(), name='ai-chat'),
     path('chat/stream/', AIChatStreamView.as_view(), name='ai-chat-stream'),
     path('chat-requests/<uuid:request_id>/', ChatRequestStatusView.as_view(), name='ai-chat-request-status'),
@@ -54,9 +53,7 @@ urlpatterns = [
     path('memories/semantics/', SemanticMemoryListView.as_view(), name='semantic-memory-list'),
     path('memories/semantics/clear/', SemanticMemoryDeleteView.as_view(), name='semantic-memory-clear'),
     path('memories/semantics/<str:memory_id>/', SemanticMemoryDeleteView.as_view(), name='semantic-memory-detail'),
-    path('bots/', BotListCreateView.as_view(), name='bot-list'),
-    path('bots/<int:pk>/', BotDetailView.as_view(), name='bot-detail'),
-    path('bots/visibility/', BotVisibilityView.as_view(), name='bot-visibility'),
+    path('bots/', BotListView.as_view(), name='bot-list'),
     path('card-interactions/', ActionCardInteractionView.as_view(), name='card-interactions'),
 
     # Phase 5: Grading & Memory API

@@ -3,19 +3,18 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from ai_assistant.models import AIChatMessage, Bot, Conversation
 from .context import prepare_note_context, conversation_uses_notes
-from .models import AgentNoteBinding, Note, Notebook
+from .models import Note, Notebook
 
 
 class NoteContextSmoke(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_superuser('notes-context', 'notes-context@example.test', 'smoke')
         self.other = get_user_model().objects.create_user('notes-other', 'notes-other@example.test', 'smoke')
-        self.bot = Bot.objects.create(name='笔记助手', bot_type='planner', system_prompt='')
+        self.bot = Bot.objects.create(is_xiaoyu=True, name='笔记助手', bot_type='planner', system_prompt='')
         self.book = Notebook.objects.create(user=self.user, name='固定收益')
         self.note = Note.objects.create(user=self.user, notebook=self.book, title='久期', content='久期衡量利率敏感性。')
 
@@ -34,20 +33,6 @@ class NoteContextSmoke(TestCase):
         self.assertEqual(self.context(conversation_id)[1][0]['version'], 2)
         self.context(conversation_id, note_ids=[])
         self.assertEqual(self.context(conversation_id)[1], [])
-
-    def test_long_term_binding_is_dynamic_and_private(self):
-        binding = AgentNoteBinding.objects.create(user=self.user, bot=self.bot, notebook=self.book)
-        child = Notebook.objects.create(user=self.user, parent=self.book, name='进阶')
-        added = Note.objects.create(user=self.user, notebook=child, title='久期案例', content='久期案例。')
-        Note.objects.create(user=self.other, title='久期秘密', content='不能读取的内容')
-        self.assertEqual({s['note_id'] for s in self.context()[1]}, {self.note.pk, added.pk})
-        Note.objects.filter(pk=added.pk).update(deleted_at=timezone.now())
-        self.assertEqual({s['note_id'] for s in self.context()[1]}, {self.note.pk})
-        self.note.notebook = None
-        self.note.save()
-        self.assertEqual(self.context()[1], [])
-        binding.delete()
-        self.assertEqual(self.context(), ('', []))
 
     def test_foreign_ids_and_conversation_are_rejected(self):
         foreign = Note.objects.create(user=self.other, title='私人')

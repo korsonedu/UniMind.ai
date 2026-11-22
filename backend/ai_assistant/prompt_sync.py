@@ -82,14 +82,6 @@ def get_bot_prompt_path(bot) -> Path:
     return get_bot_prompt_dir(bot) / 'system_prompt.txt'
 
 
-def read_bot_prompt_file(bot) -> Optional[str]:
-    return read_prompt_file(bot, 'system_prompt.txt')
-
-
-def write_bot_prompt_file(bot, content: str) -> Path:
-    return write_prompt_file(bot, 'system_prompt.txt', content)
-
-
 def sync_bot_prompt(bot):
     """文件优先覆盖 DB，文件不存在则从 DB 创建文件。"""
     file_content = read_prompt_file(bot, 'system_prompt.txt')
@@ -99,14 +91,3 @@ def sync_bot_prompt(bot):
             bot.save(update_fields=['system_prompt'])
         return
     write_prompt_file(bot, 'system_prompt.txt', bot.system_prompt or '')
-
-
-def delete_bot_prompt_file(bot):
-    """删除 bot 的 prompt 目录。"""
-    import shutil
-    dir_path = get_bot_prompt_dir(bot)
-    if dir_path.exists():
-        try:
-            shutil.rmtree(dir_path)
-        except Exception:
-            logger.exception('删除 Prompt 目录失败: %s', dir_path)

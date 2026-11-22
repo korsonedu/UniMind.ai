@@ -23,7 +23,7 @@ class NoteChatSmoke(TransactionTestCase):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
         self.user = get_user_model().objects.create_superuser('note-chat', 'note-chat@example.test', 'smoke')
-        self.bot = Bot.objects.create(name='笔记助手', bot_type='planner', system_prompt='')
+        self.bot = Bot.objects.create(is_xiaoyu=True, name='笔记助手', bot_type='planner', system_prompt='')
         self.note = Note.objects.create(user=self.user, title='久期', content='久期衡量利率敏感性。')
         self.conversation_id = str(uuid.uuid4())
         self.client = APIClient()
@@ -100,32 +100,3 @@ class NoteChatSmoke(TransactionTestCase):
         response = _duplicate_chat_response(SimpleNamespace(status='succeeded', response=cached), stream=True)
         events = [json.loads(chunk.decode().removeprefix('data: ').strip()) for chunk in response.streaming_content]
         self.assertEqual(events, [user_event, cached])
-
-    def test_websocket_uses_and_persists_read_only_sources(self):
-        from channels.routing import URLRouter
-        from channels.testing import WebsocketCommunicator
-        from django.urls import re_path
-        from ai_assistant.consumers import AgentChatConsumer
-        self.stack.enter_context(patch('ai_assistant.services.chat_dispatch.dispatch_bot_chat',
-            return_value={'result': self.result, 'tool_executor': self.executor}))
-
-        class SmokeConsumer(AgentChatConsumer):
-            async def _execute_agent(self, *args, **kwargs):
-                await super()._execute_agent(*args, **kwargs)
-                await self.send(text_data=json.dumps({'type': 'smoke-finished'}))
-
-        async def communicate():
-            application = URLRouter([re_path(r'^ws/(?P<bot_id>\d+)/$', SmokeConsumer.as_asgi())])
-            communicator = WebsocketCommunicator(application, f'/ws/{self.bot.pk}/')
-            communicator.scope['user'] = self.user
-            connected, _ = await communicator.connect()
-            self.assertTrue(connected)
-            await communicator.send_json_to(self.payload)
-            event = await communicator.receive_json_from(timeout=5)
-            self.assertEqual(event['type'], 'done', json.dumps(event))
-            self.assertEqual(event['metadata']['note_sources'][0]['note_id'], self.note.pk)
-            self.assertEqual((await communicator.receive_json_from(timeout=5))['type'], 'smoke-finished')
-            await communicator.disconnect()
-
-        async_to_sync(communicate)()
-        self.assert_saved()

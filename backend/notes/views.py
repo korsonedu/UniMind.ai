@@ -9,13 +9,13 @@ from rest_framework.views import APIView
 from ai_assistant.models import AIChatMessage, Conversation
 from core.authentication import CookieTokenAuthentication
 from core.interface_language import ui_text
-from users.permissions import IsMember, has_capability
+from users.permissions import IsMember
 from .access import accessible_bot, notebook_ids
 from .awareness import after_note_save, enqueue, xiaoyu_bot
 from .exports import export_note, export_notebook
 from .links import index_links
-from .models import AgentNoteBinding, ConversationNoteReference, Note, Notebook, Tag, NoteAISettings, NoteUnderstanding
-from .serializers import BindingSerializer, NoteSerializer, NotebookSerializer
+from .models import ConversationNoteReference, Note, Notebook, Tag, NoteAISettings, NoteUnderstanding
+from .serializers import NoteSerializer, NotebookSerializer
 
 
 class PrivateNotesView:
@@ -62,12 +62,6 @@ class NotebookDetailView(PrivateNotesView, generics.RetrieveUpdateDestroyAPIView
             after_note_save(note)
 
 
-def bound_notes(user, bot):
-    bindings = AgentNoteBinding.objects.filter(user=user, bot=bot)
-    books = notebook_ids(user, bindings.filter(notebook__isnull=False).values_list('notebook_id', flat=True))
-    return Q(id__in=bindings.filter(note__isnull=False).values_list('note_id', flat=True)) | Q(notebook_id__in=books)
-
-
 class NoteListView(PrivateNotesView, generics.ListCreateAPIView):
     serializer_class = NoteSerializer
 
@@ -85,9 +79,6 @@ class NoteListView(PrivateNotesView, generics.ListCreateAPIView):
             qs = qs.filter(tags__user=self.request.user, tags__name=params['tag'])
         if params.get('favorite') in ('1', 'true'):
             qs = qs.filter(is_favorite=True)
-        if params.get('bot'):
-            bot_id = serializers.IntegerField(min_value=1).run_validation(params['bot'])
-            qs = qs.filter(bound_notes(self.request.user, accessible_bot(self.request.user, bot_id)))
         return qs.prefetch_related('tags').distinct()
 
     @transaction.atomic
@@ -204,38 +195,6 @@ class NotebookExportView(PrivateNotesView, APIView):
 class TagListView(PrivateNotesView, APIView):
     def get(self, request):
         return Response(list(Tag.objects.filter(user=request.user).values('id', 'name')))
-
-
-class BindingListView(PrivateNotesView, generics.ListCreateAPIView):
-    serializer_class = BindingSerializer
-
-    def get_queryset(self):
-        if not has_capability(self.request.user, 'ai.assistant'):
-            raise PermissionDenied('该账号不能使用 Agent。')
-        qs = AgentNoteBinding.objects.filter(user=self.request.user)
-        bot_id = self.request.query_params.get('bot')
-        if bot_id:
-            bot_id = serializers.IntegerField(min_value=1).run_validation(bot_id)
-            return qs.filter(bot=accessible_bot(self.request.user, bot_id))
-        # Permission revocation takes effect for existing bindings too.
-        allowed = []
-        from django.http import Http404
-        for bot_id in qs.values_list('bot_id', flat=True).distinct():
-            try:
-                accessible_bot(self.request.user, bot_id)
-                allowed.append(bot_id)
-            except (PermissionDenied, NotFound, Http404):
-                pass
-        return qs.filter(bot_id__in=allowed)
-
-
-class BindingDetailView(PrivateNotesView, generics.DestroyAPIView):
-    def get_queryset(self):
-        return AgentNoteBinding.objects.filter(user=self.request.user)
-
-    def perform_destroy(self, binding):
-        accessible_bot(self.request.user, binding.bot_id)
-        binding.delete()
 
 
 class ReferenceInputSerializer(serializers.Serializer):

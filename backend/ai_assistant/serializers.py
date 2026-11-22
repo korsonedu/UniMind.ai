@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AIChatMessage, AgentMemory, Bot, BotVisibility, Conversation
+from .models import AIChatMessage, AgentMemory, Bot, Conversation
 from .prompt_sync import get_bot_prompt_path, get_bot_prompt_template_name
 
 

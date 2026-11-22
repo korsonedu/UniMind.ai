@@ -14,10 +14,9 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "school_system.settings")
 django_asgi_app = get_asgi_application()
 
 from notifications.routing import websocket_urlpatterns as notifications_ws
-from ai_assistant.routing import websocket_urlpatterns as ai_assistant_ws
 from core.ws_auth import TokenAuthMiddlewareStack
 
-websocket_urlpatterns = notifications_ws + ai_assistant_ws
+websocket_urlpatterns = notifications_ws
 
 
 class ConfiguredOriginValidator(OriginValidator):

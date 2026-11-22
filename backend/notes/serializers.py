@@ -1,6 +1,5 @@
 from rest_framework import serializers
-from .access import accessible_bot
-from .models import AgentNoteBinding, Note, Notebook, Tag
+from .models import Note, Notebook, Tag
 
 
 class OwnedRelationsMixin:
@@ -58,26 +57,3 @@ class NoteSerializer(OwnedRelationsMixin, serializers.ModelSerializer):
     @staticmethod
     def save_tags(note, names):
         note.tags.set([Tag.objects.get_or_create(user=note.user, name=name)[0] for name in names])
-
-
-class BindingSerializer(OwnedRelationsMixin, serializers.ModelSerializer):
-    bot = serializers.IntegerField(min_value=1)
-
-    class Meta:
-        model = AgentNoteBinding
-        fields = ['id', 'bot', 'note', 'notebook']
-        validators = []
-
-    def validate(self, data):
-        if bool(data.get('note')) == bool(data.get('notebook')):
-            raise serializers.ValidationError('请选择一篇笔记或一个笔记本。')
-        if data.get('note') and data['note'].deleted_at:
-            raise serializers.ValidationError('不能关联回收站中的笔记。')
-        data['bot'] = accessible_bot(self.context['request'].user, data['bot'])
-        return data
-
-    def to_representation(self, instance):
-        return {'id': instance.pk, 'bot': instance.bot_id, 'note': instance.note_id, 'notebook': instance.notebook_id}
-
-    def create(self, validated_data):
-        return AgentNoteBinding.objects.get_or_create(user=self.context['request'].user, **validated_data)[0]

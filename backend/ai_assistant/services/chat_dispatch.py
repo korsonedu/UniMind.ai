@@ -1,10 +1,5 @@
-"""
-统一的 bot 对话调度。
-
-3 个入口（polling/SSE/WS）共用此模块，消除重复的 bot_type if/elif 逻辑。
-"""
+"""轮询与 SSE 的小宇对话调度。"""
 import logging
-from typing import Callable, Optional
 
 from ai_assistant.bot_registry import get_bot_profile
 
@@ -12,35 +7,11 @@ logger = logging.getLogger(__name__)
 
 
 def build_tool_run_done_payload(result, **payload):
-    """为 SSE 和 WebSocket 的结束事件附加请求级 Tool Run 标识。"""
+    """为 SSE 的结束事件附加请求级 Tool Run 标识。"""
     run_id = result.get('run_id') if isinstance(result, dict) else None
     if run_id:
         payload['run_id'] = run_id
     return payload
-
-
-def resolve_tool_choice(profile, bot_type=None):
-    """根据 bot profile 决定 tool_choice 值。
-    
-    全部用 auto：prompt 规定边界比硬约束更灵活，
-    required 会导致任务完成后模型无法停止（如命题官无限循环出题）。
-    """
-    return "auto"
-
-
-def create_tool_executor(bot, user):
-    """根据 bot_type 创建 ToolExecutor 实例。"""
-    profile = get_bot_profile(bot.bot_type if bot else 'planner')
-    return profile.executor_class(user=user)
-
-
-def create_tools(bot, user, institution=None):
-    """根据 bot_type 创建 tools 列表。"""
-    from ai_engine.tool_permissions import filter_tools
-    profile = get_bot_profile(bot.bot_type if bot else 'planner')
-    tools = profile.tools_factory()
-    bot_type = bot.bot_type if bot else 'planner'
-    return filter_tools(bot_type, institution, tools, user=user)
 
 
 def build_system_prompt(bot, user, student_context='', memory_context='', institution=None, adaptive_directives=''):
@@ -58,9 +29,6 @@ def dispatch_bot_chat(
     history: list,
     institution=None,
     *,
-    stream: bool = False,
-    on_step: Optional[Callable] = None,
-    on_message: Optional[Callable] = None,
     student_context: str = '',
     memory_context: str = '',
     adaptive_directives: str = '',
@@ -94,30 +62,16 @@ def dispatch_bot_chat(
         variant_name, variant_overrides = variant_sel
         variant_suffix = variant_overrides.get('suffix', '')
 
-    if stream and on_step:
-        result = AIService.chat_with_assistant_agent(
-            bot=bot,
-            history_messages=history,
-            user_message=message,
-            tool_executor=tool_executor,
-            student_context=student_context,
-            memory_context=memory_context,
-            on_step=on_step,
-            on_message=on_message,
-            adaptive_directives=adaptive_directives,
-            variant_suffix=variant_suffix,
-        )
-    else:
-        result = AIService.chat_with_assistant_agent(
-            bot=bot,
-            history_messages=history,
-            user_message=message,
-            tool_executor=tool_executor,
-            student_context=student_context,
-            memory_context=memory_context,
-            adaptive_directives=adaptive_directives,
-            variant_suffix=variant_suffix,
-        )
+    result = AIService.chat_with_assistant_agent(
+        bot=bot,
+        history_messages=history,
+        user_message=message,
+        tool_executor=tool_executor,
+        student_context=student_context,
+        memory_context=memory_context,
+        adaptive_directives=adaptive_directives,
+        variant_suffix=variant_suffix,
+    )
 
     return {'result': result, 'tool_executor': tool_executor, 'prompt_variant': variant_name}
 

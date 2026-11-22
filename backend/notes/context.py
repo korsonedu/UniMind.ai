@@ -19,9 +19,9 @@ def prepare_note_context(user, bot, conversation_id, message, note_ids=None, sel
     if not apps.is_installed('notes'):
         return '', []
     from ai_assistant.models import AIChatMessage, Conversation
-    from .access import accessible_bot, notebook_ids
-    from .models import Note, AgentNoteBinding, ConversationNoteReference, NoteAISettings, NoteUnderstanding
-    from .awareness import content_signature, xiaoyu_bot
+    from .access import accessible_bot
+    from .models import Note, ConversationNoteReference, NoteAISettings, NoteUnderstanding
+    from .awareness import content_signature
 
     accessible_bot(user, bot.pk)
     if not isinstance(selection, str) or len(selection) > 3000:
@@ -53,22 +53,17 @@ def prepare_note_context(user, bot, conversation_id, message, note_ids=None, sel
     else:
         note_ids = list(references.order_by('id').values_list('note_id', flat=True))
 
-    is_xiaoyu = bool(xiaoyu_bot(user, bot))
-    bindings = [] if is_xiaoyu else list(AgentNoteBinding.objects.filter(user=user, bot=bot).values('note_id', 'notebook_id'))
-    bound_notes = [item['note_id'] for item in bindings if item['note_id']]
-    folders = notebook_ids(user, [item['notebook_id'] for item in bindings if item['notebook_id']])
     settings = NoteAISettings.objects.filter(user=user, enabled=True).first()
-    automatic = bool(settings and is_xiaoyu)
+    if not settings and not note_ids and not selection:
+        return '', []
     available = Note.objects.filter(user=user, deleted_at__isnull=True)
-    if not automatic:
-        available = available.filter(Q(pk__in=note_ids + bound_notes) | Q(notebook_id__in=folders))
+    if not settings:
+        available = available.filter(pk__in=note_ids)
     understandings = {}
     valid_understandings = NoteUnderstanding.objects.none()
-    if automatic:
+    if settings:
         valid_understandings = NoteUnderstanding.objects.filter(
             note__user=user, note__deleted_at__isnull=True, epoch=settings.epoch, status='ready', version=F('note__version'))
-    if not automatic and not note_ids and not bindings and not selection:
-        return '', []
 
     terms = set(re.findall(r'[a-zA-Z0-9_]{2,}|[\u4e00-\u9fff]{2,}', message.lower()))
     for term in list(terms):
@@ -127,7 +122,7 @@ def prepare_note_context(user, bot, conversation_id, message, note_ids=None, sel
         sources.append({
             'source_id': source_id, 'note_id': note.pk, 'title': note.title,
             'version': note.version, 'excerpt': excerpt,
-            'kind': 'temporary' if note.pk in explicit else ('automatic' if automatic else 'permanent'),
+            'kind': 'temporary' if note.pk in explicit else 'automatic',
             **({'understanding': derived} if derived else {}),
         })
         sections.append(f'[{source_id}] {note.title}（版本 {note.version}）\n{excerpt}{derived}')

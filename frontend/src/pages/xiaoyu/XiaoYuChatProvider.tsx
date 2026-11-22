@@ -11,7 +11,7 @@ import { readRecovery, recoveryScope } from '@/lib/conversationRecovery';
 import { queryClient } from '@/lib/queryClient';
 import { learningKey, type ProjectLearning } from '@/lib/projectLearning';
 import { activeWorkspace } from '@/lib/activeWorkspace';
-import { XiaoYuChatContext, findAssistantBot, type PageChatHooks } from './xiaoYuChatContext';
+import { XiaoYuChatContext, type PageChatHooks } from './xiaoYuChatContext';
 
 /**
  * 路由级常驻聊天。Provider 在 Router 根部挂载，路由切换只卸载页面 UI，
@@ -39,7 +39,6 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
 
   const chat = useAgentConversation({
     enableProjects: true,
-    findBot: findAssistantBot,
     beforeSend: async () => { await pageHooksRef.current.beforeSend?.(); },
     getExtraPayload: () => pageHooksRef.current.getExtraPayload?.() ?? {},
     onDone: () => pageHooksRef.current.onDone?.(),
@@ -68,10 +67,8 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const init = async () => {
       try {
-        const bRes = await api.get('/ai/bots/');
+        const { data: [found] } = await api.get<Bot[]>('/ai/bots/');
         if (cancelled) return;
-        const bots: Bot[] = Array.isArray(bRes.data) ? bRes.data : (bRes.data?.results || []);
-        const found = findAssistantBot(bots);
         if (!found) {
           toast.error(t('未找到小宇 bot'));
           return;

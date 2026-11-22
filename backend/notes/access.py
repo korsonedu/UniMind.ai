@@ -2,27 +2,20 @@ from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
-from ai_assistant.models import Bot, BotVisibility
+from ai_assistant.models import Bot
 from users.permissions import has_capability
 from .models import Notebook
-from core.utils import get_content_institution_id
 
 
-def accessible_bot(user, bot_id):
-    # WebSocket callers keep user instances across requests; refresh revoked access.
+def accessible_bot(user, bot_id=None):
+    # Reload account permissions before making private notes available.
     user = get_object_or_404(get_user_model().objects.select_related('access_profile'), pk=user.pk, is_active=True)
     if not has_capability(user, 'ai.assistant'):
         raise PermissionDenied('该账号不能使用 Agent。')
-    bot_id = serializers.IntegerField(min_value=1).run_validation(bot_id)
-    bot = get_object_or_404(Bot, pk=bot_id, is_active=True)
-    if bot.bot_type == 'exam_generator':
-        raise PermissionDenied('该 Agent 不支持笔记参考。')
-    if bot.institution_id and bot.institution_id != get_content_institution_id(user):
-        raise PermissionDenied('无法使用其他机构的 Agent。')
-    if (not bot.institution_id and bot.bot_type != 'planner' and get_content_institution_id(user)
-            and BotVisibility.objects.filter(bot=bot, institution_id=get_content_institution_id(user), is_visible=False).exists()):
-        raise PermissionDenied('该 Agent 当前不可见。')
-    return bot
+    bots = Bot.objects.filter(is_xiaoyu=True, is_active=True)
+    if bot_id is not None:
+        bots = bots.filter(pk=serializers.IntegerField(min_value=1).run_validation(bot_id))
+    return get_object_or_404(bots)
 
 
 def notebook_ids(user, root_ids):

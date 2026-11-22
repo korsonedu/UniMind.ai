@@ -4,7 +4,7 @@ import logging
 
 from django.db import transaction
 from django.http import Http404
-from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import PermissionDenied
 
 from .access import accessible_bot
 from .models import Note, NoteAISettings, NoteUnderstanding
@@ -12,14 +12,10 @@ from .models import Note, NoteAISettings, NoteUnderstanding
 logger = logging.getLogger(__name__)
 
 
-def xiaoyu_bot(user, bot=None):
-    from ai_assistant.models import Bot
-    canonical = Bot.objects.filter(name='小宇', bot_type='planner', institution__isnull=True, is_active=True).order_by('pk').first()
-    if canonical is None or (bot is not None and bot.pk != canonical.pk):
-        return None
+def xiaoyu_bot(user):
     try:
-        return accessible_bot(user, canonical.pk)
-    except (PermissionDenied, NotFound, Http404):
+        return accessible_bot(user)
+    except (PermissionDenied, Http404):
         return None
 
 

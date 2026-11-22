@@ -17,7 +17,7 @@ def test_failed_experiment_keeps_replayable_evidence(user, settings, tmp_path):
     settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
     user.is_member = True
     user.save(update_fields=['is_member'])
-    bot = Bot.objects.create(name='小宇', bot_type='planner', system_prompt='合成')
+    bot = Bot.objects.create(is_xiaoyu=True, name='小宇', bot_type='planner', system_prompt='合成')
     cid = uuid4()
     body = {'message': '合成交互讲题', 'request_id': str(uuid4()), 'conversation_id': str(cid), 'bot_id': bot.pk}
     arguments = {'title': '合成实验', 'html': '<button id="go">计算</button><output id="out">41</output>',
@@ -47,7 +47,7 @@ def test_official_turn_persists_once_and_uses_auxiliary_tasks(user, settings, tm
     settings.UNIMIND_DSH_TITLE_ENABLED = settings.UNIMIND_DSH_MEMORY_ENABLED = True
     settings.UNIMIND_DSH_STATE_DIR = str(tmp_path)
     WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'experience_calls': 20, 'course_calls': 200})
-    bot = Bot.objects.create(name='小宇', bot_type='planner', system_prompt='合成提示词')
+    bot = Bot.objects.create(is_xiaoyu=True, name='小宇', bot_type='planner', system_prompt='合成提示词')
     cid = uuid4()
     body = {'message': '我喜欢先举例', 'request_id': str(uuid4()), 'conversation_id': str(cid), 'bot_id': bot.pk}
     req = SimpleNamespace(user=user, headers={}, data=body)
@@ -72,7 +72,7 @@ def test_official_turn_failure_releases_and_never_uses_legacy(user, settings, tm
     from ai_assistant.services.dsh_xiaoyu import complete_turn
     from ai_assistant.services.dsh_runtime import DshUnavailable
     settings.UNIMIND_DSH_STATE_DIR = str(tmp_path)
-    bot = Bot.objects.create(name='小宇', bot_type='planner', system_prompt='合成')
+    bot = Bot.objects.create(is_xiaoyu=True, name='小宇', bot_type='planner', system_prompt='合成')
     cid = uuid4()
     body = {'message': '合成失败', 'request_id': str(uuid4()), 'conversation_id': str(cid), 'bot_id': bot.pk}
     with patch('ai_assistant.services.dsh_xiaoyu.run_site_action', side_effect=DshUnavailable()), \
@@ -102,7 +102,7 @@ def test_signed_context_is_bound_and_delete_invalidates_replay(auth_client, user
     from ai_assistant.dsh_authentication import make_task_token
     settings.UNIMIND_DSH_ENABLED = settings.UNIMIND_DSH_XIAOYU_ENABLED = True
     settings.UNIMIND_DSH_STATE_DIR = str(tmp_path)
-    bot = Bot.objects.create(name='小宇', bot_type='planner', system_prompt='合成')
+    bot = Bot.objects.create(is_xiaoyu=True, name='小宇', bot_type='planner', system_prompt='合成')
     cid = uuid4()
     Conversation.objects.create(user=user, bot=bot, conversation_id=cid)
     current = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=cid, role='user', content='本人合成问题')

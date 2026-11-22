@@ -20,14 +20,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Install Python deps
-COPY requirements.txt ./
+COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend code
 COPY backend/ ./backend/
 
-# Copy built frontend into Django static
-COPY --from=frontend-build /app/frontend/dist ./backend/static/
+# Use the same Vite output path as a source checkout.
+COPY --from=frontend-build /app/frontend/dist ./frontend/dist/
 
 # Collect static
 WORKDIR /app/backend
