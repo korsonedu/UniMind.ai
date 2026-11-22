@@ -18,6 +18,23 @@ from ai_assistant.services.dsh_runtime import DshUnavailable, run_site_action, s
 from users.models import AIUsageReservation, WeeklyAIQuotaConfig, WeeklyAIUsage
 
 
+@pytest.mark.parametrize('status, expected', [(400, 503), (403, 403), (404, 404), (409, 409), (429, 429), (503, 503)])
+def test_worker_error_keeps_status_and_detail(settings, tmp_path, status, expected):
+    from types import SimpleNamespace
+    settings.UNIMIND_DSH_PYTHON = sys.executable
+    settings.UNIMIND_DSH_API_URL = 'http://127.0.0.1:8911'
+    settings.UNIMIND_DSH_STATE_DIR = str(tmp_path / 'sessions')
+    detail = '内容访问范围尚未配置，请联系管理员。'
+    with patch('ai_assistant.services.dsh_runtime.subprocess.Popen') as popen:
+        process = popen.return_value.__enter__.return_value
+        process.returncode = 0
+        process.communicate.return_value = (json.dumps({'status': status, 'error': detail}).encode(), b'')
+        with pytest.raises(DshUnavailable) as caught:
+            run_site_action(SimpleNamespace(pk=1), 'list')
+    assert caught.value.status_code == expected
+    assert str(caught.value.detail) == detail
+
+
 @pytest.mark.django_db
 def test_task_callback_scope(user, settings):
     settings.UNIMIND_DSH_ENABLED = True

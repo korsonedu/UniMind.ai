@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 from uuid import uuid4
 from threading import Lock
+from urllib.error import HTTPError
 
 import host
 from sessions import SessionStore, SessionUnavailable
@@ -106,6 +107,23 @@ if __name__ == '__main__':
         response = {'status': 404, 'error': '会话不存在或不属于当前账号。'}
     except host.HostConfigurationError as exc:
         response = {'status': 503, 'error': str(exc)}
+    except HTTPError as exc:
+        response = {'status': exc.code if exc.code in (403, 404, 409, 429) else 503,
+                    'error': 'DSH 服务暂不可用，请稍后重试。'}
+        with exc:
+            if exc.code in (400, 403, 404, 409, 429):
+                try:
+                    body = json.loads(exc.read(8192))
+                except (ValueError, OSError):
+                    body = None
+                if isinstance(body, dict):
+                    detail = body.get('detail') or body.get('error')
+                    if isinstance(detail, str):
+                        detail = detail.strip()
+                        if (detail and len(detail) <= 300 and detail.isprintable()
+                                and '<' not in detail and '>' not in detail
+                                and 'traceback' not in detail.lower()):
+                            response['error'] = detail
     except Exception:
         response = {'status': 503, 'error': 'DSH 服务暂不可用，请稍后重试。'}
     print(json.dumps(response, ensure_ascii=False))

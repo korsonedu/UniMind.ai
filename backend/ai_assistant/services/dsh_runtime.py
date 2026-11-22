@@ -151,7 +151,7 @@ def run_site_action(user, action, *, message='', session_id=None, reservation=No
         status = result.get('status', 503)
         if status != 200:
             error = DshUnavailable(result.get('error') or DshUnavailable.default_detail)
-            error.status_code = status if status in (404, 409, 503) else 503
+            error.status_code = status if status in (403, 404, 409, 429, 503) else 503
             raise error
         if not isinstance(result.get('result'), dict):
             raise ValueError()

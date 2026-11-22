@@ -586,6 +586,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     let streamingId: string | null = null;
     let streamingContent = '';
     let completed = false;
+    let streamError: string | null = null;
     const previousMessages = isVisible() ? messagesRef.current : messageBuffersRef.current.get(requestConversationId) ?? [];
     let settled = false;
     const settle = (outcome: 'completed' | 'error') => {
@@ -769,7 +770,11 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
             streamingContent += payload.delta;
             ensureSmoother().push(streamingContent);
           } else if (payload.done) {
-            if (payload.is_error) break;
+            if (payload.is_error) {
+              streamError = typeof payload.full_content === 'string' && payload.full_content.trim()
+                ? t(payload.full_content) : t('请求失败，请稍后重试。');
+              break;
+            }
             completed = true;
             notifyDesktop({ kind: 'chat', title: t('小宇已完成回复'), body: t('打开 UniMind 查看回复。'), route: options.courseId ? `/course/${options.courseId}?conversation=${requestConversationId}` : '/xiaoyu' });
             pendingSendsRef.current.delete(requestConversationId);
@@ -824,8 +829,11 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
           }
         } catch { /* skip malformed SSE events */ }
       }
-    } catch {
-      // A rejected request or interrupted stream follows the same local rollback.
+    } catch (error) {
+      if (!(error instanceof Error && error.name === 'AbortError')) {
+        streamError = error instanceof Error && error.message.trim()
+          ? t(error.message) : t('请求失败，请稍后重试。');
+      }
     } finally {
       reveal.dispose();
       stopSmoother(completed ? streamingContent : undefined, !completed);
@@ -843,6 +851,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
           const restoreDraft = saved?.draftRevision === draftRevision && !saved?.draft;
           saveRecovery(requestScope, requestConversationId, { pending: undefined, ...(restoreDraft ? { draft: text } : {}) });
           if (isVisible() && restoreDraft && !inputValueRef.current) setInput(text);
+          if (isVisible() && streamError) toast.error(streamError);
           settle('error');
         } else {
           updateConversationMessages(requestConversationId, previous => previous.map(message =>

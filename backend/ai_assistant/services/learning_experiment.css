@@ -8,7 +8,7 @@
   --um-surface: #f5f3ef;
 }
 * { box-sizing: border-box; }
-body { margin: 0; padding: 16px; color: var(--um-ink); background: #fff; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+body { margin: 0; padding: 16px; overflow-x: hidden; color: var(--um-ink); background: #fff; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
 button, input, select { font: inherit; accent-color: var(--um-accent); }
 button, select, input[type="number"] { min-height: 32px; border: 1px solid var(--um-line); border-radius: 8px; background: #fff; color: var(--um-ink); padding: 5px 8px; }
 button { cursor: pointer; }

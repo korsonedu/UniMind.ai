@@ -247,7 +247,7 @@ def conversation_experiments(user, conversation_id):
 EXPERIMENT_TOOLS = [
     {'type': 'function', 'function': {
         'name': 'build_learning_experiment',
-        'description': '仅在解答具体问题或讲解概念时编写交互卡片，出题、统计、报告、计划等不得使用。通过检查后挂载当前对话。自包含HTML/CSS/JavaScript，无外部资源；以图形、参数控件和数值为主，沿用平台CSS变量及控件样式，桌面正文700×360、窄屏360×540像素内完整显示，不裁剪内容，长解释放聊天正文。不做答题或判分。失败返回诊断；更新前先read并沿用ID和版本。用unimind.getState()/setState(object)保存演示参数，report(简短观察)准备讲解线索；不修改学习记录。checks至少检查一个真实控件与结果。',
+        'description': '仅在解答具体问题或讲解概念时编写交互卡片，出题、统计、报告、计划等不得使用。通过检查后挂载当前对话。自包含HTML/CSS/JavaScript，无外部资源；以图形、参数控件和数值为主，沿用平台CSS变量及控件样式；布局紧凑清晰、宽度自适应（高度随内容自动展开，控件建议2到4个），长解释放聊天正文。不做答题或判分。失败返回诊断；更新前先read并沿用ID和版本。用unimind.getState()/setState(object)保存演示参数，report(简短观察)准备讲解线索；不修改学习记录。checks至少检查一个真实控件与结果。',
         'parameters': {'type': 'object', 'additionalProperties': False, 'properties': {
             'title': {'type': 'string', 'minLength': 1, 'maxLength': 100},
             'html': {'type': 'string', 'minLength': 1, 'maxLength': 24000},

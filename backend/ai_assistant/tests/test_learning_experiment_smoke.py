@@ -221,62 +221,71 @@ def test_experiment_document_is_opaque_and_state_is_escaped():
     assert 'window.unimind' in document
 
 
-def test_duration_rate_preview_layout_and_screenshots():
+@pytest.mark.parametrize('capture_screenshots', [False, True])
+def test_tall_balance_sheet_preview_and_screenshots(capture_screenshots):
     from ai_assistant.services.learning_experiment_preview import run
     html = '''
 <style>
-.um-layout { grid-template-columns: 190px minmax(0, 1fr); }
+.um-controls { grid-template-columns: 1fr; gap: 16px; padding: 16px; }
 .um-result-main b { display: block; }
-@media (max-width: 480px) {
-  .um-layout, .um-controls { grid-template-columns: 1fr; }
-}
 </style>
 <div class="um-layout">
   <div class="um-controls">
-    <label>久期（年）<i id="duration-value">5</i>
-      <input id="duration" type="range" min="1" max="10" step="1" value="5">
+    <label>持有国债（亿元）<i></i>
+      <input id="bonds" type="range" min="0" max="800" step="50" value="400">
     </label>
-    <label>利率变动（百分点）<i id="rate-value">1</i>
-      <input id="rate" type="range" min="0" max="3" step="0.25" value="1">
+    <label>对银行贷款（亿元）<i></i>
+      <input id="loans" type="range" min="0" max="800" step="50" value="200">
     </label>
-    <div class="um-result-main">估算价格变动<b id="result"></b></div>
-    <div class="um-hint">小幅利率变动时，价格变动比例约为负的久期乘以利率变动。</div>
+    <label>外汇资产（亿元）<i></i>
+      <input id="foreign-assets" type="range" min="0" max="800" step="50" value="300">
+    </label>
+    <label>流通中现金（亿元）<i></i>
+      <input id="cash" type="range" min="0" max="800" step="50" value="500">
+    </label>
+    <label>银行准备金（亿元）<i></i>
+      <input id="reserves" type="range" min="0" max="800" step="50" value="300">
+    </label>
+    <div class="um-result-main">净资产（资产减负债）<b id="result"></b></div>
   </div>
   <div class="um-stage"><div id="chart"></div></div>
 </div>
 <script>
-const duration = document.querySelector('#duration'), rate = document.querySelector('#rate');
+const controls = [...document.querySelectorAll('input')];
 function draw() {
-  const years = Number(duration.value), change = Number(rate.value);
-  document.querySelector('#duration-value').textContent = years;
-  document.querySelector('#rate-value').textContent = change;
-  document.querySelector('#result').textContent = (-years * change).toFixed(2) + '%';
+  const [bonds, loans, foreignAssets, cash, reserves] = controls.map(control => {
+    control.closest('label').querySelector('i').textContent = control.value;
+    return Number(control.value);
+  });
+  const assets = bonds + loans + foreignAssets, liabilities = cash + reserves;
+  document.querySelector('#result').textContent = `${assets - liabilities} 亿元`;
   unimind.chart(document.querySelector('#chart'), {
-    type: 'line', labels: ['0%', '1%', '2%', '3%'],
-    series: [{label: '久期估算', values: [0, -years, -years * 2, -years * 3]}],
-    xLabel: '利率变动（百分点）', yLabel: '价格变动（%）'
+    type: 'bar', labels: ['资产', '负债'],
+    series: [{label: '央行资产负债表', values: [assets, liabilities]}],
+    yLabel: '金额（亿元）'
   });
 }
-duration.addEventListener('input', draw);
-rate.addEventListener('input', draw);
+controls.forEach(control => control.addEventListener('input', draw));
 draw();
 </script>'''
-    report = run({'document': experiments.experiment_document(html, {}), 'capture_screenshots': True,
-        'checks': [
-            {'selector': '#duration', 'action': 'input', 'value': '8',
-                'expect_selector': '#result', 'expect_text': '-8.00%'},
-            {'selector': '#rate', 'action': 'input', 'value': '2',
-                'expect_selector': '#result', 'expect_text': '-16.00%'},
-        ]})
-    assert report['ok'], report
+    changes = [('bonds', '500', 200), ('loans', '250', 250), ('foreign-assets', '350', 300),
+        ('cash', '550', 250), ('reserves', '350', 200)]
+    report = run({'document': experiments.experiment_document(html, {}), 'capture_screenshots': capture_screenshots,
+        'checks': [{'selector': f'#{control}', 'action': 'input', 'value': value,
+            'expect_selector': '#result', 'expect_text': f'{expected} 亿元'} for control, value, expected in changes]})
+    assert report['ok'] is True, report
     assert not report['errors']
-    assert all(check['ok'] for check in report['checks'])
+    assert report['checks'] == [{'selector': f'#{control}', 'ok': True} for control, _, _ in changes]
+    if not capture_screenshots:
+        assert 'screenshots' not in report
+        return
     frames = report['screenshots']
-    assert [(frame['id'], frame['width'], frame['height']) for frame in frames] == [
-        ('initial-700', 700, 360), ('initial-360', 360, 540),
-        ('check-1-700', 700, 360), ('check-2-700', 700, 360), ('final-360', 360, 540),
+    assert [(frame['id'], frame['width']) for frame in frames] == [
+        ('initial-700', 700), ('initial-360', 360),
+        *((f'check-{index}-700', 700) for index in range(1, 6)), ('final-360', 360),
     ]
     for frame in frames:
+        assert (360 if frame['width'] == 700 else 540) < frame['height'] < 800
         raw = base64.b64decode(frame['png'], validate=True)
         assert raw.startswith(b'\x89PNG\r\n\x1a\n')
         assert struct.unpack('>II', raw[16:24]) == (frame['width'], frame['height'])
@@ -284,9 +293,38 @@ draw();
         assert len(raw) == frame['bytes']
 
 
+def test_preview_rejects_javascript_runtime_error():
+    from ai_assistant.services.learning_experiment_preview import run
+    html = '''<button onclick="this.textContent = '已操作'; throw Error('运行失败')">操作</button>'''
+    report = run({'document': experiments.experiment_document(html, {}), 'checks': [
+        {'selector': 'button', 'action': 'click', 'expect_selector': 'button', 'expect_text': '已操作'},
+    ]})
+    assert report['ok'] is False
+    assert report['checks'] == [{'selector': 'button', 'ok': True}]
+    assert '运行失败' in report['errors']
+
+
+def test_preview_rejects_failed_control_check():
+    from ai_assistant.services.learning_experiment_preview import run
+    report = run({'document': experiments.experiment_document('<button>操作</button>', {}), 'checks': [
+        {'selector': 'button', 'action': 'click', 'expect_selector': 'button', 'expect_text': '已操作'},
+    ]})
+    assert report['ok'] is False
+    assert not report['errors']
+    assert report['checks'][0]['ok'] is False
+
+
+def test_preview_rejects_blank_render():
+    from ai_assistant.services.learning_experiment_preview import run
+    html = '<button style="display:none">操作</button>'
+    report = run({'document': experiments.experiment_document(html, {}), 'checks': []})
+    assert report['ok'] is False
+    assert any('没有可见内容' in error for error in report['errors'])
+
+
 def test_browser_failure_reaches_model_and_mount_finishes_turn(monkeypatch):
     from ai_engine.service import AIEngine
-    diagnostics = {'ok': False, 'errors': ['SVG标签重叠：息票 / 面值'], 'checks': []}
+    diagnostics = {'ok': False, 'errors': ['讲解卡片在 360px 宽度下没有可见内容。'], 'checks': []}
     requests, executions, events = [], [], []
     definition = {'type': 'function', 'function': {'name': 'build_learning_experiment',
         'parameters': {'type': 'object', 'properties': {}, 'additionalProperties': False}}}
