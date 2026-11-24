@@ -309,6 +309,8 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             return [('run_course_tools', invalid)]
         if '"courses"' in latest:
             return [('search_asr', {**tool_args, 'course_id': course.pk})]
+        if program_mode == 'timestamp_card':
+            return [('run_course_tools', {'find': '折现率', 'output': 'card'})]
         if program_mode == 'compact' or (program_mode == 'truncated_reply' and 'run_course_tools' in names):
             return [('run_course_tools', program_payload)]
         if program_mode == 'only_ambiguous':
@@ -1625,20 +1627,26 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         settings.UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE = False
         program_prompt = '请查折现率课程，再在匹配的第一门课里查折现率讲稿。'
         program_stats, source_cards = {}, []
+        from ai_assistant.services.dsh_service import execute_tool
         for mode, engine, calls in (('individual', 'dsh', anthropic_calls), ('individual', 'ulr', openai_calls),
-                                     ('compact', 'ulr', openai_calls)):
+                                     ('compact', 'ulr', openai_calls), ('timestamp_card', 'ulr', openai_calls)):
             program_mode = mode
             before = len(calls)
-            cards, stats = run(engine, calls, None, program_prompt)
+            executor = 'views_dsh' if engine == 'dsh' else 'services.ulr_runtime'
+            with patch(f'ai_assistant.{executor}.execute_tool', wraps=execute_tool) as reads:
+                cards, stats = run(engine, calls, None, program_prompt + '只要时间点。')
+            assert [call.args[1] for call in reads.call_args_list] == ['search_courses', 'search_asr']
+            stats['business_queries'] = reads.call_count
             source, = [card for card in cards if card['tool'] == 'search_asr']
             source_cards.append(source)
             stats['serialized_request_bytes'] = sum(len(json.dumps(request, ensure_ascii=False,
                 separators=(',', ':')).encode()) for request in calls[before:])
             program_stats[f'{engine}_{mode}'] = stats
         assert all(card == source_cards[0] for card in source_cards)
+        assert program_stats['dsh_individual']['model_requests'] == 3
         assert program_stats['ulr_compact']['model_requests'] == 2
         assert program_stats['ulr_individual']['model_requests'] == 3
-        from ai_assistant.services.dsh_service import execute_tool
+        assert program_stats['ulr_timestamp_card']['model_requests'] == 1
         only_prompt = '请查指定的折现率课程讲稿，同名课程请先问我。'
         program_mode = 'only'
         with patch('ai_assistant.services.ulr_runtime.execute_tool', wraps=execute_tool) as reads:
@@ -2191,7 +2199,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         fail('dsh')
         fail('ulr')
         total_quota_charges = WeeklyAIUsage.objects.get(user=user).ai_calls
-        assert total_quota_charges == 79
+        assert total_quota_charges == 80
         print(json.dumps({'dsh': dsh_stats, 'ulr': ulr_stats, 'same_course_source_card': True,
                           'standalone_profile': {'debug': False, 'dsh_requests': 0, 'chat': isolated_stats,
                               'title': isolated.title, 'memory': True, 'score': native_score['score'],

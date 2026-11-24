@@ -22,7 +22,7 @@ from .ulr_grading import grade_probe
 from .ulr_history import bound_practice_answers, card_question_answers, scoped_history
 from .ulr_tool_program import (
     CURRENT_COURSE_NAME, MAX_RANKS, NAME as PROGRAM_NAME, PRACTICE_NAME, PROGRAM_OPS, PROGRAM_TOOLS, SOURCE_ACCESS_REVOKED,
-    VERSION as PROGRAM_VERSION, duplicate_program_scope, program_discovery, repair_program_tool, run_program,
+    TIMESTAMP_ONLY, VERSION as PROGRAM_VERSION, duplicate_program_scope, program_discovery, repair_program_tool, run_program,
 )
 from .ulr_capabilities import (
     course_tools, require_visible_course_sources, require_visible_practice_review_sources,
@@ -171,6 +171,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
     available_programs = {name: PROGRAM_TOOLS[name] for name, ops in PROGRAM_OPS.items() if set(ops) <= allowed_names
                           and (name != CURRENT_COURSE_NAME or current_course_id is not None)
                           and (name != PRACTICE_NAME or practice_request and not re.search(r'诊断|diagnos', message, re.I))}
+    course_card_request = PROGRAM_NAME in available_programs and TIMESTAMP_ONLY.search(message)
     discovery = next((tool for tool in tools if tool['function']['name'] == 'find_learning_tools'), None)
     named_tools = set(re.findall(r'(?<![a-zA-Z0-9_])session_[a-z][a-z0-9_]{0,39}(?![a-zA-Z0-9_])', message))
     if named_tools & registry.get('versions', {}).keys():
@@ -401,15 +402,16 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
             pending_tools = [reader, *registry['tools']]
             groups['session']['tools'] = pending_tools
         card = result.pop('visual', None)
-        if name == CURRENT_COURSE_NAME and result.pop('_ulr_card_only', False):
+        if name in (PROGRAM_NAME, CURRENT_COURSE_NAME) and result.pop('_ulr_card_only', False):
+            course_label = '当前课程' if name == CURRENT_COURSE_NAME else '所选课程'
             if result['segments']:
                 if not card or card.get('type') != 'data_card' or not card['payload'].get('items'):
                     raise ULRTurnUnavailable('讲稿定位卡未准备完成，请重试。')
-                card_reply = 'Found matching transcript segments.' if english else '已找到当前课程的讲稿片段。'
+                card_reply = 'Found matching transcript segments.' if english else f'已找到{course_label}的讲稿片段。'
             else:
                 card = None
                 card_reply = ('No matching segments in this course transcript.' if english
-                              else '当前课程的讲稿没有找到相关片段。')
+                              else f'{course_label}的讲稿没有找到相关片段。')
         if card:
             card = {'tool': 'search_asr' if name in (PROGRAM_NAME, CURRENT_COURSE_NAME) else name, **card}
             question_answers.update(card_question_answers((card,)))
@@ -440,7 +442,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
 
     def stream_reply(text):
         nonlocal next_text_at
-        if not (buffer_reply or hold_project_reply or PRACTICE_NAME in available_programs
+        if not (buffer_reply or hold_project_reply or course_card_request or PRACTICE_NAME in available_programs
                 or course_ids or transcript_sources or practice_sources or practice_point or question_answers
                 or practice_reviews or project_change or strategy_use_ids
                 or used_revisions or experiments or artifacts.changes or program_phase in ('selected', 'repair')):

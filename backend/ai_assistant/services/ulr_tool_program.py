@@ -14,7 +14,7 @@ NAME = 'run_course_tools'
 PRACTICE_NAME = 'run_practice_tools'
 CURRENT_COURSE_NAME = 'locate_current_course_transcript'
 # Bump when the instruction grammar or its bound operation contracts change.
-VERSION = 13
+VERSION = 14
 # Earlier versions with the same operations may still echo version and rank.
 LEGACY_VERSION = 6
 PROGRAM_OPS = {
@@ -82,10 +82,14 @@ def program_tool(name, required, properties, rules=''):
 
 FIND_PROPERTIES = {'find': {**TEXT, 'description': '要查找的课程或知识点'}, 'subject': TEXT}
 QUERY_PROPERTY = {**TEXT, 'description': '讲稿关键词'}
+COURSE_CARD_OUTPUT = {'type': 'string', 'enum': ['card'], 'description': (
+    '用户明确只要时间点或时间戳、无需讲解时填 card，内核直接交付来源卡。其他情况省略。')}
+TIMESTAMP_ONLY = re.compile(r'(?:^|[。！？.!?]\s*)(?:只要(?:视频)?时间(?:点|戳)|'
+                            r'(?:just|only) (?:the )?timestamps?)\s*[。.!！]?\s*$', re.IGNORECASE)
 PROGRAM_TOOLS = {
     NAME: program_tool(NAME, 'find',
         {**FIND_PROPERTIES, 'query': {**QUERY_PROPERTY, 'description': '讲稿关键词，省略时沿用 find'},
-         'limit': SEARCH_ASR_SCHEMA['properties']['limit']}, SELECTION_RULE),
+         'limit': SEARCH_ASR_SCHEMA['properties']['limit'], 'output': COURSE_CARD_OUTPUT}, SELECTION_RULE),
     PRACTICE_NAME: program_tool(PRACTICE_NAME, 'find',
         {**FIND_PROPERTIES, **{field: GET_PRACTICE_QUESTIONS_SCHEMA['properties'][field]
                                for field in PRACTICE_FILTERS},
@@ -213,7 +217,7 @@ def run_program(arguments, allowed_tools, execute, *, name=NAME, message='', cur
     if practice and arguments.get('q_type') == 'objective' and 'subjective_type' in arguments:
         return failure('invalid_arguments', '客观题不能指定主观题题型。', field='$.subjective_type')
 
-    card_only = arguments.get('output') == 'card'
+    card_only = arguments.get('output') == 'card' and (name != NAME or TIMESTAMP_ONLY.search(message) is not None)
     steps = []
     if anchored:
         if type(current_course_id) is not int or current_course_id < 1:

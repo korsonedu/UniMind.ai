@@ -1464,7 +1464,7 @@ def test_ulr_recovers_a_course_program_missing_from_the_initial_tools(auth_clien
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize('mode', ['recover', 'exhaust', 'withdraw', 'markup_recover'])
+@pytest.mark.parametrize('mode', ['recover', 'exhaust', 'withdraw', 'markup_recover', 'card_only', 'card_with_explanation'])
 def test_ulr_recovers_course_program_reply_without_repeating_queries(auth_client, user, settings, tmp_path, mode):
     from ai_assistant.services.dsh_service import execute_tool
 
@@ -1487,6 +1487,11 @@ def test_ulr_recovers_course_program_reply_without_repeating_queries(auth_client
             assert 'run_course_tools' in tools
             assert 'program' not in tools['find_learning_tools']['parameters']['properties']
             arguments = {'find': '折现率'}
+            if mode.startswith('card_'):
+                assert tools['run_course_tools']['parameters']['properties']['output']['enum'] == ['card']
+                arguments['output'] = 'card'
+            if mode == 'card_only':
+                kwargs['on_text']('正在查阅讲稿。')
             return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
                 'id': 'lookup', 'type': 'function',
                 'function': {'name': 'run_course_tools', 'arguments': json.dumps(arguments)},
@@ -1496,7 +1501,7 @@ def test_ulr_recovers_course_program_reply_without_repeating_queries(auth_client
         assert receipts[-1]['segments'][0]['course_id'] == course.pk
         if mode == 'withdraw':
             Course.objects.filter(pk=course.pk).update(is_published=False)
-        done = mode in ('recover', 'markup_recover') and len(receipts) == 2
+        done = mode == 'card_with_explanation' or mode in ('recover', 'markup_recover') and len(receipts) == 2
         content = '这里是完整讲解。' if done else '尚未完成的答复片段。'
         if mode == 'markup_recover' and not done:
             return {'choices': [{'finish_reason': 'stop', 'message': {'content': content + '<function_cal'}}]}
@@ -1505,6 +1510,10 @@ def test_ulr_recovers_course_program_reply_without_repeating_queries(auth_client
 
     body = {'bot_id': bot.pk, 'conversation_id': str(uuid4()), 'request_id': str(uuid4()),
             'message': '请查折现率课程，并在第一门课中查找讲稿。'}
+    if mode == 'card_only':
+        body['message'] += '只要时间点。'
+    elif mode == 'card_with_explanation':
+        body['message'] += '也请解释折现率。'
 
     async def consume(response):
         return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')]
@@ -1516,22 +1525,24 @@ def test_ulr_recovers_course_program_reply_without_repeating_queries(auth_client
             patch('ai_assistant.services.ulr_runtime.execute_tool', wraps=execute_tool) as reads:
         events = ask()
         final = events[-1]
-        if mode in ('recover', 'markup_recover'):
-            assert final['full_content'] == '这里是完整讲解。'
-            assert final['metadata']['dsh_cards'][0]['tool'] == 'search_asr'
+        completed = mode in ('recover', 'markup_recover', 'card_only', 'card_with_explanation')
+        if completed:
+            assert final['full_content'] == ('已找到所选课程的讲稿片段。' if mode == 'card_only' else '这里是完整讲解。')
+            card, = final['metadata']['dsh_cards']
+            assert card['tool'] == 'search_asr'
+            assert card['payload']['items'][0]['action_link'] == f'/course/{course.pk}?t=60'
             assert ask()[-1] == final
         else:
             assert final['is_error']
             if mode == 'withdraw':
                 assert final['full_content'] == '引用课程已不可访问，请重新提问。'
-        assert provider.call_count == (2 if mode == 'withdraw' else 3)
+        assert provider.call_count == {'card_only': 1, 'card_with_explanation': 2, 'withdraw': 2}.get(mode, 3)
         assert [call.args[1] for call in reads.call_args_list] == ['search_courses', 'search_asr']
     assert all(receipt == receipts[0] for receipt in receipts)
     assert not any(event.get('type') == 'text_delta' for event in events)
-    recovered = mode in ('recover', 'markup_recover')
-    assert AIChatMessage.objects.filter(conversation_id=body['conversation_id'], role='assistant').count() == int(recovered)
-    assert AIUsageReservation.objects.get(request_id=body['request_id']).status == ('succeeded' if recovered else 'released')
-    assert WeeklyAIUsage.objects.get(user=user).ai_calls == int(recovered)
+    assert AIChatMessage.objects.filter(conversation_id=body['conversation_id'], role='assistant').count() == int(completed)
+    assert AIUsageReservation.objects.get(request_id=body['request_id']).status == ('succeeded' if completed else 'released')
+    assert WeeklyAIUsage.objects.get(user=user).ai_calls == int(completed)
 
 
 @pytest.mark.django_db(transaction=True)
