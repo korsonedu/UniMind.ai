@@ -5,12 +5,13 @@ import re
 
 from django.db.models import F, Q
 from django.db.models.functions import Substr
+from rest_framework.exceptions import ValidationError
 
 from ai_assistant.models import AIChatMessage
 from courses.models import TranscriptSegment
 from quizzes.services.practice_results import practice_question_reviews
-from .course_context import current_transcript_sources
-from .ulr_capabilities import visible_course_ids, visible_practice_review_sources
+from .course_context import current_transcript_sources, require_current_transcript_sources
+from .ulr_capabilities import require_visible_course_sources, visible_course_ids, visible_practice_review_sources
 
 
 COURSE_LINK = re.compile(r'/course/([1-9][0-9]*)(?:\?t=(-?[0-9.]+(?:e[+-]?[0-9]+)?))?')
@@ -89,6 +90,32 @@ def match_legacy_transcript_excerpts(excerpts):
             'transcript__course_id', 'start_time', 'excerpt', 'transcript_id', 'transcript__revision')
     return {(course, start, text): (course, transcript, revision)
             for course, start, text, transcript, revision in segments.iterator() if (course, start, text) in excerpts}
+
+
+def require_receipt_course_sources(user, receipt):
+    if receipt.get('done') is not True or receipt.get('engine') not in ('dsh', 'ulr'):
+        return
+    messages = AIChatMessage.objects.filter(user=user)
+    answer = messages.filter(pk=receipt['message_id'], role='assistant').values('bot_id', 'conversation_id', **SOURCE_FIELDS).first()
+    if not answer:
+        raise ValidationError('原答复已不可用。')
+    rows = (answer,)
+    if receipt['engine'] == 'dsh' and answer['sources'] is None:
+        # Older replies could quote an earlier turn without emitting another source card.
+        rows = messages.filter(bot_id=answer['bot_id'], conversation_id=answer['conversation_id'],
+                               pk__lte=receipt['message_id']).order_by().values(**SOURCE_FIELDS).iterator()
+    courses, transcripts, excerpts = set(), set(), set()
+    for row in rows:
+        versions = reply_transcript_sources(None, row)
+        transcripts.update(versions)
+        excerpts.update(legacy_transcript_excerpts(row['cards'], versions))
+        courses.update(legacy_courses(row))
+        courses.update((row['sources'] or {}).get('courses', ()))
+    courses.update(course for course, _, _ in transcripts | excerpts)
+    require_visible_course_sources(user, courses)
+    require_current_transcript_sources(transcripts)
+    if len(match_legacy_transcript_excerpts(excerpts)) != len(excerpts):
+        raise ValidationError('当前课程讲稿已更新，请重新发起提问。')
 
 
 def card_question_answers(cards):

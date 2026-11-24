@@ -86,8 +86,12 @@ def _reserve_chat_request(user, data, bot, *, conversation_id=None):
         request_content['learning_activity'] = data['learning_activity']
     fingerprint = hashlib.sha256(json.dumps(request_content, sort_keys=True).encode()).hexdigest()
     reservation = reserve_ai_call(user, data.get('request_id'), fingerprint=fingerprint, conversation_id=conversation_id)
-    if not reservation.acquired and chat_receipt_deleted(reservation):
-        reservation.response = {'deleted': True}
+    if not reservation.acquired:
+        if chat_receipt_deleted(reservation):
+            reservation.response = {'deleted': True}
+        elif reservation.status == 'succeeded':
+            from .services.ulr_history import require_receipt_course_sources
+            require_receipt_course_sources(user, reservation.response)
     return reservation
 
 
