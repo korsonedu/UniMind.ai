@@ -2,6 +2,8 @@
 import copy
 import json
 from collections import Counter
+from pathlib import Path
+from runpy import run_path
 
 import httpx
 import pytest
@@ -121,7 +123,8 @@ class SemanticFixture:
             vector[int(second)] = 1.0
             vector[2] = .01
             rows.append(dict(index=index, embedding=vector))
-        return httpx.Response(200, json={'data': rows}, request=httpx.Request('POST', url))
+        return httpx.Response(200, json={'data': rows, 'model': config.EMBEDDING_MODEL,
+            'usage': {'prompt_tokens': len(rows) * 10}}, request=httpx.Request('POST', url))
 
 
 @pytest.fixture
@@ -200,8 +203,8 @@ def assert_failed(build, message):
 
 
 @pytest.mark.parametrize('failure_at', ['interblock_review', 'intrablock_steps', 'publication'])
-def test_ulr_build_resumes_validated_stages_and_publishes_once(monkeypatch, settings, user, api_client, failure_at, caplog):
-    from ai_engine.observability import runtime_observation
+def test_ulr_build_resumes_validated_stages_and_publishes_once(monkeypatch, settings, user, api_client, failure_at, caplog, tmp_path):
+    from ai_engine.observability import log_ai_operation, runtime_observation
     from knowledge_builder import pipeline
 
     settings.DEBUG = settings.UNIMIND_ULR_PROTOTYPE = True
@@ -231,6 +234,12 @@ def test_ulr_build_resumes_validated_stages_and_publishes_once(monkeypatch, sett
             reviews.append((messages[0]['content'], messages[1]['content']))
         if name == failure_at and requests.count(name) == 1:
             raise RuntimeError('本次构建中断')
+        if failure_at == 'publication':
+            log_ai_operation(kwargs['operation'], True, 1, metadata={
+                'model': 'capture-fixture-model', 'reported_model': 'capture-fixture-model',
+                'max_output_tokens': kwargs['max_tokens'], 'prompt_tokens': 50,
+                'completion_tokens': 10, 'cached_tokens': 30,
+            })
         if name == 'outline_decompose' and requests.count(name) == 1:
             output = {'modules': '格式错误'}
         else:
@@ -315,6 +324,43 @@ def test_ulr_build_resumes_validated_stages_and_publishes_once(monkeypatch, sett
         build_knowledge_tree(str(build.pk))
     assert len(requests) == count
     assert build.atoms.count() == 6
+    local = [row.args for row in caplog.records if row.name == 'ai_engine.observability'
+             and row.args[4].get('kind') == 'build_local']
+    if failure_at != 'publication':
+        assert not local
+        return
+    assert [(row[0], row[1], row[4]['runtime'], row[4]['attempts']) for row in local] == [
+        ('knowledge_tree.worker_guard', False, 'legacy', '0'),
+        ('knowledge_tree.checkpoint_publication', True, 'ulr', '0'),
+    ]
+    tool = run_path(str(Path(settings.BASE_DIR).parent / 'scripts/ulr_review_pairs.py'))
+    logfile = tmp_path / 'model-operations.log'
+    logfile.write_text('\n'.join(f'{row.name} {row.getMessage()}' for row in caplog.records
+                                 if row.name == 'ai_engine.observability'))
+    operations = tool['read_operations']([logfile])
+    original_attempt = str(observations[0]['attempt_id'])
+    model_operations = operations[request_id, original_attempt]
+    local_attempts = [row[4]['attempt_id'] for row in local]
+    record = {'request_id': request_id, 'attempt_ids': [original_attempt, *local_attempts], 'runtime': 'ulr',
+              'model': {call['operation']: call['reported_model'] for call in model_operations}}
+    metrics = dict.fromkeys(tool['METRICS']) | {'model_requests': count, 'embedding_requests': embedding_count}
+    rates = {'models': {'capture-fixture-model': {'uncached_input': 1_000_000, 'cached_input': 100_000, 'output': 2_000_000},
+                        config.EMBEDDING_MODEL: {'embedding_input': 1_000_000}}}
+    values = metrics.copy()
+    trace = tool['reconcile'](record, values, operations, rates)
+    assert trace['local_build_attempt_ids'] == local_attempts and not trace['unobserved_attempt_ids']
+    assert trace['model_verified'] and tool['request_configurations'](trace)
+    assert values['input_tokens'] == count * 50 and values['embedding_input_tokens'] == 180
+    assert values['cost_microusd'] == count * 43 + 180
+
+    publication = (request_id, local_attempts[-1])
+    missing = {key: rows for key, rows in operations.items() if key != publication}
+    values = metrics.copy()
+    trace = tool['reconcile'](record, values, missing, rates)
+    assert trace['unobserved_attempt_ids'] == [local_attempts[-1]] and values['cost_microusd'] is None
+    operations[publication].append({**model_operations[0], 'attempt_id': local_attempts[-1]})
+    with pytest.raises(ValueError, match='本地构建批次'):
+        tool['reconcile'](record, metrics.copy(), operations, rates)
 
 
 def test_ai_failure_is_rethrown_and_recorded(monkeypatch):

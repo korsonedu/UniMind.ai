@@ -5,12 +5,13 @@ import logging
 from base64 import b64decode, b64encode
 from io import BytesIO
 from itertools import combinations
+from time import monotonic
 
 import numpy as np
 from django.conf import settings
 from django.db import connection, transaction
 from django.utils import timezone
-from ai_engine.observability import observe_background, runtime_observation
+from ai_engine.observability import log_ai_operation, observe_background, runtime_observation
 from ai_engine.service import AICallError
 from ai_assistant.services.ulr_config import ulr_enabled
 
@@ -739,13 +740,19 @@ def _run_build(build_id, progress, *, resume_running):
 
 
 def _build_stages(build, progress, *, native):
+    started = monotonic()
+    from_checkpoints = native
+
     def stage(name):
+        nonlocal from_checkpoints
         runtime_observation.get()['stage'] = name
         build.current_stage = name
         build.save(update_fields=['current_stage', 'updated_at'])
         if progress:
             progress(name)
-        return build.checkpoint.get(name)
+        cached = build.checkpoint.get(name)
+        from_checkpoints = from_checkpoints and bool(cached)
+        return cached
 
     def save(value, *fields):
         if native:
@@ -757,6 +764,8 @@ def _build_stages(build, progress, *, native):
 
     try:
         if build.requires_ulr and not native:
+            log_ai_operation('knowledge_tree.worker_guard', False, (monotonic() - started) * 1000, 'runtime_mismatch',
+                             metadata={'kind': 'build_local', 'attempts': 0})
             raise InvariantViolationError('build requires an ULR worker')
         if build.checkpoint and build.checkpoint.get('version') != CHECKPOINT_VERSION:
             raise InvariantViolationError('unsupported knowledge build checkpoint')
@@ -807,6 +816,7 @@ def _build_stages(build, progress, *, native):
                 block.update(short_title=title, is_entry_block=block['code'] in entries)
         else:
             # Earlier checkpoints stored only the titles. Restore the entry hints before graph review.
+            from_checkpoints = False
             _name_blocks(blocks, context)
             save([groups, stats, [block['short_title'] for block in blocks],
                   [block['code'] for block in blocks if block['is_entry_block']]])
@@ -832,17 +842,21 @@ def _build_stages(build, progress, *, native):
                        'interface_count':sum(len(v) for v in interfaces.values())}
         runtime_observation.get()['stage'] = 'publication'
         _persist(build,modules,atoms,edges,blocks,graph,plans,interfaces)
+        online_mount = getattr(settings, 'UNIMIND_KB_ONLINE_AUTO_MOUNT', False)
         try:
             from .block_study import auto_mount_internal_resources
             from .public_asset_service import auto_mount_public_assets
             with transaction.atomic():
                 auto_mount_internal_resources(build)
                 auto_mount_public_assets(build)
-            if getattr(settings, 'UNIMIND_KB_ONLINE_AUTO_MOUNT', False):
+            if online_mount:
                 from .public_asset_discovery import auto_discover_and_mount_public_assets
                 auto_discover_and_mount_public_assets(build)
         except Exception:
             logging.getLogger(__name__).exception('Initial resource matching failed for build %s', build.pk)
+        if from_checkpoints and not online_mount:
+            log_ai_operation('knowledge_tree.checkpoint_publication', True, (monotonic() - started) * 1000,
+                             metadata={'kind': 'build_local', 'attempts': 0})
         return build
     except Exception as exc:
         # This is the single orchestration boundary. Preserve the original exception.

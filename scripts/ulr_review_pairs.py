@@ -21,6 +21,9 @@ OBSERVATION = re.compile(
     r'error=(\S+) meta=(\{.*\})$')
 TOKEN_KEYS = {'input_tokens': 'prompt_tokens', 'output_tokens': 'completion_tokens',
               'cached_input_tokens': 'cached_tokens'}
+LOCAL_KINDS = ('local_instruction', 'build_local')
+BUILD_LOCAL_OPERATIONS = {'knowledge_tree.checkpoint_publication': ('ulr', True),
+                          'knowledge_tree.worker_guard': ('legacy', False)}
 TOOL_OUTCOME_FIELDS = ('call_id', 'name', 'status', 'retry_of', 'steps_executed', 'error_code')
 CAPTURE_FIXTURES = {'course-discount-transcript': 'ulr_course_review.json',
                     'practice-discount-point': 'ulr_practice_review.json'}
@@ -95,7 +98,7 @@ def read_operations(paths):
                 kind = meta.get('kind', 'model')
                 if not all(meta.get(key) for key in ('request_id', 'attempt_id')):
                     continue
-                if kind != 'local_instruction' and not meta.get('model'):
+                if kind not in LOCAL_KINDS and not meta.get('model'):
                     continue
                 operations[meta['request_id'], meta['attempt_id']].append({
                     'log_file': path.name, 'log_line': line_number, 'runtime': meta.get('runtime'),
@@ -155,7 +158,8 @@ def reconcile(record, values, operations, cost_rates=None):
     calls = [call for attempt in attempts for call in operations.get((request_id, attempt), [])]
     unobserved = [attempt for attempt in attempts if not operations.get((request_id, attempt))]
     local_calls = [call for call in calls if call['kind'] == 'local_instruction']
-    model_calls = [call for call in calls if call['kind'] not in ('embedding', 'local_instruction')]
+    local_build_calls = [call for call in calls if call['kind'] == 'build_local']
+    model_calls = [call for call in calls if call['kind'] != 'embedding' and call['kind'] not in LOCAL_KINDS]
     embedding_calls = [call for call in calls if call['kind'] == 'embedding']
     runtime = 'dsh' if record['runtime'] == 'dsh' else 'ulr'
     if local_calls:
@@ -165,6 +169,12 @@ def reconcile(record, values, operations, cost_rates=None):
                 or local['model'] or local['reported_model'] or local['submitted_tools'] not in (
                     ['locate_current_course_transcript'], ['run_practice_tools'])):
             raise ValueError(f'{request_id} 的本地指令回执与调用记录不符。')
+    for call in local_build_calls:
+        if (prefix != 'build' or record['runtime'] != 'ulr' or call['requests'] != 0
+                or BUILD_LOCAL_OPERATIONS.get(call['operation']) != (call['runtime'], call['success'])
+                or len(operations[request_id, call['attempt_id']]) != 1 or call['model'] or call['reported_model']
+                or any(call[metric] is not None for metric in TOKEN_KEYS)):
+            raise ValueError(f'{request_id} 的本地构建批次回执与调用记录不符。')
     if any(call['runtime'] != runtime for call in model_calls):
         raise ValueError(f'{request_id} 的模型运行路径与日志不符。')
     counts = {'model_requests': sum(call['requests'] for call in model_calls)}
@@ -197,9 +207,10 @@ def reconcile(record, values, operations, cost_rates=None):
             raise ValueError(f'{request_id} 的 {metric} 与可核对用量不符。')
         values[metric] = total
     provider_calls = model_calls + embedding_calls
-    if local_calls or cost_rates is not None:
-        cost = 0 if local_calls else None
-        if not local_calls and not unobserved:
+    zero_provider_cost = not provider_calls and not unobserved
+    if zero_provider_cost or cost_rates is not None:
+        cost = 0 if zero_provider_cost else None
+        if provider_calls and not unobserved:
             cost = priced_cost(provider_calls, cost_rates['models'])
         if values['cost_microusd'] is not None and cost is not None and values['cost_microusd'] != cost:
             raise ValueError(f'{request_id} 的成本与调用记录及费率不符。')
@@ -210,6 +221,7 @@ def reconcile(record, values, operations, cost_rates=None):
     return {'request_id': request_id, 'attempt_ids': attempts, 'operations': calls, 'unobserved_attempt_ids': unobserved,
             **({'attempt_id': attempts[0]} if len(attempts) == 1 else {}),
             **({'local_instruction_verified': True} if local_calls else {}),
+            **({'local_build_attempt_ids': [call['attempt_id'] for call in local_build_calls]} if local_build_calls else {}),
             'model_verified': not unobserved and all(call['reported_model'] for call in provider_calls) if provider_calls else None}
 
 
@@ -224,7 +236,7 @@ def tool_quality(record, trace):
         required_steps = read(Path(__file__).with_name('fixtures') / fixture)['case']['tool_steps'][runtime]
     if required_steps is not None and len(required_steps) != len(expected):
         raise ValueError('应执行的业务步骤与工具路径长度不符。')
-    operations = [call for call in trace['operations'] if call['kind'] != 'embedding'] if trace else []
+    operations = [call for call in trace['operations'] if call['kind'] not in ('embedding', 'build_local')] if trace else []
     if not operations or 'tool_outcomes' not in record or any(call['submitted_tools'] is None for call in operations):
         return None
     submissions = [name for call in operations for name in call['submitted_tools']]
@@ -381,6 +393,8 @@ def request_configurations(trace):
     configurations = defaultdict(set)
     for call in trace.get('operations', []):
         kind, limit = call.get('kind', 'model'), call.get('max_output_tokens')
+        if kind in LOCAL_KINDS:
+            continue
         if (not call.get('operation') or not call.get('model') or not call.get('reported_model')
                 or kind != 'embedding' and (type(limit) is not int or limit <= 0)):
             return {}
