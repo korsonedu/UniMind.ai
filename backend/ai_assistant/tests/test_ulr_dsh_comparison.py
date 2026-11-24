@@ -808,7 +808,8 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                 timings.setdefault('first_visible', monotonic())
         return events
 
-    def run(engine, model_calls, focused_task, message, conversation=None, note_ids=None, course_context=None, capture=None):
+    def run(engine, model_calls, focused_task, message, conversation=None, note_ids=None, course_context=None, capture=None,
+            *, replay_error=None):
         settings.UNIMIND_ULR_PROTOTYPE = engine == 'ulr'
         conv = conversation or Conversation.objects.create(user=user, bot=bot,
             project=project if focused_task else None, conversation_id=uuid4())
@@ -829,12 +830,18 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         final = events[-1]
         assert final.get('engine') == engine, final
         count = len(model_calls)
-        assert auth_client.get(f'/api/ai/chat-requests/{request_id}/').data['response'] == final
-        assert async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))[-1] == final
+        recovered = auth_client.get(f'/api/ai/chat-requests/{request_id}/').data
+        replay = async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))[-1]
+        if replay_error:
+            assert recovered['status'] == 'failed'
+            assert recovered['response'] == replay == {'done': True, 'is_error': True, 'full_content': replay_error}
+        else:
+            assert recovered['status'] == 'completed' and recovered['response'] == replay == final
         assert len(model_calls) == count
         stats = {
             'model_requests': count - prior, 'text_deltas': sum(event.get('type') == 'text_delta' for event in events),
             'elapsed_ms': round(elapsed * 1000), 'replay_model_requests': len(model_calls) - count,
+            'replay_blocked': bool(replay_error),
             'first_text_ms': round((timings['first_text'] - start) * 1000) if 'first_text' in timings else None,
             'first_visible_text_ms': round((timings['first_visible'] - start) * 1000),
         }
@@ -2030,7 +2037,8 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             AIChatMessage.objects.create(**history, role='assistant', content=historical_derivation, metadata={'engine': 'dsh'})
             AIChatMessage.objects.create(**history, role='user', content='再从公式开始。')
             AIChatMessage.objects.create(**history, role='assistant', content='SAFE_HISTORY_MARKER')
-            _, stats = run(engine, model_calls, None, '继续上次的讨论。', conversation=conversation)
+            _, stats = run(engine, model_calls, None, '继续上次的讨论。', conversation=conversation,
+                           replay_error='引用课程已不可访问，请重新提问。' if engine == 'dsh' else None)
             assert stats['model_requests'] == 1 and stats['replay_model_requests'] == 0
             historical_withdrawal[engine] = {'prefilled_revoked_course_quote': engine == 'dsh',
                                              'prefilled_revoked_derivation': engine == 'dsh', **stats}
@@ -2090,8 +2098,10 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             request_bytes = sum(len(json.dumps(request, ensure_ascii=False, separators=(',', ':')).encode()) for request in calls[before:])
             practices[engine] = {**stats, 'serialized_request_bytes': request_bytes, 'business_queries': 2}
         assert QuizExam.objects.filter(user=user).count() == exam_count
+        practice_replay_error = '原题已进入正式练习，请重新提问。'
         for engine, calls in (('dsh', anthropic_calls), ('ulr', openai_calls)):
-            hint_cards, hint_stats = run(engine, calls, None, practice_hint)
+            hint_cards, hint_stats = run(engine, calls, None, practice_hint,
+                                         replay_error=practice_replay_error if engine == 'dsh' else None)
             hint, = hint_cards
             assert hint_stats['model_requests'] == 2
             assert bool(hint['payload']['questions'][0].get('answer')) == (engine == 'dsh')
@@ -2113,7 +2123,8 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             AIChatMessage.objects.create(**history, role='assistant', content=practice_derivation, metadata={'engine': 'dsh'})
             AIChatMessage.objects.create(**history, role='user', content='另一项讨论。')
             AIChatMessage.objects.create(**history, role='assistant', content=practice_safe_history)
-            _, stats = run(engine, calls, None, practice_history, conversation=conversation)
+            _, stats = run(engine, calls, None, practice_history, conversation=conversation,
+                           replay_error=practice_replay_error if engine == 'dsh' else None)
             assert stats['model_requests'] == 1
             sent = json.dumps(calls[-1], ensure_ascii=False)
             assert practice_safe_history in sent
@@ -2139,7 +2150,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         assert before == (len(anthropic_calls), len(openai_calls))
         practices['ulr']['objective_grading_model_requests'] = 0
         Question.objects.filter(pk=practice_question.pk).update(text=revised_practice, correct_answer='A')
-        dsh_review_cards, dsh_review_stats = run('dsh', anthropic_calls, None, practice_review)
+        dsh_review_cards, dsh_review_stats = run('dsh', anthropic_calls, None, practice_review, replay_error=practice_replay_error)
         dsh_question, = dsh_review_cards[0]['payload']['questions']
         assert dsh_question['text'] == revised_practice and dsh_question['answer'] == 'A'
         review_cards, review_stats = run('ulr', openai_calls, None, practice_review)
