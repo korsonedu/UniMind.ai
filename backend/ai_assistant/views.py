@@ -9,10 +9,17 @@ from django.conf import settings
 from django.db import close_old_connections
 from users.permissions import HasQuota
 from rest_framework import generics, serializers
+from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from users.workspaces.identity import selected_institution
 from .models import AIChatMessage, AgentMemory, Bot, Conversation
+from .services.external_audio_asr import ExternalAudioSnippetInput, transcribe_external_snippet
+from .services.external_video_context import (
+    external_video_context_text,
+    external_video_visual_messages,
+    prepare_external_video_context,
+)
 from .services.language import request_language
 from .serializers import AIChatMessageSerializer, AgentMemorySerializer, BotSerializer, ConversationSerializer
 from .utils import get_student_academic_context
@@ -62,6 +69,17 @@ def _reserve_chat_request(user, data, bot):
     }
     if 'course_context' in data:
         request_content['course_context'] = data['course_context']
+    if external_context := data.get('external_video_context'):
+        # Keep the images distinguishable without serializing their base64 into the fingerprint JSON.
+        external_context = dict(external_context)
+        if visual := external_context.get('visual'):
+            external_context['visual'] = {
+                name: {**frame, 'image': hashlib.sha256(frame['image'].encode()).hexdigest()}
+                if name in ('current', 'previous') and isinstance(frame, dict)
+                and isinstance(frame.get('image'), str) else frame
+                for name, frame in visual.items()
+            }
+        request_content['external_video_context'] = external_context
     if 'learning_activity' in data:
         request_content['learning_activity'] = data['learning_activity']
     fingerprint = hashlib.sha256(json.dumps(request_content, sort_keys=True).encode()).hexdigest()
@@ -104,7 +122,7 @@ def process_ai_chat(*args, reservation=None, **kwargs):
 
 def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=None,
                     history_limit=10, current_user_message_id=None, reservation=None,
-                    note_context='', note_sources=None):
+                    note_context='', note_sources=None, external_video_context=None):
     history_msgs = _get_chat_history(
         user,
         bot,
@@ -129,6 +147,11 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
     tool_executor = None
     poll_variant_name = 'baseline'
     try:
+        if external_video_context:
+            # The polling chat builder consumes text. The prompt describes the captured frame times.
+            project_history = project_history + [
+                {'role': 'user', 'content': external_video_context_text(external_video_context)},
+            ]
         with _AI_CHAT_SEMAPHORE:
             dispatch_result = dispatch_bot_chat(
                 bot=bot,
@@ -161,6 +184,8 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                 pending_msg.content = ai_content
                 # 统一 metadata 构建
                 msg_metadata = {'note_sources': note_sources} if note_sources else {}
+                if external_video_context:
+                    msg_metadata['external_video_context'] = external_video_context
                 if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
                     msg_metadata['generated_questions'] = tool_executor._last_generated
                 if hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
@@ -282,6 +307,7 @@ class AIChatView(APIView):
         bot = Bot.objects.filter(pk=bot_id, is_xiaoyu=True, is_active=True).first()
         if not bot:
             return Response({'error': 'Bot not found'}, status=404)
+        external_video_context = prepare_external_video_context(request, bot, conversation_id)
         sync_bot_prompt(bot)
 
         reservation = _reserve_chat_request(request.user, request.data, bot)
@@ -296,10 +322,17 @@ class AIChatView(APIView):
                 request.user, bot, conversation_id, user_message,
                 request.data.get('note_ids'), request.data.get('note_selection', ''),
             )
+            metadata = {
+                **note_message_metadata(note_context, note_sources, request.data.get('note_selection', '')),
+                **learning_activity_metadata(request, conversation_id),
+                'ui_language': request_language(request),
+            }
+            if external_video_context:
+                metadata['external_video_context'] = external_video_context
             user_msg = AIChatMessage.objects.create(
                 user=request.user, role='user', content=user_message,
                 bot=bot, conversation_id=conversation_id,
-                metadata={**note_message_metadata(note_context, note_sources, request.data.get('note_selection', '')), **learning_activity_metadata(request, conversation_id), 'ui_language': request_language(request)},
+                metadata=metadata,
             )
             record_event('ai_chat_start', user=request.user, properties={'bot_id': bot_id})
 
@@ -318,6 +351,7 @@ class AIChatView(APIView):
                 current_user_message_id=user_msg.id,
                 reservation=reservation,
                 note_context=note_context, note_sources=note_sources,
+                external_video_context=external_video_context,
             )
 
         except BaseException:
@@ -328,17 +362,35 @@ class AIChatView(APIView):
         return Response({'status': 'pending'})
 
 
+class ExternalAudioSnippetView(APIView):
+    permission_classes = [IsMember]
+    parser_classes = [MultiPartParser]
+
+    @method_decorator(user_rate_limit(key_prefix='ext_audio_asr', max_requests=30, window_seconds=3600))
+    def post(self, request):
+        data = ExternalAudioSnippetInput(data=request.data)
+        data.is_valid(raise_exception=True)
+        return Response(transcribe_external_snippet(**data.validated_data))
+
+
 class ConversationListView(generics.ListAPIView):
     """轻量会话列表，返回用户的对话元数据（含消息数），供侧栏展示。"""
     serializer_class = ConversationSerializer
     permission_classes = [IsMember]
 
     def get_queryset(self):
-        from django.db.models import Count, OuterRef, Subquery
+        from django.db.models import Count, Exists, OuterRef, Subquery
         bot_id = self.request.query_params.get('bot_id')
+        external_video_key = self.request.query_params.get('external_video_key', '').strip()
         qs = Conversation.objects.filter(user=self.request.user).order_by('-updated_at')
         if bot_id:
             qs = qs.filter(bot_id=bot_id)
+        if external_video_key:
+            qs = qs.filter(Exists(AIChatMessage.objects.filter(
+                user=self.request.user,
+                conversation_id=OuterRef('conversation_id'),
+                metadata__external_video_context__video_key=external_video_key,
+            )))
 
         # 注解消息数：通过 conversation_id UUID 关联 AIChatMessage
         msg_count_subquery = AIChatMessage.objects.filter(
@@ -465,14 +517,15 @@ class AIChatStreamView(APIView):
         bot = Bot.objects.filter(pk=bot_id, is_xiaoyu=True, is_active=True).first()
         if not bot:
             return Response({'error': 'Bot not found'}, status=404)
-
-
         from .services.course_context import prepare_course_context, course_context_text, course_visual_messages
-        course_context = prepare_course_context(request, bot, conversation_id)
+        external_video_context = prepare_external_video_context(request, bot, conversation_id)
+        course_context = (prepare_course_context(request, bot, conversation_id)
+                          if external_video_context is None else None)
 
         if settings.UNIMIND_DSH_XIAOYU_ENABLED:
             from .services.dsh_xiaoyu import response
-            return response(request, bot, conversation_id, user_message, course_context=course_context)
+            return response(request, bot, conversation_id, user_message, course_context=course_context,
+                            external_video_context=external_video_context)
 
         from .services.learning_experiments import available_to, attach_to_chat
         experiment_prototype = available_to(request.user)
@@ -489,15 +542,21 @@ class AIChatStreamView(APIView):
                 request.user, bot, conversation_id, user_message,
                 request.data.get('note_ids'), request.data.get('note_selection', ''),
             )
+            metadata = {
+                **note_message_metadata(note_context, note_sources, request.data.get('note_selection', '')),
+                **learning_activity_metadata(request, conversation_id),
+                'ui_language': request_language(request),
+            }
+            if course_context:
+                metadata['course_context'] = course_context
+            if external_video_context:
+                metadata['external_video_context'] = external_video_context
             user_msg = AIChatMessage.objects.create(
                 user=request.user, role='user', content=user_message,
                 bot=bot, conversation_id=conversation_id,
-                metadata={**note_message_metadata(note_context, note_sources, request.data.get('note_selection', '')), **learning_activity_metadata(request, conversation_id), 'ui_language': request_language(request)},
+                metadata=metadata,
             )
-            if course_context:
-                user_msg.metadata['course_context'] = course_context
-                user_msg.save(update_fields=['metadata'])
-        
+
             # Create pending assistant message (for refresh recovery)
             pending_msg = AIChatMessage.objects.create(
                 user=request.user, role='assistant', content="[Thinking...]",
@@ -526,6 +585,11 @@ class AIChatStreamView(APIView):
                 visual = course_visual_messages(course_context)
                 if visual:
                     project_history.append({'role': 'user', 'content': visual})
+            if external_video_context:
+                video_messages = [{'role': 'user', 'content': external_video_context_text(external_video_context)}]
+                if visual := external_video_visual_messages(external_video_context):
+                    video_messages.append({'role': 'user', 'content': visual})
+                project_history = project_history + video_messages
 
             from ai_assistant.services.memory_service import build_memory_context
             student_context, memory_context, adaptive_directives = '', '', ''
@@ -723,6 +787,8 @@ class AIChatStreamView(APIView):
                 metadata = {'note_sources': note_sources} if note_sources else {}
                 if course_context:
                     metadata['course_context'] = course_context
+                if external_video_context:
+                    metadata['external_video_context'] = external_video_context
                 visual_count = len(getattr(tool_executor, 'pending_visuals', []) or [])
                 metrics['visual_count'] = visual_count
                 if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:

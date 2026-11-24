@@ -224,6 +224,13 @@ CORS_ALLOWED_ORIGINS = _get_list("CORS_ALLOWED_ORIGINS")
 if CORS_ALLOW_CAPACITOR_ORIGINS:
     CORS_ALLOWED_ORIGINS = list(dict.fromkeys([*CORS_ALLOWED_ORIGINS, *CAPACITOR_ALLOWED_ORIGINS]))
 CORS_ALLOWED_ORIGIN_REGEXES = _get_list("CORS_ALLOWED_ORIGIN_REGEXES")
+CORS_ALLOW_EXTENSION_ORIGINS = _get_bool("CORS_ALLOW_EXTENSION_ORIGINS", default=True)
+if CORS_ALLOW_EXTENSION_ORIGINS:
+    CORS_ALLOWED_ORIGIN_REGEXES = list(dict.fromkeys([
+        *CORS_ALLOWED_ORIGIN_REGEXES,
+        r"^chrome-extension://[a-z]{32}$",
+        r"^moz-extension://[0-9a-fA-F-]+$",
+    ]))
 from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = (*default_headers, 'x-unimind-workspace')
 CORS_ALLOW_CREDENTIALS = _get_bool("CORS_ALLOW_CREDENTIALS", default=True)
