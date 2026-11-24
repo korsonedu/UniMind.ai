@@ -523,10 +523,11 @@ class Command(BaseCommand):
             if active_teaching:
                 counts['active_unpinned_teaching_tasks'] = len(active_teaching)
                 report['active_teaching_task_ids'] = active_teaching
-            # The older ARC and bulk entry points mark a job running before queueing it and never set kind.
+            # Legacy bulk jobs can publish questions before a later batch fails.
             question_pipelines = list(ContentPipelineTask.objects.filter(
-                task_type='ai_generate', status='running', payload__kind__isnull=True,
+                task_type='ai_generate', payload__kind__isnull=True,
             ).filter(Q(payload__bulk_mode=True) | Q(payload__has_keys=['kp_ids', 'questions_per_kp']))
+                .filter(Q(status='running') | Q(status='failed', payload__bulk_mode=True, payload__current_stage='generating'))
                 .filter(Q(payload__requires_ulr__isnull=True) | ~Q(payload__requires_ulr=True))
                 .order_by('pk').values_list('pk', flat=True))
             if question_pipelines:

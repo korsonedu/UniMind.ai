@@ -180,6 +180,62 @@ def test_ulr_reuses_legacy_bulk_delivery_and_settles_all_questions_together(admi
 
 
 @pytest.mark.django_db(transaction=True)
+def test_dsh_migration_gate_holds_failed_legacy_bulk_after_partial_publication(admin_client, admin_user, user, settings, tmp_path):
+    from types import SimpleNamespace
+
+    from django.db import transaction
+    from rest_framework.exceptions import ValidationError
+
+    from backoffice import teaching
+    from quizzes.models import ContentPipelineTask, KnowledgePoint, Question
+    from quizzes.services import bulk_pipeline
+    from quizzes.tasks import run_bulk_pipeline_task
+
+    settings.UNIMIND_DSH_ENABLED = settings.UNIMIND_ULR_PROTOTYPE = False
+    settings.UNIMIND_LEARNING_RUNTIME = 'legacy'
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    settings.UNIMIND_DIRECTUS_ADMIN_MAP = {str(uuid4()): admin_user.pk, str(uuid4()): user.pk}
+    Bot.objects.create(is_xiaoyu=True, name='小宇')
+    subject = '合成旧批量出题'
+    for index in range(2):
+        KnowledgePoint.objects.create(name=f'合成考点 {index}', code=f'PARTIAL-{index}', subject=subject)
+    fields = {'created_by': admin_user, 'title': subject, 'task_type': 'ai_generate'}
+    payload = {'bulk_mode': True, 'subject': subject, 'total_target': 20,
+               'difficulty_dist': {'normal': 1}, 'type_dist': {'objective': 1}}
+    task = ContentPipelineTask.objects.create(**fields, status='running', payload=payload)
+    ContentPipelineTask.objects.create(**fields, status='failed', progress=2,
+        payload={**payload, 'current_stage': 'select_kps'})
+
+    def generate(points, **kwargs):
+        point, = points
+        return [{'question': point.name, 'kp_id': point.pk, 'q_type': 'objective', 'answer': 'A', 'options': ['A', 'B']}]
+
+    with patch.object(bulk_pipeline, '_author_generate', side_effect=generate), \
+            patch.object(bulk_pipeline, '_classifier_tag', side_effect=[{}, RuntimeError('合成下一批失败')]):
+        run_bulk_pipeline_task(task.pk, subject, 20, {'normal': 1}, {'objective': 1})
+    task.refresh_from_db()
+    assert (task.status, task.payload['current_stage'], Question.objects.count()) == ('failed', 'generating', 1)
+
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    report = StringIO()
+    with pytest.raises(CommandError, match='未完成的迁移项'):
+        call_command('audit_dsh_sessions', state_dir=str(tmp_path), api_url='http://127.0.0.1:8000', require_migrated=True,
+                     stdout=report)
+    audit = json.loads(report.getvalue())
+    assert audit['blockers'] == {'unsettled_legacy_question_pipelines': 1}
+    assert audit['unsettled_question_pipeline_ids'] == [task.pk]
+    with patch.object(run_bulk_pipeline_task, 'delay') as queue, patch('backoffice.tasks.run_teaching_task.delay') as teaching_queue:
+        response = admin_client.post(f'/api/quizzes/admin/pipeline-tasks/{task.pk}/retry/')
+        assert response.status_code == 409, response.data
+        with transaction.atomic(), pytest.raises(ValidationError, match='可能已经入库'):
+            teaching.retry(SimpleNamespace(user=admin_user), {'id': task.pk, 'request_id': str(uuid4())})
+        queue.assert_not_called()
+        teaching_queue.assert_not_called()
+    task.refresh_from_db()
+    assert task.status == 'failed' and ContentPipelineTask.objects.count() == 2 and Question.objects.count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
 def test_ulr_requeues_a_lost_bulk_delivery_on_the_original_task(admin_client, admin_user, user, settings):
     from quizzes.models import ContentPipelineTask, KnowledgePoint, Question
     from quizzes.services import adversarial_pipeline, bulk_pipeline
