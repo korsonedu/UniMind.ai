@@ -280,22 +280,25 @@ class ToolRunCoordinator:
         self._emit(call, round_number, 'running', **extras)
 
     @staticmethod
-    def _classify_result_error(result: str) -> dict | None:
+    def _classify_result_error(result: str, *, instruction: bool) -> tuple[dict | None, list[str] | None]:
         try:
             payload = json.loads(result)
         except (json.JSONDecodeError, TypeError):
-            return None
+            return None, None
         if not isinstance(payload, dict) or 'error' not in payload:
-            return None
+            return None, None
         raw_error = payload['error']
         if isinstance(raw_error, dict):
             raw_code = str(raw_error.get('code') or '')
             message = str(raw_error.get('message') or raw_code or 'Tool execution failed')
+            steps = payload.get('steps_executed')
+            if instruction and raw_code and isinstance(steps, list) and all(isinstance(step, str) for step in steps):
+                return {'code': raw_code, 'message': message}, steps
         else:
             raw_code = str(raw_error)
             message = raw_code or 'Tool execution failed'
         code = 'timeout' if raw_code == 'timeout' else 'execution_error'
-        return {'code': code, 'message': message}
+        return {'code': code, 'message': message}, None
 
     def _run_with_timeout(
         self,
@@ -372,10 +375,12 @@ class ToolRunCoordinator:
     def _execute_one(self, call: PreparedToolCall, round_number: int) -> ToolCallOutcome:
         self._emit(call, round_number, 'running')
         started = time.monotonic()
+        instruction = call.name in ULR_INSTRUCTION_TOOLS
+        failed_steps = None
         try:
             raw_result = self._run_with_timeout(call, round_number)
             result = raw_result if isinstance(raw_result, str) else json.dumps(raw_result, ensure_ascii=False, default=str)
-            error = self._classify_result_error(result)
+            error, failed_steps = self._classify_result_error(result, instruction=instruction)
         except AIExecutionCancelled:
             raise
         except ToolReferenceError as exc:
@@ -395,7 +400,7 @@ class ToolRunCoordinator:
             self._terminal_call_ids.add(call.call_id)
         if error:
             # Generated artifacts and programs need their structured execution diagnostics.
-            if call.name not in ULR_INSTRUCTION_TOOLS | {'build_learning_experiment', 'register_session_tool'}:
+            if not instruction and call.name not in {'build_learning_experiment', 'register_session_tool'}:
                 result = self._error_result(error)
             self._emit(
                 call,
@@ -404,6 +409,7 @@ class ToolRunCoordinator:
                 duration_ms=duration_ms,
                 result_summary=error['message'][:200],
                 error=error,
+                **({'steps_executed': failed_steps} if failed_steps is not None else {}),
             )
             return ToolCallOutcome(call=call, result=result, failed=True, error=error)
 
@@ -499,7 +505,8 @@ class ToolRunCoordinator:
                     error=call.error,
                 )
                 outcomes.append(outcome)
-                self._emit(call, round_number, 'failed', error=call.error, result_summary=call.error['message'])
+                self._emit(call, round_number, 'failed', error=call.error, result_summary=call.error['message'],
+                           **({'steps_executed': []} if call.name in ULR_INSTRUCTION_TOOLS else {}))
                 self._remember_outcome(outcome)
             else:
                 valid_calls.append(call)

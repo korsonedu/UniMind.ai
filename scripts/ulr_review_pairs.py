@@ -21,7 +21,7 @@ OBSERVATION = re.compile(
     r'error=(\S+) meta=(\{.*\})$')
 TOKEN_KEYS = {'input_tokens': 'prompt_tokens', 'output_tokens': 'completion_tokens',
               'cached_input_tokens': 'cached_tokens'}
-TOOL_OUTCOME_FIELDS = ('call_id', 'name', 'status', 'retry_of', 'steps_executed')
+TOOL_OUTCOME_FIELDS = ('call_id', 'name', 'status', 'retry_of', 'steps_executed', 'error_code')
 CAPTURE_FIXTURES = {'course-discount-transcript': 'ulr_course_review.json',
                     'practice-discount-point': 'ulr_practice_review.json'}
 
@@ -50,7 +50,10 @@ def capture_turn(run, events):
             if event.get('status') in ('succeeded', 'failed'):
                 if call_id in tool_results:
                     raise ValueError('同一工具调用收到多份终态回执。')
-                tool_results[call_id] = {key: event[key] for key in TOOL_OUTCOME_FIELDS if key in event}
+                receipt = {key: event[key] for key in TOOL_OUTCOME_FIELDS if key in event}
+                if isinstance(error := event.get('error'), dict) and isinstance(code := error.get('code'), str):
+                    receipt['error_code'] = code
+                tool_results[call_id] = receipt
         if kind == 'text_reset':
             partial.clear()
         if kind == 'text_delta' and isinstance(fragment := event.get('delta'), str):

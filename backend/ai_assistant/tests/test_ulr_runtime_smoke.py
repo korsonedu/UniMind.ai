@@ -1082,6 +1082,9 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
             assert final['full_content'] == no_card_reply
             assert final['metadata']['dsh_cards'] == []
             assert async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))[-1] == final
+    if withdraw == 'direct_card_out_of_range':
+        failed, = [event for event in events if event.get('status') == 'failed']
+        assert failed['error']['code'] == 'rank_out_of_range' and failed['steps_executed'] == []
     expected_reads = ['search_knowledge_tree'] if withdraw == 'knowledge_point' else ['search_knowledge_tree', 'get_practice_questions']
     if selection:
         expected_reads = [] if withdraw in ('direct_card_conflict', 'direct_card_out_of_range') else ['search_knowledge_tree']
@@ -1418,6 +1421,13 @@ def test_ulr_recovers_a_course_program_missing_from_the_initial_tools(auth_clien
         assert len(catalogs) == 2 and not catalogs[-1]
         assert [call.args[1] for call in reads.call_args_list] == ['search_courses']
         assert not events[-1]['metadata'].get('dsh_cards')
+        failed, = [event for event in events if event.get('status') == 'failed']
+        assert failed['error']['code'] == 'missing_dependency' and failed['steps_executed'] == ['search_courses']
+        recorder = run_path(str(scripts / 'ulr_review_pairs.py'))
+        record = recorder['capture_turn']({**sample, 'runtime': 'ulr', 'request_id': request['request_id'],
+                                          'metrics': {'model_requests': len(catalogs)}}, captured)
+        outcome, = record['tool_outcomes']
+        assert outcome['error_code'] == 'missing_dependency' and outcome['steps_executed'] == ['search_courses']
     elif mode in ('inline_repair_drift', 'inline_duplicate_operation'):
         assert len(catalogs) == (3 if mode == 'inline_repair_drift' else 2) and not catalogs[-1]
         reads.assert_not_called()
@@ -1441,6 +1451,9 @@ def test_ulr_recovers_a_course_program_missing_from_the_initial_tools(auth_clien
             failed, recovered = [event for event in events if event.get('status') in ('failed', 'succeeded')]
             assert recovered['name'] == 'run_course_tools' and recovered['retry_of'] == failed['call_id']
             assert failed['name'] == 'find_learning_tools'
+            expected = 'duplicate_argument' if mode == 'inline_duplicate_rank' else 'invalid_arguments'
+            assert failed['error']['code'] == expected and failed['steps_executed'] == []
+            assert record['tool_outcomes'][0]['error_code'] == expected
             assert record['completed'] and record['review']['sources'] == events[-1]['metadata']['dsh_cards']
             assert record['metrics']['tool_failures'] == 1
             assert record['metrics']['first_visible_ms'] == record['metrics']['completion_ms']
