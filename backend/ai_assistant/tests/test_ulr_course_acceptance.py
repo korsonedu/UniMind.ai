@@ -380,6 +380,22 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
             assert native['delivery_selection'] == {'expected': expected,
                 'attempts': [{'requested': requested, 'compiled': expected}]}
             assert native['review']['answer'] == ('已找到所选课程的讲稿片段。' if delivery == 'timestamp' else REPLY)
+            if delivery == 'timestamp':
+                manifest = tool['read'](output / 'dsh' / 'private-key.json')
+                review = tool['read'](output / 'dsh' / 'review.json')
+                pair, = review['pairs']
+                for scores in pair['scores'].values():
+                    scores.update(dict.fromkeys(scores, True))
+                arm = next(arm for arm in manifest['pairs'][pair['pair_id']]['mapping'].values() if arm['runtime'] == 'ulr')
+                arm['tool_quality'] = None
+                arm['delivery_selection']['attempts'][-1]['compiled'] = 'answer'
+                scenario, = tool['report'](manifest, review)['scenarios'].values()
+                location = {'case_id': native['case_id'], 'trial': native['trial']}
+                assert scenario['evidence_gaps'] == [{**location, 'tool_paths_without_evidence': ['ulr'],
+                                                       'delivery_mode_without_evidence': False}]
+                issue, = scenario['quality_issues']
+                assert issue['delivery_mode_mismatch'] == {'expected': 'card', 'compiled': 'answer'}
+                assert all(issue[key] == value for key, value in location.items())
         baseline = records[0]
         trace = {'operations': operations[baseline['request_id'], baseline['attempt_id']]}
         reversed_path = {**baseline, 'tool_outcomes': list(reversed(baseline['tool_outcomes']))}

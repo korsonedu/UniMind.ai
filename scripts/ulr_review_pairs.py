@@ -181,7 +181,7 @@ def tool_quality(record, trace):
     if required_steps is not None and len(required_steps) != len(expected):
         raise ValueError('应执行的业务步骤与工具路径长度不符。')
     operations = [call for call in trace['operations'] if call['kind'] != 'embedding'] if trace else []
-    if not operations or any(call['submitted_tools'] is None for call in operations):
+    if not operations or 'tool_outcomes' not in record or any(call['submitted_tools'] is None for call in operations):
         return None
     submissions = [name for call in operations for name in call['submitted_tools']]
     events = record['tool_outcomes']
@@ -374,7 +374,7 @@ def report(manifest, review):
         tool_results = {runtime: Counter() for runtime in completed}
         delivery_results = Counter()
         compared_pairs = model_verified_pairs = 0
-        unverified_model_pairs, request_config_issues, quality_issues = [], [], []
+        unverified_model_pairs, request_config_issues, quality_issues, evidence_gaps = [], [], [], []
         for pair in pairs:
             arms = pair['arms']
             old, new = arms[baseline], arms['ulr']
@@ -384,12 +384,22 @@ def report(manifest, review):
             failed_criteria = [criterion for criterion, passed in new['checks'].items() if not passed]
             old_tools, new_tools = old.get('tool_quality'), new.get('tool_quality')
             first_pass_regressed = bool(old_tools and new_tools and old_tools['first_pass'] and not new_tools['first_pass'])
-            if not new['completed'] or failed_criteria or first_pass_regressed:
+            selection = new.get('delivery_selection')
+            attempts, expected = (selection['attempts'], selection['expected']) if selection else ([], None)
+            compiled = attempts[-1]['compiled'] if attempts else None
+            wrong_delivery = compiled is not None and compiled != expected
+            missing_tools = [runtime for runtime, arm in arms.items() if 'tool_quality' in arm and arm['tool_quality'] is None]
+            missing_delivery = bool(selection and new['completed'] and compiled is None)
+            if missing_tools or missing_delivery:
+                evidence_gaps.append({**location, 'tool_paths_without_evidence': missing_tools,
+                                      'delivery_mode_without_evidence': missing_delivery})
+            if not new['completed'] or failed_criteria or first_pass_regressed or wrong_delivery:
                 quality_issues.append({**location, 'model_verified': verified, 'ulr_completed': new['completed'],
                     'completion_regressed': old['completed'] and not new['completed'],
                     'first_pass_regressed': first_pass_regressed,
                     'ulr_failed_criteria': failed_criteria,
-                    'regressed_criteria': [criterion for criterion in failed_criteria if old['checks'][criterion]]})
+                    'regressed_criteria': [criterion for criterion in failed_criteria if old['checks'][criterion]],
+                    **({'delivery_mode_mismatch': {'expected': expected, 'compiled': compiled}} if wrong_delivery else {})})
             if official:
                 if not verified:
                     unverified_model_pairs.append(location)
@@ -398,14 +408,12 @@ def report(manifest, review):
                     request_config_issues.append({**location, 'reason': issue})
                     continue
             compared_pairs += 1
-            if selection := new.get('delivery_selection'):
-                attempts, expected = selection['attempts'], selection['expected']
+            if selection:
                 delivery_results['samples'] += 1
                 delivery_results['reached_compiler'] += bool(attempts)
                 delivery_results['automatic_submissions'] += bool(attempts and attempts[0]['requested'] == 'automatic')
                 delivery_results['first_choice_correct'] += bool(attempts and attempts[0]['requested'] == expected)
-                delivery_results['completed_expected_mode'] += bool(
-                    new['completed'] and attempts and attempts[-1]['compiled'] == expected)
+                delivery_results['completed_expected_mode'] += bool(new['completed'] and compiled is not None and compiled == expected)
             for runtime, arm in arms.items():
                 completed[runtime] += arm['completed']
                 all_passed[runtime] += bool(arm['completed'] and all(arm['checks'].values()))
@@ -433,6 +441,7 @@ def report(manifest, review):
         results[scenario] = {'pair_count': len(pairs), 'model_verified_pairs': model_verified_pairs,
                              'compared_pairs': compared_pairs, 'unverified_model_pairs': unverified_model_pairs,
                              'request_config_issues': request_config_issues, 'quality_issues': quality_issues,
+                             'evidence_gaps': evidence_gaps,
                              'completed': completed, 'all_criteria_passed': all_passed,
                              'criterion_pass_counts': criteria, 'metrics': metrics, 'tool_quality': tool_results,
                              **({'delivery_selection': delivery_results} if delivery_results else {}), 'pairs': pairs}
