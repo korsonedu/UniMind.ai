@@ -164,7 +164,7 @@ def _is_preplan_diagnostic(state, stage_id, purpose):
 
 
 @transaction.atomic
-def create_task(project, arguments, *, prepare=False):
+def create_task(project, arguments, *, prepare=False, pending_message_id=None):
     if not has_learning_feature(_current_user(project), 'quiz.exam'):
         raise PermissionDenied('当前账号尚未开放习题训练。')
     serializer = TaskInput(data=arguments)
@@ -175,7 +175,7 @@ def create_task(project, arguments, *, prepare=False):
     source = get_object_or_404(available_project_tasks(project), pk=source_id) if source_id else None
     use_id = data.pop('strategy_use_id', None)
     from .teaching_sidecar import validate_strategy_use
-    strategy_use = validate_strategy_use(project, use_id) if use_id else None
+    strategy_use = validate_strategy_use(project, use_id, pending_message_id=pending_message_id) if use_id else None
     if source and source.knowledge_version_id != (version.pk if version else None):
         raise ValidationError('关联任务的知识版本不同，请按当前计划重新安排，不能自动混用旧证据。')
     if source and data['purpose'] == 'recheck' and source.node_id != data['node_id']:
@@ -230,7 +230,7 @@ def personal_answers(answers):
     return [{'question_id': 0, 'answer': answer}]
 
 
-def validate_task_submission(user, task_id, submission_id, questions_data, assistance):
+def validate_task_submission(user, task_id, submission_id, questions_data, assistance, *, request):
     task = get_object_or_404(ProjectLearningTask.objects.select_for_update().select_related('project'),
                             pk=task_id, project__user=user)
     if not task.exam_id and not available_project_tasks(task.project).filter(pk=task.pk).exists():
@@ -241,15 +241,17 @@ def validate_task_submission(user, task_id, submission_id, questions_data, assis
         _validate_path(task.project, task.knowledge_version_id, task.node_id, task.stage_id, task.purpose)
     elif task.assistance != assistance:
         raise ValidationError('已提交任务不能更换辅助情况。')
+    if not task.definition and [int(item['question_id']) for item in questions_data] != task.question_ids:
+        raise ValidationError('请按原顺序提交任务内全部题目。')
+    if task.exam_id:
+        return task, None
     if task.definition:
         personal_answers(questions_data)
         if task.question_snapshot != {'0': _personal_snapshot(task)}:
             raise ValidationError('任务评价标准已变化，请重新安排任务。')
         return task, {0: personal_question(task.definition)}
-    if [int(item['question_id']) for item in questions_data] != task.question_ids:
-        raise ValidationError('请按原顺序提交任务内全部题目。')
     from quizzes.ai_workflow import validate_exam_answers
-    questions = validate_exam_answers(user, questions_data, lock=True)
+    questions = validate_exam_answers(user, questions_data, request=request, lock=True)
     for question in questions.values():
         validate_task_question(task, question)
     return task, questions

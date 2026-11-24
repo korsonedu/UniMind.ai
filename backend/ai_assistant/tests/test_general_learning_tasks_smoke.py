@@ -179,11 +179,14 @@ class GeneralLearningTasksSmoke(APITestCase):
     def test_bank_subjective_reuses_existing_memorix_and_rejects_missing_rubric(self):
         question = Question.objects.create(text='说明一种缓存命中过程。', q_type='subjective', subjective_type='short',
             grading_points='说明先查缓存再访存', correct_answer='先查缓存，未命中再访问主存。')
-        task = create_task(self.project, {key: value for key, value in self.arguments.items() if key != 'definition'} |
-            {'question_ids': [question.pk]})
+        arguments = {key: value for key, value in self.arguments.items() if key != 'definition'} | {'question_ids': [question.pk]}
+        task = create_task(self.project, arguments)
+        waiting = create_task(self.project, arguments)
+        url = '/api/quizzes/submit-exam/'
+        payload = {'learning_task_id': str(task.pk), 'submission_id': str(task.pk), 'assistance': 'hint',
+                   'answers': [{'question_id': question.pk, 'answer': '先查缓存。'}]}
         with patch('quizzes.views_exam.dispatch_exam_grading'), self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post('/api/quizzes/submit-exam/', {'learning_task_id': str(task.pk),
-                'submission_id': str(task.pk), 'assistance': 'hint', 'answers': [{'question_id': question.pk, 'answer': '先查缓存。'}]}, format='json')
+            response = self.client.post(url, payload, format='json')
         self.assertEqual(response.status_code, 202, response.data)
         with patch('quizzes.ai_workflow._queue_experience_verification'):
             self.grade(response.data['exam_id'])
@@ -195,8 +198,21 @@ class GeneralLearningTasksSmoke(APITestCase):
         question.grading_points = ''; question.save(update_fields=['grading_points'])
         self.assertEqual(task_review(self.user, task), {'status': 'unverified'})
         with self.assertRaises(ValidationError):
-            create_task(self.project, {key: value for key, value in self.arguments.items() if key != 'definition'} |
-                {'question_ids': [question.pk]})
+            create_task(self.project, arguments)
+        with patch('quizzes.views_exam.dispatch_exam_grading') as dispatch, self.captureOnCommitCallbacks(execute=True):
+            replayed = self.client.post(url, payload, format='json')
+            self.assertEqual((replayed.status_code, replayed.data), (202, response.data))
+            self.assertEqual(self.client.post(url, {**payload, 'assistance': 'independent'}, format='json').status_code, 400)
+            changed = {**payload, 'answers': [{'question_id': question.pk, 'answer': '替换原答案'}]}
+            self.assertEqual(self.client.post(url, changed, format='json').status_code, 409)
+            first = {**payload, 'learning_task_id': str(waiting.pk), 'submission_id': str(waiting.pk)}
+            self.assertEqual(self.client.post(url, first, format='json').status_code, 400)
+            question.delete()
+            self.assertEqual(self.client.post(url, payload, format='json').data, response.data)
+            dispatch.assert_not_called()
+        self.assertEqual(QuizExam.objects.count(), 1)
+        saved = self.client.get(f'/api/quizzes/exams/{task.exam_id}/').data
+        self.assertEqual((saved['total_score'], saved['results'][0]['user_answer']), (8, '先查缓存。'))
 
     def test_permission_revoked_during_model_call_stops_result_commit(self):
         from users.models import UserAccessProfile
@@ -211,6 +227,36 @@ class GeneralLearningTasksSmoke(APITestCase):
         task.refresh_from_db()
         self.assertNotEqual(task.exam.results.get().status, 'graded')
         self.assertFalse(ProjectLearningEvent.objects.filter(project=self.project,kind='assessment').exists())
+
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr')
+    def test_open_task_grading_rechecks_the_saved_criteria_after_the_model(self):
+        task = create_task(self.project, self.arguments)
+        submitted = self.submit(task)
+        self.assertEqual(submitted.status_code, 202, submitted.data)
+        exam_id = submitted.data['exam_id']
+
+        def revise(**kwargs):
+            self.assertEqual(kwargs['grading_points'], '\n'.join(task.definition['criteria']))
+            ProjectLearningTask.objects.filter(pk=task.pk).update(definition={**task.definition, 'criteria': ['改版后的评价标准']})
+            return {'score': 9, 'feedback': '按原标准评阅', 'analysis': '依据原标准分析', 'memorix_rating': 4}
+
+        with patch('quizzes.ai_workflow.AIService.grade_question', side_effect=revise) as model, \
+                self.captureOnCommitCallbacks(execute=True):
+            run_exam_grading(self.user.pk, exam_id)
+        model.assert_called_once()
+        exam = QuizExam.objects.get(pk=exam_id)
+        result = exam.results.get()
+        self.assertEqual((exam.status, result.status, result.score), ('failed', 'failed', 0))
+        self.assertEqual(result.question_snapshot['criteria'], task.definition['criteria'])
+        self.assertFalse(ProjectLearningEvent.objects.filter(project=self.project, kind='assessment').exists())
+        self.assertEqual(self.submit(task).data, submitted.data)
+
+        ProjectLearningTask.objects.filter(pk=task.pk).update(definition=task.definition)
+        with patch('quizzes.views_exam.dispatch_exam_grading'), self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(self.client.post(f'/api/quizzes/exams/{exam_id}/retry/', {}, format='json').status_code, 202)
+        self.grade(exam_id)
+        result.refresh_from_db()
+        self.assertEqual((result.status, result.score, result.attempts), ('graded', 8, 2))
 
     def test_failed_plain_stage_allows_new_recheck_prompts_from_definition_or_bank(self):
         definition = self.arguments['definition']

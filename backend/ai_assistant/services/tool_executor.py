@@ -775,7 +775,7 @@ class PlannerToolExecutor(BaseToolExecutor):
             secs = int(seconds % 60)
             return f"{mins}:{secs:02d}"
 
-        return {
+        result = {
             "segments": [
                 {
                     "course_id": s.transcript.course_id,
@@ -790,6 +790,10 @@ class PlannerToolExecutor(BaseToolExecutor):
             ],
             "total_found": qs.count(),
         }
+        if getattr(self, 'include_transcript_sources', False):
+            result['_ulr_transcripts'] = sorted({(s.transcript.course_id, s.transcript_id, s.transcript.revision)
+                                                 for s in segments})
+        return result
 
     def _handle_search_articles(self, args: Dict) -> Dict:
         """搜索文章库，推荐扩展阅读。"""

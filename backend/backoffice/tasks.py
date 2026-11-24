@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from ai_assistant.models import AIChatMessage, Bot, Conversation
 from ai_assistant.services.ulr_config import ulr_enabled
+from ai_engine.observability import observe_background
 from quizzes.models import ContentPipelineTask, KnowledgePoint
 from .common import content_institution
 
@@ -29,7 +30,7 @@ def expire_stale_teaching_tasks(queryset):
 @shared_task(name='backoffice.run_teaching_task', soft_time_limit=900, time_limit=960)
 def run_teaching_task(task_id):
     from ai_assistant.services.dsh_scope import teaching_job
-    with teaching_job(task_id):
+    with teaching_job(task_id), observe_background('ulr' if ulr_enabled() else 'legacy', f'teaching:{task_id}'):
         return _run_teaching_task(task_id)
 
 
@@ -40,7 +41,8 @@ def _run_teaching_task(task_id):
         task = ContentPipelineTask.objects.select_for_update().select_related('created_by').get(pk=task_id)
         if task.status != 'pending':
             return
-        if task.payload.get('requires_ulr') and not ulr_enabled():
+        native_worker = ulr_enabled()
+        if task.payload.get('requires_ulr') and not native_worker:
             task.status = 'failed'
             task.error_message = '任务需要 ULR，当前工作进程配置不一致。请在配置恢复后重试。'
             task.finished_at = timezone.now()
@@ -48,7 +50,12 @@ def _run_teaching_task(task_id):
             return
         task.status = 'running'
         task.started_at = timezone.now()
-        task.save(update_fields=['status', 'started_at', 'updated_at'])
+        task.error_message = ''
+        fields = ['status', 'started_at', 'error_message', 'updated_at']
+        if native_worker and not task.payload.get('requires_ulr'):
+            task.payload['requires_ulr'] = True
+            fields.append('payload')
+        task.save(update_fields=fields)
     kind = None
     try:
         from .teaching import parse_enabled, student_detail, validate_kps

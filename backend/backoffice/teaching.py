@@ -17,9 +17,13 @@ from ai_assistant.services.teaching_sidecar import canonical_hash
 from ai_assistant.services.ulr_config import ulr_enabled
 from quizzes.models import ContentPipelineTask, KnowledgePoint, Question
 from quizzes.serializers import ContentPipelineTaskSerializer
+from quizzes.tasks import (question_pipeline_delivery, question_pipeline_may_have_partial_result,
+                           question_pipeline_recovery_due, resume_question_pipeline)
 from .common import content_institution, identity, paginate
+from .tasks import TEACHING_JOB_KINDS
 
 DIFFICULTIES = ['entry', 'easy', 'normal', 'hard', 'extreme']
+TEACHING_QUEUE_RECOVERY_DELAY = timedelta(minutes=5)
 
 
 def scoped(model):
@@ -108,7 +112,26 @@ def list_tasks(request, data):
 
 
 def task_detail(request, data):
-    return task_item(task_object(request, data), True)
+    task = task_object(request, data)
+    direct_resume = (task.status in ('pending', 'running') and owned_question_pipeline(task, request.user.pk)
+                     and question_pipeline_recovery_due(task) and not question_pipeline_may_have_partial_result(task))
+    return {**task_item(task, True), 'can_resume': bool(direct_resume) or (
+        can_requeue(task, request.user.pk) and queue_recovery_due(task))}
+
+
+def owned_question_pipeline(task, operator_id):
+    delivery = question_pipeline_delivery(task)
+    if delivery and task.created_by_id == operator_id and (ulr_enabled() or task.payload.get('requires_ulr') is True):
+        return delivery
+
+
+def can_requeue(task, operator_id):
+    return (ulr_enabled() and task.created_by_id == operator_id and task.status == 'pending'
+            and task.started_at is None and task.payload.get('kind') in TEACHING_JOB_KINDS)
+
+
+def queue_recovery_due(task):
+    return task.updated_at <= timezone.now() - TEACHING_QUEUE_RECOVERY_DELAY
 
 
 def metrics(request, data):
@@ -241,6 +264,11 @@ def create_task(request, data, kind, payload, title):
         task = ContentPipelineTask.objects.create(created_by=request.user, institution=content_institution(required=True),
             task_type='ai_generate' if kind in ['quick', 'arc', 'bulk', 'parse'] else 'other',
             title=title[:200], status='pending', payload={'kind': kind, **payload}, request_id=key)
+    enqueue_teaching_task(task)
+    return task_item(task, True)
+
+
+def enqueue_teaching_task(task, *, previous_queue_time=None):
     from .tasks import run_teaching_task
 
     def enqueue():
@@ -248,10 +276,13 @@ def create_task(request, data, kind, payload, title):
             run_teaching_task.delay(task.pk)
         except Exception:
             logging.getLogger(__name__).exception('Teaching task enqueue failed: %s', task.pk)
-            ContentPipelineTask.objects.filter(pk=task.pk, status='pending').update(
-                status='failed', error_message='任务队列暂不可用，请稍后重试。', finished_at=timezone.now())
+            pending = ContentPipelineTask.objects.filter(pk=task.pk, status='pending', updated_at=task.updated_at)
+            message = '任务队列暂不可用，请稍后重试。'
+            if previous_queue_time is not None:
+                pending.update(updated_at=previous_queue_time, error_message=message)
+            else:
+                pending.update(status='failed', error_message=message, finished_at=timezone.now())
     transaction.on_commit(enqueue)
-    return task_item(task, True)
 
 
 def parse_enabled():
@@ -405,7 +436,27 @@ def review(request, data):
 
 
 def retry(request, data):
-    source = task_object(request, data)
+    source = task_object(request, data, lock=True)
+    if (source.status in ('pending', 'running', 'completed', 'review')
+            and (delivery := owned_question_pipeline(source, request.user.pk))):
+        try:
+            queued = resume_question_pipeline(source, delivery)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from None
+        if not queued:
+            request.backoffice_no_change = True
+        return task_item(source, True)
+    if can_requeue(source, request.user.pk):
+        previous_queue_time = source.updated_at
+        if queue_recovery_due(source) and ContentPipelineTask.objects.filter(
+                pk=source.pk, status='pending', updated_at=previous_queue_time).update(
+                payload={**source.payload, 'requires_ulr': True}, updated_at=timezone.now(), error_message=''):
+            source.refresh_from_db()
+            enqueue_teaching_task(source, previous_queue_time=previous_queue_time)
+        else:
+            request.backoffice_no_change = True
+            source.refresh_from_db()
+        return task_item(source, True)
     if source.status not in ['failed', 'cancelled']:
         raise serializers.ValidationError('只能重试失败或已取消的任务。')
     payload = source.payload or {}

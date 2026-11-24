@@ -1,0 +1,184 @@
+"""Restore a synthetic DSH snapshot with the native PostgreSQL clients."""
+import gzip
+import hashlib
+from io import StringIO
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+from uuid import UUID, uuid4
+
+import pytest
+from django.core.management import call_command
+from django.db import connection
+from django.utils import timezone
+
+from ai_assistant.models import AIChatMessage, Bot, Conversation
+from users.models import AIUsageReservation, CourseStudentStatus, WeeklyAIQuotaConfig
+from .test_ulr_process_smoke import child_database_environment
+
+
+def verify_restored_conversations(user_id, site_body, imported_id):
+    from asgiref.sync import async_to_sync
+    from django.conf import settings
+    from django.test import override_settings
+    from rest_framework.test import APIClient
+    from unittest.mock import patch
+
+    from users.models import User, WeeklyAIUsage
+
+    assert settings.UNIMIND_LEARNING_RUNTIME == 'ulr' and not settings.UNIMIND_DSH_ENABLED
+    user = User.objects.get(pk=user_id)
+    client = APIClient()
+    client.force_authenticate(user)
+    legacy = AIUsageReservation.objects.get(user=user, request_id=site_body['request_id']).response
+    initial_charge = WeeklyAIUsage.objects.get(user=user).ai_calls
+    seen = []
+
+    def model(messages, **kwargs):
+        seen.append(json.dumps(messages, ensure_ascii=False))
+        return {'choices': [{'finish_reason': 'stop', 'message': {'content': '从恢复的原对话继续。'}}]}
+
+    async def final(response):
+        assert response.status_code == 200
+        events = [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')]
+        return events[-1]
+
+    def send(body):
+        return async_to_sync(final)(client.post('/api/ai/chat/stream/', body, format='json'))
+
+    with override_settings(ALLOWED_HOSTS=['testserver'], USE_MEM0=False, UNIMIND_DSH_TITLE_ENABLED=False,
+            UNIMIND_DSH_MEMORY_ENABLED=False, CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}), \
+            patch('ai_engine.service.AIEngine.call_provider', side_effect=model), \
+            patch('ai_assistant.services.dsh_xiaoyu.run_site_action', side_effect=AssertionError('Unexpected DSH call')), \
+            patch('ai_assistant.services.dsh_xiaoyu.extract_memories_async'), \
+            patch('ai_assistant.services.dsh_xiaoyu.schedule_conversation_title'):
+        assert send(site_body) == legacy and not seen
+        assert WeeklyAIUsage.objects.get(user=user).ai_calls == initial_charge
+        histories = ((site_body['conversation_id'], legacy['full_content']), (imported_id, '合成迁移答复'))
+        for index, (conversation_id, old_reply) in enumerate(histories, start=1):
+            body = {'bot_id': site_body['bot_id'], 'conversation_id': conversation_id, 'request_id': str(uuid4()),
+                    'message': '请接着上次的讲解。'}
+            resumed = send(body)
+            assert resumed['engine'] == 'ulr' and resumed['conversation_id'] == conversation_id
+            assert len(seen) == index and old_reply in seen[-1]
+            assert WeeklyAIUsage.objects.get(user=user).ai_calls == initial_charge + index
+            assert send(body) == resumed
+            receipt = client.get(f"/api/ai/chat-requests/{body['request_id']}/")
+            assert receipt.status_code == 200 and receipt.data['response'] == resumed
+            assert len(seen) == index and WeeklyAIUsage.objects.get(user=user).ai_calls == initial_charge + index
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(not os.environ.get('ULR_QUEUE_SMOKE'), reason='optional native PostgreSQL restore smoke')
+def test_native_restore_and_retirement_gate(user, settings, tmp_path):
+    if connection.vendor != 'postgresql':
+        pytest.skip('Requires a disposable PostgreSQL test database.')
+    from django.db.backends.postgresql.psycopg_any import sql
+    from ai_assistant.views import _reserve_chat_request
+    from users.learning import confirm_ai_call
+
+    assert shutil.which('psql') and shutil.which('pg_dump')
+    settings.UNIMIND_DSH_ENABLED = False
+    bot = Bot.objects.create(is_xiaoyu=True, name='小宇', bot_type='planner')
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'experience_calls': 20, 'course_calls': 200})
+    api_url, session_id = 'http://127.0.0.1:8000', uuid4().hex
+    transcript = {'id': session_id, 'messages': [{'role': 'user', 'content': '合成迁移问题'},
+                                             {'role': 'assistant', 'content': '合成迁移答复'}]}
+    AIUsageReservation.objects.create(user=user, request_id=uuid4(), attempt_id=uuid4(), week=timezone.now().date(),
+        status='succeeded', response={'engine': 'dsh', 'session_id': session_id, 'finish_reason': 'completed',
+                                     'session': transcript, 'content': transcript['messages'][-1]['content']})
+    state = tmp_path / 'dsh-state'
+    owner = hashlib.sha256(json.dumps([api_url, user.pk]).encode()).hexdigest()
+    directory = state / owner / session_id
+    directory.mkdir(parents=True)
+    (directory / 'transcript.json').write_text(json.dumps(transcript, ensure_ascii=False))
+
+    site_id, site_session = uuid4(), uuid4().hex
+    site = {'user': user, 'bot': bot, 'conversation_id': site_id}
+    Conversation.objects.create(**site, title='合成原小宇对话')
+    site_body = {'bot_id': bot.pk, 'conversation_id': str(site_id), 'request_id': str(uuid4()), 'message': '合成原问答'}
+    receipt = _reserve_chat_request(user, site_body, bot, conversation_id=site_id)
+    prompt = AIChatMessage.objects.create(**site, role='user', content=site_body['message'],
+        metadata={'runtime_request_id': site_body['request_id']})
+    metadata = {'engine': 'dsh', 'dsh_session_id': site_session, 'learning_turn': {'message_id': prompt.pk}}
+    answer = AIChatMessage.objects.create(**site, role='assistant', content='合成原会话答复', metadata=metadata)
+    confirm_ai_call(receipt, response={'engine': 'dsh', 'done': True, 'session_id': site_session,
+        'full_content': answer.content, 'message_id': answer.pk, 'user_message': {'message_id': prompt.pk}, 'metadata': metadata})
+    site_directory = state / owner / site_session
+    site_directory.mkdir()
+    (site_directory / 'transcript.json').write_text(json.dumps({'id': site_session, 'messages': [
+        {'role': row.role, 'content': row.content} for row in (prompt, answer)]}, ensure_ascii=False))
+
+    env = {'PATH': os.environ['PATH'], 'TMPDIR': str(tmp_path), 'DJANGO_ENV': 'test',
+           'UNIMIND_DSH_ENABLED': 'false', 'UNIMIND_LEARNING_RUNTIME': 'ulr',
+           **child_database_environment(connection, tmp_path / 'unused.sqlite3')}
+    pg_options = ['-h', env['DB_HOST'], '-p', env['DB_PORT'], '-U', env['DB_USER']]
+    pg_env = {**env, 'PGPASSWORD': env['DB_PASSWORD']}
+    backup = tmp_path / 'paired.sql.gz'
+    source = subprocess.run(['pg_dump', *pg_options, '-d', env['DB_NAME'], '--no-owner', '--no-privileges'],
+                            env=pg_env, capture_output=True, check=True, timeout=30).stdout
+    backup.write_bytes(gzip.compress(source, mtime=0))
+    checksum = hashlib.sha256(backup.read_bytes()).hexdigest()
+    backup.with_suffix('.gz.sha256').write_text(f'{checksum}  {backup.name}\n')
+    inventory = StringIO()
+    call_command('audit_dsh_sessions', state_dir=str(state), api_url=api_url, state_fingerprint=True,
+                 database_backup=str(backup), stdout=inventory)
+    fingerprints = json.loads(inventory.getvalue())
+    assert fingerprints['database_fingerprint'] == checksum
+
+    # The script must not load any repository deployment settings.
+    script = tmp_path / 'scripts' / 'restore_db.sh'
+    script.parent.mkdir()
+    shutil.copy2(Path(settings.BASE_DIR).parent / 'scripts' / script.name, script)
+    target = f'ulr_restore_{uuid4().hex}'
+    failed_target = f'{target}_failed'
+    restored_env = {**env, 'DB_NAME': target}
+    command = [sys.executable, str(Path(settings.BASE_DIR) / 'manage.py'), 'audit_dsh_sessions',
+               '--state-dir', str(state), '--api-url', api_url]
+    gate = [*command, '--require-migrated', '--database-backup', str(backup), '--expected-state-fingerprint',
+            fingerprints['state_fingerprint'], '--expected-database-fingerprint', checksum]
+    try:
+        restored = subprocess.run(['bash', str(script), str(backup)], input='YES\n', text=True,
+                                  env=restored_env, capture_output=True, timeout=60)
+        assert restored.returncode == 0, restored.stderr
+        imported = subprocess.run([*command, '--import-verified'], env=restored_env, capture_output=True,
+                                  text=True, timeout=30, check=True)
+        assert json.loads(imported.stdout)['imported'] == 1
+        verify = ('from ai_assistant.tests.test_ulr_restore_smoke import verify_restored_conversations; '
+                  f'verify_restored_conversations({user.pk}, {site_body!r}, {str(UUID(hex=session_id))!r})')
+        continued = subprocess.run([sys.executable, command[1], 'shell', '-c', verify],
+            env={**restored_env, 'DEBUG': 'false', 'UNIMIND_DSH_XIAOYU_ENABLED': 'false'},
+            capture_output=True, text=True, timeout=30)
+        assert continued.returncode == 0, continued.stderr
+        verified = subprocess.run(gate, env=restored_env, capture_output=True, text=True, timeout=30, check=True)
+        report = json.loads(verified.stdout)
+        assert report['snapshot_pair_verified'] and report['database_restore_verified'] and report['migrated']
+        assert report['site_matched'] == report['already_imported'] == 1
+        assert report['target_runtime'] == 'ulr'
+        legacy = subprocess.run(gate, env={**restored_env, 'UNIMIND_LEARNING_RUNTIME': 'legacy'},
+                                capture_output=True, text=True, timeout=30)
+        report = json.loads(legacy.stdout)
+        assert legacy.returncode != 0 and report['snapshot_pair_verified'] and report['database_restore_verified']
+        assert report['blockers'] == {'target_runtime_not_ulr': 1}
+        wrong = subprocess.run(gate, env=env, capture_output=True, text=True, timeout=30)
+        report = json.loads(wrong.stdout)
+        assert wrong.returncode != 0 and report['snapshot_pair_verified'] and not report['database_restore_verified']
+        assert report['blockers']['database_restore_fingerprint_mismatch'] == 1
+
+        broken = tmp_path / 'broken.sql.gz'
+        broken.write_bytes(gzip.compress(b'CREATE TABLE restore_probe(id integer);\nSELECT 1/0;\n', mtime=0))
+        failed = subprocess.run(['bash', str(script), str(broken)], input='YES\n', text=True,
+                                env={**env, 'DB_NAME': failed_target}, capture_output=True, timeout=30)
+        assert failed.returncode != 0 and 'division by zero' in failed.stderr
+        check = subprocess.run(['psql', '-XAt', *pg_options, '-d', failed_target, '-c',
+            "SELECT to_regclass('restore_probe') IS NULL AND current_setting('unimind.restore_sha256', true) IS NULL"],
+            env=pg_env, capture_output=True, text=True, timeout=10, check=True)
+        assert check.stdout.strip() == 't'
+    finally:
+        with connection.cursor() as cursor:
+            for database in (target, failed_target):
+                cursor.execute(sql.SQL('DROP DATABASE IF EXISTS {}').format(sql.Identifier(database)))

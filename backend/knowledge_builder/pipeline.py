@@ -10,6 +10,7 @@ import numpy as np
 from django.conf import settings
 from django.db import connection, transaction
 from django.utils import timezone
+from ai_engine.observability import observe_background, runtime_observation
 from ai_engine.service import AICallError
 from ai_assistant.services.ulr_config import ulr_enabled
 
@@ -733,8 +734,13 @@ def _run_build(build_id, progress, *, resume_running):
             return build
         if not (resume_running and build and build.requires_ulr and build.status == 'RUNNING'):
             raise InvariantViolationError('build must be PENDING to start')
+    with observe_background('ulr' if native else 'legacy', f'build:{build.pk}'):
+        return _build_stages(build, progress, native=native)
 
+
+def _build_stages(build, progress, *, native):
     def stage(name):
+        runtime_observation.get()['stage'] = name
         build.current_stage = name
         build.save(update_fields=['current_stage', 'updated_at'])
         if progress:
@@ -824,6 +830,7 @@ def _run_build(build_id, progress, *, resume_running):
                        'module_count':len(modules),'layer_count':max(graph['layers'].values()),
                        'step_count':sum(len(p['steps']) for p in plans.values()),
                        'interface_count':sum(len(v) for v in interfaces.values())}
+        runtime_observation.get()['stage'] = 'publication'
         _persist(build,modules,atoms,edges,blocks,graph,plans,interfaces)
         try:
             from .block_study import auto_mount_internal_resources

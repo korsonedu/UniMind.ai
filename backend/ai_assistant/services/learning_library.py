@@ -11,8 +11,9 @@ from ai_assistant.models import (
     AIChatMessage, Conversation, ProjectLearning, ProjectLearningEvent, LearningResource,
     LearningStrategy, LearningStrategyUse, LearningStrategyReview, LearningResourceVersion,
 )
-from .project_learning import LearningConflict, assert_learning_turn, unconfirmed_progress_ids
+from .project_learning import LearningConflict, assert_learning_turn, message_receipts, unconfirmed_progress_ids
 from .learning_resources import store_resource
+from .ulr_config import ulr_enabled
 
 
 class LibraryInput(serializers.Serializer):
@@ -52,8 +53,17 @@ def event_data(event):
             'conversation_id': str(event.message.conversation_id) if event.message else None}
 
 
-def strategy_data(row, *, compact=False, unconfirmed=()):
-    checks = LearningStrategyReview.objects.filter(use__strategy=row).exclude(evidence_event_id__in=unconfirmed).select_related('evidence_event__message').order_by('-id')
+def unconfirmed_strategy_use_ids(user_id, uses):
+    if not ulr_enabled():
+        return set()
+    return {pk for pk, (status, response) in message_receipts(user_id, uses).items()
+            if status != 'succeeded' or response.get('deleted') or (
+                response.get('engine') == 'ulr' and pk not in (response.get('metadata') or {}).get('ulr_strategy_use_ids', []))}
+
+
+def strategy_data(row, *, compact=False, unconfirmed=(), unconfirmed_uses=()):
+    checks = LearningStrategyReview.objects.filter(use__strategy=row).exclude(evidence_event_id__in=unconfirmed).exclude(
+        use_id__in=unconfirmed_uses).select_related('evidence_event__message').order_by('-id')
     reviews = (list(checks.filter(judgement='against', evidence_event__message__isnull=False)[:2]) +
                list(checks.exclude(judgement='against').filter(evidence_event__message__isnull=False)[:1])) if compact else list(checks[:10])
     counts = {kind: getattr(row, f'{kind}_count', 0) for kind in ('support', 'against', 'uncertain')}
@@ -81,17 +91,18 @@ def _review_evidence(event, compact):
     return data
 
 
-def strategy_rows(user, unconfirmed):
+def strategy_rows(user, unconfirmed, unconfirmed_uses):
     return LearningStrategy.objects.filter(user=user).exclude(source_event_id__in=unconfirmed).select_related('source_event__message').annotate(**{
         f'{kind}_count': Count('uses__reviews', filter=Q(uses__reviews__judgement=kind, uses__reviews__evidence_event__message__isnull=False)
-                              & ~Q(uses__reviews__evidence_event_id__in=unconfirmed))
+                              & ~Q(uses__reviews__evidence_event_id__in=unconfirmed) & ~Q(uses__id__in=unconfirmed_uses))
         for kind in ('support', 'against', 'uncertain')})
 
 
 def library_data(user, query='', domain='', *, compact=False):
     resources = LearningResource.objects.filter(user=user)
     unconfirmed = unconfirmed_progress_ids(user.pk)
-    strategies = strategy_rows(user, unconfirmed)
+    unconfirmed_uses = unconfirmed_strategy_use_ids(user.pk, LearningStrategyUse.objects.filter(strategy__user=user))
+    strategies = strategy_rows(user, unconfirmed, unconfirmed_uses)
     if query:
         resources = resources.filter(Q(title__icontains=query) | Q(topic__icontains=query) | Q(domain__icontains=query) | Q(edition__icontains=query))
         strategies = strategies.filter(Q(source_event__content__strategy__icontains=query) | Q(topic__icontains=query) | Q(domain__icontains=query))
@@ -102,7 +113,8 @@ def library_data(user, query='', domain='', *, compact=False):
         resources = resources.filter(is_archived=False)
         strategies = strategies.filter(is_retired=False, source_event__message__isnull=False)
     return {'resources': [resource_data(row, compact=compact) | ({} if compact else {'versions': list(row.versions.order_by('-revision').values('revision', 'created_at')[:10])}) for row in resources.order_by('-updated_at')[:20 if not compact else 8]],
-            'strategies': [strategy_data(row, compact=compact, unconfirmed=unconfirmed) for row in strategies.order_by('-id')[:20 if not compact else 3]]}
+            'strategies': [strategy_data(row, compact=compact, unconfirmed=unconfirmed, unconfirmed_uses=unconfirmed_uses)
+                           for row in strategies.order_by('-id')[:20 if not compact else 3]]}
 
 
 def _state(project, message):
@@ -179,14 +191,20 @@ def resource_operation(project, arguments, *, message=None):
 
 
 @transaction.atomic
-def strategy_operation(project, arguments, *, message=None):
+def strategy_operation(project, arguments, *, message=None, pending_progress_id=None):
     data = validate(arguments)
     action = data['action']
     if action == 'search':
         return {'strategies': library_data(project.user, data.get('query', ''), data.get('domain', ''), compact=True)['strategies']}
     _state(project, message)
     unconfirmed = unconfirmed_progress_ids(project.user_id)
-    evidence = ProjectLearningEvent.objects.select_related('message').exclude(pk__in=unconfirmed)
+    evidence = ProjectLearningEvent.objects.select_related('message')
+    if pending_progress_id is not None:
+        if action not in ('save', 'review') or not message or data.get('event_id') != pending_progress_id:
+            raise ValidationError('策略须引用本轮正在提交的观察。')
+        evidence = evidence.filter(pk=pending_progress_id, message=message)
+        unconfirmed.discard(pending_progress_id)
+    evidence = evidence.exclude(pk__in=unconfirmed)
     if action == 'save':
         event = get_object_or_404(evidence, pk=data.get('event_id'),
                                  project=project, kind='progress', message__user=project.user, message__role='user')
@@ -200,6 +218,8 @@ def strategy_operation(project, arguments, *, message=None):
     if action == 'review':
         use = get_object_or_404(LearningStrategyUse.objects.select_related('strategy__source_event__message', 'message'),
                                pk=data.get('use_id'), project=project, strategy__user=project.user)
+        if unconfirmed_strategy_use_ids(project.user_id, LearningStrategyUse.objects.filter(pk=use.pk)):
+            raise ValidationError('请引用已随小宇答复确认的方法试用。')
         event = get_object_or_404(evidence, pk=data.get('event_id'), project=project,
                                  kind='progress', message__user=project.user, message__role='user')
         if not message or event.message_id != message.pk or event.message_id == use.message_id or event.message.timestamp <= use.message.timestamp:
@@ -250,6 +270,7 @@ def project_strategy_uses(project):
         strategy__is_retired=False, strategy__source_event__message__isnull=False).exclude(
             strategy__source_event_id__in=unconfirmed).select_related('strategy__source_event').annotate(
             reviewed=Exists(LearningStrategyReview.objects.filter(use_id=OuterRef('pk')).exclude(evidence_event_id__in=unconfirmed)))
+    uses = uses.exclude(pk__in=unconfirmed_strategy_use_ids(project.user_id, uses))
     return [{'id': use.pk, 'method': use.strategy.source_event.content['strategy'][:800], 'reason': use.reason[:400],
              'trigger_message_id': use.message_id, 'reviewed': use.reviewed, 'created_at': use.created_at}
             for use in uses.order_by('-id')[:5]]

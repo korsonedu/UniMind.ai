@@ -7,6 +7,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.utils import timezone
 from django.db.models import F
+from ai_engine.observability import observe_background
 from ..models import AgentMemory, MemoryExtractionLog
 from .ulr_config import standalone_ulr
 
@@ -58,7 +59,8 @@ def extract_memories_async(user, conversation_history, conversation_id=None, *, 
             from .ulr_memory import schedule_memory_extraction
             schedule_memory_extraction(source_message_id, answer_message_id)
     elif getattr(settings, 'UNIMIND_DSH_MEMORY_ENABLED', False) or getattr(settings, 'UNIMIND_DSH_GENERATION_ENABLED', False):
-        _THREAD_POOL.submit(_extract_memories_via_dsh, user.id, conversation_history, conversation_id)
+        _THREAD_POOL.submit(_extract_memories_via_dsh, user.id, conversation_history, conversation_id,
+                            source_message_id=source_message_id, answer_message_id=answer_message_id)
     else:
         _THREAD_POOL.submit(_extract_memories_worker, user.id, conversation_history)
 
@@ -194,7 +196,7 @@ def _merge_memory_candidates(user, candidates, user_message, conversation_id, *,
     return saved
 
 
-def _extract_memories_via_dsh(user_id, conversation_history, conversation_id):
+def _extract_memories_via_dsh(user_id, conversation_history, conversation_id, *, source_message_id=None, answer_message_id=None):
     """Extract source-backed candidates and persist each turn's result once."""
     from django.db import connections, transaction
     from ..models import Conversation, AIChatMessage
@@ -213,7 +215,9 @@ def _extract_memories_via_dsh(user_id, conversation_history, conversation_id):
         if MemoryExtractionLog.objects.filter(user=user, conversation_id=conversation_key, message_hash=message_hash).exists():
             return
         prompt = _build_dsh_extraction_prompt(conversation_history)
-        result = run_structured('assistant.memory_extract', prompt)
+        with observe_background('legacy', f'memory:{conversation_key}',
+                                source_message_id=source_message_id, answer_message_id=answer_message_id):
+            result = run_structured('assistant.memory_extract', prompt)
         candidates = result.get('memories') if isinstance(result, dict) else []
         if not isinstance(candidates, list):
             candidates = []

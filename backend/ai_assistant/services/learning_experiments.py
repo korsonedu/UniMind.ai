@@ -14,7 +14,7 @@ from ai_assistant.models import AIChatMessage
 
 VISUAL_DEMO_REQUEST = re.compile(r'可视化|演示|互动|交互实验|图解|示意图|画(?:一个|一张|一|个)?图|用图片|动态(?:展示|图)')
 EXERCISE_REQUEST = re.compile(r'出题|出(?:一|几|两|\d+)道|来(?:一|几|两|\d+)道|做(?:一|几|两|\d+)道|刷题|练一练|练练|'
-                              r'(?:生成|抽取).{0,8}(?:题目|练习题)')
+                              r'给(?:我)?(?:一|几|两|\d+)道(?:练习)?题|(?:生成|抽取).{0,8}(?:题目|练习题)')
 
 
 class ExperimentConflict(APIException):

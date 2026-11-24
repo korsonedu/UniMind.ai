@@ -1,5 +1,6 @@
 from django.db import models, router, transaction
 from django.conf import settings
+from django.utils import timezone
 import uuid
 
 from quizzes.models import KnowledgePoint
@@ -182,6 +183,14 @@ class CourseVideoQuestion(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class PendingCourseQuestions(models.Model):
+    transcript = models.ForeignKey(VideoTranscript, on_delete=models.CASCADE)
+    revision = models.PositiveIntegerField()
+    dispatch_after = models.DateTimeField(default=timezone.now, db_index=True)
+    running_until = models.DateTimeField(null=True)
+
 
 class StartupMaterial(models.Model):
     name = models.CharField(max_length=200, verbose_name="资料名称")

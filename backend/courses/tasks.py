@@ -76,3 +76,25 @@ def generate_outline_task(self, course_id: int):
     except Exception as exc:
         logger.exception("Celery outline generation failed for course %s", course_id)
         raise self.retry(exc=exc)
+
+
+@shared_task(acks_late=True, reject_on_worker_lost=True, time_limit=90)
+def generate_course_questions_task(job_id: int):
+    from ai_assistant.services.ulr_config import standalone_ulr
+    from .services.course_question_jobs import consume_course_questions
+
+    return consume_course_questions(job_id) if standalone_ulr() else 0
+
+
+@shared_task(soft_time_limit=30, time_limit=45)
+def dispatch_pending_course_questions():
+    from django.utils import timezone
+    from ai_assistant.services.ulr_config import standalone_ulr
+    from .models import PendingCourseQuestions
+    from .services.course_question_jobs import publish_course_questions
+
+    if not standalone_ulr():
+        return 0
+    ids = list(PendingCourseQuestions.objects.filter(dispatch_after__lte=timezone.now())
+               .order_by('dispatch_after', 'pk').values_list('pk', flat=True)[:50])
+    return sum(publish_course_questions(job_id) for job_id in ids)

@@ -4,10 +4,13 @@ import hashlib
 import json
 
 from django.db.models import Count, Q, Sum
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import APIException, ValidationError
 
 from quizzes.models import ExamQuestionResult, PracticeSubmission, QuizExam
 from quizzes.services.exam_grading_state import can_resume_grading
+
+
+_GRADING_FIELDS = ('text', 'options', 'q_type', 'subjective_type', 'correct_answer', 'grading_points', 'kp_id')
 
 
 def _practice_fingerprint(value):
@@ -15,15 +18,21 @@ def _practice_fingerprint(value):
 
 
 def _practice_display_fingerprint(rows):
-    return _practice_fingerprint([[row[key] for key in ('id', 'text', 'q_type', 'subjective_type', 'options')] for row in rows])
+    return _practice_fingerprint([[row['id'], row['text'] or '', row['q_type'], row['subjective_type'] or '',
+                                   row['options'] or []] for row in rows])
 
 
-def prepare_practice_card(reservation, question_points, payload):
+def prepare_practice_card(reservation, question_points, current_questions, payload):
     questions = payload['questions']
     question_ids = [row['id'] for row in questions]
+    display = _practice_display_fingerprint(questions)
+    if _practice_display_fingerprint(current_questions[pk] for pk in question_ids) != display:
+        error = APIException('练习题已更新，请重新准备。', code='practice_changed')
+        error.status_code = 409
+        raise error
     PracticeSubmission.objects.create(user_id=reservation.user_id, session_id=payload['practice_id'], answers_hash='',
         response={'ulr_practice': {'source': reservation.pk, 'question_ids': question_ids,
-            'question_points': [question_points[pk] for pk in question_ids], 'display': _practice_display_fingerprint(questions)}})
+            'question_points': [question_points[pk] for pk in question_ids], 'display': display}})
 
 
 def validate_practice_card(user, binding, answers, request):
@@ -68,7 +77,7 @@ def question_snapshot(question) -> dict:
 
 def versioned_question_snapshot(question, *, practice_card=False):
     snapshot = question_snapshot(question)
-    grading = [snapshot[key] for key in ('text', 'options', 'q_type', 'subjective_type', 'correct_answer', 'grading_points', 'kp_id')]
+    grading = [snapshot[key] for key in _GRADING_FIELDS]
     key = 'ulr_practice_version' if practice_card else 'ulr_grading_version'
     snapshot[key] = _practice_fingerprint([grading, question.rubric])
     return snapshot
@@ -77,9 +86,16 @@ def versioned_question_snapshot(question, *, practice_card=False):
 def validate_grading_question(question, snapshot, scope):
     practice_card = 'ulr_practice_version' in snapshot
     key = 'ulr_practice_version' if practice_card else 'ulr_grading_version'
-    if ((question.knowledge_point_id and question.knowledge_point.institution_id != scope)
-            or versioned_question_snapshot(question, practice_card=practice_card)[key] != snapshot[key]):
+    if question.knowledge_point_id and question.knowledge_point.institution_id != scope:
         raise ValidationError('原题或知识点已变更，请重新准备。')
+    current = versioned_question_snapshot(question, practice_card=practice_card)
+    if key in snapshot:
+        if current[key] != snapshot[key]:
+            raise ValidationError('原题或知识点已变更，请重新准备。')
+    elif (not all(field in snapshot and current[field] == snapshot[field] for field in _GRADING_FIELDS)
+            or question.q_type == 'subjective' and (question.rubric or None) != (snapshot.get('rubric') or None)):
+        raise ValidationError('旧试卷的原题评分依据已变更或无法核验。')
+    return current
 
 
 def _saved_result_analysis(snapshot, analysis):

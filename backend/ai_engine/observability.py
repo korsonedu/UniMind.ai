@@ -1,6 +1,8 @@
 import logging
+from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Dict, Optional
+from uuid import uuid4
 
 from django.core.cache import cache
 from django.utils import timezone
@@ -8,6 +10,15 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 runtime_observation = ContextVar('runtime_observation', default={})
+
+
+@contextmanager
+def observe_background(runtime, request_id, **source):
+    token = runtime_observation.set({**source, 'runtime': runtime, 'request_id': request_id, 'attempt_id': uuid4()})
+    try:
+        yield
+    finally:
+        runtime_observation.reset(token)
 
 
 def model_token_counts(usage, *, anthropic=False):

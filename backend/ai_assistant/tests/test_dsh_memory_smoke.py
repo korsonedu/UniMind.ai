@@ -5,6 +5,7 @@ import uuid
 from unittest.mock import Mock, patch
 
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from ai_assistant.models import AgentMemory, MemoryExtractionLog, Bot, Conversation, AIChatMessage
 from ai_assistant.services.memory_service import _extract_memories_via_dsh, _merge_memory_candidates
@@ -135,6 +136,44 @@ class DshMemorySmoke(TestCase):
             collect.assert_called_once()
         log = MemoryExtractionLog.objects.get()
         self.assertEqual((log.source_message_id, log.answer_message_id), (repeated.pk, new_answer.pk))
+
+    def test_ulr_memory_retries_transient_provider_failure_once(self):
+        from ai_assistant.models import PendingMemoryExtraction
+        from ai_assistant.services.ulr_memory import extract_pending_memory
+        from ai_assistant.tasks import dispatch_pending_memory_extractions, extract_memory_turn
+        from ai_engine.service import AICallError
+
+        CourseStudentStatus.objects.create(user=self.user, is_course_student=True)
+        unavailable = AICallError('Synthetic provider outage', retryable=True, error_category='upstream_5xx')
+        valid = {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+            'function': {'name': 'submit_memories', 'arguments': json.dumps({'memories': [self.candidate]})},
+        }]}}]}
+        for second_result in (unavailable, valid):
+            with self.subTest(recovered=second_result is valid):
+                job = PendingMemoryExtraction.objects.create(source_message=self.question, answer_message=self.answer)
+                jobs = PendingMemoryExtraction.objects.filter(pk=job.pk)
+                with patch('ai_engine.service.AIEngine.call_provider', side_effect=[unavailable, second_result]) as provider:
+                    self.assertEqual(extract_pending_memory(job.pk), 0)
+                    self.assertTrue(jobs.get().provider_retry_used)
+                    self.assertEqual(extract_pending_memory(job.pk), 0)
+                    provider.assert_called_once()
+                    self.assertFalse(MemoryExtractionLog.objects.exists())
+                    jobs.update(running_until=timezone.now(), dispatch_after=timezone.now())
+                    with patch.object(extract_memory_turn, 'apply_async') as enqueue:
+                        self.assertEqual(dispatch_pending_memory_extractions.run(), 1)
+                    enqueue.assert_called_once_with((self.question.pk, self.answer.pk),
+                        {'pending_job_id': job.pk}, retry=False, ignore_result=True)
+                    if second_result is unavailable:
+                        with self.assertRaises(ValueError):
+                            extract_pending_memory(job.pk)
+                    else:
+                        self.assertEqual(extract_pending_memory(job.pk), 1)
+                    self.assertFalse(jobs.exists())
+                    self.assertEqual(extract_pending_memory(job.pk), 0)
+                    self.assertEqual(provider.call_count, 2)
+        log = MemoryExtractionLog.objects.get()
+        self.assertEqual((log.source_message_id, log.answer_message_id), (self.question.pk, self.answer.pk))
+        self.assertEqual(AgentMemory.objects.count(), 1)
 
     @override_settings(UNIMIND_DSH_MEMORY_ENABLED=True)
     def test_mem0_auto_extract_is_disabled_when_dsh_memory_enabled(self):

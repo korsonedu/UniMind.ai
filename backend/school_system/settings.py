@@ -707,3 +707,7 @@ CELERY_BEAT_SCHEDULE['pending-conversation-titles'] = {
     'task': 'ai_assistant.tasks.dispatch_pending_conversation_titles',
     'schedule': 60.0,
 }
+CELERY_BEAT_SCHEDULE['pending-course-questions'] = {
+    'task': 'courses.tasks.dispatch_pending_course_questions',
+    'schedule': 60.0,
+}

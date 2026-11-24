@@ -237,6 +237,7 @@ class PendingMemoryExtraction(models.Model):
     answer_message = models.OneToOneField(AIChatMessage, on_delete=models.CASCADE, related_name='+')
     dispatch_after = models.DateTimeField(default=timezone.now, db_index=True)
     running_until = models.DateTimeField(null=True)
+    provider_retry_used = models.BooleanField(default=False, db_default=False)
 
 
 class PendingConversationTitle(models.Model):

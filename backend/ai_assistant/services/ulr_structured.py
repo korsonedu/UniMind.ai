@@ -1,4 +1,6 @@
 """Collect one typed result through the native provider transport."""
+from contextlib import contextmanager
+from contextvars import ContextVar
 import json
 from time import monotonic
 
@@ -16,14 +18,29 @@ TEACHING_COLLECTORS = frozenset({
     'knowledge_tree_dispatch', 'knowledge_tree_decompose', 'knowledge_tree_edges',
     'knowledge_tree_repair', 'knowledge_tree_block',
 })
+_ulr_question_pipeline = ContextVar('ulr_question_pipeline', default=False)
 
 
 class InvalidStructuredOutput(ValueError):
     pass
 
 
+class RetryableProviderFailure(ValueError):
+    pass
+
+
+@contextmanager
+def question_pipeline_runtime(requires_ulr):
+    token = _ulr_question_pipeline.set(requires_ulr)
+    try:
+        yield
+    finally:
+        _ulr_question_pipeline.reset(token)
+
+
 def teaching_enabled(operation):
-    return ulr_enabled() and operation in TEACHING_COLLECTORS
+    return operation in TEACHING_COLLECTORS and (
+        ulr_enabled() or (_ulr_question_pipeline.get() and operation.startswith('pipeline.')))
 
 
 def run_collector(prompt, *, instruction, operation, name, schema, max_tokens, temperature,
@@ -75,13 +92,18 @@ def collect_messages(messages, *, operation, name, schema, max_tokens, temperatu
                 if repair and attempt == 0:
                     continue
                 raise InvalidStructuredOutput('模型未返回可解析的结构化结果。') from exc
-            raise ValueError('结构化任务未完成，可重试。') from exc
+            failure = RetryableProviderFailure if exc.retryable else ValueError
+            raise failure('结构化任务未完成，可重试。') from exc
         check_scope()
         choices = response.get('choices') or []
         calls = AIEngine._extract_tool_calls(response)
         if monotonic() >= deadline:
             raise ValueError('结构化任务超出执行时限。')
-        if (not choices or choices[0].get('finish_reason') not in ('stop', 'tool_calls')
+        choice = choices[0] if choices else {}
+        message = choice.get('message') or {}
+        content = message.get('content') or ''
+        if (not AIEngine._complete_tool_round(choice.get('finish_reason'), calls, offered)
+                or AIEngine._has_open_dsml(content)
                 or not 1 <= len(calls) <= 8):
             break
         names = [call.get('function', {}).get('name') for call in calls]
@@ -103,7 +125,8 @@ def collect_messages(messages, *, operation, name, schema, max_tokens, temperatu
             return result[array_key] if array_result else result
         if attempt == budget - 1 or not set(names) <= research.keys():
             break
-        messages.append(choices[0]['message'])
+        messages.append({**message, 'role': 'assistant', 'content': AIEngine._strip_dsml(content) or None,
+                         'tool_calls': calls})
         for call, tool_name in zip(calls, names):
             call_id = call.get('id')
             if not isinstance(call_id, str) or not call_id or call_id in seen_ids:

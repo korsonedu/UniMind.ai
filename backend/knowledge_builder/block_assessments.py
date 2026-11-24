@@ -5,9 +5,13 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from ai_assistant.models import ConversationProject, ProjectLearning, ProjectLearningEvent, ProjectLearningTask
 from ai_assistant.services.learning_tasks import create_task, task_data
+from ai_assistant.services.ulr_config import standalone_ulr
 from .block_study import visible_block_resources, _assignments, _clean_question, _generate_question, _hash, _knowledge_points
 from .intake import _bank_question
 from quizzes.models import Question
+
+
+IN_PROGRESS = ('pending', 'running')
 
 
 def context(user, block, project_id):
@@ -48,11 +52,21 @@ def assessment_data(event):
             'complete': complete, 'accuracy': accuracy, 'passed': bool(core_passed and accuracy is not None and accuracy >= .75)}
 
 
-def generate_assessment(user, block, project_id, *, mode='objective', retest=False):
-    project, state, version, node, stage = context(user, block, project_id)
+def complete_preparation(preparation, assessment):
+    ProjectLearningEvent.objects.filter(pk=preparation.pk, content=preparation.content).update(content={
+        **preparation.content, 'status': 'completed', 'error': '', 'assessment_id': assessment.pk})
+
+
+def generate_assessment(preparation, block):
+    user = preparation.project.user
+    mode, retest = preparation.content['mode'], preparation.content['retest']
+    project, state, version, node, stage = context(user, block, preparation.project_id)
+    if version.pk != preparation.content['version_id']:
+        raise ValidationError('学习安排已变化，请重新打开当前知识块。')
+    claim = ProjectLearningEvent.objects.filter(pk=preparation.pk, content=preparation.content)
     previous = latest(project, block, version)
     if previous and not retest:
-        return {'assessment': assessment_data(previous)}
+        return complete_preparation(preparation, previous)
     if previous and not assessment_data(previous)['complete']:
         raise ValidationError('请先完成或恢复当前检测的批改，再安排换题检验。')
     from users.feature_access import has_learning_feature
@@ -67,11 +81,28 @@ def generate_assessment(user, block, project_id, *, mode='objective', retest=Fal
     kps = _knowledge_points(user, assignments)
     existing = ProjectLearningTask.objects.filter(project=project, knowledge_version=version, node_id=node['id'])
     seen = {_hash(snapshot['text']) for task in existing for snapshot in task.question_snapshot.values()}
-    urls = {f'/course/{row.course_id}' if row.source_kind == 'course' else row.url for row in visible_block_resources(user, block)}
+    def visible_urls():
+        return {f'/course/{course_id}' if kind == 'course' else url
+                for kind, course_id, url in visible_block_resources(user, block).values_list('source_kind', 'course_id', 'url')}
+
+    urls = visible_urls()
     resources = [item for item in state.resources if item['url'] in urls][:5]
-    sources = [item['id'] for item in resources]
+    sources = {item['id']: item for item in resources}
+    source_urls = {item['url'] for item in resources}
     source_context = '\n'.join(f"{item['title']}（{'摘要或元数据' if item.get('not_web_read') else '已保存摘录'}）：{item['excerpt'][:1000]}" for item in resources)
+
+    def check_sources(current):
+        if {item['id']: item for item in current if item['id'] in sources} != sources or not source_urls <= visible_urls():
+            raise ValidationError('出题参考资料已变化，请重新准备检测。')
+
+    def before_model_request():
+        if not claim.exists():
+            raise ValidationError('本轮出题已失效。')
+        if sources:
+            check_sources(ProjectLearning.objects.values_list('resources', flat=True).get(pk=state.pk))
+
     prepared = []
+    generated = False
     for row, q_type in [(row, 'objective') for row in selected] + ([(selected[0], 'subjective')] if mode == 'challenge' else []):
         item = None
         kp = kps.get(row.atom.name)
@@ -85,18 +116,25 @@ def generate_assessment(user, block, project_id, *, mode='objective', retest=Fal
                         item = candidate
                         item['question_id'] = question.pk
                         break
-        item = item or _generate_question(row, block, q_type, seen, source_context)
+        if item is None:
+            before_model_request()
+            item = _generate_question(row, block, q_type, seen, source_context, before_retry=before_model_request)
+            generated = True
         prepared.append((row, item))
         seen.add(_hash(item['stem']))
     with transaction.atomic():
         # Serialize concurrent clicks and recheck that the confirmed path did not change during generation.
         ProjectLearning.objects.select_for_update().get(project=project)
-        _, current, current_version, current_node, current_stage = context(user, block, project_id)
+        if not claim.exists():
+            return
+        _, current_state, current_version, current_node, current_stage = context(user, block, project.pk)
         if current_version.pk != version.pk or current_stage != stage or current_node != node:
             raise ValidationError('学习安排已变化，请重新打开当前知识块。')
         concurrent = latest(project, block, version)
         if concurrent and (not previous or concurrent.pk != previous.pk):
-            return {'assessment': assessment_data(concurrent)}
+            return complete_preparation(preparation, concurrent)
+        if generated and sources:
+            check_sources(current_state.resources)
         items = []
         old_items = previous.content['items'] if previous else []
         for row, item in prepared:
@@ -108,13 +146,13 @@ def generate_assessment(user, block, project_id, *, mode='objective', retest=Fal
                 args['question_ids'] = [item['question_id']]
             else:
                 args['definition'] = dict(prompt=item['stem'], response_type='objective' if item['q_type'] == 'objective' else 'calculation' if item['subjective_type'] == 'calculate' else 'reasoning',
-                    options=item['options'], reference_answer=item['correct_answer'], criteria=[item['grading_points'] or '按标准答案比对。'], sources=sources)
+                    options=item['options'], reference_answer=item['correct_answer'], criteria=[item['grading_points'] or '按标准答案比对。'], sources=list(sources))
             task = create_task(project, args)
             items.append(dict(task_id=str(task.pk), atom_id=row.atom_id, atom_name=row.atom.name,
                               membership_type=row.membership_type, q_type=item['q_type']))
         event = ProjectLearningEvent.objects.create(project=project, kind='block_assessment', content={
             'build_id': str(block.build_id), 'block_id': block.pk, 'version_id': version.pk, 'node_id': node['id'], 'mode': mode, 'items': items})
-    return {'assessment': assessment_data(event)}
+        complete_preparation(preparation, event)
 
 
 def block_assessment(user, block, project_id, *, action='read', mode='objective', retest=False):
@@ -125,23 +163,43 @@ def block_assessment(user, block, project_id, *, action='read', mode='objective'
         ProjectLearning.objects.select_for_update().get(project=project)
         preparation = ProjectLearningEvent.objects.filter(project=project, kind='block_prepare',
             content__block_id=block.pk, content__version_id=version.pk).order_by('-pk').first()
-        if preparation and preparation.content['status'] == 'pending' and (timezone.now() - preparation.created_at).total_seconds() > 720:
-            preparation.content.update(status='failed', error='出题已超时，请重试。')
-            preparation.save(update_fields=['content'])
+        if preparation and preparation.content['status'] in IN_PROGRESS:
+            started = preparation.content.get('started_at', preparation.content.get('queued_at', preparation.created_at.timestamp()))
+            if timezone.now().timestamp() - started > 720:
+                content = {**preparation.content, 'status': 'failed', 'error': '出题已超时，请重试。',
+                           'queue_retryable': preparation.content['status'] == 'pending'}
+                if ProjectLearningEvent.objects.filter(pk=preparation.pk, content=preparation.content).update(content=content):
+                    preparation.content = content
+                else:
+                    preparation.refresh_from_db()
         event = latest(project, block, version)
-        if action == 'generate' and not (preparation and preparation.content['status'] == 'pending') and (not event or retest):
+        if action == 'generate' and not (preparation and preparation.content['status'] in IN_PROGRESS) and (not event or retest):
             if not has_learning_feature(user, 'quiz.exam'):
                 raise PermissionDenied('当前账号尚未开放习题训练。')
             if event and not assessment_data(event)['complete']:
                 raise ValidationError('请先完成或恢复当前检测的批改，再安排换题检验。')
-            preparation = ProjectLearningEvent.objects.create(project=project, kind='block_prepare', content={
-                'block_id': block.pk, 'version_id': version.pk, 'mode': mode, 'retest': retest, 'status': 'pending', 'error': ''})
+            retry = (preparation and preparation.content.get('queue_retryable')
+                     and (preparation.content['mode'], preparation.content['retest']) == (mode, retest))
+            native = standalone_ulr()
+            if retry and preparation.content.get('requires_ulr') and not native:
+                raise ValidationError('本轮出题需要 ULR，请恢复运行配置后重试。')
+            queued = {'block_id': block.pk, 'version_id': version.pk, 'mode': mode, 'retest': retest,
+                      'status': 'pending', 'error': '', 'queued_at': timezone.now().timestamp(), 'requires_ulr': native}
+            if retry:
+                preparation.content = queued
+                preparation.save(update_fields=['content'])
+            else:
+                preparation = ProjectLearningEvent.objects.create(project=project, kind='block_prepare', content=queued)
             def dispatch():
                 from .tasks import prepare_block_assessment
                 try:
                     prepare_block_assessment.delay(preparation.pk)
                 except Exception:
-                    preparation.content.update(status='failed', error='任务暂未能进入出题队列，请重试。')
-                    preparation.save(update_fields=['content'])
+                    ProjectLearningEvent.objects.filter(pk=preparation.pk, content=queued).update(content={
+                        **queued, 'status': 'failed', 'queue_retryable': True, 'error': '任务暂未能进入出题队列，请重试。'})
             transaction.on_commit(dispatch)
-    return {'assessment': assessment_data(event), 'preparation': {'status': preparation.content['status'], 'error': preparation.content['error']} if preparation else None}
+    if not preparation:
+        return {'assessment': assessment_data(event), 'preparation': None}
+    status = preparation.content['status']
+    return {'assessment': assessment_data(event), 'preparation': {'status': 'pending' if status in IN_PROGRESS else status,
+                                                                 'error': preparation.content['error']}}

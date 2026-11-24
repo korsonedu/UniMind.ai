@@ -1,7 +1,9 @@
 """Smoke the instruction contract before any dependent query can run."""
 from rest_framework.exceptions import PermissionDenied
 
-from ai_assistant.services.ulr_tool_program import CURRENT_COURSE_NAME, NAME, PRACTICE_NAME, PROGRAM_OPS, VERSION, run_program
+from ai_assistant.services.ulr_tool_program import (
+    CURRENT_COURSE_NAME, LEGACY_VERSION, NAME, PRACTICE_NAME, PROGRAM_OPS, PROGRAM_TOOLS, VERSION, run_program,
+)
 
 
 def test_course_instruction_checks_fields_and_binds_the_selected_course():
@@ -14,10 +16,12 @@ def test_course_instruction_checks_fields_and_binds_the_selected_course():
             return {'courses': [{'id': 77}, {'id': 81}][:args['limit']]}
         return {'segments': []}
 
-    payload = {'v': VERSION, 'find': '久期', 'query': '凸性'}
+    payload = {'find': '久期', 'query': '凸性'}
+    for tool in PROGRAM_TOOLS.values():
+        assert {'v', 'rank'}.isdisjoint(tool['function']['parameters']['properties'])
     for args, code, field in (
-        ({**payload, 'v': VERSION - 1}, 'stale_tool_version', '$.v'),
-        ({'find': '久期'}, 'missing_tool_version', '$.v'),
+        ({**payload, 'v': LEGACY_VERSION - 1}, 'stale_tool_version', '$.v'),
+        ({**payload, 'v': None}, 'stale_tool_version', '$.v'),
         ({**payload, 'rank': 0}, 'invalid_arguments', '$.rank'),
         ({**payload, 'limit': 11}, 'invalid_arguments', '$.limit'),
         ({**payload, 'rank': '200'}, 'invalid_arguments', '$.rank'),
@@ -44,6 +48,16 @@ def test_course_instruction_checks_fields_and_binds_the_selected_course():
     assert selected['_ulr_source_id'] == 81 and selected['steps_executed'] == list(tools)
     assert calls[-2:] == [('search_courses', {'query': '久期', 'limit': 2}),
                          ('search_asr', {'query': '凸性', 'course_id': 81, 'limit': 1})]
+    inferred = run_program({**payload, 'limit': 1}, tools, execute, message='请选第二门相关课程。')
+    assert inferred == selected
+    assert run_program({**payload, 'v': LEGACY_VERSION, 'rank': 2, 'limit': 1},
+                       tools, execute, message='请选第二门相关课程。') == selected
+    missing = run_program(payload, tools, execute, message='请选第三门课。')
+    assert missing['error']['code'] == 'missing_dependency' and missing['steps_executed'] == ['search_courses']
+    assert calls[-1] == ('search_courses', {'query': '久期', 'limit': 3})
+    count = len(calls)
+    outside = run_program(payload, tools, execute, message='选第11门课。')
+    assert outside['error']['code'] == 'rank_out_of_range' and outside['steps_executed'] == [] and len(calls) == count
 
     def withdrawn(name, args):
         if name == 'search_courses':
@@ -64,10 +78,11 @@ def test_practice_instruction_never_widens_a_missing_or_ambiguous_match():
         calls.append(name)
         return {'results': [] if arguments['query'] == '久期' else [{'id': 1}, {'id': 2}]}
 
-    payload = {'v': VERSION, 'find': '久期', 'limit': 1}
+    payload = {'find': '久期', 'limit': 1}
     for extra, field in (
         ({'knowledge_point_id': 77}, '$.knowledge_point_id'),
         ({'find': ' '}, '$.find'),
+        ({'output': 'answer'}, '$.output'),
         ({'q_type': 'objective', 'subjective_type': 'essay'}, '$.subjective_type'),
     ):
         error = run_program({**payload, **extra}, tools, execute, name=PRACTICE_NAME)
@@ -89,7 +104,7 @@ def test_current_course_instruction_only_accepts_the_server_source():
         calls.append((name, arguments))
         return {'segments': []}
 
-    args = {'v': VERSION, 'query': '凸性'}
+    args = {'query': '凸性'}
     tools = PROGRAM_OPS[CURRENT_COURSE_NAME]
     missing = run_program(args, tools, execute, name=CURRENT_COURSE_NAME)
     forged = run_program({**args, 'course_id': 81}, tools, execute, name=CURRENT_COURSE_NAME, current_course_id=77)
@@ -98,3 +113,39 @@ def test_current_course_instruction_only_accepts_the_server_source():
     result = run_program(args, tools, execute, name=CURRENT_COURSE_NAME, current_course_id=77)
     assert result['_ulr_source_id'] == 77 and result['steps_executed'] == ['search_asr']
     assert calls == [('search_asr', {'query': '凸性', 'course_id': 77})]
+
+
+def test_instruction_waits_for_a_single_affirmative_ordinal():
+    calls = []
+
+    def execute(name, args):
+        calls.append((name, args))
+        if name == 'search_courses':
+            return {'courses': [{'id': 77}, {'id': 81}][:args['limit']]}
+        if name == 'search_knowledge_tree':
+            return {'results': [{'id': 77}]}
+        return {'segments': []}
+
+    for name, message in (
+        (NAME, '不要第一门课。'),
+        (NAME, '请不选择第一门课。'),
+        (NAME, '第一门相关课程先跳过。'),
+        (NAME, '第一门课还是第二门课，请等我确认。'),
+        (NAME, '请选第二门课，不要第二门课。'),
+        (NAME, 'Do not use the first course.'),
+        (NAME, 'Skip the first course and the second course.'),
+        (PRACTICE_NAME, '别用第一项出练习。'),
+        (PRACTICE_NAME, 'Skip the first matching knowledge point.'),
+    ):
+        receipt = run_program({'find': '折现率', 'rank': 1}, PROGRAM_OPS[name], execute, name=name, message=message)
+        assert receipt['error']['code'] == 'selection_needs_confirmation'
+        assert not receipt['error']['repairable'] and not receipt['steps_executed']
+        assert not calls
+
+    for message in (
+        '不要第一门课，请选第二门相关课程。',
+        'Skip the first course and use the second matching course.',
+    ):
+        receipt = run_program({'find': '折现率'}, PROGRAM_OPS[NAME], execute, message=message)
+        assert receipt['_ulr_source_id'] == 81
+        assert calls[-1] == ('search_asr', {'query': '折现率', 'course_id': 81})

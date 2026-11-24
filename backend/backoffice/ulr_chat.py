@@ -4,7 +4,6 @@ import re
 from time import monotonic
 
 from django.db import close_old_connections
-from jsonschema import validate
 
 from ai_assistant.services.dsh_scope import check_execution, current_execution, generation_scope
 from ai_engine.service import AIEngine
@@ -38,7 +37,6 @@ def run_workbench(messages, tools, executor, progress):
         close_old_connections()
         try:
             with generation_scope(execution):
-                validate(arguments, definitions[name]['function']['parameters'])
                 if name == 'find_teaching_tools':
                     pending_group = arguments['group']
                     return {'group': pending_group, 'tools': list(GROUPS[pending_group])}
@@ -47,7 +45,7 @@ def run_workbench(messages, tools, executor, progress):
         finally:
             close_old_connections()
 
-    coordinator = ToolRunCoordinator(execute, [], on_step=progress, tool_timeout_seconds=35)
+    coordinator = ToolRunCoordinator(execute, [], on_step=progress, tool_timeout_seconds=35, strict_arguments=True)
     for index in range(8):
         check_execution(execution)
         offered = [definitions[name] for name in GROUPS[group] if name in definitions] + [discovery] if index < 7 else []
@@ -62,15 +60,18 @@ def run_workbench(messages, tools, executor, progress):
             raise_on_error=True, max_retries=0, timeout_seconds=min(30, remaining))
         check_execution(execution)
         result = response['choices'][0]
+        message = result['message']
+        content = message.get('content') or ''
         calls = AIEngine._extract_tool_calls(response)
-        if result.get('finish_reason') == 'stop' and not calls:
-            result['message']['content'] = AIEngine._strip_dsml(result['message'].get('content') or '')
-            return response
-        if result.get('finish_reason') != 'tool_calls' or not offered or not 1 <= len(calls) <= 7:
+        if (AIEngine._has_open_dsml(content) or len(calls) > 7
+                or not AIEngine._complete_tool_round(result.get('finish_reason'), calls, offered)):
             raise ValueError('教研对话未返回完整答复。')
+        message['content'] = AIEngine._strip_dsml(content)
+        if not calls:
+            return response
         coordinator.tool_definitions = offered
         outcomes = coordinator.execute_batch(calls, index + 1)
-        messages.append({**result['message'], 'role': 'assistant', 'tool_calls': [outcome.call.tool_call for outcome in outcomes]})
+        messages.append({**message, 'role': 'assistant', 'tool_calls': [outcome.call.tool_call for outcome in outcomes]})
         messages.extend({'role': 'tool', 'tool_call_id': outcome.call.call_id, 'content': outcome.result} for outcome in outcomes)
         if pending_group:
             group, pending_group = pending_group, None

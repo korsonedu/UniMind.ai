@@ -524,7 +524,7 @@ VITE_API_URL=https://your-domain.com npx vite build
 DJANGO_ENV=production                           # development | production
 DEBUG=false                                      # 生产环境必须为 false
 SECRET_KEY=<generate-with: python -c "import secrets; print(secrets.token_urlsafe(64))">
-ALLOWED_HOSTS=your-domain.com,www.your-domain.com
+ALLOWED_HOSTS=your-domain.com,www.your-domain.com,localhost
 
 # AI 引擎
 LLM_API_KEY=sk-xxx                              # LLM API key

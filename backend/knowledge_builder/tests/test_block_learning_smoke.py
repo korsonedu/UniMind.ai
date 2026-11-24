@@ -1,16 +1,20 @@
 """Smoke the shared task path; no separate block progress or client answer keys."""
+from datetime import timedelta
 from unittest.mock import patch
 
+from django.db import connection
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from ai_assistant.models import ConversationProject, ProjectLearning, ProjectLearningTask
+from ai_assistant.models import ConversationProject, ProjectLearning, ProjectLearningEvent, ProjectLearningTask
 from ai_assistant.services.learning_knowledge import knowledge_operation, knowledge_state
+from ai_assistant.services.learning_resources import store_resource
 from ai_assistant.services.project_learning import change_learning
+from courses.models import Course
 from knowledge_builder.models import KnowledgeTreeBuild, TreeModule, TreeAtomPoint, LearningBlock, BlockStep, BlockStepAtom, BlockEdge, BlockResource
 from quizzes.ai_workflow import run_exam_grading
-from users.models import User
+from users.models import CourseStudentStatus, User
 
 
 @override_settings(UNIMIND_CONTENT_INSTITUTION_ID='global', USE_MEM0=False,
@@ -47,7 +51,7 @@ class BlockLearningSmoke(APITestCase):
         self.addCleanup(queue.stop)
         self.counter = 0
 
-    def generate(self, row, block, q_type, seen, source_context=''):
+    def generate(self, row, block, q_type, seen, source_context='', *, before_retry=None):
         self.counter += 1
         return dict(stem=f'{row.atom.name}情境{self.counter}：解释现值变化的正确方向？', q_type=q_type,
             options={'A': '折为现值', 'B': '忽略时间'}, correct_answer='A', grading_points='解释现值与未来值',
@@ -69,6 +73,218 @@ class BlockLearningSmoke(APITestCase):
             self.assertEqual(response.status_code, 202, response.data)
             with patch('quizzes.ai_workflow._queue_experience_verification'), self.captureOnCommitCallbacks(execute=True):
                 run_exam_grading(self.user.pk, response.data['exam_id'])
+
+    def enqueue_assessment(self):
+        with patch('knowledge_builder.tasks.prepare_block_assessment.delay') as dispatch, self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(self.url, {'project_id': self.project.pk}, format='json')
+        self.assertEqual(response.data['preparation']['status'], 'pending')
+        event = ProjectLearningEvent.objects.get(project=self.project, kind='block_prepare')
+        dispatch.assert_called_once_with(event.pk)
+        return event
+
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr')
+    def test_duplicate_delivery_only_generates_one_assessment(self):
+        from knowledge_builder.tasks import prepare_block_assessment
+
+        with self.settings(UNIMIND_LEARNING_RUNTIME='legacy'):
+            event = self.enqueue_assessment()
+        self.assertFalse(event.content.get('requires_ulr', False))
+
+        def generate(*args, **kwargs):
+            item = self.generate(*args, **kwargs)
+            if self.counter == 1:
+                event.refresh_from_db()
+                self.assertTrue(event.content.get('requires_ulr', False))
+                prepare_block_assessment(event.pk)
+                self.assertEqual(self.assessment(action='read').data['preparation']['status'], 'pending')
+            return item
+
+        with patch('knowledge_builder.block_assessments._generate_question', side_effect=generate):
+            prepare_block_assessment(event.pk)
+            prepare_block_assessment(event.pk)
+        self.assertEqual(self.counter, 2)
+        result = ProjectLearningEvent.objects.get(project=self.project, kind='block_assessment')
+        event.refresh_from_db()
+        self.assertEqual(event.content['assessment_id'], result.pk)
+        self.assertEqual(event.content['status'], 'completed')
+        self.assertEqual(ProjectLearningTask.objects.filter(project=self.project).count(), 2)
+
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr')
+    def test_wrong_worker_can_be_retried_on_ulr_with_the_same_preparation(self):
+        from knowledge_builder.tasks import prepare_block_assessment
+
+        event = self.enqueue_assessment()
+        self.assertTrue(event.content.get('requires_ulr', False))
+        with self.settings(UNIMIND_LEARNING_RUNTIME='legacy'), \
+                patch('knowledge_builder.block_assessments._generate_question') as model:
+            prepare_block_assessment(event.pk)
+            rejected = self.assessment()
+            self.assertEqual(rejected.status_code, 400, rejected.data)
+        model.assert_not_called()
+        event.refresh_from_db()
+        self.assertEqual(event.content['status'], 'failed')
+        self.assertFalse(ProjectLearningTask.objects.filter(project=self.project).exists())
+
+        restored = self.assessment()
+        self.assertEqual(restored.data['preparation']['status'], 'completed')
+        event.refresh_from_db()
+        self.assertEqual(restored.data['assessment']['id'], event.content['assessment_id'])
+        self.assertTrue(event.content['requires_ulr'])
+        self.assertEqual(ProjectLearningEvent.objects.filter(project=self.project, kind='block_prepare').count(), 1)
+        self.assertEqual(self.counter, 2)
+
+    def test_lost_queue_message_reuses_preparation_and_original_settings(self):
+        from ai_engine.observability import runtime_observation
+        from knowledge_builder.tasks import prepare_block_assessment
+
+        event = self.enqueue_assessment()
+        past = timezone.now() - timedelta(minutes=13)
+        ProjectLearningEvent.objects.filter(pk=event.pk).update(content={**event.content, 'queued_at': past.timestamp()})
+        self.assertEqual(self.assessment(action='read').data['preparation']['status'], 'failed')
+        payload = {'project_id': self.project.pk}
+        with patch('knowledge_builder.tasks.prepare_block_assessment.delay', side_effect=RuntimeError('broker unavailable')) as dispatch, \
+                self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(self.client.post(self.url, payload, format='json').status_code, 200)
+        dispatch.assert_called_once_with(event.pk)
+        self.assertEqual(self.assessment(action='read').data['preparation']['status'], 'failed')
+        with patch('knowledge_builder.tasks.prepare_block_assessment.delay') as dispatch, self.captureOnCommitCallbacks(execute=True):
+            for _ in range(2):
+                response = self.client.post(self.url, payload, format='json')
+                self.assertEqual(response.data['preparation']['status'], 'pending')
+        dispatch.assert_called_once_with(event.pk)
+        self.assertEqual(self.assessment(action='read').data['preparation']['status'], 'pending')
+
+        observations = []
+
+        def generate(*args, **kwargs):
+            observations.append(runtime_observation.get())
+            return self.generate(*args, **kwargs)
+
+        with patch('knowledge_builder.block_assessments._generate_question', side_effect=generate):
+            prepare_block_assessment(event.pk)
+            prepare_block_assessment(event.pk)
+        event.refresh_from_db()
+        self.assertEqual((event.content['status'], event.content['mode'], event.content['retest']), ('completed', 'objective', False))
+        self.assertEqual(ProjectLearningEvent.objects.filter(project=self.project, kind='block_prepare').count(), 1)
+        self.assertEqual(ProjectLearningEvent.objects.filter(project=self.project, kind='block_assessment').count(), 1)
+        self.assertEqual(self.counter, 2)
+        self.assertEqual({row['request_id'] for row in observations}, {f'assessment:{event.pk}'})
+        self.assertEqual(len({row['attempt_id'] for row in observations}), 1)
+
+    def test_expired_assessment_drops_late_questions(self):
+        from knowledge_builder.tasks import prepare_block_assessment
+
+        event = self.enqueue_assessment()
+
+        def generate(*args, **kwargs):
+            item = self.generate(*args, **kwargs)
+            with patch('django.utils.timezone.now', return_value=timezone.now() + timedelta(minutes=13)):
+                self.assertEqual(self.assessment(action='read').data['preparation']['status'], 'failed')
+            return item
+
+        with patch('knowledge_builder.block_assessments._generate_question', side_effect=generate):
+            prepare_block_assessment(event.pk)
+        event.refresh_from_db()
+        self.assertEqual((self.counter, event.content['status']), (1, 'failed'))
+        self.assertFalse(ProjectLearningTask.objects.filter(project=self.project).exists())
+        self.assertFalse(ProjectLearningEvent.objects.filter(project=self.project, kind='block_assessment').exists())
+
+    def mount_course_excerpt(self):
+        CourseStudentStatus.objects.create(user=self.user, is_course_student=True)
+        course = Course.objects.create(title='折现率课程', is_published=True)
+        resource = BlockResource.objects.create(build=self.build, block=self.block, source_kind='course',
+            course_id=course.pk, title=course.title, url='/courses', excerpt='课程原摘录')
+        response = self.client.post(self.url.replace('/quiz/', '/resources/'), {
+            'action': 'attach_project', 'project_id': self.project.pk, 'resource_id': resource.pk,
+        }, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        return course
+
+    def test_course_withdrawal_stops_preparation_after_the_first_question(self):
+        from knowledge_builder.tasks import prepare_block_assessment
+
+        course = self.mount_course_excerpt()
+        event = self.enqueue_assessment()
+
+        def generate(*args, **kwargs):
+            self.assertIn('课程原摘录', args[-1])
+            item = self.generate(*args, **kwargs)
+            if self.counter == 1:
+                Course.objects.filter(pk=course.pk).update(is_published=False)
+            return item
+
+        with patch('knowledge_builder.block_assessments._generate_question', side_effect=generate):
+            prepare_block_assessment(event.pk)
+        self.assertEqual((self.counter, self.assessment(action='read').data['preparation']['status']), (1, 'failed'))
+        self.assertFalse(ProjectLearningTask.objects.filter(project=self.project).exists())
+        self.assertFalse(ProjectLearningEvent.objects.filter(project=self.project, kind='block_assessment').exists())
+
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr')
+    def test_course_withdrawal_stops_retry_of_invalid_question(self):
+        from knowledge_builder.tasks import prepare_block_assessment
+
+        course = self.mount_course_excerpt()
+        event = self.enqueue_assessment()
+
+        def invalid_question(**kwargs):
+            self.assertIn('课程原摘录', kwargs['user_prompt'])
+            Course.objects.filter(pk=course.pk).update(is_published=False)
+            return None
+
+        with patch('knowledge_builder.block_study.config._get_api_key', return_value='fixture'), \
+                patch('knowledge_builder.block_study.AIService.structured_output', side_effect=invalid_question) as model:
+            prepare_block_assessment(event.pk)
+        model.assert_called_once()
+        self.assertEqual(self.assessment(action='read').data['preparation']['status'], 'failed')
+        self.assertFalse(ProjectLearningTask.objects.filter(project=self.project).exists())
+
+    def test_changed_project_excerpt_drops_prepared_questions(self):
+        from knowledge_builder.tasks import prepare_block_assessment
+
+        resource = BlockResource.objects.create(build=self.build, block=self.block,
+            title='折现率资料', url='https://example.org/discount', excerpt='项目原摘录')
+        response = self.client.post(self.url.replace('/quiz/', '/resources/'), {
+            'action': 'attach_project', 'project_id': self.project.pk, 'resource_id': resource.pk,
+        }, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        original = response.data['resource']
+        event = self.enqueue_assessment()
+
+        def generate(*args, **kwargs):
+            self.assertIn('项目原摘录', args[-1])
+            item = self.generate(*args, **kwargs)
+            if self.counter == 2:
+                revised = store_resource(self.project, {**original, 'excerpt': '新项目摘录', 'content_version': 'new'})
+                self.assertEqual(revised['resource']['id'], original['id'])
+            return item
+
+        with patch('knowledge_builder.block_assessments._generate_question', side_effect=generate):
+            prepare_block_assessment(event.pk)
+        self.assertEqual((self.counter, self.assessment(action='read').data['preparation']['status']), (2, 'failed'))
+        self.assertFalse(ProjectLearningTask.objects.filter(project=self.project).exists())
+        self.assertFalse(ProjectLearningEvent.objects.filter(project=self.project, kind='block_assessment').exists())
+
+    def test_postgresql_redelivery_recovers_the_original_preparation(self):
+        if connection.vendor != 'postgresql':
+            self.skipTest('PostgreSQL session lock required.')
+        from knowledge_builder.tasks import prepare_block_assessment
+
+        event = self.enqueue_assessment()
+        with patch('knowledge_builder.block_assessments._generate_question', side_effect=SystemExit), self.assertRaises(SystemExit):
+            prepare_block_assessment(event.pk)
+        event.refresh_from_db()
+        self.assertEqual(event.content['status'], 'running')
+        prepare_block_assessment.push_request(delivery_info={'redelivered': True})
+        try:
+            with patch('knowledge_builder.block_assessments._generate_question', side_effect=self.generate):
+                prepare_block_assessment.run(event.pk)
+                prepare_block_assessment.run(event.pk)
+        finally:
+            prepare_block_assessment.pop_request()
+        event.refresh_from_db()
+        self.assertEqual((self.counter, event.content['status']), (2, 'completed'))
+        self.assertEqual(ProjectLearningEvent.objects.filter(project=self.project, kind='block_prepare').count(), 1)
+        self.assertEqual(ProjectLearningEvent.objects.filter(project=self.project, kind='block_assessment').count(), 1)
 
     def test_tasks_answers_recovery_and_next_recommendation(self):
         for index in range(2):

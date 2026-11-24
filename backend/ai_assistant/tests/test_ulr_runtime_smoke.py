@@ -2,6 +2,8 @@
 import asyncio
 import json
 from datetime import timedelta
+from pathlib import Path
+from runpy import run_path
 from threading import Event
 from time import monotonic, sleep
 from unittest.mock import patch
@@ -10,6 +12,7 @@ from uuid import uuid4
 from asgiref.sync import async_to_sync, sync_to_async
 from django.utils import timezone
 import pytest
+from rest_framework.test import APIClient
 
 from ai_assistant.models import (
     AIChatMessage, AgentMemory, Bot, Conversation, ConversationProject, LearningKnowledgeMap, LearningKnowledgeVersion,
@@ -471,7 +474,7 @@ def test_ulr_fits_long_history_without_dropping_the_question_or_notes(auth_clien
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize('source', ['course', 'note'])
+@pytest.mark.parametrize('source', ['course', 'note', 'revision'])
 def test_ulr_reauthorizes_saved_sources_during_continuation(auth_client, user, settings, source):
     settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
     settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
@@ -481,11 +484,14 @@ def test_ulr_reauthorizes_saved_sources_during_continuation(auth_client, user, s
     conversation = Conversation.objects.create(user=user, bot=bot, conversation_id=uuid4(), title='继续学习')
     original, derived = 'HISTORICAL_SOURCE_MARKER', 'HISTORICAL_DERIVED_MARKER'
     note = Note.objects.create(user=user, title='原笔记', content=original) if source == 'note' else None
-    course = Course.objects.create(is_published=True, title='原课程') if source == 'course' else None
+    course = Course.objects.create(is_published=True, title='原课程') if source != 'note' else None
+    transcript = VideoTranscript.objects.create(course=course, asr_status='completed') if source == 'revision' else None
     history_metadata = {'engine': 'dsh'}
     if course:
         history_metadata['dsh_cards'] = [{'tool': 'search_asr', 'payload': {
             'items': [{'action_link': f'/course/{course.pk}?t=60'}]}}]
+    if transcript:
+        history_metadata['course_context'] = {'course_id': course.pk, 'revision': transcript.revision}
     base = {'user': user, 'bot': bot, 'conversation_id': conversation.conversation_id}
     AIChatMessage.objects.create(**base, role='user', content='上次的问题', metadata={
         'note_attachments': [{'note_id': note.pk, 'version': note.version}] if note else []})
@@ -507,7 +513,9 @@ def test_ulr_reauthorizes_saved_sources_during_continuation(auth_client, user, s
             reply = derived
             if phase == 'revoke':
                 assert derived in prompt
-                if course:
+                if transcript:
+                    VideoTranscript.objects.filter(pk=transcript.pk).update(revision=transcript.revision + 1)
+                elif course:
                     Course.objects.filter(pk=course.pk).update(is_published=False)
                 else:
                     Note.objects.filter(pk=note.pk).update(deleted_at=timezone.now())
@@ -536,12 +544,15 @@ def test_ulr_reauthorizes_saved_sources_during_continuation(auth_client, user, s
     persisted_sources = AIChatMessage.objects.get(**base, role='assistant', content=derived).metadata['ulr_context_sources']
     assert persisted_sources['courses'] == ([course.pk] if course else [])
     assert persisted_sources['notes'] == ([[note.pk, note.version]] if note else [])
+    if transcript:
+        assert persisted_sources['transcripts'] == [[course.pk, 0, transcript.revision]]
     assert AIChatMessage.objects.filter(**base, role='assistant', content=original).exists()
     assert WeeklyAIUsage.objects.get(user=user).ai_calls == 2
 
 
 @pytest.mark.django_db(transaction=True)
-def test_ulr_reauthorizes_imported_legacy_derivations_beyond_the_history_window(auth_client, user, settings, tmp_path):
+@pytest.mark.parametrize('source', ['course', 'excerpt'])
+def test_ulr_reauthorizes_imported_legacy_derivations_beyond_the_history_window(auth_client, user, settings, tmp_path, source):
     from django.core.management import call_command
 
     settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
@@ -553,7 +564,13 @@ def test_ulr_reauthorizes_imported_legacy_derivations_beyond_the_history_window(
     course = Course.objects.create(is_published=True, title='迁移资料授权用的课程')
     origin, derivative, safe = 'IMPORTED_SOURCE_MARKER', 'IMPORTED_DERIVATION_MARKER', 'INDEPENDENT_HISTORY_MARKER'
     conversation_id = uuid4()
-    cards = [{'tool': 'search_asr', 'payload': {'items': [{'action_link': f'/course/{course.pk}?t=60'}]}}]
+    clip = {'action_link': f'/course/{course.pk}?t=60.125'}
+    if source == 'excerpt':
+        transcript = VideoTranscript.objects.create(course=course, asr_status='completed', revision=7)
+        text = origin + '旧讲稿片段。' * 50
+        segment = TranscriptSegment.objects.create(transcript=transcript, text=text, start_time=60.125, end_time=75, index=0)
+        clip['value'] = text[:200]
+    cards = [{'tool': 'search_asr', 'payload': {'items': [clip]}}]
     rows = [{'role': 'user', 'content': '查询课堂讲稿。'}, {'role': 'assistant', 'content': origin, 'cards': cards}]
     for index in range(9):
         rows.extend([{'role': 'user', 'content': f'改写课堂内容 {index}。'},
@@ -566,12 +583,22 @@ def test_ulr_reauthorizes_imported_legacy_derivations_beyond_the_history_window(
     base = {'user': user, 'bot': bot, 'conversation_id': conversation_id}
     AIChatMessage.objects.create(**base, role='user', content='独立问题。')
     AIChatMessage.objects.create(**base, role='assistant', content=safe)
+    if source == 'excerpt':
+        AIChatMessage.objects.create(**base, role='assistant', content='PREVIOUS_ULR_DERIVATION', metadata={
+            'engine': 'ulr', 'ulr_context_sources': {'courses': [course.pk]}})
+        AIChatMessage.objects.create(**base, role='assistant', content='COURSE_CATALOG_ONLY', metadata={
+            'engine': 'ulr', 'ulr_context_sources': {'courses': [course.pk], 'transcripts': []}})
 
     def model(messages, **kwargs):
         prompt = messages[0]['content']
         assert origin not in prompt and safe in prompt
-        assert (derivative in prompt) is course.is_published
-        reply = '已读取有权历史。' if course.is_published else '继续讨论当前可用的历史。'
+        assert (derivative in prompt) is visible
+        if source == 'excerpt':
+            assert ('PREVIOUS_ULR_DERIVATION' in prompt) is visible
+            assert 'COURSE_CATALOG_ONLY' in prompt
+        if not visible:
+            assert '已读取有权历史。' not in prompt
+        reply = '已读取有权历史。' if visible else '继续讨论当前可用的历史。'
         return {'choices': [{'finish_reason': 'stop', 'message': {'content': reply}}]}
 
     async def consume(response):
@@ -580,19 +607,28 @@ def test_ulr_reauthorizes_imported_legacy_derivations_beyond_the_history_window(
     with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider, \
             patch('ai_assistant.services.dsh_xiaoyu.extract_memories_async'):
         for visible in (True, False):
-            course.is_published = visible
-            course.save(update_fields=['is_published'])
+            if source == 'excerpt':
+                if not visible:
+                    TranscriptSegment.objects.filter(pk=segment.pk).update(text='当前讲稿的不同内容')
+                    VideoTranscript.objects.filter(pk=transcript.pk).update(revision=8)
+            else:
+                Course.objects.filter(pk=course.pk).update(is_published=visible)
             response = auth_client.post('/api/ai/chat/stream/', {'bot_id': bot.pk, 'conversation_id': str(conversation_id),
                 'request_id': str(uuid4()), 'message': '继续上一次讨论。'}, format='json')
             final = async_to_sync(consume)(response)
             assert final.get('engine') == 'ulr', final
     assert provider.call_count == 2
-    assert AIChatMessage.objects.get(**base, content='已读取有权历史。').metadata['ulr_context_sources']['courses'] == [course.pk]
+    inherited = AIChatMessage.objects.get(**base, content='已读取有权历史。').metadata['ulr_context_sources']
+    assert inherited['courses'] == [course.pk]
+    if source == 'excerpt':
+        assert inherited['transcripts'] == [[course.pk, transcript.pk, 7]]
+        assert Course.objects.get(pk=course.pk).is_published
+        assert AIChatMessage.objects.filter(**base, content=origin, metadata__dsh_cards=cards).exists()
     assert AIChatMessage.objects.filter(**base, metadata__engine='dsh_import').count() == 10
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize('source', ['course', 'note'])
+@pytest.mark.parametrize('source', ['course', 'note', 'revision', 'excerpt'])
 def test_ulr_title_rechecks_sources_before_and_after_generation(user, settings, source):
     from ai_assistant.services.title_generator import sync_generate_title
     from notes.context import prepare_note_context
@@ -603,7 +639,8 @@ def test_ulr_title_rechecks_sources_before_and_after_generation(user, settings, 
     original = '继续学习原来的主题'
     reservation = Conversation.objects.create(user=user, bot=bot, conversation_id=uuid4(), title=original)
     marker = 'REVOKED_TITLE_SOURCE_MARKER'
-    course = Course.objects.create(title='合成课程', is_published=True) if source == 'course' else None
+    course = Course.objects.create(title='合成课程', is_published=True) if source != 'note' else None
+    transcript = VideoTranscript.objects.create(course=course, asr_status='completed') if source in ('revision', 'excerpt') else None
     note = Note.objects.create(user=user, title='合成笔记', content=marker) if source == 'note' else None
     if note:
         prepare_note_context(user, bot, reservation.conversation_id, original, note_ids=[note.pk])
@@ -614,11 +651,21 @@ def test_ulr_title_rechecks_sources_before_and_after_generation(user, settings, 
     AIChatMessage.objects.create(**base, role='user', content=original, metadata={
         'note_attachments': [{'note_id': note.pk, 'version': note.version}] if note else []})
     assistant_metadata = {'ulr_context_sources': {'courses': [course.pk]}} if course else {'engine': 'dsh'}
+    if source == 'excerpt':
+        segment = TranscriptSegment.objects.create(transcript=transcript, text=marker, start_time=60, end_time=75, index=0)
+        assistant_metadata = {'engine': 'dsh', 'dsh_cards': [{'tool': 'search_asr', 'payload': {
+            'items': [{'action_link': f'/course/{course.pk}?t=60', 'value': marker}]}}]}
+    elif transcript:
+        assistant_metadata['ulr_context_sources']['transcripts'] = [[course.pk, transcript.pk, transcript.revision]]
     AIChatMessage.objects.create(**base, role='assistant', content=marker, metadata=assistant_metadata)
 
     def revoke(prompt, **kwargs):
         assert marker in prompt and original in prompt and '未收到答复的旧问题' not in prompt
-        if course:
+        if transcript:
+            VideoTranscript.objects.filter(pk=transcript.pk).update(revision=transcript.revision + 1)
+            if source == 'excerpt':
+                TranscriptSegment.objects.filter(pk=segment.pk).update(text='替换后的合成片段')
+        elif course:
             Course.objects.filter(pk=course.pk).update(is_published=False)
         else:
             Note.objects.filter(pk=note.pk).update(version=note.version + 1)
@@ -790,8 +837,9 @@ def test_ulr_reviews_saved_ordinary_exam_without_dsh(auth_client, user, settings
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize('mode', ['complete', 'change_point', 'lookup_first'])
+@pytest.mark.parametrize('mode', ['complete', 'change_point', 'change_prompt', 'lookup_first', 'repair_range', 'repair_filters'])
 def test_ulr_binds_ordinary_practice_cards(auth_client, user, settings, mode):
+    from ai_assistant.services.memory_system import MemorySystem
     from quizzes.models import PracticeSubmission, QuizExam
 
     settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
@@ -804,20 +852,25 @@ def test_ulr_binds_ordinary_practice_cards(auth_client, user, settings, mode):
         options=['甲', '乙'], correct_answer='B', grading_points='STANDALONE_PRIVATE_RUBRIC')
     other = Question.objects.create(text='无知识点客观题', options=['甲', '乙'], correct_answer='B')
     receipts = []
+    repair = mode.startswith('repair_')
 
     def model(messages, **kwargs):
         if messages[-1]['role'] == 'tool':
             receipts.append(json.loads(messages[-1]['content']))
         if len(receipts) < 2:
-            lookup = bool(receipts) != (mode == 'lookup_first')
+            lookup = not repair and bool(receipts) != (mode == 'lookup_first')
             name = 'lookup_question' if lookup else 'get_practice_questions'
             args = {'question_id': question.pk} if lookup else {'limit': 2}
+            if repair and not receipts:
+                args.update({'limit': 11} if mode == 'repair_range' else {'q_type': 'objective', 'subjective_type': 'essay'})
             assert name in {entry['function']['name'] for entry in kwargs['tools']}
             result = {'tool_calls': [{'id': name, 'type': 'function',
                 'function': {'name': name, 'arguments': json.dumps(args)}}]}
             return {'choices': [{'finish_reason': 'tool_calls', 'message': result}]}
         if mode == 'change_point':
             Question.objects.filter(pk=question.pk).update(knowledge_point=None)
+        if mode == 'change_prompt':
+            Question.objects.filter(pk=question.pk).update(text='发布前修改的题干')
         kwargs['on_text']('两道练习已准备好。')
         return {'choices': [{'finish_reason': 'stop', 'message': {'content': '两道练习已准备好。'}}]}
 
@@ -829,19 +882,33 @@ def test_ulr_binds_ordinary_practice_cards(auth_client, user, settings, mode):
     body = {'bot_id': bot.pk, 'conversation_id': conversation_id, 'request_id': request_id,
             'message': '给我两道练习题。'}
     with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider, \
+            patch.object(MemorySystem, 'query_practice_questions', wraps=MemorySystem.query_practice_questions) as queries, \
             patch('ai_assistant.services.dsh_xiaoyu.extract_memories_async'), \
             patch('ai_assistant.services.dsh_xiaoyu.schedule_conversation_title'):
         events = async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))
         if mode == 'lookup_first':
             assert provider.call_count == 2 and receipts[0]['grading_points'] == 'STANDALONE_PRIVATE_RUBRIC'
+        elif repair:
+            assert provider.call_count == 3 and queries.call_count == 1
+            diagnostic = receipts[0]['error']
+            assert diagnostic['code'] == 'invalid_arguments'
+            assert diagnostic['field'] == ('$.limit' if mode == 'repair_range' else '$.subjective_type')
+            if mode == 'repair_range':
+                assert diagnostic['rule'] == 'maximum' and diagnostic['expected'] == 10
+            assert receipts[1] == {'question_count': 2, 'card_prepared': True}
+            failed, succeeded = [event for event in events if event.get('status') in ('failed', 'succeeded')]
+            assert succeeded['retry_of'] == failed['call_id']
         else:
             assert provider.call_count == 3
             assert receipts[0] == {'question_count': 2, 'card_prepared': True}
             assert receipts[1]['practice_status'] == 'unsubmitted'
             assert not {'answer', 'correct_answer', 'grading_points'} & receipts[1].keys()
         assert not any(event.get('type') == 'text_delta' for event in events)
-        if mode != 'complete':
+        if mode in ('change_point', 'change_prompt', 'lookup_first'):
             assert events[-1]['is_error']
+            if mode == 'change_prompt':
+                assert events[-1]['full_content'] == '练习题已更新，请重新准备。'
+                assert AIUsageReservation.objects.get(request_id=request_id).status == 'released'
             assert not PracticeSubmission.objects.exists()
             assert not AIChatMessage.objects.filter(conversation_id=conversation_id, role='assistant').exists()
             assert WeeklyAIUsage.objects.get(user=user).ai_calls == 0
@@ -875,7 +942,10 @@ def test_ulr_binds_ordinary_practice_cards(auth_client, user, settings, mode):
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize('withdraw', [None, 'knowledge_point', 'question', 'card_scope', 'card_deleted', 'card_changed', 'queued_changed'])
+@pytest.mark.parametrize('withdraw', [None, 'knowledge_point', 'question', 'direct_card_revoked', 'direct_card_changed',
+                                     'direct_card_empty', 'direct_card_missing', 'direct_card_ambiguous',
+                                     'direct_card_conflict', 'card_scope',
+                                     'card_deleted', 'card_changed', 'queued_changed'])
 def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_of_model_input(
         auth_client, user, settings, withdraw):
     from ai_assistant.services.dsh_service import execute_tool
@@ -897,11 +967,23 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
     old_rubric = 'OLD_PRACTICE_RUBRIC'
     old_derivation = 'OLD_PRACTICE_DERIVATION'
     safe_history = 'SAFE_PRACTICE_HISTORY'
+    selection_cases = {
+        'direct_card_missing': ('missing_dependency', '找不到指定的知识点。请核对名称或补充学科。', '请给我一道未收录知识点的练习题。'),
+        'direct_card_ambiguous': ('ambiguous_dependency', '匹配到多个知识点。请补充学科或更具体的名称。', '请给我一道现金流折现知识点的练习题。'),
+        'direct_card_conflict': ('selection_needs_confirmation', '请确认要用哪个知识点准备练习。', '请给我一道现金流折现知识点的练习题。选择第一项，也选择第二项。'),
+    }
+    selection = selection_cases.get(withdraw)
+    no_card_reply = selection[1] if selection else '当前没有符合条件的练习题。' if withdraw == 'direct_card_empty' else None
+    direct = bool(no_card_reply) or withdraw in ('direct_card_revoked', 'direct_card_changed')
 
     def tool(*args, **kwargs):
         outcome = execute_tool(*args, **kwargs)
         if args[1] == 'search_knowledge_tree' and withdraw == 'knowledge_point':
             KnowledgePoint.objects.filter(pk=point.pk).update(institution=institution)
+        if args[1] == 'get_practice_questions' and withdraw == 'direct_card_revoked':
+            Question.objects.filter(pk=question.pk).update(institution=institution)
+        if args[1] == 'get_practice_questions' and withdraw == 'direct_card_changed':
+            Question.objects.filter(pk=question.pk).update(options=['发布前修改的甲', '乙'])
         return outcome
 
     def model(messages, **kwargs):
@@ -909,13 +991,25 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
             names = [tool['function']['name'] for tool in kwargs['tools']]
             model_offers.extend(names)
             assert 'run_practice_tools' in names and len(names) <= 8
+            arguments = {'find': '现金流折现', 'limit': 2}
+            if direct:
+                arguments['output'] = 'card'
+                kwargs['on_text']('练习已准备好。')
+            if withdraw == 'direct_card_empty':
+                arguments['q_type'] = 'subjective'
+            if withdraw == 'direct_card_missing':
+                arguments['find'] = '未收录知识点'
             return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
                 'id': 'practice', 'type': 'function', 'function': {'name': 'run_practice_tools',
-                    'arguments': json.dumps({'v': TOOL_PROGRAM_VERSION, 'find': '现金流折现', 'rank': 1, 'limit': 2})},
+                    'arguments': json.dumps(arguments)},
             }]}}]}
         assert not kwargs['tools']
         receipt = json.loads(messages[-1]['content'])
-        assert receipt['question_count'] == 1 and receipt['steps_executed'] == ['search_knowledge_tree', 'get_practice_questions']
+        if selection:
+            assert receipt['error']['code'] == selection[0]
+        else:
+            assert receipt['question_count'] == (0 if no_card_reply else 1)
+            assert receipt['steps_executed'] == ['search_knowledge_tree', 'get_practice_questions']
         assert not {'questions', 'visual'} & receipt.keys()
         if withdraw == 'question':
             Question.objects.filter(pk=question.pk).update(institution=institution)
@@ -927,7 +1021,7 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
 
     request_id = str(uuid4())
     body = {'bot_id': bot.pk, 'conversation_id': str(uuid4()), 'request_id': request_id,
-            'message': '请先查现金流折现知识点，再根据第一项出一道练习题。'}
+            'message': selection[2] if selection else '请先查现金流折现知识点，再根据第一项出一道练习题。'}
 
     def discuss_practice(status, *, conversation_id=None, tool_name='lookup_question', revoke=False):
         replies = []
@@ -981,15 +1075,32 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
             patch('ai_assistant.services.dsh_xiaoyu.extract_memories_async'), \
             patch('ai_assistant.services.dsh_xiaoyu.schedule_conversation_title'):
         events = async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))
+        if no_card_reply:
+            final = events[-1]
+            assert final['full_content'] == no_card_reply
+            assert final['metadata']['dsh_cards'] == []
+            assert async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))[-1] == final
     expected_reads = ['search_knowledge_tree'] if withdraw == 'knowledge_point' else ['search_knowledge_tree', 'get_practice_questions']
+    if selection:
+        expected_reads = [] if withdraw == 'direct_card_conflict' else ['search_knowledge_tree']
     assert [call.args[1] for call in reads.call_args_list] == expected_reads, (','.join(model_offers), events)
-    assert provider.call_count == len(expected_reads)
+    assert provider.call_count == (1 if direct else len(expected_reads))
     assert not any(event.get('type') == 'text_delta' for event in events)
-    rejected_before_card = withdraw in ('knowledge_point', 'question')
+    if no_card_reply:
+        assert not PracticeSubmission.objects.exists() and not QuizExam.objects.exists()
+        assert AIUsageReservation.objects.get(request_id=request_id).status == 'succeeded'
+        assert WeeklyAIUsage.objects.get(user=user).ai_calls == 1
+        return
+    rejected_before_card = withdraw in ('knowledge_point', 'question', 'direct_card_revoked', 'direct_card_changed')
     if rejected_before_card:
-        assert events[-1]['is_error'] and '不可访问' in events[-1]['full_content']
+        error = '练习题已更新' if withdraw == 'direct_card_changed' else '不可访问'
+        assert events[-1]['is_error'] and error in events[-1]['full_content']
+        if withdraw == 'direct_card_changed':
+            assert events[-1]['full_content'] == '练习题已更新，请重新准备。'
+        assert not events[-1].get('metadata', {}).get('dsh_cards')
         assert AIUsageReservation.objects.get(request_id=request_id).status == 'released'
         assert not PracticeSubmission.objects.exists()
+        assert not AIChatMessage.objects.filter(conversation_id=body['conversation_id'], role='assistant').exists()
     else:
         card, = events[-1]['metadata']['dsh_cards']
         selected, = card['payload']['questions']
@@ -1087,58 +1198,138 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
                     followup = {**body, 'request_id': str(uuid4()), 'message': '请接着讲解。'}
                     continued = async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', followup, format='json'))
                 assert continued[-1]['full_content'] == '继续看当前可用内容。'
+                with patch('quizzes.views_exam.dispatch_exam_grading') as replay_dispatch:
+                    assert auth_client.post(submit_url, submission, format='json').data == submitted.data
+                    changed = {**submission, 'answers': [{'question_id': question.pk, 'answer': 'A'}]}
+                    assert auth_client.post(submit_url, changed, format='json').status_code == 409
+                    new_submission = {**submission, 'submission_id': str(uuid4())}
+                    assert auth_client.post(submit_url, new_submission, format='json').status_code == 400
+                    other = type(user).objects.create_user(username='practice-replay-other')
+                    CourseStudentStatus.objects.create(user=other, is_course_student=True)
+                    other_client = APIClient()
+                    other_client.force_authenticate(other)
+                    foreign = other_client.post(submit_url, submission, format='json')
+                    assert foreign.status_code == 409 and 'exam_id' not in foreign.data
+                    replay_dispatch.assert_not_called()
                 Question.objects.filter(pk=question.pk).update(institution=None)
                 deleted = auth_client.post('/api/ai/delete-conversation/', {'conversation_id': body['conversation_id']}, format='json')
                 assert deleted.status_code == 200
                 assert auth_client.post(submit_url, submission, format='json').data == submitted.data
+                Question.objects.filter(pk=question.pk).delete()
+                with patch('quizzes.views_exam.dispatch_exam_grading') as replay_dispatch:
+                    assert auth_client.post(submit_url, submission, format='json').data == submitted.data
+                    assert auth_client.get(exam_url).data['total_score'] == 10
+                    replay_dispatch.assert_not_called()
             assert auth_client.get(recover_url).data == {'exam_id': exam_id, 'answers': [{'position': 1, 'answer': 'B'}]}
             assert QuizExam.objects.count() == 1
     assert WeeklyAIUsage.objects.get(user=user).ai_calls == int(not rejected_before_card) + (5 if withdraw is None else 0)
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize('mode', ['select', 'unoffered', 'unavailable', 'omitted', 'inline_invalid_version',
-                                 'inline_duplicate_version', 'inline_decimal', 'inline_mixed'])
+@pytest.mark.parametrize('mode', ['select', 'direct', 'direct_forged_source', 'unavailable', 'omitted', 'inline_invalid_version',
+                                 'inline_duplicate_version', 'inline_decimal', 'inline_compact', 'inline_mixed', 'inline_missing_rank',
+                                 'inline_excluded_rank', 'inline_repair', 'inline_repair_drift',
+                                 'inline_duplicate_rank', 'inline_duplicate_operation', 'direct_duplicate_find',
+                                 'text_open', 'text_complete', 'text_invoke', 'group_only'])
 def test_ulr_recovers_a_course_program_missing_from_the_initial_tools(auth_client, user, settings, mode):
     from ai_assistant.services.dsh_service import execute_tool
 
+    scripts = Path(settings.BASE_DIR).parent / 'scripts'
+    sample = json.loads((scripts / 'fixtures/ulr_course_review.json').read_text())
+    fixture = sample['case']['fixture']
     settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
     settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
     CourseStudentStatus.objects.create(user=user, is_course_student=True)
     WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 200})
     bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
-    course = Course.objects.create(is_published=True, title='折现率迁移课')
+    course = Course.objects.create(is_published=True, title=fixture['course_title'])
     transcript = VideoTranscript.objects.create(course=course, asr_status='completed')
-    TranscriptSegment.objects.create(transcript=transcript, text='折现率讲稿证据', start_time=60, end_time=70, index=0)
+    TranscriptSegment.objects.create(transcript=transcript, text=fixture['transcript'],
+                                     start_time=fixture['start_time'], end_time=fixture['end_time'], index=0)
     program = {'v': TOOL_PROGRAM_VERSION, 'find': '折现率', 'rank': 1}
     catalogs = []
+    rank_repairs = ('inline_repair', 'inline_repair_drift', 'inline_duplicate_rank')
 
     def model(messages, **kwargs):
         tools = {tool['function']['name']: tool['function'] for tool in kwargs['tools'] or ()}
         catalogs.append(set(tools))
         if messages[-1]['role'] == 'user':
             assert 'find_learning_tools' in tools and 'run_course_tools' not in tools and 'search_asr' not in tools
-            if mode.startswith('inline_'):
+            if mode in ('text_open', 'text_complete', 'text_invoke'):
+                text = ('<invoke name="run_course_tools">'
+                        '<parameter name="find">折现率</parameter></invoke>')
+                if mode != 'text_invoke':
+                    text = '<function_calls>' + text
+                if mode == 'text_complete':
+                    text += '</function_calls>'
+                return {'choices': [{'finish_reason': 'stop', 'message': {'content': text}}]}
+            if mode == 'group_only':
+                name, args = 'find_learning_tools', {'group': 'resources'}
+            elif mode.startswith('inline_'):
                 name = 'find_learning_tools'
                 instruction = ({**program, 'rank': '1'} if mode in ('inline_decimal', 'inline_mixed') else
-                               {**program, 'v': TOOL_PROGRAM_VERSION - 1})
+                               {**program, 'v': 0})
+                if mode in ('inline_compact', 'inline_missing_rank'):
+                    instruction = {'find': '折现率'}
+                elif mode == 'inline_excluded_rank':
+                    instruction = program
+                elif mode in rank_repairs:
+                    instruction = {**program, 'rank': 'first'}
+                elif mode == 'inline_duplicate_operation':
+                    instruction = program
                 args = {'program': 'run_course_tools', 'instruction': instruction}
             elif mode in ('select', 'omitted'):
                 assert tools['find_learning_tools']['parameters']['properties']['program']['enum'] == ['run_course_tools']
                 name, args = 'find_learning_tools', {'program': 'run_course_tools'}
             else:
-                name, args = 'run_practice_tools' if mode == 'unavailable' else 'run_course_tools', program
+                name, args = 'run_practice_tools' if mode == 'unavailable' else 'run_course_tools', {'find': '折现率'}
+                if mode == 'direct_forged_source':
+                    args['course_id'] = course.pk
+                elif mode == 'direct_duplicate_find':
+                    args = program
         else:
             receipt = json.loads(messages[-1]['content'])
+            if mode == 'group_only':
+                assert receipt['group'] == 'resources'
+                return {'choices': [{'finish_reason': 'stop', 'message': {'content': '已切换到课程工具组。'}}]}
+            if mode in ('text_complete', 'text_invoke'):
+                assert messages[-2]['content'] is None
             if mode == 'unavailable':
                 assert receipt['error']['code'] == 'unknown_tool' and not receipt['error']['repairable']
                 return {'choices': [{'finish_reason': 'stop', 'message': {'content': '当前工具不适用于这次请求。'}}]}
             if not tools:
+                if mode == 'direct_forged_source':
+                    assert receipt['field'] == '$.course_id' and not receipt['steps_executed']
+                    return {'choices': [{'finish_reason': 'stop', 'message': {'content': '没有执行查询。'}}]}
+                if mode == 'inline_excluded_rank':
+                    assert receipt['error']['code'] == 'selection_needs_confirmation'
+                    assert not receipt['error']['repairable'] and not receipt['steps_executed']
+                    return {'choices': [{'finish_reason': 'stop', 'message': {'content': '请确认想查哪门课。'}}]}
+                if mode == 'inline_missing_rank':
+                    assert receipt['error']['code'] == 'missing_dependency'
+                    assert receipt['steps_executed'] == ['search_courses']
+                    return {'choices': [{'finish_reason': 'stop', 'message': {'content': '没有查到第二门课。'}}]}
+                if mode == 'inline_repair_drift':
+                    assert receipt['error']['code'] == 'repair_scope_mismatch'
+                    assert receipt['field'] == '$.find' and not receipt['steps_executed']
+                    return {'choices': [{'finish_reason': 'stop', 'message': {'content': '没有执行查询。'}}]}
+                if mode == 'inline_duplicate_operation':
+                    assert receipt['error']['code'] == 'duplicate_argument' and not receipt['error']['repairable']
+                    assert receipt['error']['field'] == 'program' and not receipt['steps_executed']
+                    return {'choices': [{'finish_reason': 'stop', 'message': {'content': '请确认操作。'}}]}
                 assert receipt['segments'][0]['course_id'] == course.pk
                 return {'choices': [{'finish_reason': 'stop', 'message': {'content': '找到了原课程讲稿。'}}]}
             assert set(tools) == {'run_course_tools'}
-            if mode == 'unoffered':
-                assert receipt['error']['code'] == 'tool_not_offered' and receipt['error']['repairable']
+            if mode in rank_repairs:
+                code = 'duplicate_argument' if mode == 'inline_duplicate_rank' else 'invalid_arguments'
+                assert receipt['error']['code'] == code and receipt['error']['repairable']
+                assert receipt['repair_field'] == 'rank'
+                assert set(tools['run_course_tools']['parameters']['properties']) == {'rank'}
+                assert tools['run_course_tools']['parameters']['required'] == ['rank']
+            elif mode == 'direct_duplicate_find':
+                assert receipt['error']['code'] == 'duplicate_argument' and receipt['error']['repairable']
+                assert receipt['repair_field'] == 'find'
+                assert set(tools['run_course_tools']['parameters']['properties']) == {'find'}
             else:
                 assert receipt['program'] == 'run_course_tools'
             assert receipt['steps_executed'] == []
@@ -1146,9 +1337,17 @@ def test_ulr_recovers_a_course_program_missing_from_the_initial_tools(auth_clien
                 kwargs['on_text']('声称查完，实际没有执行。')
                 return {'choices': [{'finish_reason': 'stop', 'message': {'content': '声称查完，实际没有执行。'}}]}
             name, args = 'run_course_tools', program
+            if mode in rank_repairs:
+                args = {'rank': 1, **({'find': '不同课程'} if mode.endswith('_drift') else {})}
         raw = json.dumps(args)
-        if mode == 'inline_duplicate_version':
-            raw = raw.replace('"v":', f'"v":{TOOL_PROGRAM_VERSION},"v":', 1)
+        if mode == 'inline_duplicate_rank' and len(catalogs) == 1:
+            raw = raw.replace('"rank":', '"rank":2,"rank":', 1)
+        elif mode == 'inline_duplicate_operation' and len(catalogs) == 1:
+            raw = raw.replace('"program":', '"program":"run_practice_tools","program":', 1)
+        elif mode == 'direct_duplicate_find' and len(catalogs) == 1:
+            raw = raw.replace('"find":', '"find":"不同课程","find":', 1)
+        elif mode == 'inline_duplicate_version':
+            raw = raw.replace('"v":', f'"rank":2,"rank":1,"v":{TOOL_PROGRAM_VERSION},"v":', 1)
         calls = [{
             'id': 'catalog-' + str(len(catalogs)), 'type': 'function',
             'function': {'name': name, 'arguments': raw},
@@ -1158,42 +1357,101 @@ def test_ulr_recovers_a_course_program_missing_from_the_initial_tools(auth_clien
                             'function': {'name': 'find_learning_tools', 'arguments': '{"group":"resources"}'}})
         return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': calls}}]}
 
+    captured = []
+
     async def consume(response):
-        return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')]
+        async for frame in response.streaming_content:
+            if frame.startswith(b'data: '):
+                captured.append({'elapsed_ms': round((monotonic() - started) * 1000), 'event': json.loads(frame[6:])})
+        return [sample['event'] for sample in captured]
 
     request = {'bot_id': bot.pk, 'conversation_id': str(uuid4()), 'request_id': str(uuid4()),
-               'message': '请把折现率的公式推导和第一门相关课程的讲稿放在一起说。'}
+               'message': sample['case']['prompt']}
+    if mode == 'inline_missing_rank':
+        request['message'] = request['message'].replace('第一门', '第二门')
+    if mode == 'inline_excluded_rank':
+        request['message'] = '请讲一下折现率的公式推导。不要第一门相关课程。'
+    started = monotonic()
     with patch('ai_engine.service.AIEngine.call_provider', side_effect=model), \
             patch('ai_assistant.services.ulr_runtime.execute_tool', wraps=execute_tool) as reads, \
             patch('ai_assistant.services.dsh_xiaoyu.schedule_conversation_title'), \
             patch('ai_assistant.services.dsh_xiaoyu.extract_memories_async'):
         events = async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', request, format='json'))
-    if mode in ('omitted', 'inline_invalid_version', 'inline_duplicate_version', 'inline_mixed'):
+    if mode in ('omitted', 'inline_invalid_version', 'inline_duplicate_version', 'inline_mixed', 'text_open'):
         assert len(catalogs) == (2 if mode == 'omitted' else 1) and events[-1]['is_error']
-        error = {'omitted': '组合指令未提交', 'inline_mixed': '请单独提交'}.get(mode, '版本不符')
+        error = {'omitted': '组合指令未提交', 'inline_mixed': '请单独提交',
+                 'text_open': '未完整返回'}.get(mode, '版本不符')
         assert error in events[-1]['full_content']
         assert not any(event.get('type') == 'text_delta' for event in events)
         assert AIUsageReservation.objects.get(request_id=request['request_id']).status == 'released'
+        if mode == 'text_open':
+            assert not AIChatMessage.objects.filter(conversation_id=request['conversation_id'], role='assistant').exists()
+            assert not WeeklyAIUsage.objects.filter(user=user, ai_calls__gt=0).exists()
         if mode == 'inline_mixed':
             assert not any(event.get('call_id') for event in events)
         reads.assert_not_called()
         return
     assert events[-1].get('engine') == 'ulr', events[-1]
-    if mode == 'unavailable':
+    if mode == 'group_only':
+        reads.assert_not_called()
+        assert len(catalogs) == 2 and not events[-1]['metadata'].get('dsh_cards')
+        tools = run_path(str(scripts / 'ulr_review_pairs.py'))
+        record = tools['capture_turn']({**sample, 'runtime': 'ulr', 'request_id': request['request_id'],
+                                      'metrics': {'model_requests': len(catalogs)}}, captured)
+        trace = {'operations': [{'kind': 'model', 'submitted_tools': ['find_learning_tools']},
+                                {'kind': 'model', 'submitted_tools': []}]}
+        assert tools['tool_quality'](record, trace) == {'first_pass': False, 'repair_attempted': False, 'repaired': False}
+        assert record['tool_outcomes'][0]['steps_executed'] == []
+        return
+    if mode in ('unavailable', 'direct_forged_source'):
         assert len(catalogs) == 2 and not catalogs[-1]
         reads.assert_not_called()
+        assert not events[-1]['metadata'].get('dsh_cards')
+    elif mode == 'inline_excluded_rank':
+        assert len(catalogs) == 2 and not catalogs[-1]
+        reads.assert_not_called()
+        assert not events[-1]['metadata'].get('dsh_cards')
+        assert events[-1]['full_content'] == '请确认想查哪门课。'
+    elif mode == 'inline_missing_rank':
+        assert len(catalogs) == 2 and not catalogs[-1]
+        assert [call.args[1] for call in reads.call_args_list] == ['search_courses']
+        assert not events[-1]['metadata'].get('dsh_cards')
+    elif mode in ('inline_repair_drift', 'inline_duplicate_operation'):
+        assert len(catalogs) == (3 if mode == 'inline_repair_drift' else 2) and not catalogs[-1]
+        reads.assert_not_called()
+        assert not events[-1]['metadata'].get('dsh_cards')
     else:
-        assert len(catalogs) == (2 if mode == 'inline_decimal' else 3) and not catalogs[-1]
+        first_pass = ('direct', 'inline_compact', 'inline_decimal', 'text_complete', 'text_invoke')
+        assert len(catalogs) == (2 if mode in first_pass else 3) and not catalogs[-1]
+        if mode == 'direct':
+            outcomes = [event for event in events if event.get('status') in ('failed', 'succeeded')]
+            assert [(event['name'], event['status']) for event in outcomes] == [('run_course_tools', 'succeeded')]
+        if mode in ('inline_compact', 'inline_repair', 'inline_duplicate_rank'):
+            tools = run_path(str(scripts / 'ulr_review_pairs.py'))
+            record = tools['capture_turn']({**sample, 'runtime': 'ulr', 'request_id': request['request_id'],
+                                          'metrics': {'model_requests': len(catalogs)}}, captured)
+            repairing = mode in rank_repairs
+            submissions = [['find_learning_tools'], *([['run_course_tools']] if repairing else []), []]
+            trace = {'operations': [{'kind': 'model', 'submitted_tools': names} for names in submissions]}
+            assert tools['tool_quality'](record, trace) == {
+                'first_pass': not repairing, 'repair_attempted': repairing, 'repaired': repairing}
+        if mode in rank_repairs:
+            failed, recovered = [event for event in events if event.get('status') in ('failed', 'succeeded')]
+            assert recovered['name'] == 'run_course_tools' and recovered['retry_of'] == failed['call_id']
+            assert failed['name'] == 'find_learning_tools'
+            assert record['completed'] and record['review']['sources'] == events[-1]['metadata']['dsh_cards']
+            assert record['metrics']['tool_failures'] == 1
+            assert record['metrics']['first_visible_ms'] == record['metrics']['completion_ms']
+            assert record['tool_outcomes'][-1]['retry_of'] == failed['call_id']
         assert [call.args[1] for call in reads.call_args_list] == ['search_courses', 'search_asr']
         card, = events[-1]['metadata']['dsh_cards']
         assert card['payload']['items'][0]['action_link'] == f'/course/{course.pk}?t=60'
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize('mode', ['recover', 'exhaust', 'withdraw'])
+@pytest.mark.parametrize('mode', ['recover', 'exhaust', 'withdraw', 'markup_recover'])
 def test_ulr_recovers_course_program_reply_without_repeating_queries(auth_client, user, settings, tmp_path, mode):
     from ai_assistant.services.dsh_service import execute_tool
-    from ai_assistant.services.ulr_tool_program import VERSION
 
     settings.DEBUG = settings.UNIMIND_ULR_PROTOTYPE = True
     settings.UNIMIND_DSH_ENABLED = settings.UNIMIND_DSH_XIAOYU_ENABLED = False
@@ -1213,7 +1471,7 @@ def test_ulr_recovers_course_program_reply_without_repeating_queries(auth_client
             tools = {tool['function']['name']: tool['function'] for tool in kwargs['tools']}
             assert 'run_course_tools' in tools
             assert 'program' not in tools['find_learning_tools']['parameters']['properties']
-            arguments = {'v': VERSION, 'find': '折现率', 'rank': 1}
+            arguments = {'find': '折现率'}
             return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
                 'id': 'lookup', 'type': 'function',
                 'function': {'name': 'run_course_tools', 'arguments': json.dumps(arguments)},
@@ -1223,8 +1481,10 @@ def test_ulr_recovers_course_program_reply_without_repeating_queries(auth_client
         assert receipts[-1]['segments'][0]['course_id'] == course.pk
         if mode == 'withdraw':
             Course.objects.filter(pk=course.pk).update(is_published=False)
-        done = mode == 'recover' and len(receipts) == 2
+        done = mode in ('recover', 'markup_recover') and len(receipts) == 2
         content = '这里是完整讲解。' if done else '尚未完成的答复片段。'
+        if mode == 'markup_recover' and not done:
+            return {'choices': [{'finish_reason': 'stop', 'message': {'content': content + '<function_cal'}}]}
         kwargs['on_text'](content)
         return {'choices': [{'finish_reason': 'stop' if done else 'length', 'message': {'content': content}}]}
 
@@ -1241,7 +1501,7 @@ def test_ulr_recovers_course_program_reply_without_repeating_queries(auth_client
             patch('ai_assistant.services.ulr_runtime.execute_tool', wraps=execute_tool) as reads:
         events = ask()
         final = events[-1]
-        if mode == 'recover':
+        if mode in ('recover', 'markup_recover'):
             assert final['full_content'] == '这里是完整讲解。'
             assert final['metadata']['dsh_cards'][0]['tool'] == 'search_asr'
             assert ask()[-1] == final
@@ -1253,14 +1513,17 @@ def test_ulr_recovers_course_program_reply_without_repeating_queries(auth_client
         assert [call.args[1] for call in reads.call_args_list] == ['search_courses', 'search_asr']
     assert all(receipt == receipts[0] for receipt in receipts)
     assert not any(event.get('type') == 'text_delta' for event in events)
-    assert AIChatMessage.objects.filter(conversation_id=body['conversation_id'], role='assistant').count() == int(mode == 'recover')
-    assert AIUsageReservation.objects.get(request_id=body['request_id']).status == ('succeeded' if mode == 'recover' else 'released')
-    assert WeeklyAIUsage.objects.get(user=user).ai_calls == int(mode == 'recover')
+    recovered = mode in ('recover', 'markup_recover')
+    assert AIChatMessage.objects.filter(conversation_id=body['conversation_id'], role='assistant').count() == int(recovered)
+    assert AIUsageReservation.objects.get(request_id=body['request_id']).status == ('succeeded' if recovered else 'released')
+    assert WeeklyAIUsage.objects.get(user=user).ai_calls == int(recovered)
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize('withdraw_stage', ['program_dependency', 'program_result', 'program_empty_result',
-                                           'direct_result', 'course_context', 'anchored', 'anchored_revision'])
+@pytest.mark.parametrize('withdraw_stage', ['program_dependency', 'program_result', 'program_empty_result', 'program_revision',
+                                           'direct_result', 'course_context', 'anchored', 'anchored_revision',
+                                           'anchored_legacy', 'anchored_legacy_revision', 'anchored_card',
+                                           'anchored_card_empty', 'anchored_card_revision'])
 def test_ulr_checks_course_scope_before_model_use_and_publication(auth_client, user, settings, tmp_path,
                                                             withdraw_stage):
     from ai_assistant.services.dsh_service import execute_tool
@@ -1277,7 +1540,10 @@ def test_ulr_checks_course_scope_before_model_use_and_publication(auth_client, u
     transcript = VideoTranscript.objects.create(course=course, asr_status='completed')
     marker = '折现率 REVOKED_COURSE_SOURCE_MUST_NOT_APPEAR'
     anchored = withdraw_stage.startswith('anchored')
-    if withdraw_stage != 'program_empty_result':
+    direct_card = withdraw_stage.startswith('anchored_card')
+    if withdraw_stage == 'anchored_card_empty':
+        TranscriptSegment.objects.create(transcript=transcript, text='年金复习', start_time=60, end_time=70, index=0)
+    elif withdraw_stage != 'program_empty_result':
         TranscriptSegment.objects.create(transcript=transcript, text=marker, start_time=60, end_time=70, index=0)
     if anchored:
         other = Course.objects.create(is_published=True, title=course.title)
@@ -1290,11 +1556,13 @@ def test_ulr_checks_course_scope_before_model_use_and_publication(auth_client, u
         reads.append(name)
         if anchored:
             assert name == 'search_asr' and args[0]['course_id'] == course.pk
-            if withdraw_stage == 'anchored_revision':
+            if withdraw_stage.endswith('_revision'):
                 VideoTranscript.objects.filter(pk=transcript.pk).update(revision=1)
         if (withdraw_stage, name) in {('program_dependency', 'search_courses'), ('program_result', 'search_asr'),
                                      ('program_empty_result', 'search_asr')}:
             Course.objects.filter(pk=course.pk).update(is_published=False)
+        if withdraw_stage == 'program_revision' and name == 'search_asr':
+            VideoTranscript.objects.filter(pk=transcript.pk).update(revision=1)
         return result
 
     def model(messages, **kwargs):
@@ -1303,7 +1571,8 @@ def test_ulr_checks_course_scope_before_model_use_and_publication(auth_client, u
         names = tools.keys()
         if anchored and messages[-1]['role'] == 'tool':
             receipt = json.loads(latest)
-            assert not names and receipt['steps_executed'] == ['search_asr']
+            if 'legacy' not in withdraw_stage:
+                assert not names and receipt['steps_executed'] == ['search_asr']
             assert [row['course_id'] for row in receipt['segments']] == [course.pk] and 'OTHER_COURSE' not in latest
             return {'choices': [{'finish_reason': 'stop', 'message': {'content': '找到当前课程的讲稿。'}}]}
         if withdraw_stage == 'course_context':
@@ -1317,8 +1586,14 @@ def test_ulr_checks_course_scope_before_model_use_and_publication(auth_client, u
             return {'choices': [{'finish_reason': 'stop', 'message': {'content': marker}}]}
         wanted = 'run_course_tools' if withdraw_stage.startswith('program_') else 'search_asr'
         if anchored:
-            instruction = {'v': TOOL_PROGRAM_VERSION, 'query': '折现率'}
-            if CURRENT_COURSE_NAME in names:
+            instruction = {'query': '折现率'}
+            if direct_card:
+                instruction['output'] = 'card'
+                kwargs['on_text']('正在定位讲稿。')
+            if 'legacy' in withdraw_stage:
+                assert '仅查找当前课程讲稿' in tools['search_asr']['description']
+                name, arguments = 'search_asr', instruction
+            elif CURRENT_COURSE_NAME in names:
                 name, arguments = CURRENT_COURSE_NAME, instruction
             else:
                 name = 'find_learning_tools'
@@ -1345,22 +1620,34 @@ def test_ulr_checks_course_scope_before_model_use_and_publication(auth_client, u
     if withdraw_stage == 'course_context' or anchored:
         body['course_context'] = {'course_id': course.pk, 'video_seconds': 65}
     if anchored:
-        body['message'] = '请定位当前课程的折现率讲稿。'
+        body['message'] = '当前课程在哪一段讲折现率？只要时间点。' if direct_card else '请定位当前课程的折现率讲稿。'
     with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider, \
             patch('ai_assistant.services.ulr_runtime.execute_tool', side_effect=tool):
         events = async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))
-    if withdraw_stage == 'anchored':
-        assert reads == ['search_asr'] and provider.call_count == 2
-        card, = events[-1]['metadata']['dsh_cards']
-        assert card['tool'] == 'search_asr' and card['payload']['items'][0]['action_link'] == f'/course/{course.pk}?t=60'
+        if withdraw_stage in ('anchored_card', 'anchored_card_empty'):
+            assert async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))[-1] == events[-1]
+    if withdraw_stage in ('anchored', 'anchored_legacy', 'anchored_card', 'anchored_card_empty'):
+        assert reads == ['search_asr'] and provider.call_count == (1 if direct_card else 2)
+        if withdraw_stage == 'anchored_card_empty':
+            assert events[-1]['full_content'] == '当前课程的讲稿没有找到相关片段。'
+            assert events[-1]['metadata']['dsh_cards'] == []
+        else:
+            card, = events[-1]['metadata']['dsh_cards']
+            assert card['tool'] == 'search_asr' and card['payload']['items'][0]['action_link'] == f'/course/{course.pk}?t=60'
+            if direct_card:
+                assert events[-1]['full_content'] == '已找到当前课程的讲稿片段。'
+        metadata = AIChatMessage.objects.get(pk=events[-1]['message_id']).metadata
+        assert metadata['ulr_context_sources']['transcripts'] == [[course.pk, transcript.pk, transcript.revision]]
         return
     assert reads == {'program_dependency': ['search_courses'], 'program_result': ['search_courses', 'search_asr'],
-                     'program_empty_result': ['search_courses', 'search_asr'], 'direct_result': ['search_asr'],
-                     'course_context': [], 'anchored_revision': ['search_asr']}[withdraw_stage]
+                     'program_empty_result': ['search_courses', 'search_asr'],
+                     'program_revision': ['search_courses', 'search_asr'], 'direct_result': ['search_asr'],
+                     'course_context': [], 'anchored_revision': ['search_asr'],
+                     'anchored_legacy_revision': ['search_asr'], 'anchored_card_revision': ['search_asr']}[withdraw_stage]
     assert forwarded == ([] if withdraw_stage.startswith('program_') or anchored else [marker])
-    if withdraw_stage == 'anchored_revision':
+    if withdraw_stage.endswith('_revision'):
         assert provider.call_count == 1 and '讲稿已更新' in events[-1]['full_content']
-    if withdraw_stage.startswith('program_'):
+    elif withdraw_stage.startswith('program_'):
         assert provider.call_count == 1
         assert '引用课程已不可访问' in events[-1]['full_content']
     after_model = [event for event in events if event.get('type') != 'user_message']
@@ -1432,12 +1719,84 @@ def test_ulr_project_plan_commits_with_the_answer_and_still_requires_confirmatio
     assert revisions_when_model_replies == [0, 0]
     state.refresh_from_db()
     assert state.revision == 1 and not state.plan and state.pending_plan['plan'] == plan
-    assert ProjectLearningEvent.objects.filter(project=project, kind='plan').count() == 1
+    assert final['metadata']['ulr_plan']['event_id'] == ProjectLearningEvent.objects.get(project=project, kind='plan').pk
     assert WeeklyAIUsage.objects.get(user=user).ai_calls == 1
     confirmed = auth_client.patch(f'/api/ai/projects/{project.pk}/learning/', {'action': 'accept', 'revision': 1}, format='json')
     assert confirmed.status_code == 200, confirmed.data
     state.refresh_from_db()
     assert state.revision == 2 and state.plan == plan and not state.pending_plan
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize('failure', ['incomplete_reply', 'graph_changed', None])
+def test_ulr_graph_proposal_is_committed_only_with_the_answer(auth_client, user, settings, failure):
+    from ai_assistant.models import LearningResource, LearningResourceVersion
+    from knowledge_builder.models import KnowledgeTreeBuild, LearningBlock
+
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 20})
+    bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
+    project = ConversationProject.objects.create(user=user, name='合成图谱学习')
+    state = ProjectLearning.objects.create(project=project, planning_enabled=True)
+    conversation = Conversation.objects.create(user=user, bot=bot, project=project, conversation_id=uuid4())
+    build = KnowledgeTreeBuild.objects.create(subject='折现基础', created_by=user, status='COMPLETED', completed_at=timezone.now())
+    block = LearningBlock.objects.create(build=build, code='D1', short_title='现值', narrative_summary='解释折现的方向。')
+    args = {'action': 'from_build', 'build_id': str(build.pk), 'block_ids': [block.pk], 'revision': 0}
+    provisional = []
+
+    def model(messages, **kwargs):
+        if messages[-1]['role'] == 'tool':
+            state.refresh_from_db()
+            provisional.append((state.pending_plan, LearningKnowledgeVersion.objects.count()))
+            if failure == 'graph_changed':
+                LearningBlock.objects.filter(pk=block.pk).update(narrative_summary='图谱已更新。')
+            if not failure:
+                receipt = json.loads(messages[-1]['content'])
+                assert receipt['phase'] == 'prepared' and 'href' not in receipt and not kwargs['tools']
+            kwargs['on_text']('请打开学习路径确认。')
+            return {'choices': [{'finish_reason': 'length' if failure == 'incomplete_reply' else 'stop',
+                                'message': {'content': '请打开学习路径确认。'}}]}
+        assert 'manage_learning_knowledge' in {tool['function']['name'] for tool in kwargs['tools']}
+        return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+            'id': 'graph', 'type': 'function',
+            'function': {'name': 'manage_learning_knowledge', 'arguments': json.dumps(args)},
+        }]}}]}
+
+    async def consume(response):
+        return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')]
+
+    body = {'bot_id': bot.pk, 'conversation_id': str(conversation.conversation_id), 'request_id': str(uuid4()),
+            'message': '请从知识图谱准备学习路径。'}
+    with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider, \
+            patch('ai_assistant.services.dsh_xiaoyu.schedule_conversation_title'), \
+            patch('ai_assistant.services.dsh_xiaoyu.extract_memories_async'):
+        events = async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))
+        final = events[-1]
+        assert not any(event.get('type') == 'text_delta' for event in events)
+        if not failure:
+            assert final['metadata']['ulr_plan']['pending_plan'] is True
+            card, = final['metadata']['dsh_cards']
+            assert card['payload']['cta']['link'] == f'/xiaoyu?project={project.pk}&learning_view=proposal'
+            assert async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))[-1] == final
+        else:
+            assert final['is_error']
+        assert provider.call_count == 2
+    state.refresh_from_db()
+    assert provisional == [({}, 0)] and not state.plan
+    committed = int(failure is None)
+    assert bool(state.pending_plan) == bool(committed) and state.revision == committed
+    assert AIUsageReservation.objects.get(request_id=body['request_id']).status == ('succeeded' if committed else 'released')
+    assert WeeklyAIUsage.objects.get(user=user).ai_calls == committed
+    plans = ProjectLearningEvent.objects.filter(project=project, kind='plan')
+    assert plans.count() == committed
+    for model_class in (LearningResource, LearningResourceVersion, LearningKnowledgeMap, LearningKnowledgeVersion):
+        assert model_class.objects.count() == committed
+    if committed:
+        assert plans.get().message.metadata['runtime_request_id'] == body['request_id']
+        confirmed = auth_client.patch(f'/api/ai/projects/{project.pk}/learning/', {'action': 'accept', 'revision': 1}, format='json')
+        assert confirmed.status_code == 200, confirmed.data
 
 
 @pytest.mark.django_db(transaction=True)
@@ -1500,6 +1859,102 @@ def test_ulr_project_task_is_committed_only_with_the_answer(auth_client, user, s
     detail = auth_client.get(f'/api/ai/projects/{project.pk}/learning/tasks/{task.pk}/')
     assert detail.status_code == 200 and detail.data['payload']['questions'][0]['text'] == args['definition']['prompt']
     assert ProjectLearningEvent.objects.filter(project=project, kind='task').count() == 1
+    assert WeeklyAIUsage.objects.get(user=user).ai_calls == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ulr_strategy_receipt_binds_the_trial_from_the_completed_attempt(auth_client, user, settings, tmp_path):
+    from django.test import override_settings
+    from ai_assistant.models import LearningStrategy, LearningStrategyUse
+    from ai_assistant.services.learning_library import project_strategy_uses
+    from ai_engine.service import AICallError
+
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    settings.UNIMIND_DSH_STATE_DIR = str(tmp_path)
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 20})
+    bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
+    project = ConversationProject.objects.create(user=user, name='合成方法试用项目')
+    ProjectLearning.objects.create(project=project, planning_enabled=True, status='active', current_stage='topic',
+        plan={'goal': '理解折现率', 'stages': [{'id': 'topic', 'title': '折现率', 'outcome': '解释要求回报',
+            'task': '解释折现率', 'sources': [], 'prerequisites': []}]})
+    conversation = Conversation.objects.create(user=user, bot=bot, project=project, conversation_id=uuid4())
+    source = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=conversation.conversation_id,
+        role='user', content='请举个例子。')
+    strategies = [LearningStrategy.objects.create(user=user, source_event=ProjectLearningEvent.objects.create(
+        project=project, kind='progress', message=source, content={'strategy': method}))
+        for method in ('先对比两笔现金流', '先解释所要求的回报')]
+    body = {'bot_id': bot.pk, 'conversation_id': str(conversation.conversation_id), 'request_id': str(uuid4()),
+            'message': '这个学习目标请用一个方法讲解。'}
+    fail = True
+    receipts = []
+
+    def call(name, arguments):
+        return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+            'id': name, 'type': 'function', 'function': {'name': name, 'arguments': json.dumps(arguments)},
+        }]}}]}
+
+    def model(messages, **kwargs):
+        if messages[-1]['role'] == 'user':
+            return call('manage_learning_strategies', {'action': 'apply', 'strategy_id': strategies[0 if fail else 1].pk,
+                                                       'reason': '帮助区分折现率和收益率。'})
+        receipt = json.loads(messages[-1]['content'])
+        receipts.append(receipt)
+        if 'use_id' in receipt:
+            assert receipt['phase'] == 'prepared'
+            assert project_strategy_uses(project) == []
+            if fail:
+                # A legacy event can keep the original message through a failed answer and retry.
+                trial = LearningStrategyUse.objects.get(pk=receipt['use_id'])
+                ProjectLearningEvent.objects.create(project=project, message=trial.message, kind='progress',
+                    request_key='old-progress', content={'observation': '旧运行时提前写入的观察'})
+                raise AICallError('合成最终响应失败。', status_code=422)
+            return call('find_learning_tools', {'group': 'tasks'})
+        if receipt.get('group') == 'tasks' or receipt.get('error'):
+            parameters = next(tool['function']['parameters'] for tool in kwargs['tools']
+                              if tool['function']['name'] == 'manage_learning_tasks')
+            reference = receipts[1]['strategy_ref']
+            assert parameters['properties']['strategy_ref']['const'] == reference
+            if error := receipt.get('error'):
+                assert (error['code'], error['field'], error['rule']) == (
+                    'invalid_arguments', '$.strategy_use_id', 'confirmed_reference')
+                binding = {'strategy_ref': reference}
+            else:
+                binding = {'strategy_use_id': receipts[0]['use_id']}
+            return call('manage_learning_tasks', {'action': 'create', 'stage_id': 'topic', 'title': '折现率练习',
+                'instructions': '先独立作答。', **binding, 'definition': {
+                    'prompt': '用自己的话解释折现率。', 'response_type': 'explanation', 'criteria': ['说明要求回报']}})
+        assert receipt['phase'] == 'prepared' and not project.learning_tasks.exists()
+        return {'choices': [{'finish_reason': 'stop', 'message': {'content': '先理解要求回报，再打开学习任务。'}}]}
+
+    async def consume(response):
+        return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')]
+
+    def ask():
+        return async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))
+
+    with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider:
+        assert ask()[-1]['is_error']
+        assert AIUsageReservation.objects.get(request_id=body['request_id']).status == 'released'
+        url = f'/api/ai/projects/{project.pk}/learning/'
+        with override_settings(UNIMIND_LEARNING_RUNTIME='legacy', UNIMIND_ULR_PROTOTYPE=False):
+            assert [row['id'] for row in auth_client.get(url).data['strategy_uses']] == [receipts[0]['use_id']]
+        assert auth_client.get(url).data['strategy_uses'] == []
+        fail = False
+        events = ask()
+        final = events[-1]
+        assert final.get('engine') == 'ulr' and provider.call_count == 7, (final, receipts, provider.call_count)
+        failed, repaired = [event for event in events if event.get('name') == 'manage_learning_tasks'
+                            and event.get('status') in ('failed', 'succeeded')]
+        assert failed['status'] == 'failed' and repaired['retry_of'] == failed['call_id']
+        assert ask()[-1] == final and provider.call_count == 7
+
+    first, second = LearningStrategyUse.objects.order_by('pk')
+    assert final['metadata']['ulr_strategy_use_ids'] == [second.pk]
+    assert project.learning_tasks.get().strategy_use_id == second.pk
+    assert [use['id'] for use in project_strategy_uses(project)] == [second.pk]
+    assert first.exposure['status'] == 'assigned' and second.exposure['reply_id'] == final['message_id']
     assert WeeklyAIUsage.objects.get(user=user).ai_calls == 1
 
 

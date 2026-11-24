@@ -311,7 +311,7 @@ def knowledge_state(project, state, *, compact=False, current_message=None):
 
 
 @transaction.atomic
-def knowledge_operation(project, arguments, *, message=None, prepare_probe=False, project_ticket=None):
+def knowledge_operation(project, arguments, *, message=None, prepare_change=False, project_ticket=None):
     serializer = KnowledgeInput(data=arguments)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
@@ -332,7 +332,7 @@ def knowledge_operation(project, arguments, *, message=None, prepare_probe=False
     state = _state(project, message)
     if action == 'from_build':
         from .knowledge_build_path import prepare_build
-        return prepare_build(project, data, state)
+        return prepare_build(project, data, state, message=message, prepare_change=prepare_change, project_ticket=project_ticket)
     if action == 'save':
         if not data.get('title') or not data.get('nodes'):
             raise ValidationError('请提供知识地图名称和带来源的知识单元。')
@@ -397,9 +397,9 @@ def knowledge_operation(project, arguments, *, message=None, prepare_probe=False
             content__node_id=data['node_id'], content__question_hash=content['question_hash']).first()
         if old and old.message_id != message.pk:
             raise ValidationError('这道任务已登记过，请换一个实际任务，避免同题反复累计。')
-        if old and (prepare_probe or project_ticket is not None) and any(old.content.get(key) != value for key, value in content.items()):
+        if old and (prepare_change or project_ticket is not None) and any(old.content.get(key) != value for key, value in content.items()):
             raise LearningConflict('原检查题的内容或标准已变化，请换一道题。')
-        if prepare_probe:
+        if prepare_change:
             return {'phase': 'prepared', 'question': content['question'], '_ulr_project_ticket': ticket,
                     'notice': '请原样向用户呈现 question，运行时随答复保存。判断标准留待后续作答后使用。'}
         if old:

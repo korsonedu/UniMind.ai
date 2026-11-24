@@ -11,6 +11,7 @@ from core.utils import apply_institution_filter, get_content_institution_id
 from quizzes.utils import safe_int
 
 from ai_service import AIService
+from ai_engine.observability import observe_background
 from notifications.models import Notification
 from quizzes.memorix.service import MemorixService
 from quizzes.models import ExamQuestionResult, Question, QuizExam, UserQuestionStatus
@@ -119,7 +120,7 @@ def grade_answer_for_user(user: User, question: Question, user_answer: Any, set_
     return result
 
 
-def validate_exam_answers(user: User, questions_data, request=None, lock=False):
+def exam_answer_question_ids(questions_data):
     if not isinstance(questions_data, list) or not questions_data:
         raise ValidationError({'error': '无有效答题数据'})
     question_ids = []
@@ -140,6 +141,11 @@ def validate_exam_answers(user: User, questions_data, request=None, lock=False):
         question_ids.append(int(q_id))
     if len(set(question_ids)) != len(question_ids):
         raise ValidationError({'error': '不能重复提交同一道题目'})
+    return question_ids
+
+
+def validate_exam_answers(user: User, questions_data, request=None, lock=False):
+    question_ids = exam_answer_question_ids(questions_data)
     queryset = apply_institution_filter(Question.objects.all(), user, request=request).filter(pk__in=question_ids).order_by('pk')
     if lock:
         queryset = queryset.select_for_update()
@@ -310,8 +316,12 @@ def _run_exam_grading(user_id: int, exam_id: int):
         exam.status = 'grading'
         exam.started_at = timezone.now()
         exam.save(update_fields=['status', 'started_at', 'requires_ulr'])
-    force_ulr = exam.requires_ulr and not native_worker
+    with observe_background('ulr' if exam.requires_ulr else 'legacy', f'exam:{exam_id}'):
+        return _grade_claimed_exam(user, exam, force_ulr=exam.requires_ulr and not native_worker)
 
+
+def _grade_claimed_exam(user, exam, *, force_ulr):
+    user_id, exam_id = user.pk, exam.pk
     from ai_assistant.models import ProjectLearningTask
     from ai_assistant.services.learning_tasks import validate_task_question, sync_exam_task_result, task_result_snapshot, personal_question
     learning_task = ProjectLearningTask.objects.select_related('project__user').filter(exam_id=exam_id).first()
@@ -332,7 +342,11 @@ def _run_exam_grading(user_id: int, exam_id: int):
         snapshot = item.question_snapshot or {}
         practice_card = 'ulr_practice_version' in snapshot
         versioned = practice_card or 'ulr_grading_version' in snapshot
+        grading_version = None
         try:
+            user = User.objects.filter(pk=user_id).first()
+            if not has_learning_feature(user, 'quiz.exam'):
+                raise PermissionDenied('当前账号尚未开放习题训练。')
             if personal_task:
                 task_result_snapshot(learning_task, item)
                 question = personal_question(learning_task.definition)
@@ -346,8 +360,8 @@ def _run_exam_grading(user_id: int, exam_id: int):
                     raise ValidationError('题目不存在或不在当前内容范围')
                 if learning_task:
                     validate_task_question(learning_task, question)
-                elif versioned:
-                    validate_grading_question(question, snapshot, scope)
+                elif versioned or exam.requires_ulr:
+                    grading_version = validate_grading_question(question, snapshot, scope)
             if (learning_task or practice_card) and question.q_type == 'objective':
                 graded = _grade_answer(question, item.user_answer or '', objective_only=True, language=exam.ui_language)
                 if practice_card:
@@ -355,6 +369,9 @@ def _run_exam_grading(user_id: int, exam_id: int):
             else:
                 graded = _grade_answer(question, item.user_answer or '', language=exam.ui_language,
                                        **({'ulr': True} if force_ulr else {}))
+        except PermissionDenied as exc:
+            _fail_pending_items(exam_id, str(exc))
+            break
         except Exception as exc:
             logger.exception('Exam item grading failed: exam_id=%s item_id=%s', exam_id, item.pk)
             _mark_item_failed(item.pk, str(exc))
@@ -362,24 +379,37 @@ def _run_exam_grading(user_id: int, exam_id: int):
 
         try:
             with transaction.atomic():
+                # Match submission's user → task lock order.
+                user = User.objects.select_for_update().filter(pk=user_id).first()
+                if not has_learning_feature(user, 'quiz.exam'):
+                    raise PermissionDenied('当前账号尚未开放习题训练。')
+                current_task = None
+                if learning_task:
+                    current_task = ProjectLearningTask.objects.select_related('project').select_for_update(of=('self',)).filter(
+                        pk=learning_task.pk, exam_id=exam_id, project__user_id=user_id,
+                    ).first()
+                    if current_task is None:
+                        raise ValidationError('任务与实际作答归属不一致。')
                 # Do not select_related('question') here: question is nullable,
                 # and PostgreSQL rejects FOR UPDATE on the nullable side of an outer join.
                 locked = ExamQuestionResult.objects.select_for_update().filter(pk=item.pk).first()
                 if not locked or locked.status != 'pending':
                     continue
                 if personal_task:
-                    task_result_snapshot(learning_task, locked)
-                    question = personal_question(learning_task.definition)
+                    task_result_snapshot(current_task, locked)
+                    question = personal_question(current_task.definition)
                 else:
-                    question = Question.objects.select_related('knowledge_point').filter(
-                        pk=locked.question_id, institution_id=scope,
-                    ).first()
+                    questions = Question.objects.select_related('knowledge_point')
+                    if grading_version or current_task:
+                        questions = questions.select_for_update(of=('self',), no_key=True)
+                    question = questions.filter(pk=locked.question_id, institution_id=scope).first()
                     if not question or get_content_institution_id(user) != scope:
                         raise ValidationError('题目或内容范围已变更')
-                    if learning_task:
-                        task_result_snapshot(learning_task, locked)
-                    elif versioned:
-                        validate_grading_question(question, locked.question_snapshot, scope)
+                    if current_task:
+                        locked.question = question
+                        task_result_snapshot(current_task, locked)
+                    elif grading_version:
+                        validate_grading_question(question, grading_version, scope)
                     _apply_memorix_status(
                         user, question, graded['normalized_score'], graded['memorix_rating'],
                     )
@@ -407,6 +437,9 @@ def _run_exam_grading(user_id: int, exam_id: int):
                 transaction.on_commit(
                     lambda q=question, s=graded['score']: _queue_experience_verification(user_id, q, s)
                 )
+        except PermissionDenied as exc:
+            _fail_pending_items(exam_id, str(exc))
+            break
         except Exception as exc:
             logger.exception('Exam item commit failed: exam_id=%s item_id=%s', exam_id, item.pk)
             _mark_item_failed(item.pk, str(exc))

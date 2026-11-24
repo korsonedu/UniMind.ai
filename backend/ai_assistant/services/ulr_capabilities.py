@@ -37,14 +37,22 @@ def _visible_practice_questions(scope, question_ids):
         Q(knowledge_point__isnull=True) | Q(knowledge_point__institution_id=scope))
 
 
-def require_visible_practice_sources(user, questions, *, point_id=None):
+def require_visible_practice_sources(user, questions, *, point_id=None, lock=False):
     if not questions and point_id is None:
         return
     scope = get_content_institution_id(user)
     visible = _visible_practice_questions(scope, questions)
+    rows = None
+    if lock:
+        rows = {row['id']: row for row in visible.order_by('pk').select_for_update(of=('self',)).values(
+            'id', 'knowledge_point_id', 'text', 'q_type', 'subjective_type', 'options')}
+        points = {pk: row['knowledge_point_id'] for pk, row in rows.items()}
+    else:
+        points = dict(visible.values_list('pk', 'knowledge_point_id'))
     if ((point_id is not None and not KnowledgePoint.objects.filter(pk=point_id, institution_id=scope).exists())
-            or questions != dict(visible.values_list('pk', 'knowledge_point_id'))):
+            or questions != points):
         raise PermissionDenied('所选知识点或练习题已不可访问，请重新提问。')
+    return rows
 
 
 def _reviewable_practice_questions(user, question_ids):

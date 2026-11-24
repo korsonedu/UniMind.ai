@@ -1,6 +1,11 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from threading import Event
+from time import monotonic, sleep
 from unittest.mock import patch
 
+import pytest
+from django.db import connection, transaction
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -10,6 +15,80 @@ from quizzes.ai_workflow import run_exam_grading
 from quizzes.models import ExamQuestionResult, KnowledgePoint, Question, QuizExam
 from quizzes.services.exam_grading_state import GRADING_RECOVERY_DELAY
 from users.models import CourseStudentStatus, Institution, User
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize('submit_runtime', ['ulr', 'legacy'])
+def test_ulr_exam_waits_for_the_question_edit_before_settlement(auth_client, user, settings, submit_runtime):
+    if connection.vendor != 'postgresql':
+        pytest.skip('Requires PostgreSQL row locks.')
+    settings.UNIMIND_LEARNING_RUNTIME = submit_runtime
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    question = Question.objects.create(text='说明折现依据。', q_type='subjective', subjective_type='short',
+                                       grading_points='按现金流风险说明。')
+    with patch('quizzes.views_exam.dispatch_exam_grading'):
+        submitted = auth_client.post('/api/quizzes/submit-exam/', {
+            'answers': [{'question_id': question.pk, 'answer': '先判断现金流风险。'}],
+        }, format='json')
+    assert submitted.status_code == 202, submitted.data
+    exam_id = submitted.data['exam_id']
+    assert QuizExam.objects.get(pk=exam_id).requires_ulr == (submit_runtime == 'ulr')
+    if submit_runtime == 'legacy':
+        old_item = ExamQuestionResult.objects.get(exam_id=exam_id)
+        old_item.question_snapshot.pop('rubric', None)
+        old_item.save(update_fields=['question_snapshot'])
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    model_ready, finish_model = Event(), Event()
+    grading_pid = None
+
+    def model(row, answer, *, language):
+        nonlocal grading_pid
+        assert row.grading_points == question.grading_points
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT pg_backend_pid()')
+            grading_pid, = cursor.fetchone()
+        model_ready.set()
+        assert finish_model.wait(timeout=10)
+        return grade_ok(row, answer, language=language)
+
+    def grade():
+        try:
+            run_exam_grading(user.pk, exam_id)
+        finally:
+            connection.close()
+
+    waited = False
+    with patch('quizzes.ai_workflow._grade_answer', side_effect=model) as scorer, \
+            patch('quizzes.ai_workflow._apply_memorix_status') as memorix, \
+            patch('quizzes.ai_workflow._queue_experience_verification') as experience, \
+            ThreadPoolExecutor(max_workers=1) as worker:
+        future = worker.submit(grade)
+        try:
+            assert model_ready.wait(timeout=10)
+            with transaction.atomic(), connection.cursor() as cursor:
+                Question.objects.filter(pk=question.pk).update(grading_points='按投资期限说明。')
+                finish_model.set()
+                deadline = monotonic() + 5
+                while not future.done() and monotonic() < deadline:
+                    cursor.execute('SELECT pg_backend_pid() = ANY(pg_blocking_pids(%s))', [grading_pid])
+                    waited, = cursor.fetchone()
+                    if waited:
+                        break
+                    sleep(0.02)
+        finally:
+            finish_model.set()
+        future.result(timeout=10)
+        scorer.assert_called_once()
+
+    exam = QuizExam.objects.get(pk=exam_id)
+    item = exam.results.get()
+    assert (exam.status, item.status, item.score) == ('failed', 'failed', 0)
+    assert waited
+    assert item.user_answer == '先判断现金流风险。'
+    assert item.question_snapshot['grading_points'] == question.grading_points
+    memorix.assert_not_called()
+    experience.assert_not_called()
 
 
 def grade_ok(question, answer, *, language='zh-CN'):
@@ -202,6 +281,70 @@ class ExamAsyncTests(APITestCase):
             or '题目不存在' in (item.error_metadata or {}).get('error', '')
             for item in exam.results.all()
         ))
+
+    def test_ulr_handoff_checks_the_legacy_submission_before_model_use(self):
+        rubric = [{'point': '说明期限结构', 'score': 10}]
+        Question.objects.filter(pk=self.subjective.pk).update(rubric=rubric)
+        unverified = Question.objects.create(text='比较两种利率。', q_type='subjective', subjective_type='short',
+            grading_points='说明两种利率的区别。', rubric=rubric, institution=self.content_inst)
+        with override_settings(DEBUG=False, UNIMIND_LEARNING_RUNTIME='legacy'), \
+                patch('quizzes.views_exam.dispatch_exam_grading'), self.captureOnCommitCallbacks(execute=True):
+            submitted = self.client.post('/api/quizzes/submit-exam/', {'answers': [
+                {'question_id': self.objective.pk, 'answer': 'B'},
+                {'question_id': self.subjective.pk, 'answer': '利率受期限影响。'},
+                {'question_id': unverified.pk, 'answer': '比较期限和现金流。'},
+            ]}, format='json')
+        self.assertEqual(submitted.status_code, 202, submitted.data)
+        exam = QuizExam.objects.get(pk=submitted.data['exam_id'])
+        self.assertFalse(exam.requires_ulr)
+        objective = exam.results.get(question=self.objective)
+        self.assertNotIn('ulr_grading_version', objective.question_snapshot)
+        self.assertEqual(exam.results.get(question=self.subjective).question_snapshot['rubric'], rubric)
+        old_item = exam.results.get(question=unverified)
+        old_item.question_snapshot.pop('rubric')
+        old_item.save(update_fields=['question_snapshot'])
+        Question.objects.filter(pk=self.objective.pk).update(correct_answer='A')
+
+        with override_settings(DEBUG=False, UNIMIND_LEARNING_RUNTIME='ulr'), \
+                patch('quizzes.ai_workflow._grade_answer', side_effect=grade_ok) as model, \
+                patch('quizzes.ai_workflow._queue_experience_verification'), \
+                self.captureOnCommitCallbacks(execute=True):
+            run_exam_grading(self.user.pk, exam.pk)
+        model.assert_called_once()
+        self.assertEqual(model.call_args.args[0].pk, self.subjective.pk)
+        exam.refresh_from_db()
+        objective.refresh_from_db()
+        old_item.refresh_from_db()
+        self.assertEqual((exam.status, exam.total_score, exam.failed_count, exam.requires_ulr), ('partial', 10, 2, True))
+        self.assertEqual((objective.status, objective.user_answer, objective.question_snapshot['correct_answer']),
+                         ('failed', 'B', 'B'))
+        self.assertEqual((old_item.status, old_item.user_answer), ('failed', '比较期限和现金流。'))
+
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr')
+    def test_exam_grading_stops_after_learning_access_is_revoked(self):
+        from users.models import UserAccessProfile
+
+        profile = UserAccessProfile.objects.create(user=self.user)
+        submitted, _ = self.submit()
+        self.assertEqual(submitted.status_code, 202, submitted.data)
+        exam = QuizExam.objects.get(pk=submitted.data['exam_id'])
+
+        def revoke(question, answer, *, language):
+            UserAccessProfile.objects.filter(pk=profile.pk).update(blocked_permissions=['quiz.exam'])
+            return grade_ok(question, answer, language=language)
+
+        with patch('quizzes.ai_workflow._grade_answer', side_effect=revoke) as model, \
+                patch('quizzes.ai_workflow._apply_memorix_status') as memorix, \
+                patch('quizzes.ai_workflow._queue_experience_verification') as experience, \
+                self.captureOnCommitCallbacks(execute=True):
+            run_exam_grading(self.user.pk, exam.pk)
+        model.assert_called_once()
+        memorix.assert_not_called()
+        experience.assert_not_called()
+        exam.refresh_from_db()
+        self.assertEqual((exam.status, exam.total_score, exam.failed_count), ('failed', 0, 2))
+        self.assertEqual(list(exam.results.order_by('position').values_list('user_answer', flat=True)),
+                         ['B', '利率期限结构有三种理论。'])
 
     def test_lost_queue_delivery_and_interrupted_finalization_can_resume(self):
         response, _ = self.submit()

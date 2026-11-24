@@ -7,6 +7,7 @@ from ai_assistant.models import AIChatMessage, ProjectLearning, ProjectLearningE
 from .services.ulr_config import ulr_enabled
 from notifications.models import Notification
 from users.feature_access import has_learning_feature
+from users.learning import CHAT_RESERVATION_TTL
 
 
 @shared_task
@@ -40,12 +41,15 @@ def send_project_learning_followups():
                 state.save(update_fields=['followup_at'])
                 continue
             if ulr_enabled():
-                from .services.project_learning import failed_model_event, unconfirmed_progress_ids
+                from .services.project_learning import model_event_reservation, unconfirmed_progress_ids
                 source = state.project.learning_events.filter(kind__in=(
                     'plan', 'progress', 'pause', 'resume', 'complete', 'schedule', 'accept', 'reminders',
                 )).exclude(kind='plan', content__has_key='proposed_plan').exclude(
                     kind='progress', content__has_key='mainline', content__mainline=False).select_related('message').first()
-                if failed_model_event(source) or (source and source.kind == 'progress'
+                receipt = model_event_reservation(source)
+                if receipt and receipt.status == 'pending' and receipt.updated_at >= now - CHAT_RESERVATION_TTL:
+                    continue
+                if (receipt and receipt.status != 'succeeded') or (source and source.kind == 'progress'
                         and source.pk in unconfirmed_progress_ids(user.pk, state.project_id)):
                     state.followup_at = None
                     state.followup_text = ''

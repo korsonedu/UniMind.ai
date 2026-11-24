@@ -70,6 +70,23 @@ def test_ulr_grading_repairs_malformed_arguments_but_rejects_out_of_range_score(
         model.assert_called_once()
 
 
+def test_ulr_grading_requires_a_complete_text_tool_call():
+    from ai_assistant.services.ulr_grading import grade_submission
+
+    valid = {'score': 8, 'feedback': '按合成规则评分。', 'analysis': '合成解析。', 'memorix_rating': 3}
+    tool = '<function_calls><invoke name="submit_grading_result">' + ''.join(
+        f'<parameter name="{field}">{json.dumps(value)}</parameter>' for field, value in valid.items()) + '</invoke>'
+    for suffix in ('', '<invoke name="submit_grading_result"></function_calls>', '</function_calls>'):
+        response = {'choices': [{'finish_reason': 'stop', 'message': {'content': tool + suffix}}]}
+        with patch('ai_engine.service.AIEngine.call_provider', return_value=response) as model:
+            if suffix == '</function_calls>':
+                assert grade_submission('合成题目、标准和原作答。', 10) == valid
+            else:
+                with pytest.raises(ValueError, match='评分结果不符合'):
+                    grade_submission('合成题目、标准和原作答。', 10)
+            model.assert_called_once()
+
+
 def test_structured_result_validation_private_config_and_timeout(settings, tmp_path):
     from ai_assistant.services.dsh_tasks import run_structured
     settings.DEBUG = True
@@ -113,8 +130,9 @@ def test_structured_result_validation_private_config_and_timeout(settings, tmp_p
     assert not list((tmp_path / 'tasks' / '.tasks').glob('*'))
 
 
-def test_malformed_provider_response_retries_once(settings, tmp_path):
+def test_malformed_provider_response_retries_once(settings, tmp_path, caplog):
     from ai_assistant.services.dsh_tasks import run_structured
+    from ai_engine.observability import observe_background, runtime_observation
     settings.DEBUG = True
     settings.UNIMIND_DSH_PYTHON = sys.executable
     settings.UNIMIND_DSH_STATE_DIR = str(tmp_path / 'tasks')
@@ -143,9 +161,21 @@ def test_malformed_provider_response_retries_once(settings, tmp_path):
         return patch('ai_assistant.services.dsh_tasks.subprocess.Popen',
                      side_effect=[Process(json.dumps(body).encode()) for body in responses])
 
-    with worker([malformed, {'status': 200, 'result': valid}]) as popen:
-        assert run_structured('quizzes.grade_question', '合成作答') == valid
+    observation = {'operation': 'quizzes.grade_question', 'elapsed_ms': 3, 'model': 'test-model',
+                   'offered_tools': ['submit_grading_result'], 'submitted_tools': [], 'request': 1,
+                   'max_output_tokens': 2500, 'usage_complete': False, 'status': 'interrupted'}
+    first = {**malformed, 'observations': [observation]}
+    second = {'status': 200, 'result': valid, 'observations': [{**observation, 'status': 'completed'}]}
+    with worker([first, second]) as popen, observe_background('legacy', 'exam:42'), \
+            caplog.at_level('INFO', logger='ai_engine.observability'):
+        assert run_structured('quizzes.grade_question', '合成私有作答') == valid
+        attempt_id = str(runtime_observation.get()['attempt_id'])
     assert popen.call_count == 2
+    rows = [row.args[4] for row in caplog.records if row.name == 'ai_engine.observability']
+    assert len(rows) == 2 and {row['runtime'] for row in rows} == {'dsh'}
+    assert {row['request_id'] for row in rows} == {'exam:42'} and {row['attempt_id'] for row in rows} == {attempt_id}
+    assert len({row['gateway_id'] for row in rows}) == 2 and {row['model_request'] for row in rows} == {'1'}
+    assert not runtime_observation.get() and '合成私有作答' not in caplog.text
 
     with worker([malformed, malformed]) as popen:
         with pytest.raises(DshUnavailable):

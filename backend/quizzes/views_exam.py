@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 
 from ai_assistant.services.ulr_config import ulr_enabled
 from core.analytics import record_event
-from quizzes.ai_workflow import validate_exam_answers
+from quizzes.ai_workflow import exam_answer_question_ids, validate_exam_answers
 from quizzes.models import ExamQuestionResult, PracticeSubmission, QuizExam
 from quizzes.services.exam_grading_state import can_resume_grading, lock_grading_for_recovery
 from quizzes.services.practice_results import (
@@ -39,18 +39,20 @@ class SubmitExamView(APIView):
         task_id = request.data.get('learning_task_id')
         assistance = serializers.ChoiceField(choices=['independent', 'hint', 'guided', 'unknown']).run_validation(
             request.data.get('assistance', 'unknown'))
+        questions = None
+        requested_task = None
         if task_id:
             task_id = serializers.UUIDField().run_validation(task_id)
             if not submission_id:
                 raise serializers.ValidationError('学习任务必须提供原始提交编号。')
             from ai_assistant.models import ProjectLearningTask
-            from ai_assistant.services.learning_tasks import personal_answers
             requested_task = get_object_or_404(ProjectLearningTask, pk=task_id, project__user=request.user)
-            if requested_task.definition:
-                questions_data = personal_answers(questions_data)
-                questions = {}
-            else:
-                questions = validate_exam_answers(request.user, questions_data, request=request)
+        if requested_task and requested_task.definition:
+            from ai_assistant.services.learning_tasks import personal_answers
+            questions_data = personal_answers(questions_data)
+        elif submission_id:
+            # A saved receipt depends on the original answers, not the current question bank.
+            exam_answer_question_ids(questions_data)
         else:
             questions = validate_exam_answers(request.user, questions_data, request=request)
         answers_hash = hashlib.sha256(json.dumps({
@@ -69,7 +71,7 @@ class SubmitExamView(APIView):
                 from ai_assistant.services.learning_tasks import validate_task_submission
                 if task_id:
                     task, questions = validate_task_submission(request.user, task_id, submission_id,
-                                                               questions_data, assistance)
+                                                               questions_data, assistance, request=request)
                 elif ProjectLearningTask.objects.filter(pk=submission_id).exists():
                     raise serializers.ValidationError('请从原学习任务提交。')
                 prior = PracticeSubmission.objects.filter(session_id=submission_id).first()
@@ -90,6 +92,8 @@ class SubmitExamView(APIView):
                         return Response(prior.response, status=202)
                 if task and task.exam_id:
                     return Response({'error': '学习任务已经提交。'}, status=409)
+            if questions is None:
+                questions = validate_exam_answers(request.user, questions_data, request=request, lock=ulr_enabled())
             from ai_assistant.services.language import request_language
             exam = QuizExam.objects.create(
                 ui_language=request_language(request),
@@ -107,7 +111,7 @@ class SubmitExamView(APIView):
                 elif exam.requires_ulr:
                     snapshot = versioned_question_snapshot(question, practice_card=bool(prepared))
                 else:
-                    snapshot = question_snapshot(question)
+                    snapshot = question_snapshot(question) | {'rubric': question.rubric}
                 results.append(ExamQuestionResult(
                     exam=exam,
                     question=question if question.pk else None,

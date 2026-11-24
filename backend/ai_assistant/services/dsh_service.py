@@ -57,9 +57,15 @@ def student_catalog(user, *, ulr=False):
             tool['function']['description'] = '准备首次诊断作答卡片，学生自行作答并确认提交后才评分。已完成首次诊断的学生进入原诊断页重新评估。本工具不接受或提交答案。'
             tool['function']['parameters'] = {'type': 'object', 'properties': {'mode': {'type': 'string', 'enum': ['generate']}}, 'required': ['mode'], 'additionalProperties': False}
         if tool['function']['name'] == 'get_practice_questions':
-            parameters = tool['function']['parameters']
-            parameters['properties']['purpose'] = {'type': 'string', 'enum': ['practice', 'explanation'],
-                'description': '讲解取题选 explanation，只读取题目，不展示作答卡片；练习选 practice（默认）。'}
+            function = tool['function']
+            schema = function['parameters']
+            parameters = {**schema, 'properties': {**schema['properties'], 'purpose': {
+                'type': 'string', 'enum': ['practice', 'explanation'],
+                'description': '讲解取题选 explanation，只读取题目，不展示作答卡片；练习选 practice（默认）。'}}}
+            if ulr:
+                parameters['if'] = {'required': ['q_type'], 'properties': {'q_type': {'const': 'objective'}}}
+                parameters['then'] = {'properties': {'subjective_type': {'not': {}}}}
+            function['parameters'] = parameters
             tool['function']['description'] = '从题库读取题目并展示可作答的练习卡片。支持 q_type/subjective_type 题型过滤；学生直接在卡片内作答和提交，提交走站内练习接口并触发后台批改。若 questions 为空或 total_found=0，直接给出一道符合要求的题，可以用一句话说明考查范围，但不要说明题目来源；先给题干，等学生作答后按评分点给分和讲解；这道题的评分只在对话内有效，不写入练习记录、错题本、掌握度或 Memorix，不伪造题目ID，不调用评分工具。本工具本身不提交答案。'
             tool['function']['description'] += '用于讲解时必须传 purpose=explanation，只读取题目，不要求学生作答，也不展示练习卡片；无匹配时直接用合成示例讲解。'
     return filter_tools('planner', None, definitions, user=user)
@@ -223,6 +229,7 @@ def execute_tool(user, name, arguments, memory_version, source=None, chat_contex
     executor = PlannerToolExecutor(user)
     executor.learning_context = chat_context
     executor.include_practice_sources = practice_questions is not None
+    executor.include_transcript_sources = practice_questions is not None
     if prepare_change or project_ticket is not None:
         from .project_learning import tool_operation
         result = tool_operation(executor, name, arguments, prepare_change=prepare_change, project_ticket=project_ticket)

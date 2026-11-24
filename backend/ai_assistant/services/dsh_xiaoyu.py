@@ -28,7 +28,9 @@ from users.learning import confirm_ai_call, finish_ai_call, release_ai_call
 from users.models import AIUsageReservation
 from .dsh_runtime import DshUnavailable, run_site_action, site_request_lock, quota_write_lock
 from .dsh_stream import action_events
-from .course_context import course_context_text, course_visual_messages, require_course_transcript
+from .course_context import (
+    course_context_text, course_visual_messages, require_current_transcript_sources, transcript_source,
+)
 from .ulr_config import standalone_ulr
 
 
@@ -96,13 +98,17 @@ def task_context_data(user, claims, message, *, history_limit, reauthorize=False
     if reauthorize:
         from .ulr_history import scoped_history
         recent = scoped_history(user, current, set(note_versions))[-history_limit:]
-        history = [row for row, _, _, _ in recent]
+        history = [row for row, *_ in recent]
         course_ids = {course['course_id']} if course else set()
+        transcripts = {transcript_source(course)} if course else set()
+        transcripts.update(*(refs for _, _, _, _, refs in recent))
+        require_current_transcript_sources(transcripts)
         scope['history_sources'] = {
-            'courses': sorted(course_ids.union(*(ids for _, ids, _, _ in recent))),
-            'question_answers': sorted(set().union(*(ids for _, _, ids, _ in recent))),
-            'practice_reviews': sorted(set().union(*(refs for _, _, _, refs in recent))),
+            'courses': sorted(course_ids.union(*(ids for _, ids, *_ in recent))),
+            'question_answers': sorted(set().union(*(ids for _, _, ids, *_ in recent))),
+            'practice_reviews': sorted(set().union(*(refs for _, _, _, refs, _ in recent))),
             'notes': note_versions, 'selection': bool(current.metadata.get('note_selection')),
+            'transcripts': sorted(transcripts),
         }
     else:
         history = _get_chat_history(user, current.bot, current.conversation_id, exclude_ids=(current.pk,), limit=history_limit)
@@ -197,6 +203,8 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                 except AIExecutionCancelled as exc:
                     raise exc.error from None
                 metadata = {'engine': 'ulr', 'ulr_task_id': task_id}
+                if strategy_use_ids := context_sources.pop('strategy_use_ids', None):
+                    metadata['ulr_strategy_use_ids'] = strategy_use_ids
             else:
                 answers = AIChatMessage.objects.filter(user=user, bot=bot, conversation_id=conversation_id, role='assistant')
                 handoff = has_handoff_history(user, bot, conversation_id)
@@ -237,6 +245,11 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                     raise ConversationDeleted()
                 if not AIUsageReservation.objects.filter(pk=reservation.pk, status='pending', attempt_id=reservation.attempt_id).exists():
                     raise DshUnavailable('本轮运行已失效，请恢复当前请求。')
+                if ulr or handoff:
+                    transcripts = {tuple(source) for source in context_sources.get('transcripts', ())}
+                    if course_context:
+                        transcripts.add(transcript_source(course_context))
+                    require_current_transcript_sources(transcripts, lock=True)
                 if handoff:
                     from .ulr_capabilities import require_visible_course_sources
                     from .ulr_history import bound_practice_answers, card_question_answers, legacy_courses
@@ -249,16 +262,15 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                     context_sources.update(courses=sorted(course_ids), question_answers=sorted(question_answers))
                 if ulr:
                     require_visible_course_sources(user, set(context_sources.get('courses', ())))
-                    require_course_transcript(course_context, lock=True)
                     require_current_practice_answers(user, set(context_sources.get('question_answers', ())))
                     require_visible_practice_review_sources(user, {tuple(ref) for ref in context_sources.get('practice_reviews', ())})
                     if practice := context_sources.get('practice'):
                         from quizzes.services.practice_results import prepare_practice_card
                         questions = dict(practice['questions'])
-                        require_visible_practice_sources(user, questions, point_id=practice['point_id'])
+                        current_questions = require_visible_practice_sources(user, questions, point_id=practice['point_id'], lock=True)
                         for card in cards:
                             if card['type'] == 'practice_quiz':
-                                prepare_practice_card(reservation, questions, card['payload'])
+                                prepare_practice_card(reservation, questions, current_questions, card['payload'])
                 if ulr and artifacts:
                     artifacts.commit(user, conversation_id)
                 if ulr and project_change:
@@ -308,7 +320,8 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                         response__message_id=answer.pk).update(response=payload)
                 if (not ulr and getattr(settings, 'UNIMIND_DSH_MEMORY_ENABLED', False) and can_use_learning_context(user)
                         and not conversation_uses_notes(user, conversation_id)):
-                    extract_memories_async(user, [{'role': 'user', 'content': message}], str(conversation_id))
+                    extract_memories_async(user, [{'role': 'user', 'content': message}], str(conversation_id),
+                                           source_message_id=current.pk, answer_message_id=answer.pk)
             except Exception:
                 logger.exception('XiaoYu auxiliary task failed for conversation %s', conversation_id)
             return payload
@@ -401,7 +414,9 @@ async def turn_events(request, bot, conversation_id, message, *, course_context=
                 event = {'type': 'step', 'run_id': run_id, 'call_id': event['call_id'],
                     'round': round_number, 'name': event['name'],
                     'label': '切换学习工具' if event['name'] == 'find_learning_tools' else '展示学习内容' if event['name'] == 'present_learning_visual' else '运行会话计算工具' if event['name'].startswith('session_') else generate_step_label(event['name'], {}),
-                    'status': event['status'], **({'error': event['error']} if event.get('error') else {})}
+                    'status': event['status'], **({'retry_of': event['retry_of']} if event.get('retry_of') else {}),
+                    **({'steps_executed': event['steps_executed']} if 'steps_executed' in event else {}),
+                    **({'error': event['error']} if event.get('error') else {})}
                 if event['status'] == 'running':
                     pending[event['call_id']] = event
                 else:

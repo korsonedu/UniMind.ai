@@ -329,7 +329,7 @@ def _clean_question(raw, q_type):
     return item
 
 
-def _generate_question(row, block, q_type, seen, source_context=''):
+def _generate_question(row, block, q_type, seen, source_context='', *, before_retry=None):
     atom = row.atom
     if config._get_api_key():
         description = (f'所属学习块：{block.short_title}；掌握目标：{atom.goal_statement}；认知层级：{atom.cognitive_level}；'
@@ -342,7 +342,8 @@ def _generate_question(row, block, q_type, seen, source_context=''):
         try:
             generated = QuestionGenerator(AIService)._request_bulk_generate_once(
                 [{'id': atom.pk, 'code': atom.code, 'name': atom.name, 'description': description}],
-                1, ['objective'] if q_type == 'objective' else ['subjective:short', 'subjective:calculate'], 'normal' if q_type == 'objective' else 'hard', '')
+                1, ['objective'] if q_type == 'objective' else ['subjective:short', 'subjective:calculate'],
+                'normal' if q_type == 'objective' else 'hard', '', before_retry=before_retry)
             for raw in generated:
                 item = _clean_question(raw, q_type)
                 if item and _hash(item['stem']) not in seen:

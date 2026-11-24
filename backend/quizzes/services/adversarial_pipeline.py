@@ -16,6 +16,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from django.db import transaction
 from django.utils import timezone
 
 from ai_assistant.services.ulr_structured import teaching_enabled
@@ -78,13 +79,14 @@ def run_adversarial_pipeline(
         title=task_title or "对抗性出题管线",
         description=f"知识点: {', '.join(k.name for k in kps[:5])}",
         payload={
-            "kp_ids": kp_ids,
+            "kp_ids": [point.pk for point in kps],
             "questions_per_kp": questions_per_kp,
             "difficulty": difficulty,
             "max_iterations": MAX_ITERATIONS,
             "quality_threshold": QUALITY_THRESHOLD,
             "types": types_list,
             "stages": [],
+            **({'requires_ulr': True} if teaching_enabled('pipeline.author') else {}),
         },
         progress=0,
         created_by=created_by,
@@ -92,15 +94,8 @@ def run_adversarial_pipeline(
         started_at=timezone.now(),
     )
 
-    # 异步执行（通过 Celery）
-    from quizzes.tasks import run_adversarial_pipeline_task
-    run_adversarial_pipeline_task.delay(
-        task_id=task.id,
-        kp_ids=[k.id for k in kps],
-        questions_per_kp=questions_per_kp,
-        difficulty=difficulty,
-        types=types_list,
-    )
+    from quizzes.tasks import enqueue_question_pipeline, question_pipeline_delivery
+    enqueue_question_pipeline(task, question_pipeline_delivery(task))
     return task.id
 
 
@@ -247,33 +242,21 @@ def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_pe
     task.status = "review" if review_only else "completed"
     task.progress = 100
     task.finished_at = timezone.now()
-    task.save()
+    with transaction.atomic():
+        task.save()
+        if not review_only:
+            ContentPipelineTask.objects.create(
+                task_type="ai_generate",
+                status="review",
+                title=f"[待审核] {task.title}",
+                description=f"对抗性出题完成，{len(reviewed)} 道题待管理员审核入库",
+                payload={"source_task_id": task.id, "questions_preview": reviewed[:5]},
+                result=task.result,
+                progress=100,
+                created_by=task.created_by,
+            )
 
     all_questions.extend(reviewed)
-
-    if review_only:
-        return
-
-    # ── 创建审核任务 ──
-    ContentPipelineTask.objects.create(
-        task_type="ai_generate",
-        status="review",
-        title=f"[待审核] {task.title}",
-        description=f"对抗性出题完成，{len(reviewed)} 道题待管理员审核入库",
-        payload={"source_task_id": task.id, "questions_preview": reviewed[:5]},
-        result={
-            "questions": reviewed,
-            "stages": stage_log,
-            "summary": {
-                "total_generated": len(reviewed),
-                "avg_quality_score": round(sum(q.get("review_score", 0) for q in reviewed) / max(len(reviewed), 1), 3),
-                "iteration_distribution": iteration_stats,
-                "knowledge_points": [k.name for k in kps],
-            },
-        },
-        progress=100,
-        created_by=task.created_by,
-    )
 
 
 def _classifier_batch_report(questions: List[Dict], kps: List[KnowledgePoint], difficulty: str) -> Dict:

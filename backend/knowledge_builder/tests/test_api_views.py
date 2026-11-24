@@ -747,7 +747,7 @@ def test_ensure_project_activates_whole_tree_and_immediately_generates_quiz(
     monkeypatch.setattr('users.feature_access.has_learning_feature', lambda *args: True)
     monkeypatch.setattr('ai_assistant.services.learning_tasks.has_learning_feature', lambda *args: True)
     monkeypatch.setattr('knowledge_builder.tasks.prepare_block_assessment.delay', prepare_block_assessment)
-    def generate(row, block, q_type, seen, source_context=''):
+    def generate(row, block, q_type, seen, source_context='', *, before_retry=None):
         return dict(stem=f'{row.atom.name}如何影响现值？', q_type=q_type,
                     options={'A': '改变现值', 'B': '始终不变'}, correct_answer='A',
                     grading_points='分析时间价值', subjective_type='short', question_id=None)

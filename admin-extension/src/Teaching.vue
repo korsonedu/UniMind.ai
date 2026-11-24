@@ -7,7 +7,7 @@ import { localDate, useTask } from './api';
 import { difficulties } from './catalog';
 import type { Gateway, Meta, Page, Payload } from './types';
 
-type Job = { id: number; title: string; status: string; progress: number; task_type: string; payload: any; result?: any; error_message?: string; created_at: string };
+type Job = { id: number; title: string; status: string; progress: number; task_type: string; payload: any; result?: any; error_message?: string; created_at: string; can_resume?: boolean };
 type Message = { id: number; role: string; content: string; metadata: any };
 type Candidate = { question?: string; text?: string; q_type?: string; subjective_type?: string; kp_id?: number; kp_name?: string; answer?: string; grading_points?: any; options?: any; difficulty_level?: string };
 const props = defineProps<{ api: Gateway; meta: Meta; view: 'workbench' | 'tasks' }>();
@@ -266,7 +266,9 @@ watch(() => props.view, () => run(async () => { current.value = undefined; await
         </div>
       </div>
     </template>
-    <div v-if="activeJob" class="teaching-progress" role="status"><div><strong>#{{ activeJob.id }} {{ activeJob.title }}</strong><span>{{ statusNames[activeJob.status] }} · {{ activeJob.progress }}%</span></div><progress max="100" :value="activeJob.progress" /><small>{{ activeJob.payload?.status_text || activeJob.error_message }}</small></div>
+    <div v-if="activeJob" class="teaching-progress" role="status"><div><strong>#{{ activeJob.id }} {{ activeJob.title }}</strong><span>{{ statusNames[activeJob.status] }} · {{ activeJob.progress }}%</span></div><progress max="100" :value="activeJob.progress" /><small>{{ activeJob.payload?.status_text || activeJob.error_message }}</small>
+      <button v-if="activeJob.can_resume" :disabled="!canWrite" @click="run(() => retryTask(activeJob!))">继续任务</button>
+    </div>
     <template v-if="view === 'tasks'">
       <form class="toolbar" @submit.prevent="run(() => loadJobs())"><input v-model="search" aria-label="搜索任务" placeholder="搜索任务标题" /><select v-model="status" aria-label="任务状态" :disabled="busy" @change="run(() => loadJobs())"><option value="">全部状态</option><option v-for="(label, value) in statusNames" :key="value" :value="value">{{ label }}</option></select><button :disabled="busy">查询</button><button type="button" :disabled="busy" @click="run(async () => { metrics = await api('pipeline.metrics'); })">查看近14天指标</button></form>
       <details v-if="metrics" open class="teaching-results"><summary>管线指标</summary><TeachingData :value="metrics" /></details>

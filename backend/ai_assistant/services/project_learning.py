@@ -21,54 +21,66 @@ class LearningConflict(APIException):
     default_detail = '学习安排已更新，请重新读取后再修改。'
 
 
-def failed_model_event(event):
+def model_event_reservation(event):
     if not event or not event.request_key or not event.message_id:
-        return False
+        return None
     try:
         request_id = UUID(event.message.metadata.get('runtime_request_id', ''))
     except (ValueError, TypeError, AttributeError):
-        return False
+        return None
     from users.models import AIUsageReservation
-    return AIUsageReservation.objects.filter(user_id=event.message.user_id, request_id=request_id, status='released').exists()
+    return AIUsageReservation.objects.filter(user_id=event.message.user_id, request_id=request_id).only('status', 'updated_at').first()
+
+
+def message_receipts(user_id, rows):
+    rows = rows.filter(
+        message__user_id=user_id, message__role='user', message__metadata__has_key='runtime_request_id')
+    origins = []
+    for pk, raw in rows.values_list('pk', 'message__metadata__runtime_request_id'):
+        try:
+            origins.append((pk, UUID(raw)))
+        except (ValueError, TypeError, AttributeError):
+            continue
+    if not origins:
+        return {}
+    from users.models import AIUsageReservation
+    receipts = {row[0]: row[1:] for row in AIUsageReservation.objects.filter(user_id=user_id,
+        request_id__in={request_id for _, request_id in origins}).values_list('request_id', 'status', 'response')}
+    return {pk: receipts.get(request_id, (None, {})) for pk, request_id in origins}
 
 
 def unconfirmed_progress_ids(user_id, project_id=None):
     if not ulr_enabled():
         return set()
-    events = ProjectLearningEvent.objects.filter(project__user_id=user_id, kind='progress', request_key__isnull=False,
-        message__user_id=user_id, message__role='user', message__metadata__has_key='runtime_request_id')
+    events = ProjectLearningEvent.objects.filter(project__user_id=user_id, kind='progress', request_key__isnull=False)
     if project_id is not None:
         events = events.filter(project_id=project_id)
-    origins = []
-    for pk, created_at, raw in events.values_list('pk', 'created_at', 'message__metadata__runtime_request_id'):
-        try:
-            origins.append((pk, created_at, UUID(raw)))
-        except (ValueError, TypeError, AttributeError):
-            continue
-    if not origins:
-        return set()
-    from users.learning import CHAT_RESERVATION_TTL
-    from users.models import AIUsageReservation
-    receipts = {row[0]: row[1:] for row in AIUsageReservation.objects.filter(user_id=user_id,
-        request_id__in={request_id for _, _, request_id in origins}).values_list('request_id', 'status', 'response', 'updated_at')}
-    cutoff = timezone.now() - CHAT_RESERVATION_TTL
     hidden = set()
-    for pk, created_at, request_id in origins:
-        status, response, started = receipts.get(request_id, (None, {}, None))
-        # Newly committed progress is read in the same transaction before its reply is recorded.
-        if status == 'pending' and cutoff <= started <= created_at:
-            continue
+    for pk, (status, response) in message_receipts(user_id, events).items():
         native_event = ((response.get('metadata') or {}).get('ulr_progress') or {}).get('event_id')
         if status != 'succeeded' or (response.get('engine') == 'ulr' and native_event != pk):
             hidden.add(pk)
     return hidden
 
 
-def failed_pending_plan(project, pending):
-    if not pending.get('plan') or not ulr_enabled():
+def unconfirmed_plan_ids(project):
+    if not ulr_enabled():
+        return set()
+    events = project.learning_events.filter(kind='plan', content__has_key='proposed_plan', request_key__isnull=False)
+    hidden = set()
+    for pk, (status, response) in message_receipts(project.user_id, events).items():
+        plan = (response.get('metadata') or {}).get('ulr_plan') or {}
+        if (status != 'succeeded' or response.get('deleted')
+                or response.get('engine') == 'ulr' and (plan.get('pending_plan') is not True or plan.get('event_id', pk) != pk)):
+            hidden.add(pk)
+    return hidden
+
+
+def unconfirmed_pending_plan(project, pending, hidden):
+    if not pending.get('plan') or not hidden:
         return False
-    proposal = project.learning_events.filter(kind='plan', content__proposed_plan=pending['plan']).select_related('message').first()
-    return failed_model_event(proposal)
+    proposal = project.learning_events.filter(kind='plan', content__proposed_plan=pending['plan']).values_list('pk', flat=True).first()
+    return proposal in hidden
 
 
 class StageSerializer(serializers.Serializer):
@@ -142,6 +154,8 @@ def learning_data(project, language='zh-CN', *, current_message=None):
     state, _ = ProjectLearning.objects.get_or_create(project=project)
     from users.feature_access import has_learning_feature
     event_rows = ProjectLearningEvent.objects.filter(project=project).exclude(kind='turn')
+    hidden_plans = unconfirmed_plan_ids(project)
+    event_rows = event_rows.exclude(pk__in=hidden_plans)
     unconfirmed = unconfirmed_progress_ids(project.user_id, project.pk)
     if unconfirmed:
         progress = event_rows.filter(kind='progress').exclude(
@@ -195,7 +209,8 @@ def learning_data(project, language='zh-CN', *, current_message=None):
         'planning_enabled': state.planning_enabled, 'reminders_enabled': state.reminders_enabled,
         'status': state.status, 'plan': state.plan, 'resources': state.resources,
         'current_stage': state.current_stage, 'feedback': state.feedback, 'next_action': state.next_action,
-        'pending_plan': {} if failed_pending_plan(project, state.pending_plan) else state.pending_plan, 'revision': state.revision,
+        'pending_plan': {} if unconfirmed_pending_plan(project, state.pending_plan, hidden_plans) else state.pending_plan,
+        'revision': state.revision,
         'conversation_id': str(state.last_conversation.conversation_id) if state.last_conversation and state.last_conversation.project_id == project.pk else None,
         'followup_at': state.followup_at,
         'followup_text': guidance['next_action'] if guidance['feedback'] and state.followup_text == state.next_action else state.followup_text,
@@ -522,9 +537,9 @@ def change_learning(project, data, *, message=None, model=False, language='zh-CN
         pending = state.pending_plan
         if not pending:
             raise LearningConflict('没有待确认的调整方案。')
+        if unconfirmed_pending_plan(project, pending, unconfirmed_plan_ids(project)):
+            raise LearningConflict('原答复尚未完成，请等待答复或重新生成学习计划。')
         if action == 'accept':
-            if failed_pending_plan(project, pending):
-                raise LearningConflict('原答复未完成，请重新生成学习计划。')
             event['previous_plan'] = state.plan
             state.plan = pending['plan']
             ids = [s['id'] for s in state.plan['stages']]
@@ -555,6 +570,9 @@ def change_learning(project, data, *, message=None, model=False, language='zh-CN
     state.save()
     record = ProjectLearningEvent.objects.create(project=project, message=message, kind=action, content=event, request_key=request_key)
     data = learning_data(project, language=language)
+    if model and 'proposed_plan' in event:
+        # The caller just wrote the proposal and can bind it to the answer being committed.
+        data.update(pending_plan=state.pending_plan, plan_event_id=record.pk)
     if action == 'progress':
         data['progress_event_id'] = record.pk
     if action == 'complete':
@@ -602,7 +620,7 @@ def tool_operation(executor, name, arguments, *, prepare_change=False, project_t
             previous = ProjectLearningEvent.objects.filter(request_key=key).first()
             task = project.learning_tasks.get(pk=previous.content['task_id']) if previous else None
             if prepare_change or project_ticket is not None:
-                draft = create_task(project, arguments, prepare=True)
+                draft = create_task(project, arguments, prepare=True, pending_message_id=message.pk)
                 questions = {pk: task_question_hash(snapshot) for pk, snapshot in draft.question_snapshot.items()}
                 if task and questions != {pk: task_question_hash(snapshot) for pk, snapshot in task.question_snapshot.items()}:
                     raise LearningConflict('原任务的题目已变化，请重新安排。')
@@ -616,7 +634,7 @@ def tool_operation(executor, name, arguments, *, prepare_change=False, project_t
                     task = draft
                     task.save(force_insert=True)
             elif not task:
-                task = create_task(project, arguments)
+                task = create_task(project, arguments, pending_message_id=message.pk)
             if not previous:
                 ProjectLearningEvent.objects.create(project=project, message=message, kind='task',
                     request_key=key, content={'task_id': str(task.pk)})
@@ -627,11 +645,13 @@ def tool_operation(executor, name, arguments, *, prepare_change=False, project_t
     if name == 'manage_learning_knowledge':
         from .learning_knowledge import knowledge_operation
         return knowledge_operation(project, arguments, message=message,
-                                   prepare_probe=prepare_change, project_ticket=project_ticket)
+                                   prepare_change=prepare_change, project_ticket=project_ticket)
     if name in ('manage_learning_resources', 'manage_learning_strategies'):
         from .learning_library import resource_operation, strategy_operation
-        operation = resource_operation if name == 'manage_learning_resources' else strategy_operation
-        return operation(project, arguments, message=message)
+        if name == 'manage_learning_resources':
+            return resource_operation(project, arguments, message=message)
+        return strategy_operation(project, arguments, message=message,
+                                  pending_progress_id=(project_ticket or {}).get('progress_event_id'))
     if name == 'read_learning_project':
         return compact_learning(learning_data(project))
     if name == 'find_learning_resources':
@@ -648,6 +668,7 @@ def tool_operation(executor, name, arguments, *, prepare_change=False, project_t
     return {key: data[key] for key in ('project_id', 'status', 'revision', 'current_stage', 'feedback', 'next_action',
                                       'pending_plan', 'followup_at', 'followup_text', 'events')} | {
         'pending_plan': bool(data['pending_plan']), 'events': compact_learning(data)['events'][:1],
+        **({'plan_event_id': data['plan_event_id']} if 'plan_event_id' in data else {}),
         **({'event_id': data['progress_event_id']} if action == 'progress' else {})}
 
 

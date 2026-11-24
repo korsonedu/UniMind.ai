@@ -24,11 +24,16 @@ CHAT = '我习惯先看例子。'
 TITLE = '例子优先'
 DRAFT = {'question': '解释折现率。', 'q_type': 'subjective', 'subjective_type': 'short',
          'options': None, 'answer': '', 'grading_points': None, 'difficulty_level': 'normal'}
+BULK_DRAFT = {**DRAFT, 'question': '合成恢复批量题', 'q_type': 'objective', 'subjective_type': None,
+              'options': ['A.核对原题范围', 'B.更改题型'], 'answer': 'A'}
 SUBJECT = '合成金融'
 FOREIGN = 'OUTSIDE_QUEUE_SCOPE'
 CUTOVER_QUEUE = 'runtime_cutover_smoke'
 EXAM_ANSWER = '需要先将现金流折现到同一时点。'
 CRASH_ANSWER = '中断复验时仍将现金流折现到同一时点。'
+COURSE_TRANSCRIPT = '合成讲稿：现值等于未来现金流除以折现系数。'
+COURSE_EXERCISE = dict(question='如何把未来现金流折算为现值？', q_type='objective', subjective_type=None,
+                       options=['A.除以折现系数', 'B.直接相加'], answer='A', grading_points=None, difficulty_level='normal')
 EDGE = {'source_name': '时间价值', 'target_name': '折现率', 'relation': 'prerequisite', 'confidence': 0.9}
 PROFILE = {'learning_style': 'example_driven', 'response_length': 'balanced', 'interaction_style': 'passive_learner',
            'cognitive_state': 'focused', 'domain_expertise': 'intermediate', 'confidence': 0.9}
@@ -64,9 +69,10 @@ def submit_from_web():
     from ai_assistant.tasks_learning import send_project_learning_followups
     from backoffice.tasks import run_teaching_task
     from backoffice.teaching import launch, retry
-    from courses.models import Course
+    from courses.models import Course, CourseVideoQuestion, TranscriptSegment, VideoTranscript
+    from courses.services.ai_course_service import AICourseService
     from notifications.models import Notification
-    from quizzes.models import ContentPipelineTask, KnowledgeEdge, Question, QuizExam
+    from quizzes.models import ContentPipelineTask, KnowledgeEdge, KnowledgePoint, Question, QuizExam
     from quizzes.services.exam_grading_state import GRADING_RECOVERY_DELAY
     from quizzes.tasks import run_exam_grading_task, run_semantic_edge_analysis_task
     from users.login_sessions import LoginSession
@@ -90,6 +96,11 @@ def submit_from_web():
     recovered = client.get(f'{public_url}/api/ai/chat-requests/{request_id}/', timeout=8)
     assert recovered.json()['response'] == reply
     client.close()
+
+    course = Course.objects.create(title='合成队列课程')
+    transcript = VideoTranscript.objects.create(course=course, asr_status='completed', full_text=COURSE_TRANSCRIPT)
+    TranscriptSegment.objects.create(transcript=transcript, text=COURSE_TRANSCRIPT, start_time=0, end_time=10, index=0)
+    assert AICourseService().generate_outline(course.pk)
 
     source = Course.objects.create(title='待撤权课程', is_published=True)
     saved_title = '保留初始标题'
@@ -158,7 +169,32 @@ def submit_from_web():
     review_chat = Conversation.objects.create(user=user, bot_id=bot_id, conversation_id=uuid4(), project=project)
     ProjectLearning.objects.create(project=project, planning_enabled=True, reminders_enabled=True, status='active',
         last_conversation=review_chat, followup_at=timezone.now(), followup_text='复习原折现率案例。')
-    Path(ready).touch()
+    ready_path = Path(ready)
+    bulk_id = None
+    if connection.vendor == 'postgresql':
+        bulk_point = KnowledgePoint.objects.create(name='合成批量考点', code='BULK-QUEUE', subject='合成批量学科')
+        bulk_admin = APIClient(HTTP_HOST='127.0.0.1', HTTP_X_FORWARDED_PROTO='https')
+        bulk_admin.force_authenticate(user=User.objects.get(pk=good_id))
+        bulk = bulk_admin.post('/api/quizzes/admin/bulk-pipeline/', {
+            'subject': bulk_point.subject, 'kp_code': bulk_point.code, 'total_target': 1,
+            'difficulty_dist': {'normal': 1}, 'type_dist': {'objective': 1},
+        }, format='json')
+        assert bulk.status_code == 201, bulk.data
+        bulk_id = bulk.data['task_id']
+        ready_path.with_suffix('.bulk').write_text(str(bulk_id))
+    ready_path.with_suffix('.tmp').write_text(str(good))
+    ready_path.with_suffix('.tmp').replace(ready_path)
+    if connection.vendor == 'postgresql':
+        removed = ready_path.with_suffix('.removed')
+        wait_for(removed.exists)
+        with transaction.atomic():
+            resumed = retry(SimpleNamespace(user=User.objects.get(pk=good_id)), {'id': good, 'request_id': str(uuid4())})
+        assert resumed['id'] == good and resumed['payload']['requires_ulr']
+        retry_bulk = f'/api/quizzes/admin/pipeline-tasks/{bulk_id}/retry/'
+        recovered_bulk = bulk_admin.post(retry_bulk)
+        assert recovered_bulk.status_code == 202 and recovered_bulk.data['id'] == bulk_id
+        assert bulk_admin.post(retry_bulk).status_code == 200
+        ready_path.with_suffix('.requeued').touch()
 
     def finished():
         title = Conversation.objects.get(conversation_id=conversation_id).title
@@ -167,7 +203,8 @@ def submit_from_web():
             return accepted, rejected
 
     accepted, rejected = wait_for(finished)
-    assert accepted.result['questions'][0]['question'] == DRAFT['question'] and not rejected.result
+    assert accepted.payload['requires_ulr'] and accepted.result['questions'][0]['question'] == DRAFT['question']
+    assert not rejected.result
     mismatch = wait_for(lambda: ContentPipelineTask.objects.filter(pk=mismatch_id, status='failed').first())
     assert '工作进程配置不一致' in mismatch.error_message and mismatch.started_at is None and not mismatch.result
     cutover_title.get(timeout=10)
@@ -254,7 +291,13 @@ def submit_from_web():
     assert (extraction.source_message_id, extraction.answer_message_id) == (
         reply['user_message']['message_id'], reply['message_id'])
     assert extract_memory_turn.delay(extraction.source_message_id, extraction.answer_message_id).get(timeout=10) == 0
-    assert Question.objects.count() == 2 and WeeklyAIUsage.objects.get(user=user).ai_calls == 1
+    course_question = wait_for(lambda: CourseVideoQuestion.objects.filter(course=course).first())
+    assert course_question.question_data == COURSE_EXERCISE
+    assert CourseVideoQuestion.objects.filter(course=course).count() == 1
+    if bulk_id is not None:
+        bulk = wait_for(lambda: ContentPipelineTask.objects.filter(pk=bulk_id, status='completed').first())
+        assert bulk.result['questions_saved'] == 1 and Question.objects.get(text=BULK_DRAFT['question']).knowledge_point_id == bulk_point.pk
+    assert Question.objects.count() == 2 + int(bulk_id is not None) and WeeklyAIUsage.objects.get(user=user).ai_calls == 1
     if settings.DATABASES['default']['ENGINE'].endswith('postgresql'):
         assert not (settings.BASE_DIR / 'logs' / 'chat-locks').exists()
     print(json.dumps({'title': TITLE, 'preview': accepted.status, 'revoked': rejected.status, 'candidate_edges': 1}, ensure_ascii=False))
@@ -271,7 +314,8 @@ def test_standalone_web_and_celery_share_runtime(user, settings, tmp_path):
     from redis.exceptions import ConnectionError
 
     from ai_assistant.models import Bot, PendingConversationTitle, PendingMemoryExtraction
-    from quizzes.models import KnowledgePoint
+    from courses.models import PendingCourseQuestions
+    from quizzes.models import ContentPipelineTask, KnowledgePoint
     from users.models import CourseStudentStatus, Institution, User, WeeklyAIQuotaConfig
     from .test_ulr_process_smoke import child_database_environment
 
@@ -312,7 +356,10 @@ def test_standalone_web_and_celery_share_runtime(user, settings, tmp_path):
                                  b'data: {"choices":[{"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
                 return
             name, = [tool['function']['name'] for tool in request['tools']]
-            calls.append(name)
+            messages = json.dumps(request['messages'], ensure_ascii=False)
+            course_question = name == 'submit_questions' and COURSE_TRANSCRIPT in messages
+            bulk_question = name == 'submit_questions' and 'BULK-QUEUE' in messages
+            calls.append('course-questions' if course_question else 'bulk-questions' if bulk_question else name)
             if name == 'submit_edges':
                 assert FOREIGN not in json.dumps(request['messages'])
             if name == 'submit_title':
@@ -321,10 +368,18 @@ def test_standalone_web_and_celery_share_runtime(user, settings, tmp_path):
                 assert 'ACTIVE_QUEUED_PROFILE' in json.dumps(request['messages'])
                 assert 'REVOKED_QUEUED_PROFILE' not in json.dumps(request['messages'])
             result = {'submit_title': {'title': TITLE}, 'submit_questions': {'questions': [DRAFT]},
+                      'submit_outline': {'items': [{'title': '折现', 'timestamp_seconds': 0, 'description': '合成大纲'}]},
                       'submit_profile': PROFILE,
                       'submit_grading_result': {'score': 8, 'feedback': '说明了时点。', 'analysis': '统一现金流计价时点。', 'memorix_rating': 3},
                       'submit_objective_analysis': {'why_correct': '统一计价时点。', 'why_wrong': '', 'pitfalls': ''},
+                      'submit_classification': {'detected_difficulty': 'normal', 'difficulty_match': True,
+                          'difficulty_mismatch_reason': '', 'knowledge_tags': ['BULK-QUEUE'], 'question_type': 'objective',
+                          'subjective_type': None, 'answer_correct': True, 'answer_accuracy_note': '', 'bloom_level': 'apply'},
                       'submit_memories': {'memories': []}, 'submit_edges': {'items': [EDGE, {**EDGE, 'target_name': FOREIGN}]}}[name]
+            if course_question:
+                result = {'items': [COURSE_EXERCISE]}
+            if bulk_question:
+                result = {'questions': [BULK_DRAFT]}
             if name == 'submit_grading_result':
                 message = json.dumps(request['messages'], ensure_ascii=False)
                 assert '同一时点' in message
@@ -420,6 +475,30 @@ def test_standalone_web_and_celery_share_runtime(user, settings, tmp_path):
                      str(user.pk), str(bot.pk), str(point.pk), str(ready), public_url], 'web.log', env)
         wait_for(lambda: ready.exists() or web.poll() is not None)
         assert ready.exists() and web.poll() is None, (tmp_path / 'web.log').read_text()
+        if connection.vendor == 'postgresql':
+            task_id = int(ready.read_text())
+            for raw in client.lrange('default', 0, -1):
+                job = json.loads(raw)
+                if job['headers']['task'] == 'backoffice.run_teaching_task' and json.loads(b64decode(job['body']))[0] == [task_id]:
+                    assert client.lrem('default', 1, raw) == 1
+                    break
+            else:
+                pytest.fail('Expected the old teaching task in the local queue.')
+            bulk_id = int(ready.with_suffix('.bulk').read_text())
+            for bulk_raw in client.lrange('default', 0, -1):
+                job = json.loads(bulk_raw)
+                if (job['headers']['task'] == 'quizzes.run_bulk_pipeline_task'
+                        and json.loads(b64decode(job['body']))[1]['task_id'] == bulk_id):
+                    assert client.lrem('default', 1, bulk_raw) == 1
+                    break
+            else:
+                pytest.fail('Expected the bulk task in the local queue.')
+            ContentPipelineTask.objects.filter(pk=task_id, status='pending').update(updated_at=timezone.now() - timedelta(minutes=6))
+            ContentPipelineTask.objects.filter(pk=bulk_id, status='running').update(updated_at=timezone.now() - timedelta(hours=1))
+            ready.with_suffix('.removed').touch()
+            wait_for(lambda: ready.with_suffix('.requeued').exists() or web.poll() is not None)
+            assert ready.with_suffix('.requeued').exists(), (tmp_path / 'web.log').read_text()
+            client.lpush('default', raw, bulk_raw)  # The original deliveries arrive after recovery.
         def service_command(name):
             unit = settings.BASE_DIR.parent / 'deploy' / f'{name}.service'
             return shlex.split(next(line.removeprefix('ExecStart=') for line in unit.read_text().splitlines()
@@ -449,20 +528,29 @@ def test_standalone_web_and_celery_share_runtime(user, settings, tmp_path):
             dropped[name] = pending.pk
         assert dropped.keys() == work.keys()
 
-        schedules = ('project-learning-followups', 'pending-memory-extractions', 'pending-conversation-titles')
+        course_job = PendingCourseQuestions.objects.get()
+        raw_course_job = wait_for(lambda: next((raw for raw in client.lrange('default', 0, -1)
+            if json.loads(raw)['headers']['task'] == 'courses.tasks.generate_course_questions_task'), None))
+        assert json.loads(b64decode(json.loads(raw_course_job)['body']))[0] == [course_job.pk]
+        assert client.lrem('default', 1, raw_course_job) == 1
+        PendingCourseQuestions.objects.filter(pk=course_job.pk).update(dispatch_after=expired)
+
+        schedules = ('project-learning-followups', 'pending-memory-extractions', 'pending-conversation-titles',
+                     'pending-course-questions')
         with shelve.open(env['CELERY_BEAT_SCHEDULE_FILENAME']) as store:
             store.update({'entries': {name: ScheduleEntry(name=name, **settings.CELERY_BEAT_SCHEDULE[name],
                 last_run_at=timezone.now() - timedelta(minutes=2)) for name in schedules}, '__version__': celery_version,
                 'tz': settings.TIME_ZONE, 'utc_enabled': settings.USE_TZ})
         beat = start([sys.executable, '-m', 'celery', *service_command('unimind-celery-beat')], 'beat.log', env)
-        wait_for(lambda: client.llen('default') == 6 or beat.poll() is not None)
+        extra_deliveries = 3 if connection.vendor == 'postgresql' else 0  # One teaching replay and both bulk deliveries.
+        wait_for(lambda: client.llen('default') == 7 + extra_deliveries or beat.poll() is not None)
         assert beat.poll() is None, (tmp_path / 'beat.log').read_text()
         jobs = [json.loads(raw) for raw in client.lrange('default', 0, -1)]
         for name in schedules:
             assert [job['headers']['task'] for job in jobs].count(settings.CELERY_BEAT_SCHEDULE[name]['task']) == 1
         subprocess.run([sys.executable, *service_command('unimind-learning-followups')], cwd=bundle, env=env,
                        check=True, capture_output=True, text=True, timeout=15)
-        assert client.llen('high_priority') == 3 and client.llen('default') == 7
+        assert client.llen('high_priority') == 3 and client.llen('default') == 8 + extra_deliveries
         assert client.llen('low_priority') == 1
         assert client.llen(CUTOVER_QUEUE) == 3
         for queue in (CUTOVER_QUEUE, 'default'):
@@ -486,9 +574,23 @@ def test_standalone_web_and_celery_share_runtime(user, settings, tmp_path):
                                          for name in ('web', 'daphne', 'worker', 'legacy-worker', 'beat'))
         assert [calls.count(name) for name in ('chat', 'submit_title', 'submit_profile', 'submit_questions', 'submit_edges')] == [1, 2, 1, 2, 2]
         assert calls.count('submit_memories') == 1
+        assert (calls.count('submit_outline'), calls.count('course-questions')) == (1, 1)
+        assert calls.count('bulk-questions') == calls.count('submit_classification') == int(connection.vendor == 'postgresql')
         assert not any(model.objects.filter(pk=dropped[name]).exists() for name, model in work.items())
+        assert not PendingCourseQuestions.objects.filter(pk=course_job.pk).exists()
         assert (calls.count('submit_grading_result'), calls.count('submit_objective_analysis')) == (
             (4, 2) if connection.vendor == 'postgresql' else (2, 1))
+        worker_log = (tmp_path / 'worker.log').read_text()
+        observations = [line for line in worker_log.splitlines() if 'ai.obs operation=' in line]
+        assert any('ulr.quizzes.preview_parse' in line and f"'request_id': 'teaching:{ready.read_text()}'" in line
+                   and "'runtime': 'ulr'" in line for line in observations)
+        assert any('quizzes.grade_question' in line and "'request_id': 'exam:" in line
+                   and "'runtime': 'ulr'" in line for line in observations)
+        assert any('courses.generate_questions' in line and f"'request_id': 'course-questions:{course_job.pk}'" in line
+                   for line in observations)
+        for operation, prefix in (('assistant.title', 'title'), ('assistant.memory_extract', 'memory')):
+            assert any(f'operation={operation} ' in line and f"'request_id': '{prefix}:" in line
+                       and "'source_message_id':" in line and "'answer_message_id':" in line for line in observations)
 
 
 if __name__ == '__main__':

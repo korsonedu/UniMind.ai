@@ -57,7 +57,7 @@ services:
       - media:/app/backend/media
       - ./backend/logs:/app/backend/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      test: ["CMD-SHELL", 'probe_code=$$(curl -fsS -o /dev/null -w "%{http_code}" -H "X-Forwarded-Proto: https" http://localhost:8000/health/) && [ "$$probe_code" = 200 ]']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -73,6 +73,8 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
       CACHE_REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
     command: celery -A school_system worker -l info --concurrency=4
+    healthcheck:
+      disable: true
     depends_on:
       db:
         condition: service_healthy
@@ -93,6 +95,8 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
       CACHE_REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
     command: celery -A school_system beat -l info
+    healthcheck:
+      disable: true
     depends_on:
       db:
         condition: service_healthy

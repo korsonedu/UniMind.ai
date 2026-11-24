@@ -12,6 +12,7 @@ from django.db import transaction
 from rest_framework.exceptions import PermissionDenied
 
 from ai_service import AIService
+from ai_engine.observability import observe_background
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +35,15 @@ def _generate_title_via_dsh(prompt):
     return str(result.get('title') or '').strip()[:TITLE_MAX_CHARS]
 
 
-def _authorized_title_inputs(messages, user_msg, assistant_msg):
+def _authorized_title_inputs(messages, user_msg, assistant_msg, *, lock_transcripts=False):
     from notes.context import prepare_note_context
     from users.permissions import has_capability
+    from .course_context import current_transcript_sources
     from .ulr_capabilities import visible_course_ids, visible_practice_review_sources
-    from .ulr_history import SOURCE_FIELDS, bound_practice_answers, reply_practice_reviews, reply_question_answers, reply_sources
+    from .ulr_history import (
+        SOURCE_FIELDS, bound_practice_answers, legacy_transcript_excerpts, match_legacy_transcript_excerpts,
+        reply_practice_reviews, reply_question_answers, reply_sources, reply_transcript_sources,
+    )
 
     rows = {row['pk']: row for row in messages.filter(pk__in=[user_msg.pk, assistant_msg.pk])
             .values('pk', 'content', **SOURCE_FIELDS)}
@@ -46,6 +51,10 @@ def _authorized_title_inputs(messages, user_msg, assistant_msg):
     if not question or not answer or question['content'] != user_msg.content or answer['content'] != assistant_msg.content:
         return None
     courses, notes, selection = reply_sources(question, answer)
+    transcripts = reply_transcript_sources(question, answer)
+    excerpts = legacy_transcript_excerpts(answer['cards'], transcripts)
+    courses.update(course for course, _, _ in transcripts)
+    courses.update(course for course, _, _ in excerpts)
     question_answers = reply_question_answers(answer)
     practice_reviews = reply_practice_reviews(answer)
     user = get_user_model().objects.filter(pk=user_msg.user_id, is_active=True).first()
@@ -56,13 +65,17 @@ def _authorized_title_inputs(messages, user_msg, assistant_msg):
                 or bound_practice_answers(user, question_answers)
                 or visible_practice_review_sources(user, practice_reviews) != practice_reviews):
             return None
+        matched = match_legacy_transcript_excerpts(excerpts)
+        transcripts.update(matched.values())
+        if len(matched) != len(excerpts) or current_transcript_sources(transcripts, lock=lock_transcripts) != transcripts:
+            return None
         if notes:
             _, sources = prepare_note_context(user, user_msg.bot, user_msg.conversation_id, user_msg.content)
             if not notes <= {(source['note_id'], source['version']) for source in sources}:
                 return None
     except PermissionDenied:
         return None
-    return courses, notes, question_answers, practice_reviews
+    return courses, notes, question_answers, practice_reviews, transcripts
 
 
 def schedule_conversation_title(conversation, answer_id, expected_title):
@@ -142,41 +155,45 @@ def sync_generate_title(conversation_id, user_id, bot_id, *, expected_title='', 
             f"{instruction}"
         )
 
-        if ulr:
-            from .dsh_tasks import TITLE_SCHEMA
-            from .ulr_structured import run_collector
-            source_snapshot = _authorized_title_inputs(messages, user_msg, assistant_msg)
-            if source_snapshot is None:
-                return None
-            try:
-                result = run_collector(prompt, operation='assistant.title', name='submit_title',
-                    instruction=(Path(settings.BASE_DIR) / 'prompts/ai_assistant/title_task.txt').read_text(),
-                    schema=TITLE_SCHEMA, max_tokens=64, temperature=0.2)
-                title = result['title'].strip() or _fallback_title(user_msg)
-            except ValueError:
-                title = _fallback_title(user_msg)
-        elif getattr(settings, 'UNIMIND_DSH_TITLE_ENABLED', False) or getattr(settings, 'UNIMIND_DSH_GENERATION_ENABLED', False):
-            try:
-                title = _generate_title_via_dsh(prompt) or _fallback_title(user_msg)
-            except Exception:
-                logger.warning("DSH title generation failed for conversation %s", conversation_id, exc_info=True)
-                title = _fallback_title(user_msg)
-        else:
-            ai = AIService()
-            result = ai.simple_chat_text(
-                system_prompt=instruction,
-                user_prompt=prompt,
-                operation='assistant.chat.title',
-            )
-            title = result.strip() if result else ''
+        with observe_background('ulr' if ulr else 'legacy', f'title:{assistant_msg.conversation_id}',
+                                source_message_id=user_msg.pk, answer_message_id=assistant_msg.pk):
+            if ulr:
+                from .dsh_tasks import TITLE_SCHEMA
+                from .ulr_structured import run_collector
+                source_snapshot = _authorized_title_inputs(messages, user_msg, assistant_msg)
+                if source_snapshot is None:
+                    return None
+                try:
+                    result = run_collector(prompt, operation='assistant.title', name='submit_title',
+                        instruction=(Path(settings.BASE_DIR) / 'prompts/ai_assistant/title_task.txt').read_text(),
+                        schema=TITLE_SCHEMA, max_tokens=64, temperature=0.2)
+                    title = result['title'].strip() or _fallback_title(user_msg)
+                except ValueError:
+                    title = _fallback_title(user_msg)
+            elif getattr(settings, 'UNIMIND_DSH_TITLE_ENABLED', False) or getattr(settings, 'UNIMIND_DSH_GENERATION_ENABLED', False):
+                try:
+                    title = _generate_title_via_dsh(prompt) or _fallback_title(user_msg)
+                except Exception:
+                    logger.warning("DSH title generation failed for conversation %s", conversation_id, exc_info=True)
+                    title = _fallback_title(user_msg)
+            else:
+                ai = AIService()
+                result = ai.simple_chat_text(
+                    system_prompt=instruction,
+                    user_prompt=prompt,
+                    operation='assistant.chat.title',
+                )
+                title = result.strip() if result else ''
 
         title = title[:TITLE_MAX_CHARS if english else 15]
         if ulr:
-            if _authorized_title_inputs(messages, user_msg, assistant_msg) != source_snapshot:
-                return None
             if not title:
                 return None
             with transaction.atomic():
+                if not conversation.filter(title=expected_title).select_for_update().exists():
+                    return None
+                if _authorized_title_inputs(messages, user_msg, assistant_msg, lock_transcripts=True) != source_snapshot:
+                    return None
                 updated = conversation.filter(title=expected_title).update(title=title)
                 # Consume the claim with the title write, even if the title stays the same.
                 if pending_job is not None and not pending_job.delete()[0]:

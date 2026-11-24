@@ -200,7 +200,8 @@ def assert_failed(build, message):
 
 
 @pytest.mark.parametrize('failure_at', ['interblock_review', 'intrablock_steps', 'publication'])
-def test_ulr_build_resumes_validated_stages_and_publishes_once(monkeypatch, settings, user, api_client, failure_at):
+def test_ulr_build_resumes_validated_stages_and_publishes_once(monkeypatch, settings, user, api_client, failure_at, caplog):
+    from ai_engine.observability import runtime_observation
     from knowledge_builder import pipeline
 
     settings.DEBUG = settings.UNIMIND_ULR_PROTOTYPE = True
@@ -210,6 +211,7 @@ def test_ulr_build_resumes_validated_stages_and_publishes_once(monkeypatch, sett
     fixture = SemanticFixture()
     monkeypatch.setattr(config, 'EMBEDDING_DIMENSIONS', 24)
     requests = []
+    observations = []
     reviews = []
     embeddings = []
     persist = pipeline._persist
@@ -224,6 +226,7 @@ def test_ulr_build_resumes_validated_stages_and_publishes_once(monkeypatch, sett
     def provider(messages, *, tools, raise_on_error, **kwargs):
         name = tools[0]['function']['name']
         requests.append(name)
+        observations.append(runtime_observation.get().copy())
         if name == 'interblock_review':
             reviews.append((messages[0]['content'], messages[1]['content']))
         if name == failure_at and requests.count(name) == 1:
@@ -246,6 +249,7 @@ def test_ulr_build_resumes_validated_stages_and_publishes_once(monkeypatch, sett
     if failure_at == 'publication':
         monkeypatch.setattr(pipeline, '_persist', interrupted_publish)
     api_client.force_authenticate(user=user)
+    caplog.set_level('INFO', logger='ai_engine.observability')
     created = api_client.post('/', {'subject': '合成微积分知识图谱'}, format='json')
     assert created.status_code == 202
     build = KnowledgeTreeBuild.objects.get(pk=created.data['id'])
@@ -287,6 +291,20 @@ def test_ulr_build_resumes_validated_stages_and_publishes_once(monkeypatch, sett
         expected.add('interblock_review')
         assert len(reviews) == 2 and reviews[0] == reviews[1]
     assert set(requests[count:]) == expected
+    request_id = f'build:{build.pk}'
+    assert {row['request_id'] for row in observations} == {request_id}
+    assert len({row['attempt_id'] for row in observations[:count]}) == 1
+    if expected:
+        assert len({row['attempt_id'] for row in observations[count:]}) == 1
+        assert observations[0]['attempt_id'] != observations[count]['attempt_id']
+    embedded = [row.args[4] for row in caplog.records if row.name == 'ai_engine.observability'
+                and row.args[0] == 'knowledge_tree.embedding']
+    assert len(embedded) == embedding_count == 3
+    assert {row['request_id'] for row in embedded} == {request_id}
+    assert {row['attempt_id'] for row in embedded} == {str(observations[0]['attempt_id'])}
+    assert all(row['kind'] == 'embedding' and row['stage'] == 'atom_edges' for row in embedded)
+    assert '合成微积分知识图谱' not in repr(embedded)
+    assert not runtime_observation.get()
     assert (build.modules.count(), build.atoms.count(), build.atom_edges.count(), build.blocks.count()) == (4, 6, 5, 2)
     assert build.cross_block_interfaces.count() == 1
     assert requests.count('outline_decompose') == 2

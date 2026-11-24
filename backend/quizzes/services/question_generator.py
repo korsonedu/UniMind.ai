@@ -59,6 +59,8 @@ class QuestionGenerator:
         target_types: Optional[List[str]],
         target_difficulty: str,
         target_type_ratio_text: str,
+        *,
+        before_retry=None,
     ) -> List[Dict[str, Any]]:
         template = self.ai_service.get_template('quizzes', 'bulk_generate_prompt.txt') or ''
         prompt = self.ai_service.format_template(
@@ -92,6 +94,8 @@ class QuestionGenerator:
 
         # 重试一次：降 temperature、提 max_tokens
         if not isinstance(data, list):
+            if before_retry:
+                before_retry()
             logger.info(
                 "_request_bulk_generate_once retrying: kp_count=%s count_per_kp=%s",
                 len(kps_data), count_per_kp,

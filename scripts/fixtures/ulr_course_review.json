@@ -1,0 +1,26 @@
+{
+  "case_id": "course-discount-transcript",
+  "case": {
+    "scenario": "课程伴学",
+    "prompt": "请把折现率的公式推导和第一门相关课程的讲稿放在一起说。",
+    "reference": "合成课程《折现率迁移课》在 01:00 说明，一年后的 110 元以 10% 折现，现值为 100 元。公式为 PV = FV / (1 + r)^t，r 与 t 使用同一计息周期。",
+    "criteria": {
+      "formula": "公式的分母、指数和计息周期正确。",
+      "example": "使用讲稿中 110 元、10% 与 100 元的例子，解释折现方向。",
+      "source": "给出可回到《折现率迁移课》01:00 的原讲稿来源。",
+      "scope": "答复中未经讲稿核实的内容不会被归为讲稿原文。"
+    },
+    "tool_paths": {
+      "dsh": ["find_learning_tools", "search_courses", "search_asr"],
+      "ulr_individual": ["find_learning_tools", "search_courses", "search_asr"],
+      "ulr": [["find_learning_tools", "run_course_tools"]]
+    },
+    "tool_steps": {"ulr": [["search_courses", "search_asr"]]},
+    "fixture": {
+      "course_title": "折现率迁移课",
+      "transcript": "折现率讲稿证据。一年后的 110 元以 10% 折现，现值为 100 元。公式为 PV = FV / (1 + r)^t，r 与 t 使用同一计息周期。",
+      "start_time": 60,
+      "end_time": 75
+    }
+  }
+}

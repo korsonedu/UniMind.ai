@@ -1,5 +1,6 @@
 """Isolated migration smoke; model and notification providers are never called."""
 import json
+from datetime import timedelta
 from types import SimpleNamespace
 from uuid import uuid4
 from unittest.mock import patch
@@ -7,6 +8,7 @@ from unittest.mock import patch
 from django.test import TestCase, override_settings
 from rest_framework.exceptions import ValidationError
 from django.http import Http404
+from django.utils import timezone
 
 from ai_assistant.models import AIChatMessage, Bot, Conversation
 from quizzes.models import ContentPipelineTask, KnowledgePoint, Question
@@ -125,6 +127,78 @@ class TeachingSmoke(TestCase):
         self.assertFalse(task.result)
         self.assertFalse(Question.objects.exists())
 
+    @override_settings(DEBUG=False, UNIMIND_LEARNING_RUNTIME='ulr')
+    def test_ulr_requeues_a_lost_delivery_on_the_original_teaching_task(self):
+        original = {'kind': 'parse', 'kp_ids': [self.kp.pk], 'raw_text': '合成旧任务资料'}
+        task = self.task(status='pending', payload=original, request_id=str(uuid4()))
+        request = {'id': task.pk, 'request_id': str(uuid4())}
+        self.assertFalse(teaching.task_detail(self.request, request)['can_resume'])
+        ContentPipelineTask.objects.filter(pk=task.pk).update(updated_at=timezone.now() - timedelta(minutes=6))
+        self.assertTrue(teaching.task_detail(self.request, request)['can_resume'])
+        self.assertFalse(teaching.task_detail(SimpleNamespace(user=self.admin2), request)['can_resume'])
+        with self.assertRaises(ValidationError):
+            teaching.retry(SimpleNamespace(user=self.admin2), request)
+
+        with patch('backoffice.tasks.run_teaching_task.delay', side_effect=RuntimeError('synthetic broker outage')), \
+                self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(teaching.retry(self.request, request)['id'], task.pk)
+        self.assertTrue(teaching.task_detail(self.request, request)['can_resume'])
+        with patch('backoffice.tasks.run_teaching_task.delay') as dispatch, self.captureOnCommitCallbacks(execute=True):
+            resumed = teaching.retry(self.request, request)
+            duplicate = teaching.retry(self.request, request)
+        self.assertEqual((resumed['id'], duplicate['id']), (task.pk, task.pk))
+        self.assertEqual(resumed['request_id'], task.request_id)
+        self.assertTrue(resumed['payload']['requires_ulr'])
+        self.assertFalse(teaching.task_detail(self.request, request)['can_resume'])
+        dispatch.assert_called_once_with(task.pk)
+
+        parsed = {'text': '原资料的候选题', 'correct_answer': '合成答案'}
+        with patch('ai_engine.ai_service.AIService.parse_questions_from_text', return_value=[parsed]) as parse:
+            run_teaching_task(task.pk)
+            run_teaching_task(task.pk)
+        parse.assert_called_once_with(original['raw_text'])
+        task.refresh_from_db()
+        self.assertEqual((task.status, task.payload), ('review', {**original, 'requires_ulr': True}))
+        self.assertEqual(task.result['questions'][0]['question'], parsed['text'])
+        self.assertEqual(ContentPipelineTask.objects.count(), 1)
+        self.assertFalse(Question.objects.exists())
+
+    @override_settings(DEBUG=False, UNIMIND_LEARNING_RUNTIME='ulr')
+    def test_ulr_keeps_an_adopted_teaching_task_on_ulr_after_failure(self):
+        original = {'kind': 'parse', 'kp_ids': [self.kp.pk], 'raw_text': '合成教研资料'}
+        task = self.task(status='pending', payload=original)
+
+        def interrupted(_):
+            claimed = ContentPipelineTask.objects.get(pk=task.pk)
+            self.assertEqual(claimed.status, 'running')
+            self.assertTrue(claimed.payload.get('requires_ulr'))
+            raise RuntimeError('synthetic interruption')
+
+        with patch('ai_engine.ai_service.AIService.parse_questions_from_text', side_effect=interrupted) as parse:
+            run_teaching_task(task.pk)
+        parse.assert_called_once_with(original['raw_text'])
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'failed')
+        self.assertEqual(task.payload, {**original, 'requires_ulr': True})
+
+        retry = {'id': task.pk, 'request_id': str(uuid4())}
+        with override_settings(UNIMIND_LEARNING_RUNTIME='legacy', UNIMIND_DSH_TEACHING_ENABLED=True), \
+                self.assertRaisesMessage(ValidationError, '需要 ULR'):
+            teaching.retry(self.request, retry)
+        with patch('backoffice.tasks.run_teaching_task.delay') as dispatch, self.captureOnCommitCallbacks(execute=True):
+            restarted = teaching.retry(self.request, retry)
+            self.assertEqual(restarted['id'], teaching.retry(self.request, retry)['id'])
+        dispatch.assert_called_once_with(restarted['id'])
+        parsed = {'text': '合成题目', 'correct_answer': '合成答案'}
+        with patch('ai_engine.ai_service.AIService.parse_questions_from_text', return_value=[parsed]) as parse:
+            run_teaching_task(restarted['id'])
+            run_teaching_task(restarted['id'])
+        parse.assert_called_once_with(original['raw_text'])
+        recovered = ContentPipelineTask.objects.get(pk=restarted['id'])
+        self.assertEqual(recovered.status, 'review')
+        self.assertEqual(recovered.result['questions'][0]['question'], parsed['text'])
+        self.assertFalse(Question.objects.exists())
+
     @override_settings(DEBUG=True, UNIMIND_ULR_PROTOTYPE=True, UNIMIND_DSH_TEACHING_ENABLED=False)
     def test_ulr_arc_stops_when_reviewer_uses_an_invalid_lookup(self):
         task = self.task(status='pending', payload={'kind': 'arc', 'kp_ids': [self.kp.pk], 'count': 1})
@@ -147,6 +221,32 @@ class TeachingSmoke(TestCase):
         self.assertEqual(task.status, 'failed')
         self.assertFalse(task.result)
         self.assertFalse(Question.objects.exists())
+
+    @override_settings(DEBUG=True, UNIMIND_ULR_PROTOTYPE=True, UNIMIND_DSH_TEACHING_ENABLED=False)
+    def test_ulr_reviewer_replays_a_text_lookup_as_a_tool_call(self):
+        from quizzes.services.adversarial_pipeline import _reviewer_evaluate
+
+        review = {'score': 0.8, 'feedback': '知识点一致。',
+                  'dimensions': {'discrimination': 0.8, 'clarity': 0.8, 'coverage': 0.8}}
+
+        def provider(messages, **kwargs):
+            if messages[-1]['role'] == 'user':
+                text = ('<function_calls><invoke name="lookup_knowledge_point_definition">'
+                        f'<parameter name="code">{self.kp.code}</parameter></invoke></function_calls>')
+                return {'choices': [{'finish_reason': 'stop', 'message': {'role': 'assistant', 'content': text}}]}
+            request, receipt = messages[-2:]
+            self.assertIsNone(request['content'])
+            call, = request['tool_calls']
+            self.assertEqual(receipt['tool_call_id'], call['id'])
+            self.assertEqual(json.loads(receipt['content'])['code'], self.kp.code)
+            return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+                'id': 'review', 'function': {'name': 'submit_review', 'arguments': json.dumps(review)},
+            }]}}]}
+
+        with patch('ai_engine.service.AIEngine.call_provider', side_effect=provider) as call:
+            self.assertEqual(_reviewer_evaluate({'question': '合成审题题目', 'kp_code': self.kp.code},
+                                               institution=self.scope, strict_scope=True), review)
+        self.assertEqual(call.call_count, 2)
 
     @override_settings(DEBUG=True, UNIMIND_ULR_PROTOTYPE=True, UNIMIND_DSH_TEACHING_ENABLED=False)
     def test_ulr_workbench_discards_a_reply_after_operator_is_disabled(self):

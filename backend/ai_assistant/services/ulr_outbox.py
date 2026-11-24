@@ -9,6 +9,8 @@ from django.db.models import Q
 from django.utils import timezone
 from kombu.exceptions import OperationalError
 
+from .ulr_structured import RetryableProviderFailure
+
 
 logger = logging.getLogger(__name__)
 _PUBLISHERS = ThreadPoolExecutor(max_workers=2, thread_name_prefix='ulr-outbox')
@@ -58,7 +60,7 @@ def publish_job(jobs, send):
     return True
 
 
-def consume_job(jobs, work):
+def consume_job(jobs, work, *, retry_provider_failure=False):
     now = timezone.now()
     running_until = now + _RECOVERY_DELAY
     if not jobs.filter(Q(running_until__isnull=True) | Q(running_until__lte=now)).update(
@@ -70,7 +72,10 @@ def consume_job(jobs, work):
         return None
     try:
         result = work(job, claimed)
-    except ValueError:
+    except ValueError as exc:
+        if retry_provider_failure and isinstance(exc, RetryableProviderFailure) and not job.provider_retry_used:
+            claimed.update(provider_retry_used=True)
+            return None
         # A rejected model response ends this attempt. An interrupted worker leaves a claim to recover.
         claimed.delete()
         raise

@@ -5,6 +5,7 @@ from django.db import connection, transaction
 from rest_framework.exceptions import PermissionDenied
 
 from notes.context import conversation_uses_notes
+from ai_engine.observability import observe_background
 from users.feature_access import has_learning_feature
 from ..models import AIChatMessage, Conversation, MemoryExtractionLog, PendingMemoryExtraction
 from .dsh_tasks import MEMORY_EXTRACTION_SCHEMA
@@ -34,7 +35,8 @@ def publish_memory_extraction(job_id):
 def extract_pending_memory(job_id):
     # An older delivery for the same question may already hold the extraction lock.
     return consume_job(PendingMemoryExtraction.objects.filter(pk=job_id), lambda job, _:
-        extract_answer_memory(job.source_message_id, job.answer_message_id, redelivered=True)) or 0
+        extract_answer_memory(job.source_message_id, job.answer_message_id, redelivered=True),
+        retry_provider_failure=True) or 0
 
 
 def question_for_answer(question_id, answer_id, *, lock=False):
@@ -87,10 +89,12 @@ def extract_answer_memory(question_id, answer_id, *, redelivered=False):
         current = question_for_answer(question_id, answer_id)
         if current is None or current.content != original.content or records.exists():
             return 0
-        result = run_collector(_build_dsh_extraction_prompt([{'role': 'user', 'content': current.content}]),
-            operation='assistant.memory_extract', name='submit_memories',
-            instruction='只提交用户明确陈述的长期事实及原话。没有明确依据时返回空列表。',
-            schema=MEMORY_EXTRACTION_SCHEMA, max_tokens=800, temperature=0.2)
+        with observe_background('ulr', f'memory:{current.conversation_id}',
+                                source_message_id=question_id, answer_message_id=answer_id):
+            result = run_collector(_build_dsh_extraction_prompt([{'role': 'user', 'content': current.content}]),
+                operation='assistant.memory_extract', name='submit_memories',
+                instruction='只提交用户明确陈述的长期事实及原话。没有明确依据时返回空列表。',
+                schema=MEMORY_EXTRACTION_SCHEMA, max_tokens=800, temperature=0.2)
         candidates = result['memories']
         with transaction.atomic():
             if not conversations.filter(pk=conversation_pk).select_for_update().exists():

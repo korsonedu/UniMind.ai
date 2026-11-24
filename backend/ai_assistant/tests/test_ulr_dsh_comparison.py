@@ -251,13 +251,14 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         if '折现率对照片段' in latest or 'missing_dependency' in latest or 'ambiguous_dependency' in latest:
             return None
         if program_mode == 'current_course_native':
-            args = {'v': PROGRAM_VERSION, 'query': '折现率'}
+            args = {'v': PROGRAM_VERSION, 'query': '折现率', 'output': 'card'}
             if CURRENT_COURSE_NAME in names:
                 return [(CURRENT_COURSE_NAME, args)]
             return [('find_learning_tools', {'program': CURRENT_COURSE_NAME, 'instruction': args})]
-        if program_mode == 'current_course_dsh':
+        if program_mode in ('current_course_dsh', 'current_course_implicit'):
             if 'search_asr' in names:
-                return [('search_asr', {**tool_args, 'course_id': course.pk})]
+                args = {**tool_args, 'course_id': course.pk} if program_mode == 'current_course_dsh' else tool_args
+                return [('search_asr', args)]
             return [('find_learning_tools', {'group': 'resources'})]
         if program_mode in ('inline_program', 'inline_program_repair', 'inline_program_decimal'):
             if messages[-1]['role'] == 'tool':
@@ -289,11 +290,9 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             return [('run_course_tools', '{"v":0,' + json.dumps(program_payload)[1:])]
         if program_mode == 'duplicate_individual' and 'duplicate_argument' in latest:
             return None
-        if program_mode in ('stale_version', 'missing_version'):
+        if program_mode in ('stale_version', 'invalid_version'):
             assert messages[-1]['role'] == 'user'
-            payload = {'find': '折现率'}
-            if program_mode == 'stale_version':
-                payload['v'] = PROGRAM_VERSION - 1
+            payload = {'find': '折现率', 'v': 0 if program_mode == 'stale_version' else None}
             return [('run_course_tools', payload)]
         if program_mode == 'aborted_round':
             assert messages[-1]['role'] == 'user'
@@ -645,16 +644,12 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                     assert json.loads(request['messages'][-1]['content']) == {'question_count': 1, 'card_prepared': True}
                     deltas, reason = [{'content': '请在卡片中完成练习。'}], 'stop'
             elif last_user == practice_prompt:
-                if request['messages'][-1]['role'] == 'user':
-                    assert 'run_practice_tools' in names
-                    program = {'v': PROGRAM_VERSION, 'find': practice_point.name, 'rank': 1, 'limit': 1}
-                    deltas = [{'tool_calls': [{'index': 0, 'id': 'practice-program', 'type': 'function',
-                        'function': {'name': 'run_practice_tools', 'arguments': json.dumps(program)}}]}]
-                    reason = 'tool_calls'
-                else:
-                    assert not names and practice_marker not in json.dumps(request['messages'])
-                    assert json.loads(request['messages'][-1]['content']) == {'question_count': 1, 'steps_executed': ['search_knowledge_tree', 'get_practice_questions']}
-                    deltas, reason = [{'content': '请在卡片中完成练习。'}], 'stop'
+                assert request['messages'][-1]['role'] == 'user'
+                assert 'run_practice_tools' in names and practice_marker not in json.dumps(request['messages'])
+                program = {'v': PROGRAM_VERSION, 'find': practice_point.name, 'rank': 1, 'limit': 1, 'output': 'card'}
+                deltas = [{'tool_calls': [{'index': 0, 'id': 'practice-program', 'type': 'function',
+                    'function': {'name': 'run_practice_tools', 'arguments': json.dumps(program)}}]}]
+                reason = 'tool_calls'
             elif compare_historical_withdrawal:
                 sent = json.dumps(request['messages'], ensure_ascii=False)
                 assert historical_quote not in sent and historical_derivation not in sent
@@ -698,7 +693,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                         content = '课程查询未执行。'
                     else:
                         assert result['segments'][0]['course_id'] == course.pk
-                        if program_mode != 'individual':
+                        if program_mode not in ('individual', 'current_course_implicit'):
                             assert not names
                         content = complete_reply
                     deltas = [{'content': content}]
@@ -1357,7 +1352,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             assert len(anthropic_calls) - before[0] == 4 and len(openai_calls) == before[1]
             handoff_mode = ''
             Course.objects.filter(pk=course.pk).update(is_published=True)
-            assert session_inventory() == {'site_matched': 2, 'deleted_with_file': 1}
+            assert session_inventory() == {'site_matched': 2, 'deleted_with_file': 1, 'handoff_receipts_verified': 2}
             assert not list(Path(settings.UNIMIND_DSH_STATE_DIR).glob('handoff-*'))
         handoff_receipts = list(AIUsageReservation.objects.filter(user=user, conversation_id=original.conversation_id,
             response__metadata__dsh_handoff=True))
@@ -1397,14 +1392,15 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         assert ulr_recheck['model_requests'] == 0 and ulr_recheck_cards == []
         dsh_answer_card = any(card['tool'] == 'lookup_question' and card['payload']['questions'][0]['answer'] == 'B'
                               for card in dsh_recheck_cards)
-        with patch('quizzes.views_exam.dispatch_exam_grading'):
-            submission = auth_client.post('/api/quizzes/submit-exam/', {
-                'learning_task_id': str(task.pk), 'submission_id': str(task.pk), 'assistance': 'independent',
-                'answers': [{'question_id': question.pk, 'answer': 'B'}],
-            }, format='json')
-        assert submission.status_code == 202, submission.data
-        with patch('quizzes.ai_workflow._queue_experience_verification'):
-            run_exam_grading(user.pk, submission.data['exam_id'])
+        exam_body = {'learning_task_id': str(task.pk), 'submission_id': str(task.pk), 'assistance': 'independent',
+                     'answers': [{'question_id': question.pk, 'answer': 'B'}]}
+        with override_settings(UNIMIND_ULR_PROTOTYPE=False):
+            with patch('quizzes.views_exam.dispatch_exam_grading'):
+                submission = auth_client.post('/api/quizzes/submit-exam/', exam_body, format='json')
+            assert submission.status_code == 202, submission.data
+            with patch('quizzes.ai_workflow._queue_experience_verification'):
+                run_exam_grading(user.pk, submission.data['exam_id'])
+        assert not QuizExam.objects.get(pk=submission.data['exam_id']).requires_ulr
         _, dsh_review = run('dsh', anthropic_calls, task, review_request)
         review_cards, ulr_review = run('ulr', openai_calls, task, review_request)
         dsh_context = json.dumps(anthropic_calls[-1].get('system'), ensure_ascii=False).replace('\\"', '"').replace(' ', '')
@@ -1417,6 +1413,16 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         assert review_cards[0]['payload']['items'][0]['value'] == f'0/{question.get_max_score():g}'
         assert dsh_review['model_requests'] == ulr_review['model_requests'] == 1
         assert ulr_review['text_deltas'] == 0  # Release the finished review after revalidation.
+        before = len(anthropic_calls), len(openai_calls), QuizExam.objects.count()
+        with transaction.atomic(), override_settings(DEBUG=False, UNIMIND_LEARNING_RUNTIME='ulr',
+                UNIMIND_DSH_ENABLED=False, UNIMIND_DSH_PYTHON=''), patch('quizzes.views_exam.dispatch_exam_grading') as dispatch:
+            Question.objects.filter(pk=question.pk).update(text='原项目题改版后的题干')
+            recovered = auth_client.post('/api/quizzes/submit-exam/', exam_body, format='json')
+            assert recovered.status_code == 202 and recovered.data == submission.data
+            assert auth_client.get(f'/api/quizzes/exams/{recovered.data["exam_id"]}/').data['results'][0]['user_answer'] == 'B'
+            assert before == (len(anthropic_calls), len(openai_calls), QuizExam.objects.count())
+            dispatch.assert_not_called()
+            transaction.set_rollback(True)
         dsh_grade, _ = grade('dsh', anthropic_calls)
         ulr_grade, _ = grade('ulr', openai_calls)
         assert dsh_grade == ulr_grade
@@ -1660,7 +1666,31 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             arguments = tool.kwargs['arguments'] if engine == 'dsh' else tool.args[2]
             assert tool.args[1] == 'search_asr' and arguments == {**tool_args, 'course_id': course.pk}
             anchored_stats[engine] = {**stats, 'business_queries': 1, 'model_supplied_course_id': engine == 'dsh'}
-        assert anchored_stats['ulr']['model_requests'] == 2
+        assert anchored_stats['dsh']['model_requests'] == 2
+        assert anchored_stats['ulr']['model_requests'] == 1
+        implicit_stats = {}
+        program_mode = 'current_course_implicit'
+        for engine, calls, executor in (
+            ('dsh', anthropic_calls, 'views_dsh'), ('ulr', openai_calls, 'services.ulr_runtime'),
+        ):
+            charges_before = WeeklyAIUsage.objects.get(user=user).ai_calls
+            with patch(f'ai_assistant.{executor}.execute_tool', wraps=execute_tool) as reads:
+                cards, stats = run(engine, calls, None, '请定位当前课程的折现率讲稿。', course_context=selected_course)
+            tool, = reads.call_args_list
+            arguments = tool.kwargs['arguments'] if engine == 'dsh' else tool.args[2]
+            assert tool.args[1] == 'search_asr'
+            sources = {item['action_link'] for card in cards for item in card['payload']['items']}
+            expected = {f'/course/{course.pk}?t=60'}
+            if engine == 'dsh':
+                expected.add(f'/course/{other_course.pk}?t=120')
+                assert arguments == tool_args
+            else:
+                assert arguments == {**tool_args, 'course_id': course.pk}
+                assert cards == [source_cards[0]] and stats['model_requests'] == 2
+            assert sources == expected
+            assert WeeklyAIUsage.objects.get(user=user).ai_calls == charges_before + 1
+            implicit_stats[engine] = {**stats, 'business_queries': 1, 'source_count': len(sources)}
+        anchored_stats['implicit_scope'] = implicit_stats
         program_stats['current_course'] = anchored_stats
         other_course.delete()
         program_stats['unique_source'] = {'ulr': {**only_stats, 'asr_queries': 1},
@@ -1743,7 +1773,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                 assert reads.call_args_list[0].kwargs['arguments']['query'] == '折现率' and cards[-1] == source_cards[0]
             ambiguous_calls[engine] = {**stats, 'business_queries': len(expected_tools)}
         program_stats['duplicate_individual'] = ambiguous_calls
-        for program_mode, expected_error in (('stale_version', '版本不符'), ('missing_version', '版本不符'),
+        for program_mode, expected_error in (('stale_version', '版本不符'), ('invalid_version', '版本不符'),
                                              ('duplicate_version', '版本不符'),
                                              ('aborted_round', '本轮未完成')):
             conversation_id, request_id = str(uuid4()), str(uuid4())
@@ -2018,7 +2048,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             practice_ids[engine] = card['payload']['practice_id']
             selected, = card['payload']['questions']
             assert selected['id'] == practice_question.pk and 'correct_answer' not in selected
-            assert stats['model_requests'] == (3 if engine == 'dsh' else 2)
+            assert stats['model_requests'] == (3 if engine == 'dsh' else 1)
             request_bytes = sum(len(json.dumps(request, ensure_ascii=False, separators=(',', ':')).encode()) for request in calls[before:])
             practices[engine] = {**stats, 'serialized_request_bytes': request_bytes, 'business_queries': 2}
         assert QuizExam.objects.filter(user=user).count() == exam_count
@@ -2131,7 +2161,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         fail('dsh')
         fail('ulr')
         total_quota_charges = WeeklyAIUsage.objects.get(user=user).ai_calls
-        assert total_quota_charges == 77
+        assert total_quota_charges == 79
         print(json.dumps({'dsh': dsh_stats, 'ulr': ulr_stats, 'same_course_source_card': True,
                           'standalone_profile': {'debug': False, 'dsh_requests': 0, 'chat': isolated_stats,
                               'title': isolated.title, 'memory': True, 'score': native_score['score'],

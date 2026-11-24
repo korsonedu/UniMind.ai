@@ -75,7 +75,7 @@ class AIEngine:
     _DSML_RE_2 = re.compile(r'<｜｜DSML｜｜\w+.*?(?:</｜｜DSML｜｜\w+>)', re.DOTALL)
     # 兼容模型将工具调用输出为通用 XML，以及 Markdown 转义后的 \<tag> 形式。
     _FUNCTION_CALLS_RE = re.compile(
-        r'\\?<function_calls\b[^>]*>.*?\\?</function_calls\s*>',
+        r'\\?<(function_calls|invoke)\b[^>]*>.*?\\?</\1\s*>',
         re.DOTALL | re.IGNORECASE,
     )
 
@@ -98,7 +98,7 @@ class AIEngine:
         text = re.sub(r'</｜｜DSML｜｜\w+>', '', text)
         text = re.sub(r'\\?</?function_calls\b[^>]*>', '', text, flags=re.IGNORECASE)
         # 流式截断场景：丢弃未闭合标签之后的全部内容
-        markers = ['<龘', '<｜｜DSML｜｜', '<function_calls', '\\<function_calls']
+        markers = ['<龘', '<｜｜DSML｜｜', '<function_calls', '\\<function_calls', '<invoke', '\\<invoke']
         for marker in markers:
             idx = text.find(marker)
             if idx >= 0:
@@ -116,9 +116,14 @@ class AIEngine:
     def _has_open_dsml(text: str) -> bool:
         """检查文本中是否存在未闭合的 DSML 标记块。"""
         import re as _re
+        _, marker, tail = text.rpartition('<')
+        tail = tail.strip().lower()
+        if marker and '>' not in tail and (tail.startswith(('龘', '｜｜dsml', 'function_calls', 'invoke'))
+                or tail.startswith('function_') and 'function_calls'.startswith(tail)):
+            return True
         # 格式1: <龘>
         if '<龘' in text:
-            opens = len(_re.findall(r'<龘\w+[\s>]|<龘\w+/>', text))
+            opens = len(_re.findall(r'<龘\w+\b[^<>]*(?<!/)>', text))
             closes = len(_re.findall(r'</龘\w+>', text))
             if opens > closes:
                 return True
@@ -128,12 +133,18 @@ class AIEngine:
             closes = len(_re.findall(r'</｜｜DSML｜｜\w+>', text))
             if opens > closes:
                 return True
-        # 格式3: <function_calls>，允许 Markdown 转义的 \<function_calls>
-        if _re.search(r'\\?<function_calls\b', text, flags=_re.IGNORECASE):
-            opens = len(_re.findall(r'\\?<function_calls\b[^>]*>', text, flags=_re.IGNORECASE))
-            closes = len(_re.findall(r'\\?</function_calls\s*>', text, flags=_re.IGNORECASE))
-            if opens > closes:
-                return True
+        # Match the nesting too. A closed wrapper can still contain an unfinished invocation.
+        if _re.search(r'<(?:function_calls|invoke)\b', text, flags=_re.IGNORECASE):
+            pending = []
+            for closing, name, attributes in _re.findall(
+                    r'<(/?)(function_calls|invoke|parameter)\b([^<>]*)>', text, flags=_re.IGNORECASE):
+                name = name.lower()
+                if closing:
+                    if not pending or pending.pop() != name:
+                        return True
+                elif not attributes.endswith('/'):
+                    pending.append(name)
+            return bool(pending)
         return False
 
     @staticmethod
@@ -268,11 +279,15 @@ class AIEngine:
                     timeout_seconds=max(0.001, execution['deadline'] - time.monotonic()), max_retries=0,
                 )
                 check_execution(execution)
-                choices = (response or {}).get('choices') or []
-                if not tools and choices and choices[0].get('finish_reason') in {'length', 'content_filter'}:
-                    if raise_on_error:
-                        raise AICallError('生成结果未完整返回。', error_category='incomplete')
-                    return None
+                if not tools:
+                    choice = ((response or {}).get('choices') or [{}])[0]
+                    content = (choice.get('message') or {}).get('content')
+                    if (not isinstance(content, str) or not content.strip()
+                            or not cls._complete_tool_round(choice.get('finish_reason'), cls._extract_tool_calls(response), tools)
+                            or cls._has_open_dsml(content)):
+                        if raise_on_error:
+                            raise AICallError('生成结果未完整返回。', error_category='incomplete')
+                        return None
                 return response
         from ai_assistant.services.dsh_generation import enabled, generate, chat_result
         if enabled(operation):
@@ -332,7 +347,7 @@ class AIEngine:
     def call_provider(
         cls, messages, temperature=0.7, max_tokens=8192, raise_on_error=False,
         operation='general', tools=None, tool_choice=None, _preserve_tool_choice=False,
-        _response_format=None, *, timeout_seconds=None, max_retries=None, on_text=None,
+        _response_format=None, *, timeout_seconds=None, max_retries=None, on_text=None, tool_aliases=(),
     ):
         """Use the configured model transport after the caller has selected an executor."""
         from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
@@ -378,6 +393,8 @@ class AIEngine:
                     stream=on_text is not None, _preserve_tool_choice=_preserve_tool_choice, _response_format=_response_format)
                 if runtime_observation.get():
                     request_metadata['offered_tools'] = ','.join(tool['function']['name'] for tool in body.get('tools', ()))
+                    if tool_aliases:
+                        request_metadata['tool_aliases'] = ','.join(tool_aliases)
                     request_metadata['max_output_tokens'] = body['max_completion_tokens']
 
                 logger.info(
@@ -414,6 +431,17 @@ class AIEngine:
                 }
                 if isinstance(reported_model, str) and len(reported_model) <= 160:
                     metadata['reported_model'] = reported_model
+                if 'offered_tools' in request_metadata:
+                    offered = set(request_metadata['offered_tools'].split(',')) - {''}
+                    offered.update(tool_aliases)
+                    submitted = cls._extract_tool_calls(payload)
+                    if isinstance(submitted, list):
+                        names = []
+                        for call in submitted:
+                            function = call.get('function') if isinstance(call, dict) else None
+                            name = function.get('name') if isinstance(function, dict) else None
+                            names.append(name if isinstance(name, str) and name in offered else '<unoffered>')
+                        metadata['submitted_tools'] = ','.join(names)
                 record_ai_operation(
                     operation=operation,
                     success=True,
@@ -613,7 +641,7 @@ class AIEngine:
             if tool_calls:
                 return tool_calls
         except Exception:
-            logger.warning("_extract_tool_calls failed: %s", response)
+            logger.warning("_extract_tool_calls failed for response")
             return []
 
         # DeepSeek 有时把 tool call 以 DSML 原生格式放在 content 里

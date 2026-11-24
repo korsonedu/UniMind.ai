@@ -86,14 +86,16 @@ def quota_write_lock():
         raise DshUnavailable('数据服务繁忙或运行环境不可用，请稍后重试。') from None
 
 
-def log_model_observation(record, reservation):
+def log_model_observation(record, reservation=None, *, gateway_id=None):
     completed = record['status'] == 'completed'
     counts = model_token_counts(record.get('usage'), anthropic=True) if record['usage_complete'] else {}
     log_ai_operation(operation=record['operation'], success=completed, duration_ms=record['elapsed_ms'],
         error_category='none' if completed else record['status'], metadata={
-            'runtime': 'dsh', 'request_id': reservation.request_id, 'attempt_id': reservation.attempt_id,
+            'runtime': 'dsh', 'gateway_id': gateway_id,
+            **({'request_id': reservation.request_id, 'attempt_id': reservation.attempt_id} if reservation else {}),
             'model': record['model'], 'offered_tools': ','.join(record['offered_tools']), 'model_request': record['request'],
             'reported_model': record.get('reported_model'), 'max_output_tokens': record['max_output_tokens'],
+            'submitted_tools': ','.join(record['submitted_tools']) if 'submitted_tools' in record else None,
             **counts,
         })
 

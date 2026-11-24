@@ -205,7 +205,7 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                     body['temperature'] = 0.4 if policy['operation'] == 'quizzes.objective_analysis' else 0.2
                 record = {'request': len(requests) + 1, 'model': policy['model'],
                           'operation': policy.get('task_operation', policy['operation']), 'tier': policy['tier'],
-                          'offered_tools': [tool['name'] for tool in tools],
+                          'offered_tools': [tool['name'] for tool in tools], 'submitted_tools': [],
                           'max_output_tokens': body['max_tokens'],
                           'tool_count': len(tools), 'tool_schema_bytes': len(json.dumps(tools, ensure_ascii=False).encode()),
                           'status': 'started', 'usage': {}, 'usage_complete': False,
@@ -263,6 +263,11 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                                     model = event.get('message', {}).get('model')
                                     if isinstance(model, str) and len(model) <= 160:
                                         record['reported_model'] = model
+                                if event.get('type') == 'content_block_start':
+                                    block = event.get('content_block')
+                                    if isinstance(block, dict) and block.get('type') == 'tool_use':
+                                        name = block.get('name')
+                                        record['submitted_tools'].append(name if name in record['offered_tools'] else '<unoffered>')
                                 usage = event.get('usage', event.get('message', {}).get('usage', {}))
                                 counts = {k: v for k, v in usage.items()
                                     if k in ('input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens')
