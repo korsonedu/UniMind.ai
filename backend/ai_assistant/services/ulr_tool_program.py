@@ -14,7 +14,7 @@ NAME = 'run_course_tools'
 PRACTICE_NAME = 'run_practice_tools'
 CURRENT_COURSE_NAME = 'locate_current_course_transcript'
 # Bump when the instruction grammar or its bound operation contracts change.
-VERSION = 16
+VERSION = 17
 # Earlier versions with the same operations may still echo version and rank.
 LEGACY_VERSION = 6
 PROGRAM_OPS = {
@@ -83,7 +83,7 @@ def program_tool(name, required, properties, rules=''):
 FIND_PROPERTIES = {'find': {**TEXT, 'description': '要查找的课程或知识点'}, 'subject': TEXT}
 QUERY_PROPERTY = {**TEXT, 'description': '讲稿关键词'}
 LEGACY_COURSE_OUTPUT = {'type': 'string', 'enum': ['card']}
-TIMESTAMP_ONLY = re.compile(r'(?:^|[。！？.!?]\s*)(?:只要(?:视频)?时间(?:点|戳)|'
+TIMESTAMP_ONLY = re.compile(r'(?:^|[。！？.!?]\s*)(?:只(?:要|返回)(?:视频)?时间(?:点|戳)|'
                             r'(?:just|only) (?:the )?timestamps?)\s*[。.!！]?\s*$', re.IGNORECASE)
 CURRENT_COURSE_LOCATOR = re.compile(r'\s*(?:请)?(?:帮我)?定位当前课程的(?P<query>[^。！？；，、,.!?;：:\n]+)讲稿\s*[。.!！]?\s*')
 PROGRAM_TOOLS = {

@@ -1655,6 +1655,8 @@ def test_ulr_checks_course_scope_before_model_use_and_publication(auth_client, u
     if anchored:
         body['message'] = ('当前课程在哪一段讲折现率？只要时间点。' if direct_card else
                            '请定位当前课程的折现率并解释相关讲稿。')
+    if withdraw_stage == 'anchored_card':
+        body['message'] = '请问折现率是在哪一段？只返回时间点。'
     with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider, \
             patch('ai_assistant.services.ulr_runtime.execute_tool', side_effect=tool):
         events = async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))
