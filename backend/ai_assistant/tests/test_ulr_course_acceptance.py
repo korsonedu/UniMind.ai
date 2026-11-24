@@ -165,7 +165,8 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
     sample_path = repo / f'scripts/fixtures/ulr_{case_name}_review.json'
     sample = tool['read'](sample_path)
     delivery_cases = sample.pop('delivery_cases', {})
-    direct = delivery == 'direct'
+    named = delivery == 'named'
+    direct = delivery in ('direct', 'named')
     if delivery:
         variant = delivery_cases[delivery].copy()
         sample['case_id'] = variant.pop('case_id')
@@ -204,18 +205,22 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
                       ('search_asr', {'course_id': course.pk, 'query': '折现率'})]
         combined = [('run_course_tools', {'find': '折现率'})]
         if direct:
-            other_course = Course.objects.create(is_published=True, title=course.title)
+            other_title = '折现率迁移导读' if named else course.title
+            other_course = Course.objects.create(is_published=True, title=other_title)
             other_transcript = VideoTranscript.objects.create(course=other_course, asr_status='completed')
-            TranscriptSegment.objects.create(transcript=other_transcript, text='折现率在同名课程的讲稿。',
+            TranscriptSegment.objects.create(transcript=other_transcript, text=f'折现率在《{other_title}》的讲稿。',
                                              start_time=120, end_time=140, index=0)
             individual = individual[-1:]
             combined = [('locate_current_course_transcript', {'query': '折现率'})]
+            if named:
+                individual.insert(0, ('search_courses', {'query': course.title}))
+                combined = [('run_course_tools', {'find': course.title, 'query': '折现率'})]
         elif delivery:
             individual = individual[1:]
         if delivery == 'explanation':
             # An old client may still send a card hint for a mixed request.
             combined[0][1]['output'] = 'card'
-        reply = '已找到 01:00 的讲稿片段。' if delivery in ('timestamp', 'direct') else REPLY
+        reply = '已找到 01:00 的讲稿片段。' if direct or delivery == 'timestamp' else REPLY
     CourseStudentStatus.objects.create(user=user, is_course_student=True)
     WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 20})
     bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
@@ -289,7 +294,7 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
         request_id = str(uuid4())
         body = {'bot_id': bot.pk, 'conversation_id': str(conversation.conversation_id),
                 'request_id': request_id, 'message': sample['case']['prompt']}
-        if direct and not practice:
+        if delivery == 'direct' and not practice:
             body['course_context'] = {'course_id': course.pk, 'video_seconds': source['start_time']}
         course_attempts = []
 
@@ -312,7 +317,8 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
             if runtime == 'ulr_individual':
                 scope.enter_context(patch.object(ulr_runtime, 'PROGRAM_OPS', {}))
             if runtime == 'ulr_model_instruction':
-                compiler = 'compile_practice_request' if practice else 'compile_current_course_locator'
+                compiler = ('compile_practice_request' if practice else
+                            'compile_named_course_locator' if named else 'compile_current_course_locator')
                 scope.enter_context(patch.object(ulr_runtime, compiler, return_value=None))
             if runtime == 'ulr' and delivery and not direct:
                 scope.enter_context(patch.object(ulr_runtime, 'run_program', side_effect=observe_instruction))
@@ -366,7 +372,7 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
 
     operations = prepare_capture(repo, output, records, caplog, tool, limits.keys() - {'ulr'})
     if not official:
-        expected_requests = ([3 if practice else 2, 1, 0] if direct else
+        expected_requests = ([3 if practice or named else 2, 1, 0] if direct else
             {'course': [4, 4, 2], 'practice': [3, 3, 1], 'project': [3, 3],
              'timestamp': [3, 3, 1], 'explanation': [3, 3, 2]}[delivery or case_name])
         by_runtime = {record['runtime']: record for record in records}
@@ -463,6 +469,13 @@ def test_capture_direct_instruction_acceptance(official, case_name, auth_client,
     if official and not os.environ.get(f'ULR_{case_name.upper()}_DIRECT_OFFICIAL_OUTPUT'):
         pytest.skip('manual, authorized official-provider comparison')
     capture_acceptance(case_name, official, auth_client, user, settings, request, tmp_path, caplog, delivery='direct')
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize('official', [False, pytest.param(True, marks=pytest.mark.skipif(
+    not os.environ.get('ULR_COURSE_NAMED_OFFICIAL_OUTPUT'), reason='manual, authorized official-provider comparison'))])
+def test_capture_named_course_acceptance(official, auth_client, user, settings, request, tmp_path, caplog):
+    capture_acceptance('course', official, auth_client, user, settings, request, tmp_path, caplog, delivery='named')
 
 
 @pytest.mark.django_db(transaction=True)

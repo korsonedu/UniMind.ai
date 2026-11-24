@@ -17,6 +17,25 @@
       },
       "tool_steps": {"ulr_model_instruction": [["search_asr"]], "ulr": [["search_asr"]]}
     },
+    "named": {
+      "case_id": "literal-named-course-card",
+      "scenario": "按完整课程名称定位讲稿",
+      "prompt": "请定位课程「折现率迁移课」的「折现率」讲稿。只要时间点。",
+      "reference": "《折现率迁移课》对应片段在 01:00。名称相近的《折现率迁移导读》在 02:00 的片段不属于目标课程。",
+      "criteria": {
+        "source": "时间点卡片指向《折现率迁移课》的 01:00。",
+        "delivery": "只交付讲稿定位，未附加其他卡片或讲解。"
+      },
+      "tool_paths": {
+        "dsh": ["search_courses", "search_asr"],
+        "ulr_model_instruction": [["run_course_tools", "find_learning_tools"]],
+        "ulr": ["run_course_tools"]
+      },
+      "tool_steps": {
+        "ulr_model_instruction": [["search_courses", "search_asr"]],
+        "ulr": [["search_courses", "search_asr"]]
+      }
+    },
     "timestamp": {
       "case_id": "course-discount-timestamp",
       "scenario": "课程伴学时间戳直达",
