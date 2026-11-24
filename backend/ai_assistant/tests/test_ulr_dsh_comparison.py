@@ -316,6 +316,14 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             return [('run_course_tools', invalid)]
         if '"courses"' in latest:
             return [('search_asr', {**tool_args, 'course_id': course.pk})]
+        if program_mode == 'named_course_dsh' and 'search_courses' in names:
+            return [('search_courses', {'query': course.title, 'limit': 1})]
+        if program_mode == 'named_course_model':
+            instruction = {'find': course.title, 'query': '折现率'}
+            if 'run_course_tools' in names:
+                return [('run_course_tools', instruction)]
+            return [('find_learning_tools', {'program': 'run_course_tools', 'instruction': instruction})]
+        assert program_mode != 'named_course_local', 'Local named instruction must not call the model'
         if program_mode == 'timestamp_card':
             return [('run_course_tools', {'find': '折现率', 'output': 'card'})]
         if program_mode == 'compact' or (program_mode == 'truncated_reply' and 'run_course_tools' in names):
@@ -1832,7 +1840,50 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             cards, only_stats = run('ulr', openai_calls, None, only_prompt)
         assert cards == [source_cards[0]] and only_stats['model_requests'] == 2
         assert [call.args[1] for call in reads.call_args_list] == ['search_courses', 'search_asr']
+        named_prompt = f'请定位课程「{course.title}」的「折现率」讲稿。只要时间点。'
+        named_stats, named_captures = {}, []
+        for mode, engine, calls, executor in (
+            ('dsh', 'dsh', anthropic_calls, 'views_dsh'),
+            ('model', 'ulr', openai_calls, 'services.ulr_runtime'),
+            ('local', 'ulr', openai_calls, 'services.ulr_runtime'),
+        ):
+            program_mode = f'named_course_{mode}'
+            before = len(calls)
+            compiler = (patch('ai_assistant.services.ulr_runtime.compile_named_course_locator', return_value=None)
+                        if mode == 'model' else nullcontext())
+            with compiler, patch(f'ai_assistant.{executor}.execute_tool', wraps=execute_tool) as reads:
+                cards, stats = run(engine, calls, None, named_prompt, capture=named_captures,
+                                   capture_as='ulr_model_instruction' if mode == 'model' else None)
+            assert [call.args[1] for call in reads.call_args_list] == ['search_courses', 'search_asr']
+            assert [card for card in cards if card['tool'] == 'search_asr'] == [source_cards[0]]
+            if engine == 'ulr':
+                assert len(cards) == 1
+            named_stats[mode] = {**stats, 'business_queries': reads.call_count, 'cards_delivered': len(cards),
+                'serialized_request_bytes': sum(len(json.dumps(payload, ensure_ascii=False,
+                    separators=(',', ':')).encode()) for payload in calls[before:])}
+        assert [stats['model_requests'] for stats in named_stats.values()] == [3, 1, 0]
+        capture_pair('named-course-comparison', {'case_id': 'literal-named-course-card', 'case': {
+            'scenario': '按完整课程名称定位讲稿', 'prompt': named_prompt,
+            'reference': '只返回指定课程 01:00 的讲稿定位卡。',
+            'criteria': {'source': '时间点和课程来自指定讲稿。', 'delivery': '只交付时间点卡片。'},
+            'tool_paths': {'dsh': ['search_courses', 'search_asr'],
+                           'ulr': [['run_course_tools', 'find_learning_tools']],
+                           'ulr_model_instruction': [['run_course_tools', 'find_learning_tools']]},
+            'tool_steps': {arm: [['search_courses', 'search_asr']] for arm in ('ulr', 'ulr_model_instruction')},
+        }}, named_captures)
         other_course = Course.objects.create(is_published=True, title=course.title)
+        for condition, prompt, expected in (
+            ('ambiguous', named_prompt, '找到多门同名课程。请打开目标课程后再定位讲稿。'),
+            ('partial_title', named_prompt.replace(course.title, course.title[:-2]), '找不到这门课程。请核对完整课程名称。'),
+        ):
+            captured = []
+            with patch('ai_assistant.services.ulr_runtime.execute_tool', wraps=execute_tool) as reads:
+                cards, stats = run('ulr', openai_calls, None, prompt, capture=captured)
+            assert not cards and stats['model_requests'] == 0
+            assert captured[0][-1][-1]['event']['full_content'] == expected
+            assert [call.args[1] for call in reads.call_args_list] == ['search_courses']
+            named_stats[condition] = {**stats, 'business_queries': reads.call_count, 'transcript_queries': 0, 'reply': expected}
+        program_stats['named_course'] = named_stats
         program_mode = 'individual'
         with patch('ai_assistant.views_dsh.execute_tool', wraps=execute_tool) as reads:
             cards, dsh_ambiguous = run('dsh', anthropic_calls, None, only_prompt)
@@ -2432,7 +2483,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         fail('dsh')
         fail('ulr')
         total_quota_charges = WeeklyAIUsage.objects.get(user=user).ai_calls
-        assert total_quota_charges == 80 + len(direct_stats) + len(direct_practices)
+        assert total_quota_charges == 80 + len(direct_stats) + len(direct_practices) + len(named_stats)
         print(json.dumps({'dsh': dsh_stats, 'ulr': ulr_stats, 'same_course_source_card': True,
                           'standalone_profile': {'debug': False, 'dsh_requests': 0, 'chat': isolated_stats,
                               'title': isolated.title, 'memory': True, 'score': native_score['score'],

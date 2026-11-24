@@ -14,7 +14,7 @@ NAME = 'run_course_tools'
 PRACTICE_NAME = 'run_practice_tools'
 CURRENT_COURSE_NAME = 'locate_current_course_transcript'
 # Bump when the instruction grammar or its bound operation contracts change.
-VERSION = 19
+VERSION = 20
 # Earlier versions with the same operations may still echo version and rank.
 LEGACY_VERSION = 6
 PROGRAM_OPS = {
@@ -86,6 +86,8 @@ LEGACY_OUTPUT = {'type': 'string', 'enum': ['card']}
 TIMESTAMP_ONLY = re.compile(r'(?:^|[。！？.!?]\s*)(?:只(?:要|返回)(?:视频)?时间(?:点|戳)|'
                             r'(?:just|only) (?:the )?timestamps?)\s*[。.!！]?\s*$', re.IGNORECASE)
 CURRENT_COURSE_LOCATOR = re.compile(r'\s*(?:请)?(?:帮我)?定位当前课程的(?P<query>[^。！？；，、,.!?;：:\n]+)讲稿\s*[。.!！]?\s*')
+NAMED_COURSE_LOCATOR = re.compile(
+    r'\s*(?:请)?(?:帮我)?定位课程「(?P<find>[^「」\r\n]+)」的「(?P<query>[^「」\r\n]+)」讲稿\s*')
 PRACTICE_ONLY = re.compile(r'(?:^|[。！？.!?]\s*)(?:只(?:要|发|返回)练习(?:题|卡)|'
                            r'(?:just|only) (?:the )?practice questions)\s*[。.!！]?\s*$', re.IGNORECASE)
 PRACTICE_LOCATOR = re.compile(
@@ -117,6 +119,15 @@ def compile_current_course_locator(message):
         literal = re.fullmatch(r'「([^「」]+)」', locator['query'].strip())
         if literal and (query := literal[1].strip()):
             return {'query': query}
+    return None
+
+
+def compile_named_course_locator(message):
+    delivery = TIMESTAMP_ONLY.search(message)
+    if delivery and (locator := NAMED_COURSE_LOCATOR.fullmatch(message[:delivery.start()])):
+        find, query = locator['find'].strip(), locator['query'].strip()
+        if find and query:
+            return {'find': find, 'query': query}
     return None
 
 
@@ -200,7 +211,7 @@ def valid_program_version(arguments):
     return type(version) is int and LEGACY_VERSION <= version <= VERSION
 
 
-def run_program(arguments, allowed_tools, execute, *, name=NAME, message='', current_course_id=None):
+def run_program(arguments, allowed_tools, execute, *, name=NAME, message='', current_course_id=None, exact_course_title=False):
     operations = PROGRAM_OPS[name]
     second = operations[-1]
     anchored = name == CURRENT_COURSE_NAME
@@ -270,8 +281,8 @@ def run_program(arguments, allowed_tools, execute, *, name=NAME, message='', cur
         source_id = current_course_id
     else:
         first = operations[0]
-        # A quoted topic is a string value, even when its name contains an ordinal.
-        rank, needs_confirmation = ((None, False) if practice and compile_practice_request(message)
+        # A quoted course title or topic is a string value, even when its name contains an ordinal.
+        rank, needs_confirmation = ((None, False) if exact_course_title or (practice and compile_practice_request(message))
                                     else requested_rank(message, practice))
         if needs_confirmation:
             return failure('selection_needs_confirmation', '请用户确认要使用的课程或知识点。')

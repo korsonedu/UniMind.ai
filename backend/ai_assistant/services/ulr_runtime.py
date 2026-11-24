@@ -23,7 +23,8 @@ from .ulr_grading import grade_probe
 from .ulr_history import card_question_answers, require_current_practice_answers, scoped_history
 from .ulr_tool_program import (
     CURRENT_COURSE_NAME, MAX_RANKS, NAME as PROGRAM_NAME, PRACTICE_NAME, PROGRAM_OPS, PROGRAM_TOOLS, SOURCE_ACCESS_REVOKED,
-    TIMESTAMP_ONLY, VERSION as PROGRAM_VERSION, compile_current_course_locator, compile_practice_request,
+    TIMESTAMP_ONLY, VERSION as PROGRAM_VERSION, compile_current_course_locator, compile_named_course_locator,
+    compile_practice_request,
     duplicate_program_scope, program_discovery,
     repair_program_tool, run_program,
 )
@@ -50,6 +51,11 @@ PRACTICE_CARD_SELECTION_REPLIES = {
                                      'Confirm which knowledge point to use for the practice.'),
     'rank_out_of_range': (f'请提供第 1 至 {MAX_RANKS[PRACTICE_NAME]} 项内的知识点序号。',
                           f'Choose a knowledge point from positions 1 to {MAX_RANKS[PRACTICE_NAME]}.'),
+}
+COURSE_CARD_SELECTION_REPLIES = {
+    'missing_dependency': ('找不到这门课程。请核对完整课程名称。', 'I could not find that course. Check its full title.'),
+    'ambiguous_dependency': ('找到多门同名课程。请打开目标课程后再定位讲稿。',
+                             'Several courses have that title. Open the intended course to locate its transcript.'),
 }
 
 
@@ -176,6 +182,9 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
         if CURRENT_COURSE_NAME in available_programs and (local_instruction := compile_current_course_locator(message)):
             local_program = CURRENT_COURSE_NAME
             history.clear()
+        elif PROGRAM_NAME in available_programs and (local_instruction := compile_named_course_locator(message)):
+            local_program = PROGRAM_NAME
+            history.clear()
         elif PRACTICE_NAME in available_programs and local_practice is not None:
             local_program, local_instruction = PRACTICE_NAME, local_practice
     course_card_request = PROGRAM_NAME in available_programs and TIMESTAMP_ONLY.search(message)
@@ -230,13 +239,14 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
                     require_course_transcript(course_context)
             elif operation == 'get_practice_questions':
                 require_visible_practice_sources(user, {}, point_id=params['knowledge_point_id'])
-            scope = ({'exact_knowledge_name': True}
-                     if local_program == PRACTICE_NAME and operation == 'search_knowledge_tree' else {})
+            scope = ({'exact_lookup': True}
+                     if (local_program, operation) in ((PRACTICE_NAME, 'search_knowledge_tree'),
+                                                       (PROGRAM_NAME, 'search_courses')) else {})
             return execute_tool(user, operation, params, memory['version'], source=source, chat_context=chat_context,
                                 practice_questions=set(practice_sources), **scope)
 
         result = run_program(arguments, allowed_names, execute_read, name=name, message=message,
-                             current_course_id=current_course_id)
+                             current_course_id=current_course_id, exact_course_title=local_program == PROGRAM_NAME)
         return json.dumps(result, ensure_ascii=False)
 
     def bind_task_strategy(arguments):
@@ -327,8 +337,11 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
                 code = error['code']
                 if code == 'stale_tool_version':
                     raise ULRTurnUnavailable('工具指令版本不符，请重试。')
-                if result.pop('_ulr_card_only', False) and name == PRACTICE_NAME and code in PRACTICE_CARD_SELECTION_REPLIES:
-                    card_reply = PRACTICE_CARD_SELECTION_REPLIES[code][english]
+                if result.pop('_ulr_card_only', False):
+                    replies = PRACTICE_CARD_SELECTION_REPLIES if name == PRACTICE_NAME else (
+                        COURSE_CARD_SELECTION_REPLIES if local_program == PROGRAM_NAME else {})
+                    if code in replies:
+                        card_reply = replies[code][english]
                 if duplicate_field:
                     result['field'] = f'$.{duplicate_field}'
                 repairable = error.get('repairable') or (
