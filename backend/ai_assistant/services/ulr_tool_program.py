@@ -14,7 +14,7 @@ NAME = 'run_course_tools'
 PRACTICE_NAME = 'run_practice_tools'
 CURRENT_COURSE_NAME = 'locate_current_course_transcript'
 # Bump when the instruction grammar or its bound operation contracts change.
-VERSION = 18
+VERSION = 19
 # Earlier versions with the same operations may still echo version and rank.
 LEGACY_VERSION = 6
 PROGRAM_OPS = {
@@ -89,7 +89,8 @@ CURRENT_COURSE_LOCATOR = re.compile(r'\s*(?:请)?(?:帮我)?定位当前课程�
 PRACTICE_ONLY = re.compile(r'(?:^|[。！？.!?]\s*)(?:只(?:要|发|返回)练习(?:题|卡)|'
                            r'(?:just|only) (?:the )?practice questions)\s*[。.!！]?\s*$', re.IGNORECASE)
 PRACTICE_LOCATOR = re.compile(
-    r'\s*(?:请)?给我(?P<limit>[1-9][0-9]?)道「(?P<find>[^「」\r\n]+)」知识点的练习题\s*')
+    rf'\s*(?:请)?给我\s*(?P<limit>[1-9１-９][0-9０-９]?|两|{"|".join(_ORDINALS)})\s*道\s*'
+    r'「(?P<find>[^「」\r\n]+)」知识点的练习题\s*')
 _PRACTICE_COUNT = r'(?:\d+|[一二两三四五六七八九十百几]+)道'
 _PRACTICE_ORDINAL = r'第[\d零〇一二两三四五六七八九十百千万亿]+项'
 _PRACTICE_TOPIC = r'[^。！？；，、,.!?;：:\n]+'
@@ -122,7 +123,11 @@ def compile_current_course_locator(message):
 def compile_practice_request(message):
     delivery = PRACTICE_ONLY.search(message)
     if delivery and (request := PRACTICE_LOCATOR.fullmatch(message[:delivery.start()])):
-        limit = int(request['limit'])
+        count = normalize('NFKC', request['limit'])
+        if count.isdecimal():
+            limit = int(count)
+        else:
+            limit = _ORDINALS.index('二' if count == '两' else count) + 1
         if limit <= GET_PRACTICE_QUESTIONS_SCHEMA['properties']['limit']['maximum'] and (find := request['find'].strip()):
             return {'find': find, 'limit': limit}
     return None

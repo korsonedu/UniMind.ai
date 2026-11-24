@@ -958,7 +958,7 @@ def test_ulr_compiles_literal_practice_for_the_original_submission(auth_client, 
     CourseStudentStatus.objects.create(user=user, is_course_student=True)
     WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 20})
     bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
-    point = KnowledgePoint.objects.create(name='第2项现金流折现')
+    point = KnowledgePoint.objects.create(name='第２项现金流诊断')
     question = Question.objects.create(knowledge_point=point, text='只在卡片呈现的题目', options=['甲', '乙'],
         correct_answer='B', grading_points='只能用于评阅的依据')
     foreign = Institution.objects.create(name='不可见题库', slug='local-practice-foreign')
@@ -966,8 +966,11 @@ def test_ulr_compiles_literal_practice_for_the_original_submission(auth_client, 
         KnowledgePoint.objects.create(name=point.name)
     if mode == 'ready':
         KnowledgePoint.objects.create(name=f'{point.name}拓展')
+        second = Question.objects.create(knowledge_point=point, text='同一知识点的另一道题', options=['甲', '乙'],
+            correct_answer='B')
+    written_count, count = {'ready': ('两', 2), 'ambiguous': ('１', 1), 'revoked': ('1', 1)}[mode]
     body = {'bot_id': bot.pk, 'conversation_id': str(uuid4()), 'request_id': str(uuid4()),
-            'message': f'请给我1道「{point.name}」知识点的练习题。只要练习卡。'}
+            'message': f'请给我{written_count}道「{point.name}」知识点的练习题。只要练习卡。'}
 
     def read_tool(*args, **kwargs):
         result = execute_tool(*args, **kwargs)
@@ -989,7 +992,7 @@ def test_ulr_compiles_literal_practice_for_the_original_submission(auth_client, 
         model.assert_not_called()
     expected_reads = [('search_knowledge_tree', {'query': point.name})]
     if mode != 'ambiguous':
-        expected_reads.append(('get_practice_questions', {'knowledge_point_id': point.pk, 'limit': 1}))
+        expected_reads.append(('get_practice_questions', {'knowledge_point_id': point.pk, 'limit': count}))
     assert [call.args[1:3] for call in reads.call_args_list] == expected_reads
     assert not QuizExam.objects.exists()
     if mode != 'ready':
@@ -1003,10 +1006,11 @@ def test_ulr_compiles_literal_practice_for_the_original_submission(auth_client, 
 
     assert final['full_content'] == '练习已准备好。'
     card, = final['metadata']['dsh_cards']
-    item, = card['payload']['questions']
-    assert item['id'] == question.pk and not {'answer', 'correct_answer', 'grading_points'} & item.keys()
+    items = card['payload']['questions']
+    assert len(items) == 2 and {item['id'] for item in items} == {question.pk, second.pk}
+    assert all(not {'answer', 'correct_answer', 'grading_points'} & item.keys() for item in items)
     practice_id = card['payload']['practice_id']
-    submission = {'submission_id': practice_id, 'answers': [{'question_id': question.pk, 'answer': 'B'}]}
+    submission = {'submission_id': practice_id, 'answers': [{'question_id': item['id'], 'answer': 'B'} for item in items]}
     with patch('quizzes.views_exam.dispatch_exam_grading') as enqueue:
         accepted = auth_client.post('/api/quizzes/submit-exam/', submission, format='json')
         assert accepted.status_code == 202
@@ -1017,7 +1021,8 @@ def test_ulr_compiles_literal_practice_for_the_original_submission(auth_client, 
         run_exam_grading(*enqueue.call_args.args)
         model.assert_not_called()
     exam = QuizExam.objects.get()
-    assert (exam.status, exam.total_score, exam.results.get().question_id) == ('completed', 10, question.pk)
+    assert (exam.status, exam.total_score) == ('completed', 20)
+    assert set(exam.results.values_list('question_id', flat=True)) == {question.pk, second.pk}
 
 
 @pytest.mark.django_db(transaction=True)

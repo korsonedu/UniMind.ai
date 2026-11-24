@@ -162,21 +162,22 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
                    '引用进展回执的 event_ref，不自行填写数据库事件编号。'
                    '\n方法试用回执随答复确认。任务工具提供 strategy_ref 时引用本轮唯一试用，多项试用时使用所选回执的 use_id。')
     messages = [{'role': 'system', 'content': prompt}, {'role': 'user', 'content': message}]
-    practice_request = not task and (
+    local_practice = compile_practice_request(message) if not task and not source_context['notes'] else None
+    practice_request = local_practice is not None or (not task and not re.search(r'诊断|diagnos', message, re.I) and (
         ('知识点' in message and (EXERCISE_REQUEST.search(message)
                              or re.search(r'给(?:我)?(?:一|几|两|\d+)道[^。！？\n]*练习题', message)))
-        or re.search(r'knowledge point.*(?:practice|exercise|question)', message, re.I))
+        or re.search(r'knowledge point.*(?:practice|exercise|question)', message, re.I)))
     allowed_names = {tool['function']['name'] for tool in available_tools}
     available_programs = {name: PROGRAM_TOOLS[name] for name, ops in PROGRAM_OPS.items() if set(ops) <= allowed_names
                           and (name != CURRENT_COURSE_NAME or current_course_id is not None)
-                          and (name != PRACTICE_NAME or practice_request and not re.search(r'诊断|diagnos', message, re.I))}
+                          and (name != PRACTICE_NAME or practice_request)}
     local_program, local_instruction = None, None
     if not task and not source_context['notes']:
         if CURRENT_COURSE_NAME in available_programs and (local_instruction := compile_current_course_locator(message)):
             local_program = CURRENT_COURSE_NAME
             history.clear()
-        elif PRACTICE_NAME in available_programs and (local_instruction := compile_practice_request(message)):
-            local_program = PRACTICE_NAME
+        elif PRACTICE_NAME in available_programs and local_practice is not None:
+            local_program, local_instruction = PRACTICE_NAME, local_practice
     course_card_request = PROGRAM_NAME in available_programs and TIMESTAMP_ONLY.search(message)
     discovery = next((tool for tool in tools if tool['function']['name'] == 'find_learning_tools'), None)
     named_tools = set(re.findall(r'(?<![a-zA-Z0-9_])session_[a-z][a-z0-9_]{0,39}(?![a-zA-Z0-9_])', message))

@@ -101,11 +101,13 @@ def test_practice_instruction_never_widens_a_missing_or_ambiguous_match():
 
 
 def test_practice_compiler_requires_an_explicit_card_and_literal_topic():
-    request = '请给我2道「第2项现金流折现」知识点的练习题。只要练习卡。'
-    assert compile_practice_request(request) == {'find': '第2项现金流折现', 'limit': 2}
+    request = '请给我2道「第２项现金流折现」知识点的练习题。只要练习卡。'
+    for written, count in (('2', 2), ('２', 2), ('两', 2), (' 二 ', 2), ('三', 3), ('十', 10), ('１０', 10)):
+        assert compile_practice_request(request.replace('我2道', f'我{written}道')) == {'find': '第２项现金流折现', 'limit': count}
     for invalid in (request.replace('我2道', '我11道'), request.replace('我2道', '我0道'),
+                    request.replace('我2道', '我十一道'), request.replace('我2道', '我几道'),
                     request.replace('只要练习卡。', '还要讲解。'), '先提示我一下。' + request,
-                    request.replace('「第2项现金流折现」', '第2项现金流折现')):
+                    request.replace('「第２项现金流折现」', '第２项现金流折现')):
         assert compile_practice_request(invalid) is None
 
 
