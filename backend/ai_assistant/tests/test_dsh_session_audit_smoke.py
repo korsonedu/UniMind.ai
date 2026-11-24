@@ -596,6 +596,8 @@ def test_dsh_migration_gate_verifies_the_exact_source_snapshot(user, tmp_path, s
     assert not Conversation.objects.exists()
     restored = copytree(source, tmp_path / 'restored')
     audit(restored, import_verified=True)
+    with pytest.raises(CommandError, match='配对恢复验收需要'):
+        audit(restored, require_paired_restore=True, expected_state_fingerprint=inventory['state_fingerprint'])
     gate = {'require_migrated': True, 'expected_state_fingerprint': inventory['state_fingerprint'],
             'database_backup': str(backup), 'expected_database_fingerprint': inventory['database_fingerprint']}
     report = audit(restored, blocked=True, **gate)
@@ -633,7 +635,8 @@ def test_dsh_migration_gate_verifies_the_exact_source_snapshot(user, tmp_path, s
     assert report['state_fingerprint_verified'] and not report['snapshot_pair_verified']
     empty = tmp_path / 'empty'
     empty.mkdir()
-    assert audit(empty, require_migrated=True)['migrated']
+    inventory_only = audit(empty, require_migrated=True)
+    assert inventory_only['migrated'] and 'paired_migration_verified' not in inventory_only
     report = audit(empty, blocked=True, **gate)
     assert report['blockers'] == {'state_fingerprint_mismatch': 1} and not report['state_fingerprint_verified']
     changed = restored / owner / session_id / 'transcript.json'

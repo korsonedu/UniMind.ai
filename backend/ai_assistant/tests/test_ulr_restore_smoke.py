@@ -153,7 +153,7 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
     restored_env = {**env, 'DB_NAME': target}
     command = [sys.executable, str(Path(settings.BASE_DIR) / 'manage.py'), 'audit_dsh_sessions',
                '--state-dir', str(state), '--api-url', api_url]
-    gate = [*command, '--require-migrated', '--database-backup', str(backup), '--expected-state-fingerprint',
+    gate = [*command, '--require-paired-restore', '--database-backup', str(backup), '--expected-state-fingerprint',
             fingerprints['state_fingerprint'], '--expected-database-fingerprint', checksum]
     def sql_probe(database, query):
         return subprocess.run(['psql', '-XAtv', 'ON_ERROR_STOP=1', *pg_options, '-d', database, '-c', query],
@@ -175,6 +175,7 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
         blocked = subprocess.run(gate, env=restored_env, capture_output=True, text=True, timeout=30)
         report = json.loads(blocked.stdout)
         assert blocked.returncode != 0 and report['snapshot_pair_verified'] and report['database_restore_verified']
+        assert not report['paired_migration_verified']
         assert report['blockers'] == {'unsettled_legacy_question_pipelines': 1}
         assert report['unsettled_question_pipeline_ids'] == [unsettled.pk]
         # Settle the synthetic review on the restored copy for the continuation check.
@@ -190,16 +191,19 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
         verified = subprocess.run(gate, env=restored_env, capture_output=True, text=True, timeout=30, check=True)
         report = json.loads(verified.stdout)
         assert report['snapshot_pair_verified'] and report['database_restore_verified'] and report['migrated']
+        assert report['paired_migration_verified']
         assert report['site_matched'] == report['already_imported'] == 1
         assert report['target_runtime'] == 'ulr'
         legacy = subprocess.run(gate, env={**restored_env, 'UNIMIND_LEARNING_RUNTIME': 'legacy'},
                                 capture_output=True, text=True, timeout=30)
         report = json.loads(legacy.stdout)
         assert legacy.returncode != 0 and report['snapshot_pair_verified'] and report['database_restore_verified']
+        assert not report['paired_migration_verified']
         assert report['blockers'] == {'target_runtime_not_ulr': 1}
         wrong = subprocess.run(gate, env=env, capture_output=True, text=True, timeout=30)
         report = json.loads(wrong.stdout)
         assert wrong.returncode != 0 and report['snapshot_pair_verified'] and not report['database_restore_verified']
+        assert not report['paired_migration_verified']
         assert report['blockers']['database_restore_fingerprint_mismatch'] == 1
 
         broken = tmp_path / 'broken.sql.gz'

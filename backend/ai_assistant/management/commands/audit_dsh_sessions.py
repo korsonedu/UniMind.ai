@@ -405,6 +405,8 @@ class Command(BaseCommand):
         parser.add_argument('--import-verified', action='store_true')
         parser.add_argument('--require-migrated', action='store_true',
                             help='Fail if the full read-only audit finds unresolved histories or running legacy work.')
+        parser.add_argument('--require-paired-restore', action='store_true',
+                            help='Require a full audit against both snapshot files and the restored ULR database.')
         parser.add_argument('--state-fingerprint', action='store_true', help='Record the full source state fingerprint.')
         parser.add_argument('--expected-state-fingerprint', help='Verify the source state fingerprint at the migration gate.')
         parser.add_argument('--database-backup', help='Fingerprint the database backup paired with the source state.')
@@ -416,7 +418,8 @@ class Command(BaseCommand):
         parsed = urlsplit(api_url)
         if not root.is_absolute() or not root.is_dir() or parsed.scheme != 'http' or parsed.hostname not in ('127.0.0.1', 'localhost', '::1'):
             raise CommandError('需要绝对路径的 DSH 状态目录和该目录原先使用的本机 API 地址。')
-        write, gate = options['import_verified'], options['require_migrated']
+        paired_gate = options['require_paired_restore']
+        write, gate = options['import_verified'], options['require_migrated'] or paired_gate
         if gate and (write or options['user_id'] is not None):
             raise CommandError('迁移验收须对完整快照执行只读盘点。')
         expected_state = options['expected_state_fingerprint']
@@ -427,6 +430,8 @@ class Command(BaseCommand):
             raise CommandError('状态快照指纹须对完整目录只读记录。')
         database_backup = options['database_backup']
         expected_database = options['expected_database_fingerprint']
+        if paired_gate and not (database_backup and expected_state and expected_database):
+            raise CommandError('配对恢复验收需要状态指纹、数据库备份文件及备份指纹。')
         if expected_database is not None and (
                 not database_backup or expected_state is None or not HEX_DIGEST.fullmatch(expected_database)):
             raise CommandError('验证数据库备份须提供配对的源状态指纹和数据库 SHA-256 指纹。')
@@ -558,6 +563,8 @@ class Command(BaseCommand):
         if gate:
             blockers = {key: counts[key] for key in MIGRATION_BLOCKERS if counts[key]}
             report.update(migrated=not blockers, blockers=blockers)
+            if expected_database is not None:
+                report['paired_migration_verified'] = not blockers
         self.stdout.write(json.dumps(report, sort_keys=True))
         if gate and blockers:
             raise CommandError('DSH 退役盘点存在未完成的迁移项。')
