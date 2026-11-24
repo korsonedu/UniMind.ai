@@ -85,7 +85,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
     review_request = '请只复盘我刚提交的原作答和已有分数。'
     diagnostic_request = '请准备迁移验收用的首次诊断。'
     practice_prompt = '请先查合成验收知识点，再根据第一项出一道练习题。'
-    explicit_practice_prompt = '请给我1道「合成验收」知识点的练习题。只要练习卡。'
+    explicit_practice_prompt = '请给我一道「合成验收」知识点的练习题。只要练习卡。'
     practice_marker = 'PRACTICE_PROGRAM_BANK_QUESTION'
     practice_rubric = 'PRACTICE_PROGRAM_PRIVATE_RUBRIC'
     practice_hint = '请查原练习题并给我一个提示。'
@@ -813,7 +813,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         return events
 
     def run(engine, model_calls, focused_task, message, conversation=None, note_ids=None, course_context=None, capture=None,
-            *, replay_error=None):
+            *, replay_error=None, capture_as=None):
         settings.UNIMIND_ULR_PROTOTYPE = engine == 'ulr'
         conv = conversation or Conversation.objects.create(user=user, bot=bot,
             project=project if focused_task else None, conversation_id=uuid4())
@@ -869,7 +869,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                 if event.get('type') == 'step' and event['status'] in ('succeeded', 'failed')]
         if capture is not None:
             attempt = AIUsageReservation.objects.get(user=user, request_id=request_id).attempt_id
-            capture.append((engine, str(request_id), str(attempt), stats['model_requests'], samples))
+            capture.append((capture_as or engine, str(request_id), str(attempt), stats['model_requests'], samples))
         return final['metadata']['dsh_cards'], stats
 
     def capture_pair(name, sample, captures):
@@ -884,7 +884,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             records.append(tool['capture_turn']({**sample, 'runtime': engine, 'trial': 1, 'revision': revision,
                 'request_id': request_id, 'attempt_id': attempt_id, 'model': 'deepseek-flash',
                 'evidence': 'protocol_smoke', 'metrics': {'model_requests': count}}, events))
-        operations = prepare_capture(repo, output, records, caplog, tool, ('dsh',))
+        operations = prepare_capture(repo, output, records, caplog, tool, sample['case']['tool_paths'].keys() - {'ulr'})
         for record in records:
             values = dict.fromkeys(tool['METRICS']) | record['metrics']
             trace = tool['reconcile'](record, values, operations)
@@ -1770,7 +1770,8 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                         if label == 'model_instruction' else nullcontext())
             with compiler, patch(f'ai_assistant.{executor}.execute_tool', wraps=execute_tool) as reads:
                 cards, stats = run(engine, calls, None, direct_prompt, course_context=selected_course,
-                                   capture=direct_captures if label != 'model_instruction' else None)
+                                   capture=direct_captures,
+                                   capture_as='ulr_model_instruction' if label == 'model_instruction' else None)
             call, = reads.call_args_list
             arguments = call.kwargs['arguments'] if engine == 'dsh' else call.args[2]
             assert call.args[1] == 'search_asr' and arguments == {**tool_args, 'course_id': course.pk}
@@ -1781,8 +1782,10 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                 'serialized_request_bytes': sum(len(json.dumps(request, ensure_ascii=False,
                     separators=(',', ':')).encode()) for request in calls[before:])}
         assert [stats['model_requests'] for stats in direct_stats.values()] == [2, 1, 0]
-        capture_pair('direct-course-comparison', {**sample, 'case_id': 'literal-current-course-card',
-            'case': {**sample['case'], 'prompt': direct_prompt}}, direct_captures)
+        direct_case = {**sample['case'], 'prompt': direct_prompt}
+        for key in ('tool_paths', 'tool_steps'):
+            direct_case[key] = {**direct_case[key], 'ulr_model_instruction': direct_case[key]['ulr']}
+        capture_pair('direct-course-comparison', {'case_id': 'literal-current-course-card', 'case': direct_case}, direct_captures)
         anchored_stats['direct_dispatch'] = direct_stats
         program_stats['current_course'] = anchored_stats
         other_course.delete()
@@ -2265,7 +2268,8 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                         if label == 'model_instruction' else nullcontext())
             with compiler, patch(f'ai_assistant.{executor}.execute_tool', wraps=execute_tool) as reads:
                 cards, stats = run(engine, calls, None, explicit_practice_prompt,
-                                   capture=practice_captures if label != 'model_instruction' else None)
+                                   capture=practice_captures,
+                                   capture_as='ulr_model_instruction' if label == 'model_instruction' else None)
             assert [read.args[1] for read in reads.call_args_list] == ['search_knowledge_tree', 'get_practice_questions']
             card, = [card['payload'] for card in cards if card['type'] == 'practice_quiz']
             row, = card['questions']
@@ -2276,12 +2280,13 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                     separators=(',', ':')).encode()) for request in calls[before:])}
         assert [stats['model_requests'] for stats in direct_practices.values()] == [3, 1, 0]
         assert QuizExam.objects.filter(user=user).count() == exam_count
-        capture_pair('direct-practice-comparison', {'case_id': 'literal-practice-card', 'case': {
+        practice_steps = [['search_knowledge_tree', 'get_practice_questions']]
+        capture_pair('direct-practice-comparison', {'case_id': 'literal-practice-card-chinese-count', 'case': {
             'scenario': '知识点练习', 'prompt': explicit_practice_prompt,
             'reference': f'命中「{practice_point.name}」的原题，选项为甲、乙；作答前不显示答案。',
             'criteria': {'source': '卡片只包含指定知识点的原题。', 'answer_protection': '卡片没有包含答案。'},
-            'tool_paths': {'dsh': ['search_knowledge_tree', 'get_practice_questions'], 'ulr': ['run_practice_tools']},
-            'tool_steps': {'ulr': [['search_knowledge_tree', 'get_practice_questions']]},
+            'tool_paths': {'dsh': practice_steps[0], 'ulr': ['run_practice_tools'], 'ulr_model_instruction': ['run_practice_tools']},
+            'tool_steps': {'ulr': practice_steps, 'ulr_model_instruction': practice_steps},
         }}, practice_captures)
 
         anthropic.response_status = 422
