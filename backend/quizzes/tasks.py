@@ -26,7 +26,9 @@ def question_pipeline_delivery(task):
     payload = task.payload
     if task.task_type != 'ai_generate' or not isinstance(payload, dict) or payload.get('kind'):
         return None
-    if payload.get('bulk_mode') is True and {'subject', 'total_target'} <= payload.keys():
+    if payload.get('bulk_mode') is True:
+        if not {'subject', 'total_target'} <= payload.keys():
+            return None
         fields = ('subject', 'total_target', 'difficulty_dist', 'type_dist', 'kp_code', 'institution_only')
         arguments = {field: payload[field] for field in fields if field in payload}
         return run_bulk_pipeline_task, {**arguments, 'task_id': task.pk, 'institution_id': task.institution_id}
@@ -92,7 +94,7 @@ def resume_question_pipeline(task, delivery):
     return True
 
 
-def _run_queued_question_pipeline(task_id, execute, *, redelivered):
+def _run_queued_question_pipeline(task_id, worker_name, execute, *, redelivered):
     from ai_assistant.services.ulr_config import ulr_enabled
     from ai_assistant.services.ulr_structured import question_pipeline_runtime
     from ai_engine.observability import observe_background
@@ -111,6 +113,10 @@ def _run_queued_question_pipeline(task_id, execute, *, redelivered):
         task = ContentPipelineTask.objects.select_related('institution').filter(pk=task_id, status='running').first()
         if task is None:
             return
+        delivery = question_pipeline_delivery(task)
+        if delivery is None or delivery[0].name != worker_name:
+            logger.warning('Question pipeline task %s does not match the worker %s', task_id, worker_name)
+            return
         native = task.payload.get('requires_ulr') is True or ulr_enabled()
         if native and question_pipeline_may_have_partial_result(task):
             logger.warning('Legacy bulk task %s has progress and needs review before ULR takeover', task_id)
@@ -118,9 +124,12 @@ def _run_queued_question_pipeline(task_id, execute, *, redelivered):
         if native and task.payload.get('requires_ulr') is not True:
             task.payload['requires_ulr'] = True
             task.save(update_fields=['payload', 'updated_at'])
+        _, arguments = delivery
+        arguments.pop('task_id')
+        arguments.pop('institution_id', None)
         try:
             with question_pipeline_runtime(native), observe_background('ulr' if native else 'legacy', f'teaching:{task_id}'):
-                execute(task)
+                execute(task, **arguments)
         except Exception as exc:
             logger.exception('Question pipeline task failed: task_id=%s', task_id)
             task.status = 'failed'
@@ -133,16 +142,18 @@ def _run_queued_question_pipeline(task_id, execute, *, redelivered):
                 cursor.execute('SELECT pg_advisory_unlock(%s)', [key])
 
 
+# Keep accepting the original Celery arguments for messages already queued.
 @shared_task(bind=True, name='quizzes.run_adversarial_pipeline_task', soft_time_limit=600, time_limit=QUESTION_PIPELINE_HARD_LIMIT)
 def run_adversarial_pipeline_task(self, task_id: int, kp_ids: list, questions_per_kp: int, difficulty: str = "normal", types: list = None):
     from quizzes.models import KnowledgePoint
     from quizzes.services.adversarial_pipeline import _execute_pipeline
 
-    def execute(task):
+    def execute(task, kp_ids, questions_per_kp, difficulty='normal', types=None):
         kps = list(KnowledgePoint.objects.filter(id__in=kp_ids))
         _execute_pipeline(task, kps, questions_per_kp, difficulty=difficulty, types=types, institution=task.institution)
 
-    return _run_queued_question_pipeline(task_id, execute, redelivered=(self.request.delivery_info or {}).get('redelivered'))
+    return _run_queued_question_pipeline(task_id, self.name, execute,
+        redelivered=(self.request.delivery_info or {}).get('redelivered'))
 
 
 @shared_task(bind=True, name='quizzes.run_bulk_pipeline_task', soft_time_limit=600, time_limit=QUESTION_PIPELINE_HARD_LIMIT)
@@ -158,10 +169,8 @@ def run_bulk_pipeline_task(
     institution_only: bool = False,
 ):
     from quizzes.services.bulk_pipeline import _execute_bulk_pipeline
-    from users.models import Institution
 
-    def execute(task):
-        institution = Institution.objects.get(id=institution_id) if institution_id else None
+    def execute(task, subject, total_target, difficulty_dist=None, type_dist=None, kp_code=None, institution_only=False):
         _execute_bulk_pipeline(
             task=task,
             subject=subject,
@@ -169,11 +178,12 @@ def run_bulk_pipeline_task(
             difficulty_dist=difficulty_dist or {},
             type_dist=type_dist or {},
             kp_code=kp_code,
-            institution=institution,
+            institution=task.institution,
             institution_only=institution_only,
         )
 
-    return _run_queued_question_pipeline(task_id, execute, redelivered=(self.request.delivery_info or {}).get('redelivered'))
+    return _run_queued_question_pipeline(task_id, self.name, execute,
+        redelivered=(self.request.delivery_info or {}).get('redelivered'))
 
 
 # ═══════════════════════════════════════════

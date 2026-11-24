@@ -26,6 +26,7 @@ def test_legacy_arc_settles_its_result_with_the_review_draft(user, settings, dja
     settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
     settings.UNIMIND_DSH_ENABLED = False
     point = KnowledgePoint.objects.create(code='arc-settlement', name='合成考点')
+    other = KnowledgePoint.objects.create(code='arc-outdated', name='旧消息中的考点')
     failed = ContentPipelineTask.objects.create(created_by=user, title='合成旧 ARC 出题', task_type='ai_generate',
         status='running', payload={'kp_ids': [point.pk], 'questions_per_kp': 1})
     with patch.object(run_adversarial_pipeline_task, 'delay') as queued, django_capture_on_commit_callbacks(execute=True):
@@ -53,12 +54,17 @@ def test_legacy_arc_settles_its_result_with_the_review_draft(user, settings, dja
             'function': {'name': name, 'arguments': json.dumps(result)},
         }]}}]}
 
-    with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider:
+    delayed = {**envelope, 'kp_ids': [other.pk], 'questions_per_kp': 2, 'difficulty': 'hard'}
+    with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider, \
+            patch.object(pipeline, '_execute_pipeline', wraps=pipeline._execute_pipeline) as execute:
         with patch.object(ContentPipelineTask.objects, 'create', side_effect=RuntimeError('合成待审草稿写入失败')):
             run_adversarial_pipeline_task(failed.pk, [point.pk], 1)
         with override_settings(UNIMIND_LEARNING_RUNTIME='legacy', UNIMIND_ULR_PROTOTYPE=False):
+            run_adversarial_pipeline_task(**delayed)
             run_adversarial_pipeline_task(**envelope)
-            run_adversarial_pipeline_task(**envelope)
+        assert execute.call_count == 2
+        assert execute.call_args.args[1:] == ([point], 1)
+        assert execute.call_args.kwargs['difficulty'] == 'normal'
         assert [call.kwargs['operation'] for call in provider.call_args_list] == list(outputs) * 2
     failed.refresh_from_db()
     completed.refresh_from_db()
@@ -88,7 +94,8 @@ def test_ulr_reuses_legacy_bulk_delivery_and_settles_all_questions_together(admi
     for index in range(2):
         KnowledgePoint.objects.create(name=f'合成考点 {index}', code=f'BULK-{index}', subject=subject)
     failed, resumed = [ContentPipelineTask.objects.create(created_by=user, title=subject, task_type='ai_generate',
-        status='running', payload={'bulk_mode': True, 'subject': subject, 'total_target': 20}) for _ in range(2)]
+        status='running', payload={'bulk_mode': True, 'subject': subject, 'total_target': 20,
+            'difficulty_dist': {'normal': 1}, 'type_dist': {'objective': 1}}) for _ in range(2)]
     running, release = Event(), Event()
     hold = False
     modes = []
@@ -175,8 +182,9 @@ def test_ulr_reuses_legacy_bulk_delivery_and_settles_all_questions_together(admi
 @pytest.mark.django_db(transaction=True)
 def test_ulr_requeues_a_lost_bulk_delivery_on_the_original_task(admin_client, admin_user, user, settings):
     from quizzes.models import ContentPipelineTask, KnowledgePoint, Question
-    from quizzes.services import bulk_pipeline
-    from quizzes.tasks import QUESTION_PIPELINE_QUEUE_ERROR, run_bulk_pipeline_task
+    from quizzes.services import adversarial_pipeline, bulk_pipeline
+    from quizzes.tasks import QUESTION_PIPELINE_QUEUE_ERROR, run_adversarial_pipeline_task, run_bulk_pipeline_task
+    from users.models import Institution
 
     settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
     settings.UNIMIND_DSH_ENABLED = False
@@ -201,11 +209,19 @@ def test_ulr_requeues_a_lost_bulk_delivery_on_the_original_task(admin_client, ad
         assert admin_client.post(url).status_code == 200
         envelope = queued.call_args.kwargs
         assert queued.call_count == 3 and all(call.kwargs == envelope for call in queued.call_args_list)
+    other_scope = Institution.objects.create(name='旧消息中的机构', slug='old-bulk-scope')
+    other = KnowledgePoint.objects.create(name='旧消息中的考点', code='BULK-OUTDATED',
+        subject='旧消息中的学科', institution=other_scope)
+    delayed = {**envelope, 'subject': other.subject, 'kp_code': other.code, 'institution_id': other_scope.pk,
+               'institution_only': True, 'total_target': 2}
+    with patch.object(adversarial_pipeline, '_execute_pipeline') as wrong_pipeline:
+        run_adversarial_pipeline_task(task.pk, [other.pk], 2)
+        wrong_pipeline.assert_not_called()
     with patch.object(bulk_pipeline, '_author_generate', return_value=[{'question': '合成恢复题', 'kp_id': point.pk}]) as author, \
             patch.object(bulk_pipeline, '_classifier_tag', return_value={}):
+        run_bulk_pipeline_task(**delayed)
         run_bulk_pipeline_task(**envelope)
-        run_bulk_pipeline_task(**envelope)
-        author.assert_called_once()
+        author.assert_called_once_with([point], q_per_kp=1, difficulty='normal', types=['objective'])
     task.refresh_from_db()
     assert ContentPipelineTask.objects.count() == 1 and task.status == 'completed' and not task.error_message
     assert Question.objects.get().knowledge_point_id == point.pk and task.result['questions_saved'] == 1
