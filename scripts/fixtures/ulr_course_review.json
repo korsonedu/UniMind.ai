@@ -1,6 +1,22 @@
 {
   "case_id": "course-discount-transcript",
   "delivery_cases": {
+    "direct": {
+      "case_id": "literal-current-course-card",
+      "scenario": "当前课程时间戳定位",
+      "prompt": "请定位当前课程的「折现率」讲稿。只要时间点。",
+      "reference": "当前课程《折现率迁移课》的对应讲稿在 01:00。另一门同名课的 02:00 片段不属于当前课。",
+      "criteria": {
+        "source": "只提供当前课程的讲稿来源。",
+        "timestamp": "来源定位到 01:00，只交付定位结果。"
+      },
+      "tool_paths": {
+        "dsh": ["search_asr"],
+        "ulr_model_instruction": [["locate_current_course_transcript", "find_learning_tools"]],
+        "ulr": ["locate_current_course_transcript"]
+      },
+      "tool_steps": {"ulr_model_instruction": [["search_asr"]], "ulr": [["search_asr"]]}
+    },
     "timestamp": {
       "case_id": "course-discount-timestamp",
       "scenario": "课程伴学时间戳直达",

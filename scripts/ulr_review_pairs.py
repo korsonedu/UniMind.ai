@@ -12,7 +12,7 @@ from statistics import median
 from uuid import UUID
 
 
-SYSTEMS = ('dsh', 'ulr_individual', 'ulr')
+SYSTEMS = ('dsh', 'ulr_individual', 'ulr_model_instruction', 'ulr')
 METRICS = ('model_requests', 'tool_failures', 'input_tokens', 'output_tokens', 'cached_input_tokens',
            'embedding_requests', 'embedding_input_tokens', 'first_visible_ms', 'completion_ms', 'cost_microusd')
 EVIDENCE = ('protocol_smoke', 'same_model')
@@ -133,7 +133,7 @@ def reconcile(record, values, operations):
     local_calls = [call for call in calls if call['kind'] == 'local_instruction']
     model_calls = [call for call in calls if call['kind'] not in ('embedding', 'local_instruction')]
     embedding_calls = [call for call in calls if call['kind'] == 'embedding']
-    runtime = 'ulr' if record['runtime'] == 'ulr_individual' else record['runtime']
+    runtime = 'dsh' if record['runtime'] == 'dsh' else 'ulr'
     if local_calls:
         local = local_calls[0]
         if (record['runtime'] != 'ulr' or local['runtime'] != 'ulr' or len(attempts) != 1 or len(calls) != 1

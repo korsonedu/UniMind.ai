@@ -1,5 +1,20 @@
 {
   "case_id": "practice-discount-point",
+  "delivery_cases": {
+    "direct": {
+      "case_id": "literal-practice-card",
+      "prompt": "请给我1道「现金流折现」知识点的练习题。只要练习卡。",
+      "tool_paths": {
+        "dsh": ["search_knowledge_tree", "get_practice_questions"],
+        "ulr_model_instruction": [["run_practice_tools", "find_learning_tools"]],
+        "ulr": ["run_practice_tools"]
+      },
+      "tool_steps": {
+        "ulr_model_instruction": [["search_knowledge_tree", "get_practice_questions"]],
+        "ulr": [["search_knowledge_tree", "get_practice_questions"]]
+      }
+    }
+  },
   "case": {
     "scenario": "知识点练习",
     "prompt": "请先查现金流折现知识点，再根据第一项给我一道练习题，让我在卡片里作答。",
