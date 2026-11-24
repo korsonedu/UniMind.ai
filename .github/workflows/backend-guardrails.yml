@@ -119,6 +119,7 @@ jobs:
           ai_assistant/tests/test_ulr_process_smoke.py
           ai_assistant/tests/test_ulr_queue_smoke.py
           ai_assistant/tests/test_ulr_restore_smoke.py
+          ai_assistant/tests/test_chat_recovery_smoke.py
           quizzes/tests_exam_async.py::test_ulr_exam_waits_for_the_question_edit_before_settlement
 
       - name: QA smoke check
@@ -259,6 +260,9 @@ jobs:
               assert monotonic() < deadline, 'Celery Beat did not open its schedule file'
               sleep(0.5)
           PYTHON
+
+      - name: Verify receipt protection over packaged HTTP
+        run: docker compose exec -T web python - < scripts/ulr_release_receipt_smoke.py
 
       - name: Show container logs
         if: failure()
