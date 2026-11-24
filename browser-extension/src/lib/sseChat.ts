@@ -188,7 +188,7 @@ export async function streamChat(
 ): Promise<ChatStreamState> {
   const response = await api.fetch('/ai/chat/stream/', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream, application/json' },
     body: JSON.stringify(payload),
     signal: options.signal,
   });

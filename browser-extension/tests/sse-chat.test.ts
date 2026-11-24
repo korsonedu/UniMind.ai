@@ -57,6 +57,7 @@ describe('小宇 SSE', () => {
     expect(request?.credentials).toBe('omit');
     expect(new Headers(request?.headers).get('Authorization')).toBe('Token fixture-token');
     expect(new Headers(request?.headers).get('Accept-Language')).toBe('zh-CN');
+    expect(new Headers(request?.headers).get('Accept')).toBe('text/event-stream, application/json');
     expect(JSON.parse(String(request?.body))).toEqual(message);
   });
 
