@@ -93,14 +93,14 @@ def read_operations(paths):
                 operation, success, duration, error, raw = match.groups()
                 meta = literal_eval(raw)
                 kind = meta.get('kind', 'model')
-                if (not all(meta.get(key) for key in ('request_id', 'attempt_id', 'model'))
-                        or kind != 'embedding' and not meta.get('max_output_tokens')):
+                if not all(meta.get(key) for key in ('request_id', 'attempt_id', 'model')):
                     continue
                 operations[meta['request_id'], meta['attempt_id']].append({
                     'log_file': path.name, 'log_line': line_number, 'runtime': meta.get('runtime'),
                     'operation': operation, 'kind': kind, 'success': success == 'True', 'attempt_id': meta['attempt_id'],
                     'duration_ms': int(duration), 'error': error, 'model': meta['model'],
-                    'reported_model': meta.get('reported_model'), 'max_output_tokens': int(meta['max_output_tokens']) if 'max_output_tokens' in meta else None,
+                    'reported_model': meta.get('reported_model'),
+                    'max_output_tokens': int(limit) if (limit := meta.get('max_output_tokens')) else None,
                     'gateway_id': meta.get('gateway_id'),
                     **{key: meta[key] for key in ('stage', 'input_count', 'source_message_id', 'answer_message_id') if key in meta},
                     'offered_tools': [tool for tool in meta.get('offered_tools', '').split(',') if tool],
@@ -312,6 +312,28 @@ def prepare(records, output, baseline, operations=None):
                                          'baseline': baseline, 'pairs': manifest})
 
 
+def request_configurations(trace):
+    configurations = defaultdict(set)
+    for call in trace.get('operations', []):
+        kind, limit = call.get('kind', 'model'), call.get('max_output_tokens')
+        if (not call.get('operation') or not call.get('model') or not call.get('reported_model')
+                or kind != 'embedding' and (type(limit) is not int or limit <= 0)):
+            return {}
+        configurations[call['operation']].add((kind, call['model'], call['reported_model'], limit))
+    return configurations
+
+
+def request_config_issue(before, after):
+    before, after = request_configurations(before), request_configurations(after)
+    if not before or not after:
+        return 'missing_request_config'
+    # Match settings, allowing a runtime to repeat an otherwise identical call fewer times.
+    if (set().union(*before.values()) != set().union(*after.values())
+            or any(before[key] != after[key] for key in before.keys() & after.keys())):
+        return 'request_config_mismatch'
+    return None
+
+
 def report(manifest, review):
     if review['packet_id'] != manifest['packet_id']:
         raise ValueError('评阅文件与对应的私有映射不匹配。')
@@ -320,6 +342,7 @@ def report(manifest, review):
         raise ValueError('评阅文件存在重复、缺失或额外的样本。')
 
     baseline = manifest['baseline']
+    official = manifest['evidence'] == 'same_model'
     groups = defaultdict(list)
     revisions = {}
     for pair_id, pair in manifest['pairs'].items():
@@ -331,7 +354,7 @@ def report(manifest, review):
             raise ValueError(f'{pair_id} 缺少 A 或 B 的评阅。')
         arms = {}
         for label, arm in pair['mapping'].items():
-            if manifest['evidence'] == 'same_model':
+            if official:
                 require_same_revision(revisions, arm)
             checks = scores[label]
             if set(checks) != set(pair['criteria']) or any(type(value) is not bool for value in checks.values()):
@@ -348,7 +371,7 @@ def report(manifest, review):
         all_passed = completed.copy()
         tool_results = {runtime: Counter() for runtime in completed}
         compared_pairs = model_verified_pairs = 0
-        unverified_model_pairs, quality_issues = [], []
+        unverified_model_pairs, request_config_issues, quality_issues = [], [], []
         for pair in pairs:
             arms = pair['arms']
             old, new = arms[baseline], arms['ulr']
@@ -364,9 +387,13 @@ def report(manifest, review):
                     'first_pass_regressed': first_pass_regressed,
                     'ulr_failed_criteria': failed_criteria,
                     'regressed_criteria': [criterion for criterion in failed_criteria if old['checks'][criterion]]})
-            if not verified and manifest['evidence'] == 'same_model':
-                unverified_model_pairs.append(location)
-                continue
+            if official:
+                if not verified:
+                    unverified_model_pairs.append(location)
+                    continue
+                if issue := request_config_issue(old['trace'], new['trace']):
+                    request_config_issues.append({**location, 'reason': issue})
+                    continue
             compared_pairs += 1
             for runtime, arm in arms.items():
                 completed[runtime] += arm['completed']
@@ -394,7 +421,7 @@ def report(manifest, review):
                 metrics[metric]['p95_ms'] = {baseline: sorted(baseline_times)[tail], 'ulr': sorted(ulr_times)[tail]}
         results[scenario] = {'pair_count': len(pairs), 'model_verified_pairs': model_verified_pairs,
                              'compared_pairs': compared_pairs, 'unverified_model_pairs': unverified_model_pairs,
-                             'quality_issues': quality_issues,
+                             'request_config_issues': request_config_issues, 'quality_issues': quality_issues,
                              'completed': completed, 'all_criteria_passed': all_passed,
                              'criterion_pass_counts': criteria, 'metrics': metrics, 'tool_quality': tool_results, 'pairs': pairs}
     return {'evidence': manifest['evidence'], 'baseline': baseline, 'scenarios': results}
