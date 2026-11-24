@@ -194,7 +194,8 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
         combined = [('run_course_tools', {'find': '折现率'})]
         if delivery:
             individual = individual[1:]
-            # The mixed task exercises the kernel's fallback after a wrong model choice.
+        if delivery == 'explanation':
+            # An old client may still send a card hint for a mixed request.
             combined[0][1]['output'] = 'card'
         reply = '已找到 01:00 的讲稿片段。' if delivery == 'timestamp' else REPLY
     CourseStudentStatus.objects.create(user=user, is_course_student=True)
@@ -276,7 +277,7 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
             if kwargs['name'] == 'run_course_tools':
                 submitted = 'invalid'
                 if isinstance(arguments, dict):
-                    submitted = 'answer' if 'output' not in arguments else 'card' if arguments['output'] == 'card' else 'invalid'
+                    submitted = 'automatic' if 'output' not in arguments else 'card' if arguments['output'] == 'card' else 'invalid'
                 course_attempts.append({'requested': submitted,
                     'compiled': None if result.get('error') else 'card' if result.get('_ulr_card_only') else 'answer'})
             return result
@@ -375,7 +376,9 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
         if delivery:
             native = records[-1]
             expected = sample['case']['expected_delivery']
-            assert native['delivery_selection'] == {'expected': expected, 'attempts': [{'requested': 'card', 'compiled': expected}]}
+            requested = 'automatic' if delivery == 'timestamp' else 'card'
+            assert native['delivery_selection'] == {'expected': expected,
+                'attempts': [{'requested': requested, 'compiled': expected}]}
             assert native['review']['answer'] == ('已找到所选课程的讲稿片段。' if delivery == 'timestamp' else REPLY)
         baseline = records[0]
         trace = {'operations': operations[baseline['request_id'], baseline['attempt_id']]}

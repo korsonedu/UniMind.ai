@@ -1651,7 +1651,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             program_stats[f'{engine}_{mode}'] = stats
         assert all(card == source_cards[0] for card in source_cards)
         assert program_stats['dsh_individual']['model_requests'] == 3
-        assert program_stats['ulr_compact']['model_requests'] == 2
+        assert program_stats['ulr_compact']['model_requests'] == 1
         assert program_stats['ulr_individual']['model_requests'] == 3
         assert program_stats['ulr_timestamp_card']['model_requests'] == 1
         only_prompt = '请查指定的折现率课程讲稿，同名课程请先问我。'

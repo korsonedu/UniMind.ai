@@ -14,7 +14,7 @@ NAME = 'run_course_tools'
 PRACTICE_NAME = 'run_practice_tools'
 CURRENT_COURSE_NAME = 'locate_current_course_transcript'
 # Bump when the instruction grammar or its bound operation contracts change.
-VERSION = 14
+VERSION = 15
 # Earlier versions with the same operations may still echo version and rank.
 LEGACY_VERSION = 6
 PROGRAM_OPS = {
@@ -82,14 +82,13 @@ def program_tool(name, required, properties, rules=''):
 
 FIND_PROPERTIES = {'find': {**TEXT, 'description': '要查找的课程或知识点'}, 'subject': TEXT}
 QUERY_PROPERTY = {**TEXT, 'description': '讲稿关键词'}
-COURSE_CARD_OUTPUT = {'type': 'string', 'enum': ['card'], 'description': (
-    '用户明确只要时间点或时间戳、无需讲解时填 card，内核直接交付来源卡。其他情况省略。')}
+LEGACY_COURSE_OUTPUT = {'type': 'string', 'enum': ['card']}
 TIMESTAMP_ONLY = re.compile(r'(?:^|[。！？.!?]\s*)(?:只要(?:视频)?时间(?:点|戳)|'
                             r'(?:just|only) (?:the )?timestamps?)\s*[。.!！]?\s*$', re.IGNORECASE)
 PROGRAM_TOOLS = {
     NAME: program_tool(NAME, 'find',
         {**FIND_PROPERTIES, 'query': {**QUERY_PROPERTY, 'description': '讲稿关键词，省略时沿用 find'},
-         'limit': SEARCH_ASR_SCHEMA['properties']['limit'], 'output': COURSE_CARD_OUTPUT}, SELECTION_RULE),
+         'limit': SEARCH_ASR_SCHEMA['properties']['limit']}, SELECTION_RULE),
     PRACTICE_NAME: program_tool(PRACTICE_NAME, 'find',
         {**FIND_PROPERTIES, **{field: GET_PRACTICE_QUESTIONS_SCHEMA['properties'][field]
                                for field in PRACTICE_FILTERS},
@@ -102,10 +101,14 @@ PROGRAM_TOOLS = {
 }
 
 
-def repair_program_tool(name, field):
+def program_properties(name):
     properties = PROGRAM_TOOLS[name]['function']['parameters']['properties']
+    return {**properties, 'output': LEGACY_COURSE_OUTPUT} if name == NAME else properties
+
+
+def repair_program_tool(name, field):
     schema = ({'type': 'integer', 'minimum': 1, 'maximum': MAX_RANKS[name]}
-              if field == 'rank' else properties[field])
+              if field == 'rank' else program_properties(name)[field])
     return program_tool(name, field, {field: schema}, f'只提交修正后的 {field}，其余参数沿用原值。')
 
 
@@ -130,8 +133,7 @@ def duplicate_program_scope(name, raw_arguments, advertised):
     if len(repeated) != 1:
         return None
     field, = repeated
-    properties = PROGRAM_TOOLS[name]['function']['parameters']['properties']
-    if field not in properties and not (field == 'rank' and name in MAX_RANKS):
+    if field not in program_properties(name) and not (field == 'rank' and name in MAX_RANKS):
         return None
     original = {key: value for key, value in pairs if key != field}
     if any(isinstance(value, (tuple, list)) for value in original.values()):
@@ -184,7 +186,7 @@ def run_program(arguments, allowed_tools, execute, *, name=NAME, message='', cur
     schema = PROGRAM_TOOLS[name]['function']['parameters']
     if not anchored:
         maximum_rank = MAX_RANKS[name]
-        schema = {**schema, 'properties': {**schema['properties'],
+        schema = {**schema, 'properties': {**program_properties(name),
                   'rank': {'type': 'integer', 'minimum': 1, 'maximum': maximum_rank}}}
     if isinstance(arguments, dict):
         arguments = arguments.copy()
@@ -217,7 +219,7 @@ def run_program(arguments, allowed_tools, execute, *, name=NAME, message='', cur
     if practice and arguments.get('q_type') == 'objective' and 'subjective_type' in arguments:
         return failure('invalid_arguments', '客观题不能指定主观题题型。', field='$.subjective_type')
 
-    card_only = arguments.get('output') == 'card' and (name != NAME or TIMESTAMP_ONLY.search(message) is not None)
+    card_only = TIMESTAMP_ONLY.search(message) is not None if name == NAME else arguments.get('output') == 'card'
     steps = []
     if anchored:
         if type(current_course_id) is not int or current_course_id < 1:

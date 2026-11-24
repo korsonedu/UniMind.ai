@@ -402,6 +402,7 @@ def report(manifest, review):
                 attempts, expected = selection['attempts'], selection['expected']
                 delivery_results['samples'] += 1
                 delivery_results['reached_compiler'] += bool(attempts)
+                delivery_results['automatic_submissions'] += bool(attempts and attempts[0]['requested'] == 'automatic')
                 delivery_results['first_choice_correct'] += bool(attempts and attempts[0]['requested'] == expected)
                 delivery_results['completed_expected_mode'] += bool(
                     new['completed'] and attempts and attempts[-1]['compiled'] == expected)

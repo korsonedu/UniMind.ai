@@ -1491,9 +1491,9 @@ def test_ulr_recovers_course_program_reply_without_repeating_queries(auth_client
             tools = {tool['function']['name']: tool['function'] for tool in kwargs['tools']}
             assert 'run_course_tools' in tools
             assert 'program' not in tools['find_learning_tools']['parameters']['properties']
+            assert 'output' not in tools['run_course_tools']['parameters']['properties']
             arguments = {'find': '折现率'}
-            if mode.startswith('card_'):
-                assert tools['run_course_tools']['parameters']['properties']['output']['enum'] == ['card']
+            if mode == 'card_with_explanation':
                 arguments['output'] = 'card'
             if mode == 'card_only':
                 kwargs['on_text']('正在查阅讲稿。')
