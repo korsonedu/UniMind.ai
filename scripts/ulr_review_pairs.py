@@ -115,7 +115,31 @@ def read_operations(paths):
     return operations
 
 
-def reconcile(record, values, operations):
+def priced_cost(calls, models):
+    weighted_tokens = 0
+    for call in calls:
+        prices = models.get(call['reported_model'], {})
+        total = call['input_tokens']
+        if call['requests'] != 1 or total is None or total < 0:
+            return None
+        if call['kind'] == 'embedding':
+            if 'embedding_input' not in prices:
+                return None
+            weighted_tokens += total * prices['embedding_input']
+            continue
+        output, cached = call['output_tokens'], call['cached_input_tokens']
+        if 'output' not in prices or output is None or output < 0:
+            return None
+        if cached is None and prices['uncached_input'] == prices['cached_input']:
+            cached = 0
+        if cached is None or not 0 <= cached <= total:
+            return None
+        weighted_tokens += ((total - cached) * prices['uncached_input']
+                            + cached * prices['cached_input'] + output * prices['output'])
+    return (weighted_tokens + 500_000) // 1_000_000
+
+
+def reconcile(record, values, operations, cost_rates=None):
     request_id = record['request_id']
     prefix, _, identifier = request_id.partition(':')
     if prefix in ('build', 'title', 'memory'):
@@ -172,10 +196,17 @@ def reconcile(record, values, operations):
         if not unobserved and values[metric] is not None and values[metric] != total:
             raise ValueError(f'{request_id} 的 {metric} 与可核对用量不符。')
         values[metric] = total
-    if (values['input_tokens'] is None or values['output_tokens'] is None
+    provider_calls = model_calls + embedding_calls
+    if local_calls or cost_rates is not None:
+        cost = 0 if local_calls else None
+        if not local_calls and not unobserved:
+            cost = priced_cost(provider_calls, cost_rates['models'])
+        if values['cost_microusd'] is not None and cost is not None and values['cost_microusd'] != cost:
+            raise ValueError(f'{request_id} 的成本与调用记录及费率不符。')
+        values['cost_microusd'] = cost
+    elif (values['input_tokens'] is None or values['output_tokens'] is None
             or counts.get('embedding_requests') and values['embedding_input_tokens'] is None):
         values['cost_microusd'] = None
-    provider_calls = model_calls + embedding_calls
     return {'request_id': request_id, 'attempt_ids': attempts, 'operations': calls, 'unobserved_attempt_ids': unobserved,
             **({'attempt_id': attempts[0]} if len(attempts) == 1 else {}),
             **({'local_instruction_verified': True} if local_calls else {}),
@@ -248,7 +279,19 @@ def response_fingerprint(pair):
     return sha256(json.dumps(material, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
-def prepare(records, output, baseline, operations=None):
+def prepare(records, output, baseline, operations=None, cost_rates=None):
+    if cost_rates is not None:
+        if operations is None:
+            raise ValueError('按费率对账需要 --operations。')
+        if (not isinstance(cost_rates, dict) or not isinstance(cost_rates.get('source'), str)
+                or not cost_rates['source'].strip() or not isinstance(cost_rates.get('models'), dict)
+                or not cost_rates['models']):
+            raise ValueError('费率文件需要来源和按回报模型列出的费率。')
+        for name, rates in cost_rates['models'].items():
+            if (not isinstance(name, str) or not name.strip() or not isinstance(rates, dict)
+                    or set(rates) not in ({'uncached_input', 'cached_input', 'output'}, {'embedding_input'})
+                    or any(type(rate) is not int or rate < 0 for rate in rates.values())):
+                raise ValueError('模型费率须完整，按每百万 token 的整数微美元填写。')
     groups = defaultdict(dict)
     for record in records:
         if record['runtime'] not in SYSTEMS:
@@ -302,7 +345,7 @@ def prepare(records, output, baseline, operations=None):
                 require_same_revision(revisions, mapping[label])
                 if operations is None:
                     raise ValueError('真实同模型样本需要 --operations 及原请求和执行批次编号。')
-            trace = reconcile(record, values, operations) if operations is not None else None
+            trace = reconcile(record, values, operations, cost_rates) if operations is not None else None
             if trace is not None:
                 identities = {(trace['request_id'], attempt_id) for attempt_id in trace['attempt_ids']}
                 if linked_attempts & identities:
@@ -330,7 +373,8 @@ def prepare(records, output, baseline, operations=None):
     output.mkdir(mode=0o700)
     write(output / 'review.json', {'packet_id': packet_id, 'pairs': packet})
     write(output / 'private-key.json', {'packet_id': packet_id, 'evidence': evidence_types.pop(),
-                                         'baseline': baseline, 'pairs': manifest})
+                                         'baseline': baseline, 'pairs': manifest,
+                                         **({'cost_rates': cost_rates} if cost_rates is not None else {})})
 
 
 def request_configurations(trace):
@@ -479,7 +523,8 @@ def report(manifest, review):
                              'completed': completed, 'all_criteria_passed': all_passed,
                              'criterion_pass_counts': criteria, 'metrics': metrics, 'tool_quality': tool_results,
                              **({'delivery_selection': delivery_results} if delivery_results else {}), 'pairs': pairs}
-    return {'evidence': manifest['evidence'], 'baseline': baseline, 'scenarios': results}
+    return {'evidence': manifest['evidence'], 'baseline': baseline, 'scenarios': results,
+            **({'cost_rate_source': manifest['cost_rates']['source']} if 'cost_rates' in manifest else {})}
 
 
 def main():
@@ -494,6 +539,7 @@ def main():
     build.add_argument('output', type=Path)
     build.add_argument('--baseline', choices=SYSTEMS[:-1], default='dsh')
     build.add_argument('--operations', type=Path, action='append', help='本地服务端调用日志，可重复给出。')
+    build.add_argument('--cost-rates', type=Path, help='按模型回报名称提供的费率 JSON。')
     scored = commands.add_parser('report')
     scored.add_argument('private_key', type=Path)
     scored.add_argument('review', type=Path)
@@ -507,7 +553,10 @@ def main():
                 output.write('\n')
         elif args.command == 'prepare':
             operations = read_operations(args.operations) if args.operations else None
-            prepare(read(args.records), args.output, args.baseline, operations)
+            cost_rates = read(args.cost_rates) if args.cost_rates else None
+            if args.cost_rates and not isinstance(cost_rates, dict):
+                raise ValueError('费率文件须为 JSON 对象。')
+            prepare(read(args.records), args.output, args.baseline, operations, cost_rates)
         else:
             print(json.dumps(report(read(args.private_key), read(args.review)), ensure_ascii=False, indent=2))
     except (OSError, KeyError, TypeError, ValueError, SyntaxError) as exc:
