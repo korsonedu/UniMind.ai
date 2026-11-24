@@ -215,6 +215,10 @@ def valid_site_receipt(answer, original_prompt, request_id, conversation_id, fin
     for field in ('course_context', 'note_attachments', 'note_selection', 'learning_activity'):
         if field in replayed_context and replayed_context[field] != original_prompt.metadata.get(field):
             return False
+    external_video = original_prompt.metadata.get('external_video_context')
+    if any(payload.get('external_video_context') != external_video
+           for payload in (replayed_context, metadata, answer.metadata)):
+        return False
     if answer.metadata.get('dsh_handoff') is True:
         if (metadata.get('dsh_handoff') is not True or metadata.get('dsh_session_id') is not None
                 or conversation_id != answer.conversation_id or original_request_id != str(request_id)):

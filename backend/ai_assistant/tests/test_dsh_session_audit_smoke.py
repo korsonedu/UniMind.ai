@@ -689,6 +689,26 @@ def test_dsh_migration_gate_requires_a_recoverable_receipt_for_each_product_turn
     ):
         AIUsageReservation.objects.filter(pk=receipt.pk).update(response=corrupted)
         audit({'invalid_site_receipt': 1})
+    video = {'video_key': 'bilibili:BV1ULRSmoke:p1', 'video_seconds': 60}
+    video_prompt = {**prompt_metadata, 'external_video_context': video}
+    video_answer = {**metadata, 'external_video_context': video}
+    AIChatMessage.objects.filter(pk=prompt.pk).update(metadata=video_prompt)
+    AIChatMessage.objects.filter(pk=answer.pk).update(metadata=video_answer)
+    video_payload = {**payload, 'metadata': video_answer,
+        'user_message': {**payload['user_message'], 'metadata': video_prompt}}
+    AIUsageReservation.objects.filter(pk=receipt.pk).update(response=video_payload)
+    audit({})
+    wrong_part = {**video, 'video_key': 'bilibili:BV1ULRSmoke:p2'}
+    for altered in (
+        {**video_payload, 'metadata': {**video_answer, 'external_video_context': wrong_part}},
+        {**video_payload, 'user_message': payload['user_message']},
+        {**video_payload, 'user_message': {**video_payload['user_message'],
+            'metadata': {**video_prompt, 'external_video_context': wrong_part}}},
+    ):
+        AIUsageReservation.objects.filter(pk=receipt.pk).update(response=altered)
+        audit({'invalid_site_receipt': 1})
+    AIChatMessage.objects.filter(pk=prompt.pk).update(metadata=prompt_metadata)
+    AIChatMessage.objects.filter(pk=answer.pk).update(metadata=metadata)
     AIUsageReservation.objects.filter(pk=receipt.pk).update(response=payload, request_id=uuid4())
     audit({'invalid_site_receipt': 1})
     AIUsageReservation.objects.filter(pk=receipt.pk).update(request_id=request_id, fingerprint='')
