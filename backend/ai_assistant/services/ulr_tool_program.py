@@ -2,6 +2,7 @@
 import json
 import re
 from collections import Counter
+from unicodedata import normalize
 
 from jsonschema import Draft202012Validator
 from rest_framework.exceptions import PermissionDenied
@@ -13,7 +14,7 @@ NAME = 'run_course_tools'
 PRACTICE_NAME = 'run_practice_tools'
 CURRENT_COURSE_NAME = 'locate_current_course_transcript'
 # Bump when the instruction grammar or its bound operation contracts change.
-VERSION = 12
+VERSION = 13
 # Earlier versions with the same operations may still echo version and rank.
 LEGACY_VERSION = 6
 PROGRAM_OPS = {
@@ -37,6 +38,8 @@ _ENGLISH_ORDINALS = ('first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'se
 
 
 def requested_rank(message, practice):
+    message = normalize('NFKC', message)
+    maximum_rank = MAX_RANKS[PRACTICE_NAME if practice else NAME]
     chinese_unit = r'(?:项|个(?:相关|匹配的?)?知识点)' if practice else r'门(?:相关|匹配的?)?课(?:程)?'
     english_unit = r'(?:knowledge point|result)' if practice else r'course'
     chinese_action = r'选(?:择)?|用|看|查(?:找)?|读(?:取)?|打开'
@@ -44,18 +47,22 @@ def requested_rank(message, practice):
     english_exclusion = rf"skip|avoid|exclude|(?:do not|don['’]t|not)(?:\s+(?:{english_action}))?"
     chinese = re.finditer(
         rf'(?:(?P<exclude>不要|别|跳过|排除|不(?:{chinese_action}))\s*(?:先\s*)?(?:{chinese_action})?\s*'
-        rf'|(?P<select>{chinese_action})\s*)?第\s*(?P<rank>[1-9][0-9]?|{"|".join(reversed(_ORDINALS))})\s*{chinese_unit}'
+        rf'|(?P<select>{chinese_action})\s*)?第\s*(?P<rank>[0-9]+|[零〇一二两三四五六七八九十百千万亿]+)\s*{chinese_unit}'
         rf'(?P<after>\s*(?:先)?(?:不要|跳过|不(?:{chinese_action}))(?=\s*(?:[，。；？！,.;?!]|$)))?', message)
     english = re.finditer(
         rf'\b(?:(?:(?P<exclude>{english_exclusion})'
-        rf'|(?P<select>{english_action}))\s+(?:the\s+)?)?(?P<rank>{"|".join(_ENGLISH_ORDINALS)})'
+        rf'|(?P<select>{english_action}))\s+(?:the\s+)?)?(?P<rank>{"|".join(_ENGLISH_ORDINALS)}|[0-9]+(?:st|nd|rd|th))'
         rf'\s+(?:(?:matching|relevant)\s+)?{english_unit}\b', message.lower())
     wanted, excluded = set(), set()
     explicit_choice = False
     for matches, words in ((chinese, _ORDINALS), (english, _ENGLISH_ORDINALS)):
         for match in matches:
             value = match['rank']
-            rank = int(value) if value.isdecimal() else words.index(value) + 1
+            if number := re.match(r'[0-9]+', value):
+                digits = number[0].lstrip('0') or '0'
+                rank = int(digits) if len(digits) <= len(str(maximum_rank)) else maximum_rank + 1
+            else:
+                rank = words.index(value) + 1 if value in words else maximum_rank + 1
             if match['exclude'] or match.groupdict().get('after'):
                 excluded.add(rank)
             else:
@@ -217,8 +224,9 @@ def run_program(arguments, allowed_tools, execute, *, name=NAME, message='', cur
         rank, needs_confirmation = requested_rank(message, practice)
         if needs_confirmation:
             return failure('selection_needs_confirmation', '请用户确认要使用的课程或知识点。')
-        if rank is not None and rank > maximum_rank:
-            return failure('rank_out_of_range', '用户指定的序号超过本指令可查找的范围。', field='$.rank', maximum=maximum_rank)
+        if rank is not None and not 1 <= rank <= maximum_rank:
+            return failure('rank_out_of_range', '用户指定的序号不在可查找的范围内。', field='$.rank',
+                           minimum=1, maximum=maximum_rank)
         if rank is not None and arguments.get('rank', rank) != rank:
             return failure('rank_mismatch', '序号与用户明确指定的顺序不同。', field='$.rank', expected=rank, repairable=True)
         first_args = {'query': arguments['find']}

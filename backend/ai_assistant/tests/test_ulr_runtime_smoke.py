@@ -944,7 +944,7 @@ def test_ulr_binds_ordinary_practice_cards(auth_client, user, settings, mode):
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize('withdraw', [None, 'knowledge_point', 'question', 'direct_card_revoked', 'direct_card_changed',
                                      'direct_card_empty', 'direct_card_missing', 'direct_card_ambiguous',
-                                     'direct_card_conflict', 'card_scope',
+                                     'direct_card_conflict', 'direct_card_out_of_range', 'card_scope',
                                      'card_deleted', 'card_changed', 'queued_changed'])
 def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_of_model_input(
         auth_client, user, settings, withdraw):
@@ -958,7 +958,7 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
     WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 200})
     bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
     point = KnowledgePoint.objects.create(name='现金流折现')
-    other = KnowledgePoint.objects.create(name=point.name)
+    other = KnowledgePoint.objects.create(name='另一知识点' if withdraw == 'direct_card_out_of_range' else point.name)
     institution = Institution.objects.create(name='隔离题库', slug='practice-withdrawal')
     question = Question.objects.create(knowledge_point=point, text='ORIGINAL_PRACTICE_PROMPT', options=['甲', '乙'],
         correct_answer='B', ai_answer='ORIGINAL_PRACTICE_ANALYSIS')
@@ -971,6 +971,8 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
         'direct_card_missing': ('missing_dependency', '找不到指定的知识点。请核对名称或补充学科。', '请给我一道未收录知识点的练习题。'),
         'direct_card_ambiguous': ('ambiguous_dependency', '匹配到多个知识点。请补充学科或更具体的名称。', '请给我一道现金流折现知识点的练习题。'),
         'direct_card_conflict': ('selection_needs_confirmation', '请确认要用哪个知识点准备练习。', '请给我一道现金流折现知识点的练习题。选择第一项，也选择第二项。'),
+        'direct_card_out_of_range': ('rank_out_of_range', '请提供第 1 至 15 项内的知识点序号。',
+                                     '请给我一道现金流折现知识点的练习题。选择第100项。'),
     }
     selection = selection_cases.get(withdraw)
     no_card_reply = selection[1] if selection else '当前没有符合条件的练习题。' if withdraw == 'direct_card_empty' else None
@@ -1082,7 +1084,7 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
             assert async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))[-1] == final
     expected_reads = ['search_knowledge_tree'] if withdraw == 'knowledge_point' else ['search_knowledge_tree', 'get_practice_questions']
     if selection:
-        expected_reads = [] if withdraw == 'direct_card_conflict' else ['search_knowledge_tree']
+        expected_reads = [] if withdraw in ('direct_card_conflict', 'direct_card_out_of_range') else ['search_knowledge_tree']
     assert [call.args[1] for call in reads.call_args_list] == expected_reads, (','.join(model_offers), events)
     assert provider.call_count == (1 if direct else len(expected_reads))
     assert not any(event.get('type') == 'text_delta' for event in events)
@@ -1368,9 +1370,9 @@ def test_ulr_recovers_a_course_program_missing_from_the_initial_tools(auth_clien
     request = {'bot_id': bot.pk, 'conversation_id': str(uuid4()), 'request_id': str(uuid4()),
                'message': sample['case']['prompt']}
     if mode == 'inline_missing_rank':
-        request['message'] = request['message'].replace('第一门', '第二门')
+        request['message'] = request['message'].replace('第一门', '第２门')
     if mode == 'inline_excluded_rank':
-        request['message'] = '请讲一下折现率的公式推导。不要第一门相关课程。'
+        request['message'] = '请讲一下折现率的公式推导。不要第１门相关课程。'
     started = monotonic()
     with patch('ai_engine.service.AIEngine.call_provider', side_effect=model), \
             patch('ai_assistant.services.ulr_runtime.execute_tool', wraps=execute_tool) as reads, \

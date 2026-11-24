@@ -21,7 +21,7 @@ from .ulr_artifacts import TurnArtifacts
 from .ulr_grading import grade_probe
 from .ulr_history import bound_practice_answers, card_question_answers, scoped_history
 from .ulr_tool_program import (
-    CURRENT_COURSE_NAME, NAME as PROGRAM_NAME, PRACTICE_NAME, PROGRAM_OPS, PROGRAM_TOOLS, SOURCE_ACCESS_REVOKED,
+    CURRENT_COURSE_NAME, MAX_RANKS, NAME as PROGRAM_NAME, PRACTICE_NAME, PROGRAM_OPS, PROGRAM_TOOLS, SOURCE_ACCESS_REVOKED,
     VERSION as PROGRAM_VERSION, duplicate_program_scope, program_discovery, repair_program_tool, run_program,
 )
 from .ulr_capabilities import (
@@ -45,6 +45,8 @@ PRACTICE_CARD_SELECTION_REPLIES = {
                              'Several knowledge points match. Add a subject or a more specific name.'),
     'selection_needs_confirmation': ('请确认要用哪个知识点准备练习。',
                                      'Confirm which knowledge point to use for the practice.'),
+    'rank_out_of_range': (f'请提供第 1 至 {MAX_RANKS[PRACTICE_NAME]} 项内的知识点序号。',
+                          f'Choose a knowledge point from positions 1 to {MAX_RANKS[PRACTICE_NAME]}.'),
 }
 
 

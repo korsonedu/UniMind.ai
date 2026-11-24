@@ -56,8 +56,10 @@ def test_course_instruction_checks_fields_and_binds_the_selected_course():
     assert missing['error']['code'] == 'missing_dependency' and missing['steps_executed'] == ['search_courses']
     assert calls[-1] == ('search_courses', {'query': '久期', 'limit': 3})
     count = len(calls)
-    outside = run_program(payload, tools, execute, message='选第11门课。')
-    assert outside['error']['code'] == 'rank_out_of_range' and outside['steps_executed'] == [] and len(calls) == count
+    for message in ('选第11门课。', '选第0门课。', '选第100门课。', '选第十六门课。', 'Use the 101st course.'):
+        outside = run_program(payload, tools, execute, message=message)
+        assert outside['error']['code'] == 'rank_out_of_range' and outside['steps_executed'] == []
+        assert len(calls) == count
 
     def withdrawn(name, args):
         if name == 'search_courses':
@@ -133,6 +135,7 @@ def test_instruction_waits_for_a_single_affirmative_ordinal():
         (NAME, '第一门课还是第二门课，请等我确认。'),
         (NAME, '请选第二门课，不要第二门课。'),
         (NAME, 'Do not use the first course.'),
+        (NAME, 'Skip the 2nd course and use the 2nd course.'),
         (NAME, 'Skip the first course and the second course.'),
         (PRACTICE_NAME, '别用第一项出练习。'),
         (PRACTICE_NAME, 'Skip the first matching knowledge point.'),
@@ -145,6 +148,8 @@ def test_instruction_waits_for_a_single_affirmative_ordinal():
     for message in (
         '不要第一门课，请选第二门相关课程。',
         'Skip the first course and use the second matching course.',
+        '请选第２门课。',
+        'Use the 2nd matching course.',
     ):
         receipt = run_program({'find': '折现率'}, PROGRAM_OPS[NAME], execute, message=message)
         assert receipt['_ulr_source_id'] == 81
