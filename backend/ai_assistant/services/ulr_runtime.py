@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from rest_framework.exceptions import APIException, PermissionDenied
 
+from ai_engine.observability import log_ai_operation
 from ai_engine.service import AICallError, AIEngine
 from ai_engine.tool_run import ToolReferenceError, ToolRunCoordinator
 from users.feature_access import has_learning_feature
@@ -85,7 +86,8 @@ class ULRTurnUnavailable(APIException):
 def run_turn(user, message, chat_context, emit, *, source, check_active):
     from .dsh_xiaoyu import format_task_context, task_context_data, task_course_visual, task_message
 
-    deadline = monotonic() + 60
+    started_at = monotonic()
+    deadline = started_at + 60
     current = task_message(user, chat_context, message)
     task = selected_task(user, chat_context, current)
     english = message_language(current) == 'en'
@@ -613,6 +615,11 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
                 context_sources['practice'] = {'questions': list(practice_sources.items()), 'point_id': practice_point}
             if strategy_use_ids:
                 context_sources['strategy_use_ids'] = sorted(strategy_use_ids)
+            if local_program:
+                log_ai_operation('assistant.chat.instruction', True, (monotonic() - started_at) * 1000, metadata={
+                    'kind': 'local_instruction', 'submitted_tools': local_program, 'attempts': 0,
+                    'instruction_version': PROGRAM_VERSION,
+                })
             return content, cards[:12], str(task.pk) if task else None, project_change, artifacts, context_sources
         require_visible_course_sources(user, course_ids)
         if len(calls) > 8:

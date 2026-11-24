@@ -867,9 +867,34 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             stats['offered_tools'] = [row['offered_tools'].split(',') if row['offered_tools'] else [] for row in observed]
             stats['tool_outcomes'] = [{'name': event['name'], 'status': event['status']} for event in events
                 if event.get('type') == 'step' and event['status'] in ('succeeded', 'failed')]
-            if capture is not None:
-                capture.append((engine, str(request_id), observed[0]['attempt_id'], stats['model_requests'], samples))
+        if capture is not None:
+            attempt = AIUsageReservation.objects.get(user=user, request_id=request_id).attempt_id
+            capture.append((engine, str(request_id), str(attempt), stats['model_requests'], samples))
         return final['metadata']['dsh_cards'], stats
+
+    def capture_pair(name, sample, captures):
+        repo = Path(settings.BASE_DIR).parent
+        tool = runpy.run_path(str(repo / 'scripts/ulr_review_pairs.py'))
+        output = tmp_path / name
+        output.mkdir(mode=0o700)
+        revision = capture_revision(repo)
+        records = []
+        for engine, request_id, attempt_id, count, events in captures:
+            tool['write'](output / f'{engine}-events.json', events)
+            records.append(tool['capture_turn']({**sample, 'runtime': engine, 'trial': 1, 'revision': revision,
+                'request_id': request_id, 'attempt_id': attempt_id, 'model': 'deepseek-flash',
+                'evidence': 'protocol_smoke', 'metrics': {'model_requests': count}}, events))
+        operations = prepare_capture(repo, output, records, caplog, tool, ('dsh',))
+        for record in records:
+            values = dict.fromkeys(tool['METRICS']) | record['metrics']
+            trace = tool['reconcile'](record, values, operations)
+            assert tool['tool_quality'](record, trace)['first_pass']
+            if record['metrics']['model_requests'] == 0:
+                assert values['model_requests'] == values['input_tokens'] == values['output_tokens'] == 0
+                assert trace['local_instruction_verified'] and trace['model_verified'] is None
+                missing = tool['reconcile'](record, values.copy(), {})
+                assert missing['unobserved_attempt_ids'] == [record['attempt_id']]
+                assert 'local_instruction_verified' not in missing
 
     def fail(engine):
         settings.UNIMIND_ULR_PROTOTYPE = engine == 'ulr'
@@ -1686,8 +1711,6 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         selected_course = {'course_id': course.pk, 'video_seconds': 65}
         anchored_stats, captured = {}, []
         anchored_prompt = '请定位当前课程的折现率讲稿。'
-        repo = Path(settings.BASE_DIR).parent
-        revision = capture_revision(repo)
         for engine, mode, calls, executor in (
             ('dsh', 'current_course_dsh', anthropic_calls, 'views_dsh'),
             ('ulr', 'current_course_native', openai_calls, 'services.ulr_runtime'),
@@ -1702,9 +1725,6 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             anchored_stats[engine] = {**stats, 'business_queries': 1, 'model_supplied_course_id': engine == 'dsh'}
         assert anchored_stats['dsh']['model_requests'] == 2
         assert anchored_stats['ulr']['model_requests'] == 1
-        tool = runpy.run_path(str(repo / 'scripts/ulr_review_pairs.py'))
-        output = tmp_path / 'current-course-comparison'
-        output.mkdir(mode=0o700)
         sample = {'case_id': 'current-course-discount-card', 'case': {
             'scenario': '当前课程时间戳定位', 'prompt': anchored_prompt,
             'reference': f'当前课程《{course.title}》在 01:00 讲述折现率。同名课程的 02:00 属于另一个来源。',
@@ -1712,16 +1732,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             'tool_paths': {'dsh': ['search_asr'], 'ulr': [[CURRENT_COURSE_NAME, 'find_learning_tools']]},
             'tool_steps': {'ulr': [['search_asr']]},
         }}
-        records = []
-        for engine, request_id, attempt_id, count, events in captured:
-            tool['write'](output / f'{engine}-events.json', events)
-            records.append(tool['capture_turn']({**sample, 'runtime': engine, 'trial': 1, 'revision': revision,
-                'request_id': request_id, 'attempt_id': attempt_id, 'model': 'deepseek-flash',
-                'evidence': 'protocol_smoke', 'metrics': {'model_requests': count}}, events))
-        operations = prepare_capture(repo, output, records, caplog, tool, ('dsh',))
-        for record in records:
-            trace = {'operations': operations[record['request_id'], record['attempt_id']]}
-            assert tool['tool_quality'](record, trace)['first_pass']
+        capture_pair('current-course-comparison', sample, captured)
         implicit_stats = {}
         program_mode = 'current_course_implicit'
         for engine, calls, executor in (
@@ -1746,7 +1757,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             implicit_stats[engine] = {**stats, 'business_queries': 1, 'source_count': len(sources)}
         anchored_stats['implicit_scope'] = implicit_stats
         direct_prompt = '请定位当前课程的「折现率」讲稿。只要时间点。'
-        direct_stats = {}
+        direct_stats, direct_captures = {}, []
         for label, engine, mode, calls, executor in (
             ('dsh', 'dsh', 'current_course_dsh', anthropic_calls, 'views_dsh'),
             ('model_instruction', 'ulr', 'current_course_native', openai_calls, 'services.ulr_runtime'),
@@ -1758,7 +1769,8 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             compiler = (patch('ai_assistant.services.ulr_runtime.compile_current_course_locator', return_value=None)
                         if label == 'model_instruction' else nullcontext())
             with compiler, patch(f'ai_assistant.{executor}.execute_tool', wraps=execute_tool) as reads:
-                cards, stats = run(engine, calls, None, direct_prompt, course_context=selected_course)
+                cards, stats = run(engine, calls, None, direct_prompt, course_context=selected_course,
+                                   capture=direct_captures if label != 'model_instruction' else None)
             call, = reads.call_args_list
             arguments = call.kwargs['arguments'] if engine == 'dsh' else call.args[2]
             assert call.args[1] == 'search_asr' and arguments == {**tool_args, 'course_id': course.pk}
@@ -1769,6 +1781,8 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                 'serialized_request_bytes': sum(len(json.dumps(request, ensure_ascii=False,
                     separators=(',', ':')).encode()) for request in calls[before:])}
         assert [stats['model_requests'] for stats in direct_stats.values()] == [2, 1, 0]
+        capture_pair('direct-course-comparison', {**sample, 'case_id': 'literal-current-course-card',
+            'case': {**sample['case'], 'prompt': direct_prompt}}, direct_captures)
         anchored_stats['direct_dispatch'] = direct_stats
         program_stats['current_course'] = anchored_stats
         other_course.delete()
@@ -2239,7 +2253,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         attempt.refresh_from_db()
         assert attempt.score == 0 and attempt.attempts == 1
 
-        direct_practices = {}
+        direct_practices, practice_captures = {}, []
         exam_count = QuizExam.objects.filter(user=user).count()
         for label, engine, calls, executor in (
             ('dsh', 'dsh', anthropic_calls, 'views_dsh'),
@@ -2250,7 +2264,8 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             compiler = (patch('ai_assistant.services.ulr_runtime.compile_practice_request', return_value=None)
                         if label == 'model_instruction' else nullcontext())
             with compiler, patch(f'ai_assistant.{executor}.execute_tool', wraps=execute_tool) as reads:
-                cards, stats = run(engine, calls, None, explicit_practice_prompt)
+                cards, stats = run(engine, calls, None, explicit_practice_prompt,
+                                   capture=practice_captures if label != 'model_instruction' else None)
             assert [read.args[1] for read in reads.call_args_list] == ['search_knowledge_tree', 'get_practice_questions']
             card, = [card['payload'] for card in cards if card['type'] == 'practice_quiz']
             row, = card['questions']
@@ -2261,6 +2276,13 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                     separators=(',', ':')).encode()) for request in calls[before:])}
         assert [stats['model_requests'] for stats in direct_practices.values()] == [3, 1, 0]
         assert QuizExam.objects.filter(user=user).count() == exam_count
+        capture_pair('direct-practice-comparison', {'case_id': 'literal-practice-card', 'case': {
+            'scenario': '知识点练习', 'prompt': explicit_practice_prompt,
+            'reference': f'命中「{practice_point.name}」的原题，选项为甲、乙；作答前不显示答案。',
+            'criteria': {'source': '卡片只包含指定知识点的原题。', 'answer_protection': '卡片没有包含答案。'},
+            'tool_paths': {'dsh': ['search_knowledge_tree', 'get_practice_questions'], 'ulr': ['run_practice_tools']},
+            'tool_steps': {'ulr': [['search_knowledge_tree', 'get_practice_questions']]},
+        }}, practice_captures)
 
         anthropic.response_status = 422
         openai.reject_request = True

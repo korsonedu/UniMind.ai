@@ -93,16 +93,19 @@ def read_operations(paths):
                 operation, success, duration, error, raw = match.groups()
                 meta = literal_eval(raw)
                 kind = meta.get('kind', 'model')
-                if not all(meta.get(key) for key in ('request_id', 'attempt_id', 'model')):
+                if not all(meta.get(key) for key in ('request_id', 'attempt_id')):
+                    continue
+                if kind != 'local_instruction' and not meta.get('model'):
                     continue
                 operations[meta['request_id'], meta['attempt_id']].append({
                     'log_file': path.name, 'log_line': line_number, 'runtime': meta.get('runtime'),
                     'operation': operation, 'kind': kind, 'success': success == 'True', 'attempt_id': meta['attempt_id'],
-                    'duration_ms': int(duration), 'error': error, 'model': meta['model'],
+                    'duration_ms': int(duration), 'error': error, 'model': meta.get('model'),
                     'reported_model': meta.get('reported_model'),
                     'max_output_tokens': int(limit) if (limit := meta.get('max_output_tokens')) else None,
                     'gateway_id': meta.get('gateway_id'),
-                    **{key: meta[key] for key in ('stage', 'input_count', 'source_message_id', 'answer_message_id') if key in meta},
+                    **{key: meta[key] for key in ('stage', 'input_count', 'source_message_id', 'answer_message_id',
+                                                 'instruction_version') if key in meta},
                     'offered_tools': [tool for tool in meta.get('offered_tools', '').split(',') if tool],
                     **({'tool_aliases': meta['tool_aliases'].split(',')} if meta.get('tool_aliases') else {}),
                     'submitted_tools': list(filter(None, meta['submitted_tools'].split(','))) if 'submitted_tools' in meta else None,
@@ -127,9 +130,17 @@ def reconcile(record, values, operations):
         raise ValueError(f'{request_id} 的执行批次有重复。')
     calls = [call for attempt in attempts for call in operations.get((request_id, attempt), [])]
     unobserved = [attempt for attempt in attempts if not operations.get((request_id, attempt))]
-    model_calls = [call for call in calls if call['kind'] != 'embedding']
+    local_calls = [call for call in calls if call['kind'] == 'local_instruction']
+    model_calls = [call for call in calls if call['kind'] not in ('embedding', 'local_instruction')]
     embedding_calls = [call for call in calls if call['kind'] == 'embedding']
     runtime = 'ulr' if record['runtime'] == 'ulr_individual' else record['runtime']
+    if local_calls:
+        local = local_calls[0]
+        if (record['runtime'] != 'ulr' or local['runtime'] != 'ulr' or len(attempts) != 1 or len(calls) != 1
+                or local['operation'] != 'assistant.chat.instruction' or not local['success'] or local['requests'] != 0
+                or local['model'] or local['reported_model'] or local['submitted_tools'] not in (
+                    ['locate_current_course_transcript'], ['run_practice_tools'])):
+            raise ValueError(f'{request_id} 的本地指令回执与调用记录不符。')
     if any(call['runtime'] != runtime for call in model_calls):
         raise ValueError(f'{request_id} 的模型运行路径与日志不符。')
     counts = {'model_requests': sum(call['requests'] for call in model_calls)}
@@ -148,7 +159,7 @@ def reconcile(record, values, operations):
     if any(sorted(sequence) != list(range(1, len(sequence) + 1)) for sequence in sequences.values()):
         raise ValueError(f'{request_id} 的 DSH 调用序号重复或缺失。')
     model = record['model']
-    for call in calls:
+    for call in model_calls + embedding_calls:
         expected = model.get(call['operation']) if isinstance(model, dict) else model
         if not expected or (call['reported_model'] and call['reported_model'] != expected):
             raise ValueError(f'{request_id} 的模型回报与该操作声明的模型不符。')
@@ -164,9 +175,11 @@ def reconcile(record, values, operations):
     if (values['input_tokens'] is None or values['output_tokens'] is None
             or counts.get('embedding_requests') and values['embedding_input_tokens'] is None):
         values['cost_microusd'] = None
+    provider_calls = model_calls + embedding_calls
     return {'request_id': request_id, 'attempt_ids': attempts, 'operations': calls, 'unobserved_attempt_ids': unobserved,
             **({'attempt_id': attempts[0]} if len(attempts) == 1 else {}),
-            'model_verified': not unobserved and all(call['reported_model'] for call in calls) if calls else None}
+            **({'local_instruction_verified': True} if local_calls else {}),
+            'model_verified': not unobserved and all(call['reported_model'] for call in provider_calls) if provider_calls else None}
 
 
 def tool_quality(record, trace):
@@ -373,13 +386,16 @@ def report(manifest, review):
         all_passed = completed.copy()
         tool_results = {runtime: Counter() for runtime in completed}
         delivery_results = Counter()
-        compared_pairs = model_verified_pairs = 0
+        compared_pairs = model_verified_pairs = local_instruction_pairs = 0
         unverified_model_pairs, request_config_issues, quality_issues, evidence_gaps = [], [], [], []
         for pair in pairs:
             arms = pair['arms']
             old, new = arms[baseline], arms['ulr']
             verified = all(arm.get('trace', {}).get('model_verified') is True for arm in arms.values())
             model_verified_pairs += verified
+            local_verified = (old.get('trace', {}).get('model_verified') is True
+                              and new.get('trace', {}).get('local_instruction_verified') is True)
+            local_instruction_pairs += local_verified
             location = {key: pair[key] for key in ('case_id', 'trial')}
             failed_criteria = [criterion for criterion, passed in new['checks'].items() if not passed]
             old_tools, new_tools = old.get('tool_quality'), new.get('tool_quality')
@@ -401,10 +417,14 @@ def report(manifest, review):
                     'regressed_criteria': [criterion for criterion in failed_criteria if old['checks'][criterion]],
                     **({'delivery_mode_mismatch': {'expected': expected, 'compiled': compiled}} if wrong_delivery else {})})
             if official:
-                if not verified:
+                if not (verified or local_verified):
                     unverified_model_pairs.append(location)
                     continue
-                if issue := request_config_issue(old['trace'], new['trace']):
+                if local_verified:
+                    issue = None if request_configurations(old['trace']) else 'missing_request_config'
+                else:
+                    issue = request_config_issue(old['trace'], new['trace'])
+                if issue:
                     request_config_issues.append({**location, 'reason': issue})
                     continue
             compared_pairs += 1
@@ -439,6 +459,7 @@ def report(manifest, review):
                 baseline_times, ulr_times = zip(*values, strict=True)
                 metrics[metric]['p95_ms'] = {baseline: sorted(baseline_times)[tail], 'ulr': sorted(ulr_times)[tail]}
         results[scenario] = {'pair_count': len(pairs), 'model_verified_pairs': model_verified_pairs,
+                             **({'local_instruction_pairs': local_instruction_pairs} if local_instruction_pairs else {}),
                              'compared_pairs': compared_pairs, 'unverified_model_pairs': unverified_model_pairs,
                              'request_config_issues': request_config_issues, 'quality_issues': quality_issues,
                              'evidence_gaps': evidence_gaps,
