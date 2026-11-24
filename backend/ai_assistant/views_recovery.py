@@ -9,7 +9,7 @@ from users.learning import AI_RESERVATION_TTL, CHAT_RESERVATION_TTL
 from users.models import AIUsageReservation
 from .models import chat_receipt_deleted
 from .services.dsh_runtime import quota_write_lock
-from .services.ulr_history import require_receipt_course_sources
+from .services.ulr_history import require_receipt_sources
 
 
 class ChatRequestStatusView(APIView):
@@ -24,7 +24,7 @@ class ChatRequestStatusView(APIView):
             ttl = CHAT_RESERVATION_TTL if reservation.conversation_id else AI_RESERVATION_TTL
             if reservation.status == 'succeeded' and not deleted:
                 try:
-                    require_receipt_course_sources(request.user, reservation.response)
+                    require_receipt_sources(request.user, reservation.response)
                 except (PermissionDenied, ValidationError) as exc:
                     payload.update(status='failed', response={'done': True, 'is_error': True, 'full_content': str(exc.detail)})
                 else:

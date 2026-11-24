@@ -3,9 +3,10 @@ from itertools import chain
 from math import isfinite
 import re
 
+from django.apps import apps
 from django.db.models import F, Q
 from django.db.models.functions import Substr
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from ai_assistant.models import AIChatMessage
 from courses.models import TranscriptSegment
@@ -92,7 +93,7 @@ def match_legacy_transcript_excerpts(excerpts):
             for course, start, text, transcript, revision in segments.iterator() if (course, start, text) in excerpts}
 
 
-def require_receipt_course_sources(user, receipt):
+def require_receipt_sources(user, receipt):
     if receipt.get('done') is not True or receipt.get('engine') not in ('dsh', 'ulr'):
         return
     messages = AIChatMessage.objects.filter(user=user)
@@ -103,19 +104,41 @@ def require_receipt_course_sources(user, receipt):
     if receipt['engine'] == 'dsh' and answer['sources'] is None:
         # Older replies could quote an earlier turn without emitting another source card.
         rows = messages.filter(bot_id=answer['bot_id'], conversation_id=answer['conversation_id'],
-                               pk__lte=receipt['message_id']).order_by().values(**SOURCE_FIELDS).iterator()
-    courses, transcripts, excerpts = set(), set(), set()
+                               pk__lte=receipt['message_id']).order_by().values(
+                                   notes_context_used=F('metadata__notes_context_used'), **SOURCE_FIELDS).iterator()
+    courses, transcripts, excerpts, notes = set(), set(), set(), set()
     for row in rows:
         versions = reply_transcript_sources(None, row)
         transcripts.update(versions)
         excerpts.update(legacy_transcript_excerpts(row['cards'], versions))
         courses.update(legacy_courses(row))
-        courses.update((row['sources'] or {}).get('courses', ()))
+        sources = row['sources'] or {}
+        courses.update(sources.get('courses', ()))
+        attached = {(note['note_id'], note['version']) for note in row['attachments'] or ()}
+        if row.get('notes_context_used') and not attached and not row['note_selection']:
+            raise ValidationError('旧笔记来源无法核对，请重新提问。')
+        notes.update(attached)
+        notes.update(map(tuple, sources.get('notes', ())))
     courses.update(course for course, _, _ in transcripts | excerpts)
     require_visible_course_sources(user, courses)
     require_current_transcript_sources(transcripts)
     if len(match_legacy_transcript_excerpts(excerpts)) != len(excerpts):
         raise ValidationError('当前课程讲稿已更新，请重新发起提问。')
+    if notes:
+        if not apps.is_installed('notes'):
+            raise PermissionDenied('引用笔记已不可访问，请重新提问。')
+        from notes.models import Note, NoteAISettings
+
+        note_ids = {note_id for note_id, _ in notes}
+        available = Note.objects.filter(user=user, deleted_at__isnull=True, pk__in=note_ids)
+        if not NoteAISettings.objects.filter(user=user, enabled=True).exists():
+            available = available.filter(conversation_references__user=user, conversation_references__bot_id=answer['bot_id'],
+                conversation_references__conversation__conversation_id=answer['conversation_id'])
+        current = dict(available.values_list('pk', 'version'))
+        if note_ids != current.keys():
+            raise PermissionDenied('引用笔记已不可访问，请重新提问。')
+        if notes != current.items():
+            raise ValidationError('引用笔记已更新，请重新提问。')
 
 
 def card_question_answers(cards):

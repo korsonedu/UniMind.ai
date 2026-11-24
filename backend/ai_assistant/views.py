@@ -90,8 +90,8 @@ def _reserve_chat_request(user, data, bot, *, conversation_id=None):
         if chat_receipt_deleted(reservation):
             reservation.response = {'deleted': True}
         elif reservation.status == 'succeeded':
-            from .services.ulr_history import require_receipt_course_sources
-            require_receipt_course_sources(user, reservation.response)
+            from .services.ulr_history import require_receipt_sources
+            require_receipt_sources(user, reservation.response)
     return reservation
 
 

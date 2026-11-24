@@ -13,6 +13,20 @@ from ai_assistant.models import AIChatMessage, Bot, Conversation
 from users.models import AIUsageReservation, WeeklyAIUsage
 
 
+async def consume_receipt(response):
+    return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')][-1]
+
+
+def assert_replay_denied(client, body, detail, polling_status, marker):
+    recovered = client.get(f"/api/ai/chat-requests/{body['request_id']}/").data
+    assert recovered['status'] == 'failed' and detail in recovered['response']['full_content']
+    polling = client.post('/api/ai/chat/', body, format='json')
+    assert polling.status_code == polling_status and detail in str(polling.data)
+    final = async_to_sync(consume_receipt)(client.post('/api/ai/chat/stream/', body, format='json'))
+    assert final['is_error'] and detail in final['full_content']
+    assert marker not in str((recovered, polling.data, final))
+
+
 @pytest.mark.django_db
 def test_request_status_is_read_only_and_owner_scoped(auth_client, user):
     request_id = uuid4()
@@ -91,30 +105,78 @@ def test_course_receipt_rechecks_original_sources_without_using_quota(auth_clien
     confirm_ai_call(reservation, response=receipt)
     url = f"/api/ai/chat-requests/{body['request_id']}/"
 
-    async def stream(response):
-        return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')][-1]
-
-    def deny_replay(detail, polling_status):
-        recovered = auth_client.get(url).data
-        assert recovered['status'] == 'failed' and detail in recovered['response']['full_content']
-        polling = auth_client.post('/api/ai/chat/', body, format='json')
-        assert polling.status_code == polling_status and detail in str(polling.data)
-        final = async_to_sync(stream)(auth_client.post('/api/ai/chat/stream/', body, format='json'))
-        assert final['is_error'] and detail in final['full_content']
-        assert marker not in str((recovered, polling.data, final))
-
     with patch('ai_engine.service.AIEngine.call_provider') as model:
         assert auth_client.get(url).data['response'] == receipt
-        assert async_to_sync(stream)(auth_client.post('/api/ai/chat/stream/', body, format='json')) == receipt
+        assert async_to_sync(consume_receipt)(auth_client.post('/api/ai/chat/stream/', body, format='json')) == receipt
         VideoTranscript.objects.filter(pk=transcript.pk).update(revision=transcript.revision + 1)
         TranscriptSegment.objects.filter(pk=segment.pk).update(text='新版片段')
-        deny_replay('讲稿已更新', 400)
+        assert_replay_denied(auth_client, body, '讲稿已更新', 400, marker)
         VideoTranscript.objects.filter(pk=transcript.pk).update(revision=transcript.revision)
         TranscriptSegment.objects.filter(pk=segment.pk).update(text=marker)
         assert auth_client.get(url).data['response'] == receipt
         Course.objects.filter(pk=course.pk).update(is_published=False)
-        deny_replay('引用课程已不可访问', 403)
+        assert_replay_denied(auth_client, body, '引用课程已不可访问', 403, marker)
         model.assert_not_called()
     reservation.refresh_from_db()
     assert reservation.status == 'succeeded' and reservation.response == receipt
+    assert WeeklyAIUsage.objects.get(user=user).ai_calls == 1
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize('engine', ['dsh', 'ulr'])
+def test_private_note_receipt_rechecks_original_note_and_consent(auth_client, user, settings, engine):
+    from ai_assistant.views import _reserve_chat_request
+    from notes.models import ConversationNoteReference, Note, NoteAISettings
+    from users.learning import confirm_ai_call
+    from users.models import CourseStudentStatus, WeeklyAIQuotaConfig
+
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    settings.UNIMIND_DSH_ENABLED = settings.USE_MEM0 = False
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 30})
+    bot = Bot.objects.create(name='小宇', is_xiaoyu=True, bot_type='planner')
+    conversation = Conversation.objects.create(user=user, bot=bot, title='合成笔记', conversation_id=uuid4())
+    marker = 'SYNTHETIC_NOTE_RECEIPT'
+    note = Note.objects.create(user=user, title='久期', content=marker)
+    body = {'bot_id': bot.pk, 'conversation_id': str(conversation.conversation_id),
+            'request_id': str(uuid4()), 'message': '请根据笔记解释久期。'}
+    fetched = f"/api/ai/chat-requests/{body['request_id']}/"
+    if engine == 'dsh':
+        reference = ConversationNoteReference.objects.create(user=user, bot=bot, conversation=conversation, note=note)
+        saved = {'user': user, 'bot': bot, 'conversation_id': conversation.conversation_id}
+        prompt = AIChatMessage.objects.create(**saved, role='user', content='原专用笔记问题', metadata={'notes_context_used': True,
+            'note_attachments': [{'note_id': note.pk, 'version': note.version}]})
+        AIChatMessage.objects.create(**saved, role='assistant', content=marker, metadata={'engine': 'dsh'})
+        answer = AIChatMessage.objects.create(**saved, role='assistant', content=marker, metadata={'engine': 'dsh'})
+        receipt = {'engine': engine, 'done': True, 'message_id': answer.pk, 'full_content': marker}
+        confirm_ai_call(_reserve_chat_request(user, body, bot, conversation_id=conversation.conversation_id), response=receipt)
+    else:
+        NoteAISettings.objects.create(user=user, enabled=True, acknowledged=True)
+        response = {'choices': [{'finish_reason': 'stop', 'message': {'content': marker}}]}
+        with patch('ai_engine.service.AIEngine.call_provider', return_value=response) as provider, \
+                patch('ai_assistant.services.dsh_xiaoyu.extract_memories_async'):
+            receipt = async_to_sync(consume_receipt)(auth_client.post('/api/ai/chat/stream/', body, format='json'))
+        assert provider.call_count == 1 and marker in str(provider.call_args.args[0])
+        answer = AIChatMessage.objects.get(pk=receipt['message_id'])
+        assert answer.metadata['ulr_context_sources']['notes'] == [[note.pk, note.version]]
+
+    with patch('ai_engine.service.AIEngine.call_provider') as provider:
+        assert auth_client.get(fetched).data['response'] == receipt
+        Note.objects.filter(pk=note.pk).update(version=note.version + 1)
+        assert_replay_denied(auth_client, body, '引用笔记已更新', 400, marker)
+        Note.objects.filter(pk=note.pk).update(version=note.version, deleted_at=timezone.now())
+        assert_replay_denied(auth_client, body, '引用笔记已不可访问', 403, marker)
+        Note.objects.filter(pk=note.pk).update(deleted_at=None)
+        assert auth_client.get(fetched).data['response'] == receipt
+        if engine == 'dsh':
+            reference.delete()
+        else:
+            NoteAISettings.objects.filter(user=user).update(enabled=False)
+        assert_replay_denied(auth_client, body, '引用笔记已不可访问', 403, marker)
+        if engine == 'dsh':
+            AIChatMessage.objects.filter(pk=prompt.pk).update(metadata={'notes_context_used': True})
+            assert_replay_denied(auth_client, body, '旧笔记来源无法核对', 400, marker)
+        provider.assert_not_called()
+    assert AIUsageReservation.objects.get(request_id=body['request_id']).response == receipt
     assert WeeklyAIUsage.objects.get(user=user).ai_calls == 1
