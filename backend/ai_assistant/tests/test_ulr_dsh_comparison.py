@@ -44,6 +44,7 @@ from quizzes.services.semantic_edge_analyzer import _call_llm as semantic_edges
 from quizzes.test_ulr_knowledge_commands import synthetic_tree
 from users.models import AIUsageReservation, CourseStudentStatus, Institution, User, WeeklyAIQuotaConfig, WeeklyAIUsage
 from .test_session_tool_smoke import REGISTRATION
+from .test_ulr_course_acceptance import capture_revision, prepare_capture
 from .test_ulr_queue_smoke import PROFILE
 from .test_ulr_runtime_smoke import LONG_HISTORY_ANCHOR, LONG_HISTORY_QUESTION, seed_long_history
 
@@ -789,13 +790,15 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
     monkeypatch.setenv('LLM_BASE_URL', f'http://127.0.0.1:{openai.server_port}/v1/chat/completions')
     monkeypatch.setenv('LLM_API_KEY', 'synthetic-loopback-only')
 
-    async def consume(response, timings=None):
+    async def consume(response, timings=None, samples=None, started=None):
         events = []
         async for frame in response.streaming_content:
             if not frame.startswith(b'data: '):
                 continue
             event = json.loads(frame[6:])
             events.append(event)
+            if samples is not None:
+                samples.append({'elapsed_ms': round((monotonic() - started) * 1000), 'event': event})
             if timings is not None and event.get('type') == 'text_delta':
                 timings.setdefault('first_text', monotonic())
             if timings is not None and (event.get('delta') or (event.get('done') and not event.get('is_error')
@@ -803,7 +806,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                 timings.setdefault('first_visible', monotonic())
         return events
 
-    def run(engine, model_calls, focused_task, message, conversation=None, note_ids=None, course_context=None):
+    def run(engine, model_calls, focused_task, message, conversation=None, note_ids=None, course_context=None, capture=None):
         settings.UNIMIND_ULR_PROTOTYPE = engine == 'ulr'
         conv = conversation or Conversation.objects.create(user=user, bot=bot,
             project=project if focused_task else None, conversation_id=uuid4())
@@ -816,8 +819,10 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             body['course_context'] = course_context
         prior = len(model_calls)
         timings = {}
+        samples = [] if capture is not None else None
         start = monotonic()
-        events = async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'), timings)
+        events = async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'),
+                                        timings, samples, start)
         elapsed = monotonic() - start
         final = events[-1]
         assert final.get('engine') == engine, final
@@ -849,6 +854,8 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             stats['offered_tools'] = [row['offered_tools'].split(',') if row['offered_tools'] else [] for row in observed]
             stats['tool_outcomes'] = [{'name': event['name'], 'status': event['status']} for event in events
                 if event.get('type') == 'step' and event['status'] in ('succeeded', 'failed')]
+            if capture is not None:
+                capture.append((engine, str(request_id), observed[0]['attempt_id'], stats['model_requests'], samples))
         return final['metadata']['dsh_cards'], stats
 
     def fail(engine):
@@ -1653,14 +1660,17 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         TranscriptSegment.objects.create(transcript=other_transcript, start_time=120, end_time=140, index=0,
                                          text='折现率同名课片段')
         selected_course = {'course_id': course.pk, 'video_seconds': 65}
-        anchored_stats = {}
+        anchored_stats, captured = {}, []
+        anchored_prompt = '请定位当前课程的折现率讲稿。'
+        repo = Path(settings.BASE_DIR).parent
+        revision = capture_revision(repo)
         for engine, mode, calls, executor in (
             ('dsh', 'current_course_dsh', anthropic_calls, 'views_dsh'),
             ('ulr', 'current_course_native', openai_calls, 'services.ulr_runtime'),
         ):
             program_mode = mode
             with patch(f'ai_assistant.{executor}.execute_tool', wraps=execute_tool) as reads:
-                cards, stats = run(engine, calls, None, '请定位当前课程的折现率讲稿。', course_context=selected_course)
+                cards, stats = run(engine, calls, None, anchored_prompt, course_context=selected_course, capture=captured)
             assert cards == [source_cards[0]]
             tool, = reads.call_args_list
             arguments = tool.kwargs['arguments'] if engine == 'dsh' else tool.args[2]
@@ -1668,6 +1678,26 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             anchored_stats[engine] = {**stats, 'business_queries': 1, 'model_supplied_course_id': engine == 'dsh'}
         assert anchored_stats['dsh']['model_requests'] == 2
         assert anchored_stats['ulr']['model_requests'] == 1
+        tool = runpy.run_path(str(repo / 'scripts/ulr_review_pairs.py'))
+        output = tmp_path / 'current-course-comparison'
+        output.mkdir(mode=0o700)
+        sample = {'case_id': 'current-course-discount-card', 'case': {
+            'scenario': '当前课程时间戳定位', 'prompt': anchored_prompt,
+            'reference': f'当前课程《{course.title}》在 01:00 讲述折现率。同名课程的 02:00 属于另一个来源。',
+            'criteria': {'source': '卡片只指向当前课程的原讲稿。', 'timestamp': '片段定位到 01:00。'},
+            'tool_paths': {'dsh': ['search_asr'], 'ulr': [[CURRENT_COURSE_NAME, 'find_learning_tools']]},
+            'tool_steps': {'ulr': [['search_asr']]},
+        }}
+        records = []
+        for engine, request_id, attempt_id, count, events in captured:
+            tool['write'](output / f'{engine}-events.json', events)
+            records.append(tool['capture_turn']({**sample, 'runtime': engine, 'trial': 1, 'revision': revision,
+                'request_id': request_id, 'attempt_id': attempt_id, 'model': 'deepseek-flash',
+                'evidence': 'protocol_smoke', 'metrics': {'model_requests': count}}, events))
+        operations = prepare_capture(repo, output, records, caplog, tool, ('dsh',))
+        for record in records:
+            trace = {'operations': operations[record['request_id'], record['attempt_id']]}
+            assert tool['tool_quality'](record, trace)['first_pass']
         implicit_stats = {}
         program_mode = 'current_course_implicit'
         for engine, calls, executor in (
