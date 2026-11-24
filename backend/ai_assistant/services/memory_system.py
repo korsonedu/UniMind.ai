@@ -375,14 +375,13 @@ class MemorySystem:
         }
 
     @staticmethod
-    def query_knowledge_tree(query: str, subject: str, user, institution=None) -> Dict:
+    def query_knowledge_tree(query: str, subject: str, user, institution=None, *, exact_name=False) -> Dict:
         """搜索知识点树。"""
         from django.db.models import Q, Count
         from quizzes.models import KnowledgePoint
 
-        qs = KnowledgePoint.objects.filter(
-            Q(name__icontains=query) | Q(description__icontains=query),
-        )
+        match = Q(name__iexact=query) if exact_name else Q(name__icontains=query) | Q(description__icontains=query)
+        qs = KnowledgePoint.objects.filter(match)
         if subject:
             qs = qs.filter(subject=subject)
         else:

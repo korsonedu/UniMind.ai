@@ -184,7 +184,8 @@ def build_context(user, message, recent_messages=None, chat_context=None, *, ulr
 
 
 def execute_tool(user, name, arguments, memory_version, source=None, chat_context=None, tool_revision=None,
-                 *, prepare_change=False, project_ticket=None, artifacts=None, practice_questions=None):
+                 *, prepare_change=False, project_ticket=None, artifacts=None, practice_questions=None,
+                 exact_knowledge_name=False):
     def observed(result):
         from .teaching_sidecar import observe, record_tool_result
         observe(record_tool_result, user, chat_context, name, arguments, result)
@@ -230,6 +231,7 @@ def execute_tool(user, name, arguments, memory_version, source=None, chat_contex
     executor.learning_context = chat_context
     executor.include_practice_sources = practice_questions is not None
     executor.include_transcript_sources = practice_questions is not None
+    executor.exact_knowledge_name = exact_knowledge_name
     if prepare_change or project_ticket is not None:
         from .project_learning import tool_operation
         result = tool_operation(executor, name, arguments, prepare_change=prepare_change, project_ticket=project_ticket)

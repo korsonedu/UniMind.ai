@@ -947,6 +947,80 @@ def test_ulr_binds_ordinary_practice_cards(auth_client, user, settings, mode):
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize('mode', ['ready', 'ambiguous', 'revoked'])
+def test_ulr_compiles_literal_practice_for_the_original_submission(auth_client, user, settings, mode):
+    from ai_assistant.services.dsh_service import execute_tool
+    from quizzes.models import PracticeSubmission, QuizExam
+    from users.models import Institution
+
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 20})
+    bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
+    point = KnowledgePoint.objects.create(name='第2项现金流折现')
+    question = Question.objects.create(knowledge_point=point, text='只在卡片呈现的题目', options=['甲', '乙'],
+        correct_answer='B', grading_points='只能用于评阅的依据')
+    foreign = Institution.objects.create(name='不可见题库', slug='local-practice-foreign')
+    if mode == 'ambiguous':
+        KnowledgePoint.objects.create(name=point.name)
+    if mode == 'ready':
+        KnowledgePoint.objects.create(name=f'{point.name}拓展')
+    body = {'bot_id': bot.pk, 'conversation_id': str(uuid4()), 'request_id': str(uuid4()),
+            'message': f'请给我1道「{point.name}」知识点的练习题。只要练习卡。'}
+
+    def read_tool(*args, **kwargs):
+        result = execute_tool(*args, **kwargs)
+        if mode == 'revoked' and args[1] == 'get_practice_questions':
+            Question.objects.filter(pk=question.pk).update(institution=foreign)
+        return result
+
+    async def consume(response):
+        assert response.status_code == 200
+        return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')]
+
+    with patch('ai_engine.service.AIEngine.call_provider') as model, \
+            patch('ai_assistant.services.ulr_runtime.execute_tool', side_effect=read_tool) as reads, \
+            patch('ai_assistant.services.dsh_xiaoyu.extract_memories_async'), \
+            patch('ai_assistant.services.dsh_xiaoyu.schedule_conversation_title'):
+        final = async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))[-1]
+        if mode != 'revoked':
+            assert async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))[-1] == final
+        model.assert_not_called()
+    expected_reads = [('search_knowledge_tree', {'query': point.name})]
+    if mode != 'ambiguous':
+        expected_reads.append(('get_practice_questions', {'knowledge_point_id': point.pk, 'limit': 1}))
+    assert [call.args[1:3] for call in reads.call_args_list] == expected_reads
+    assert not QuizExam.objects.exists()
+    if mode != 'ready':
+        assert not PracticeSubmission.objects.exists()
+        if mode == 'ambiguous':
+            assert '匹配到多个知识点' in final['full_content'] and not final['metadata']['dsh_cards']
+        else:
+            assert final['is_error'] and '不可访问' in final['full_content']
+            assert AIUsageReservation.objects.get(request_id=body['request_id']).status == 'released'
+        return
+
+    assert final['full_content'] == '练习已准备好。'
+    card, = final['metadata']['dsh_cards']
+    item, = card['payload']['questions']
+    assert item['id'] == question.pk and not {'answer', 'correct_answer', 'grading_points'} & item.keys()
+    practice_id = card['payload']['practice_id']
+    submission = {'submission_id': practice_id, 'answers': [{'question_id': question.pk, 'answer': 'B'}]}
+    with patch('quizzes.views_exam.dispatch_exam_grading') as enqueue:
+        accepted = auth_client.post('/api/quizzes/submit-exam/', submission, format='json')
+        assert accepted.status_code == 202
+        assert auth_client.post('/api/quizzes/submit-exam/', submission, format='json').data == accepted.data
+        enqueue.assert_called_once()
+    with patch('ai_engine.service.AIEngine.call_provider') as model, \
+            patch('quizzes.ai_workflow._queue_experience_verification'):
+        run_exam_grading(*enqueue.call_args.args)
+        model.assert_not_called()
+    exam = QuizExam.objects.get()
+    assert (exam.status, exam.total_score, exam.results.get().question_id) == ('completed', 10, question.pk)
+
+
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize('withdraw', [None, 'knowledge_point', 'question', 'direct_card_revoked', 'direct_card_changed',
                                      'direct_card_empty', 'direct_card_missing', 'direct_card_ambiguous',
                                      'direct_card_conflict', 'direct_card_out_of_range', 'card_scope',

@@ -85,6 +85,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
     review_request = '请只复盘我刚提交的原作答和已有分数。'
     diagnostic_request = '请准备迁移验收用的首次诊断。'
     practice_prompt = '请先查合成验收知识点，再根据第一项出一道练习题。'
+    explicit_practice_prompt = '请给我1道「合成验收」知识点的练习题。只要练习卡。'
     practice_marker = 'PRACTICE_PROGRAM_BANK_QUESTION'
     practice_rubric = 'PRACTICE_PROGRAM_PRIVATE_RUBRIC'
     practice_hint = '请查原练习题并给我一个提示。'
@@ -405,7 +406,8 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                 return None
             assert 'lookup_question' in tools
             return [('lookup_question', {'question_id': practice_question.pk})]
-        if practice_prompt in json.dumps(body['messages'], ensure_ascii=False):
+        if any(prompt in json.dumps(body['messages'], ensure_ascii=False)
+               for prompt in (practice_prompt, explicit_practice_prompt)):
             latest = json.dumps(body['messages'][-1], ensure_ascii=False).replace('\\"', '"')
             if '"question_count"' in latest:
                 assert practice_marker not in latest
@@ -648,7 +650,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                 else:
                     assert json.loads(request['messages'][-1]['content']) == {'question_count': 1, 'card_prepared': True}
                     deltas, reason = [{'content': '请在卡片中完成练习。'}], 'stop'
-            elif last_user == practice_prompt:
+            elif last_user in (practice_prompt, explicit_practice_prompt):
                 assert request['messages'][-1]['role'] == 'user'
                 assert 'run_practice_tools' in names and practice_marker not in json.dumps(request['messages'])
                 program = {'v': PROGRAM_VERSION, 'find': practice_point.name, 'rank': 1, 'limit': 1}
@@ -2237,12 +2239,35 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         attempt.refresh_from_db()
         assert attempt.score == 0 and attempt.attempts == 1
 
+        direct_practices = {}
+        exam_count = QuizExam.objects.filter(user=user).count()
+        for label, engine, calls, executor in (
+            ('dsh', 'dsh', anthropic_calls, 'views_dsh'),
+            ('model_instruction', 'ulr', openai_calls, 'services.ulr_runtime'),
+            ('local_instruction', 'ulr', openai_calls, 'services.ulr_runtime'),
+        ):
+            before = len(calls)
+            compiler = (patch('ai_assistant.services.ulr_runtime.compile_practice_request', return_value=None)
+                        if label == 'model_instruction' else nullcontext())
+            with compiler, patch(f'ai_assistant.{executor}.execute_tool', wraps=execute_tool) as reads:
+                cards, stats = run(engine, calls, None, explicit_practice_prompt)
+            assert [read.args[1] for read in reads.call_args_list] == ['search_knowledge_tree', 'get_practice_questions']
+            card, = [card['payload'] for card in cards if card['type'] == 'practice_quiz']
+            row, = card['questions']
+            assert row['id'] == practice_question.pk and row['text'] == revised_practice
+            assert row['options'] == ['甲', '乙'] and not {'answer', 'correct_answer'} & row.keys()
+            direct_practices[label] = {**stats, 'business_queries': reads.call_count,
+                'serialized_request_bytes': sum(len(json.dumps(request, ensure_ascii=False,
+                    separators=(',', ':')).encode()) for request in calls[before:])}
+        assert [stats['model_requests'] for stats in direct_practices.values()] == [3, 1, 0]
+        assert QuizExam.objects.filter(user=user).count() == exam_count
+
         anthropic.response_status = 422
         openai.reject_request = True
         fail('dsh')
         fail('ulr')
         total_quota_charges = WeeklyAIUsage.objects.get(user=user).ai_calls
-        assert total_quota_charges == 80 + len(direct_stats)
+        assert total_quota_charges == 80 + len(direct_stats) + len(direct_practices)
         print(json.dumps({'dsh': dsh_stats, 'ulr': ulr_stats, 'same_course_source_card': True,
                           'standalone_profile': {'debug': False, 'dsh_requests': 0, 'chat': isolated_stats,
                               'title': isolated.title, 'memory': True, 'score': native_score['score'],
@@ -2325,6 +2350,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                           'course_programs': {**program_stats, 'missing_dependency_asr_calls': 0},
                           'course_program_discovery': discovery_stats,
                           'practice_program': practices,
+                          'practice_direct_dispatch': direct_practices,
                           'ordinary_practice': ordinary_practices,
                           'dsh_exam_review_after_switch': {
                               'dsh': {**old_stats, 'had_original_items': False},

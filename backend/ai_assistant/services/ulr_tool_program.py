@@ -88,6 +88,8 @@ TIMESTAMP_ONLY = re.compile(r'(?:^|[。！？.!?]\s*)(?:只(?:要|返回)(?:视�
 CURRENT_COURSE_LOCATOR = re.compile(r'\s*(?:请)?(?:帮我)?定位当前课程的(?P<query>[^。！？；，、,.!?;：:\n]+)讲稿\s*[。.!！]?\s*')
 PRACTICE_ONLY = re.compile(r'(?:^|[。！？.!?]\s*)(?:只(?:要|发|返回)练习(?:题|卡)|'
                            r'(?:just|only) (?:the )?practice questions)\s*[。.!！]?\s*$', re.IGNORECASE)
+PRACTICE_LOCATOR = re.compile(
+    r'\s*(?:请)?给我(?P<limit>[1-9][0-9]?)道「(?P<find>[^「」\r\n]+)」知识点的练习题\s*')
 _PRACTICE_COUNT = r'(?:\d+|[一二两三四五六七八九十百几]+)道'
 _PRACTICE_ORDINAL = r'第[\d零〇一二两三四五六七八九十百千万亿]+项'
 _PRACTICE_TOPIC = r'[^。！？；，、,.!?;：:\n]+'
@@ -114,6 +116,15 @@ def compile_current_course_locator(message):
         literal = re.fullmatch(r'「([^「」]+)」', locator['query'].strip())
         if literal and (query := literal[1].strip()):
             return {'query': query}
+    return None
+
+
+def compile_practice_request(message):
+    delivery = PRACTICE_ONLY.search(message)
+    if delivery and (request := PRACTICE_LOCATOR.fullmatch(message[:delivery.start()])):
+        limit = int(request['limit'])
+        if limit <= GET_PRACTICE_QUESTIONS_SCHEMA['properties']['limit']['maximum'] and (find := request['find'].strip()):
+            return {'find': find, 'limit': limit}
     return None
 
 
@@ -253,7 +264,9 @@ def run_program(arguments, allowed_tools, execute, *, name=NAME, message='', cur
         source_id = current_course_id
     else:
         first = operations[0]
-        rank, needs_confirmation = requested_rank(message, practice)
+        # A quoted topic is a string value, even when its name contains an ordinal.
+        rank, needs_confirmation = ((None, False) if practice and compile_practice_request(message)
+                                    else requested_rank(message, practice))
         if needs_confirmation:
             return failure('selection_needs_confirmation', '请用户确认要使用的课程或知识点。')
         if rank is not None and not 1 <= rank <= maximum_rank:

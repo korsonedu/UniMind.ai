@@ -3,7 +3,7 @@ from rest_framework.exceptions import PermissionDenied
 
 from ai_assistant.services.ulr_tool_program import (
     CURRENT_COURSE_NAME, LEGACY_VERSION, NAME, PRACTICE_NAME, PROGRAM_OPS, PROGRAM_TOOLS, VERSION,
-    compile_current_course_locator, run_program,
+    compile_current_course_locator, compile_practice_request, run_program,
 )
 
 
@@ -98,6 +98,15 @@ def test_practice_instruction_never_widens_a_missing_or_ambiguous_match():
                             message='有同名知识点请先向我确认。')
     assert ambiguous['error']['code'] == 'ambiguous_dependency' and not ambiguous['error']['repairable']
     assert ambiguous['steps_executed'] == ['search_knowledge_tree'] and calls == ['search_knowledge_tree'] * 2
+
+
+def test_practice_compiler_requires_an_explicit_card_and_literal_topic():
+    request = '请给我2道「第2项现金流折现」知识点的练习题。只要练习卡。'
+    assert compile_practice_request(request) == {'find': '第2项现金流折现', 'limit': 2}
+    for invalid in (request.replace('我2道', '我11道'), request.replace('我2道', '我0道'),
+                    request.replace('只要练习卡。', '还要讲解。'), '先提示我一下。' + request,
+                    request.replace('「第2项现金流折现」', '第2项现金流折现')):
+        assert compile_practice_request(invalid) is None
 
 
 def test_current_course_instruction_only_accepts_the_server_source():

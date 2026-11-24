@@ -204,6 +204,8 @@ def set_permitted_tools(tool_executor, tools) -> None:
 class BaseToolExecutor:
     """基础工具执行器。将 tool_name 映射到实际数据库查询，捕获 user 和 institution 上下文。"""
 
+    exact_knowledge_name = False
+
     # 工具名别名：LLM 跨 bot 误调用时自动纠正
     TOOL_ALIASES: Dict[str, str] = {
         "search_knowledge": "search_knowledge_tree",
@@ -424,7 +426,8 @@ class BaseToolExecutor:
         from ai_assistant.services.memory_system import MemorySystem
         query = (args.get('query') or '').strip()
         subject = (args.get('subject') or '').strip()
-        result = MemorySystem.query_knowledge_tree(query, subject, self.user, self.institution)
+        result = MemorySystem.query_knowledge_tree(query, subject, self.user, self.institution,
+                                                   exact_name=self.exact_knowledge_name)
 
         # 经验路由器 Phase 3：kp_chain 二次注入
         # 搜索到 KP 后，检查是否有针对这些 KP 的 kp_chain 经验
