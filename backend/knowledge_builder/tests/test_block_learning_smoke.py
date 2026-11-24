@@ -286,6 +286,80 @@ class BlockLearningSmoke(APITestCase):
         self.assertEqual(ProjectLearningEvent.objects.filter(project=self.project, kind='block_prepare').count(), 1)
         self.assertEqual(ProjectLearningEvent.objects.filter(project=self.project, kind='block_assessment').count(), 1)
 
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr', UNIMIND_DSH_ENABLED=False)
+    def test_postgresql_cutover_requeues_interrupted_legacy_assessment(self):
+        if connection.vendor != 'postgresql':
+            self.skipTest('PostgreSQL session lock required.')
+        from io import StringIO
+        import json
+        from tempfile import TemporaryDirectory
+
+        from django.core.management import call_command, CommandError
+        from ai_assistant.models import Bot
+        from knowledge_builder.tasks import prepare_block_assessment
+
+        Bot.objects.create(is_xiaoyu=True, name='小宇')
+        with self.settings(UNIMIND_LEARNING_RUNTIME='legacy'):
+            event = self.enqueue_assessment()
+            with patch('knowledge_builder.block_assessments._generate_question', side_effect=SystemExit), self.assertRaises(SystemExit):
+                prepare_block_assessment(event.pk)
+        event.refresh_from_db()
+        self.assertEqual(event.content['status'], 'running')
+        self.assertFalse(event.content['requires_ulr'])
+        original = event.content.copy()
+        self.assertFalse(ProjectLearningTask.objects.filter(project=self.project).exists())
+
+        def gate(state, blocked=False):
+            output = StringIO()
+            options = {'state_dir': state, 'api_url': 'http://127.0.0.1:8000', 'require_migrated': True, 'stdout': output}
+            if blocked:
+                with self.assertRaisesRegex(CommandError, '未完成的迁移项'):
+                    call_command('audit_dsh_sessions', **options)
+            else:
+                call_command('audit_dsh_sessions', **options)
+            return json.loads(output.getvalue())
+
+        def resume(**options):
+            output = StringIO()
+            with self.captureOnCommitCallbacks(execute=True):
+                call_command('resume_block_assessment', event.pk, stdout=output, **options)
+            return json.loads(output.getvalue())
+
+        with TemporaryDirectory() as state:
+            blocked = gate(state, blocked=True)
+            self.assertEqual(blocked['blockers'], {'running_unpinned_block_assessments': 1})
+            self.assertEqual(blocked['unsettled_block_preparation_ids'], [event.pk])
+            with self.assertRaisesRegex(CommandError, '请停止旧工作进程'):
+                resume()
+            with patch('knowledge_builder.tasks.prepare_block_assessment.delay', side_effect=RuntimeError('broker unavailable')) as dispatch:
+                resume(legacy_workers_stopped=True)
+            dispatch.assert_called_once_with(event.pk)
+            event.refresh_from_db()
+            self.assertEqual(event.content['status'], 'failed')
+            self.assertTrue(event.content['queue_retryable'])
+
+            with patch('knowledge_builder.tasks.prepare_block_assessment.delay') as dispatch:
+                self.assertTrue(resume(legacy_workers_stopped=True)['queued'])
+                self.assertFalse(resume(legacy_workers_stopped=True)['queued'])
+            dispatch.assert_called_once_with(event.pk)
+            with patch('knowledge_builder.block_assessments._generate_question', side_effect=self.generate):
+                prepare_block_assessment(event.pk)
+                prepare_block_assessment(event.pk)
+            self.assertTrue(gate(state)['migrated'])
+
+        event.refresh_from_db()
+        self.assertTrue(event.content['requires_ulr'])
+        self.assertEqual(event.content['status'], 'completed')
+        self.assertEqual({key: event.content[key] for key in ('block_id', 'version_id', 'mode', 'retest')},
+                         {key: original[key] for key in ('block_id', 'version_id', 'mode', 'retest')})
+        result = self.assessment(action='read').data
+        self.assertEqual(result['assessment']['id'], event.content['assessment_id'])
+        self.assertEqual(len(result['assessment']['items']), 2)
+        self.assertEqual(ProjectLearningEvent.objects.filter(project=self.project, kind='block_prepare').count(), 1)
+        self.assertEqual(ProjectLearningEvent.objects.filter(project=self.project, kind='block_assessment').count(), 1)
+        self.assertEqual(ProjectLearningTask.objects.filter(project=self.project).count(), self.counter)
+        self.assertEqual(self.counter, 2)
+
     def test_tasks_answers_recovery_and_next_recommendation(self):
         for index in range(2):
             response = self.assessment(retest=bool(index))

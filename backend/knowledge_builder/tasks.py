@@ -15,13 +15,17 @@ def build_knowledge_tree(self, build_id):
     return str(build.pk)
 
 
+def assessment_lock_key(event_id):
+    digest = blake2b(str(event_id).encode(), digest_size=8, person=b'kb-assessment').digest()
+    return int.from_bytes(digest, 'big', signed=True)
+
+
 @shared_task(bind=True, max_retries=0, soft_time_limit=600, time_limit=630,
              acks_late=True, reject_on_worker_lost=True)
 def prepare_block_assessment(self, event_id):
     if connection.vendor != 'postgresql':
         return _prepare_block_assessment(event_id)
-    digest = blake2b(str(event_id).encode(), digest_size=8, person=b'kb-assessment').digest()
-    key = int.from_bytes(digest, 'big', signed=True)
+    key = assessment_lock_key(event_id)
     with connection.cursor() as cursor:
         cursor.execute('SELECT pg_try_advisory_lock(%s)', [key])
         if not cursor.fetchone()[0]:

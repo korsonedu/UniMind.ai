@@ -119,6 +119,7 @@ jobs:
           ai_assistant/tests/test_ulr_process_smoke.py
           ai_assistant/tests/test_ulr_queue_smoke.py
           ai_assistant/tests/test_ulr_restore_smoke.py
+          knowledge_builder/tests/test_block_learning_smoke.py::BlockLearningSmoke::test_postgresql_cutover_requeues_interrupted_legacy_assessment
           ai_assistant/tests/test_chat_recovery_smoke.py
           ai_assistant/tests/test_project_learning_smoke.py::test_followup_yields_to_concurrent_project_turn
           quizzes/tests_exam_async.py::test_ulr_exam_waits_for_the_question_edit_before_settlement

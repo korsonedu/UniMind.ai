@@ -155,6 +155,18 @@ def generate_assessment(preparation, block):
         complete_preparation(preparation, event)
 
 
+def enqueue_preparation(event_id, queued):
+    def dispatch():
+        from .tasks import prepare_block_assessment
+        try:
+            prepare_block_assessment.delay(event_id)
+        except Exception:
+            ProjectLearningEvent.objects.filter(pk=event_id, content=queued).update(content={
+                **queued, 'status': 'failed', 'queue_retryable': True, 'error': '任务暂未能进入出题队列，请重试。'})
+
+    transaction.on_commit(dispatch)
+
+
 def block_assessment(user, block, project_id, *, action='read', mode='objective', retest=False):
     from django.utils import timezone
     from users.feature_access import has_learning_feature
@@ -190,14 +202,7 @@ def block_assessment(user, block, project_id, *, action='read', mode='objective'
                 preparation.save(update_fields=['content'])
             else:
                 preparation = ProjectLearningEvent.objects.create(project=project, kind='block_prepare', content=queued)
-            def dispatch():
-                from .tasks import prepare_block_assessment
-                try:
-                    prepare_block_assessment.delay(preparation.pk)
-                except Exception:
-                    ProjectLearningEvent.objects.filter(pk=preparation.pk, content=queued).update(content={
-                        **queued, 'status': 'failed', 'queue_retryable': True, 'error': '任务暂未能进入出题队列，请重试。'})
-            transaction.on_commit(dispatch)
+            enqueue_preparation(preparation.pk, queued)
     if not preparation:
         return {'assessment': assessment_data(event), 'preparation': None}
     status = preparation.content['status']
