@@ -13,7 +13,7 @@ from ai_assistant.services.ulr_config import ulr_enabled
 from core.analytics import record_event
 from quizzes.ai_workflow import exam_answer_question_ids, validate_exam_answers
 from quizzes.models import ExamQuestionResult, PracticeSubmission, QuizExam
-from quizzes.services.exam_grading_state import can_resume_grading, lock_grading_for_recovery
+from quizzes.services.exam_grading_state import can_resume_grading, exam_submission_complete, lock_grading_for_recovery
 from quizzes.services.practice_results import (
     exam_history_items,
     exam_result_payload,
@@ -199,7 +199,8 @@ class ExamRetryView(APIView):
             # Continue the interrupted attempt, preserving both settled and explicitly failed results.
             return self._enqueue(exam)
 
-        failed = exam.results.filter(status='failed')
+        ulr_terminal = exam.requires_ulr and exam.status in ('failed', 'partial')
+        retryable = exam.results.filter(status='failed')
         question_id = request.data.get('question_id')
         if question_id not in (None, ''):
             try:
@@ -207,12 +208,17 @@ class ExamRetryView(APIView):
             except (TypeError, ValueError):
                 return Response({'error': '题目 ID 无效'}, status=400)
             task = getattr(exam, 'learning_task', None)
-            failed = failed.filter(question__isnull=True) if question_id == 0 and task and task.definition else failed.filter(question_id=question_id)
+            retryable = (retryable.filter(question__isnull=True) if question_id == 0 and task and task.definition
+                         else retryable.filter(question_id=question_id))
+        elif ulr_terminal:
+            retryable = exam.results.filter(status__in=('failed', 'pending'))
 
-        if not failed.exists():
+        if ulr_terminal and not exam_submission_complete(exam.total_questions, exam.results.count()):
+            return Response(exam_status_payload(exam))
+        if not retryable.exists():
             return Response(exam_status_payload(exam))
 
-        failed.update(status='pending', error_metadata={}, graded_at=None)
+        retryable.filter(status='failed').update(status='pending', error_metadata={}, graded_at=None)
         return self._enqueue(exam)
 
     @staticmethod

@@ -371,6 +371,48 @@ class ExamAsyncTests(APITestCase):
         detail = self.client.get(f'/api/quizzes/exams/{exam.pk}/').data
         self.assertEqual((detail['status'], detail['failed_count'], detail['pending_count']), ('failed', 2, 0))
         self.assertIn('原始作答记录不完整', detail['summary_text'])
+        with patch('quizzes.views_exam.dispatch_exam_grading') as dispatch, self.captureOnCommitCallbacks(execute=True):
+            retry = self.client.post(f'/api/quizzes/exams/{exam.pk}/retry/', {}, format='json')
+        self.assertEqual(retry.status_code, 200, retry.data)
+        dispatch.assert_not_called()
+
+    def test_ulr_retries_restored_answer_without_regrading_settled_item(self):
+        with override_settings(DEBUG=False, UNIMIND_LEARNING_RUNTIME='legacy'):
+            submitted, _ = self.submit()
+        self.assertEqual(submitted.status_code, 202, submitted.data)
+        exam = QuizExam.objects.get(pk=submitted.data['exam_id'])
+        settled = exam.results.get(question=self.objective)
+        ExamQuestionResult.objects.filter(pk=settled.pk).update(status='graded', score=6, attempts=1)
+        restored = exam.results.get(question=self.subjective)
+        original_id = restored.pk
+        restored.delete()
+        url = f'/api/quizzes/exams/{exam.pk}/retry/'
+
+        with override_settings(DEBUG=False, UNIMIND_LEARNING_RUNTIME='ulr'), \
+                patch('quizzes.views_exam.dispatch_exam_grading') as dispatch, \
+                patch('quizzes.ai_workflow._grade_answer', side_effect=grade_ok) as model, \
+                patch('quizzes.ai_workflow._queue_experience_verification'), \
+                self.captureOnCommitCallbacks(execute=True):
+            run_exam_grading(self.user.pk, exam.pk)
+            model.assert_not_called()
+            held = self.client.post(url, {}, format='json')
+            self.assertEqual((held.status_code, held.data['status'], held.data['total_score']), (200, 'partial', 6))
+            restored.pk = original_id
+            restored.save(force_insert=True)
+            resumed = self.client.post(url, {}, format='json')
+            self.assertEqual((resumed.status_code, resumed.data['id']), (202, exam.pk))
+            self.assertEqual(self.client.post(url, {}, format='json').status_code, 200)
+            run_exam_grading(self.user.pk, exam.pk)
+            run_exam_grading(self.user.pk, exam.pk)
+        dispatch.assert_called_once_with(self.user.pk, exam.pk)
+        model.assert_called_once()
+        self.assertEqual((model.call_args.args[0].pk, model.call_args.args[1]),
+                         (self.subjective.pk, restored.user_answer))
+        exam.refresh_from_db()
+        settled.refresh_from_db()
+        restored.refresh_from_db()
+        self.assertEqual((exam.status, exam.total_score, exam.graded_count), ('completed', 16, 2))
+        self.assertEqual((settled.score, settled.attempts, restored.attempts), (6, 1, 1))
 
     def test_lost_queue_delivery_and_interrupted_finalization_can_resume(self):
         response, _ = self.submit()
