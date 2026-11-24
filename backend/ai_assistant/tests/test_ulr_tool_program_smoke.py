@@ -2,7 +2,8 @@
 from rest_framework.exceptions import PermissionDenied
 
 from ai_assistant.services.ulr_tool_program import (
-    CURRENT_COURSE_NAME, LEGACY_VERSION, NAME, PRACTICE_NAME, PROGRAM_OPS, PROGRAM_TOOLS, VERSION, run_program,
+    CURRENT_COURSE_NAME, LEGACY_VERSION, NAME, PRACTICE_NAME, PROGRAM_OPS, PROGRAM_TOOLS, VERSION,
+    compile_current_course_locator, run_program,
 )
 
 
@@ -100,6 +101,12 @@ def test_practice_instruction_never_widens_a_missing_or_ambiguous_match():
 
 
 def test_current_course_instruction_only_accepts_the_server_source():
+    request = '请定位当前课程的「折现率」讲稿。只要时间点。'
+    assert compile_current_course_locator(request) == {'query': '折现率'}
+    for question in (request.replace('「折现率」', '折现率'), request.replace('只要时间点。', '请解释。'),
+                     request + '再给我两道题。', request.replace('折现率', ' ')):
+        assert compile_current_course_locator(question) is None
+
     calls = []
 
     def execute(name, arguments):

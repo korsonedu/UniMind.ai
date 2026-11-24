@@ -1,6 +1,7 @@
 """Optional loopback smoke against the installed DSH SDK and a scripted model."""
 import json
 import os
+from contextlib import nullcontext
 from datetime import timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import StringIO
@@ -251,6 +252,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         latest = json.dumps(messages[-1], ensure_ascii=False).replace('\\"', '"')
         if '折现率对照片段' in latest or 'missing_dependency' in latest or 'ambiguous_dependency' in latest:
             return None
+        assert program_mode != 'current_course_local', 'Local instruction must not call the model'
         if program_mode == 'current_course_native':
             args = {'query': '折现率'}
             if CURRENT_COURSE_NAME in names:
@@ -850,7 +852,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                 and row.msg.startswith('ai.obs ') and row.args[0].startswith('assistant.chat.planner')
                 and row.args[4].get('request_id') == str(request_id)]
             assert len(observed) == stats['model_requests'] and all(row['runtime'] == engine for row in observed)
-            assert len({row['attempt_id'] for row in observed}) == 1
+            assert len({row['attempt_id'] for row in observed}) == int(bool(observed))
             for row, call in zip(observed, model_calls[prior:count], strict=True):
                 assert row['model'] == call['model'] and row['reported_model'] == 'deepseek-flash'
                 assert int(row['max_output_tokens']) == call['max_tokens' if engine == 'dsh' else 'max_completion_tokens']
@@ -1741,6 +1743,31 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             assert WeeklyAIUsage.objects.get(user=user).ai_calls == charges_before + 1
             implicit_stats[engine] = {**stats, 'business_queries': 1, 'source_count': len(sources)}
         anchored_stats['implicit_scope'] = implicit_stats
+        direct_prompt = '请定位当前课程的「折现率」讲稿。只要时间点。'
+        direct_stats = {}
+        for label, engine, mode, calls, executor in (
+            ('dsh', 'dsh', 'current_course_dsh', anthropic_calls, 'views_dsh'),
+            ('model_instruction', 'ulr', 'current_course_native', openai_calls, 'services.ulr_runtime'),
+            ('local_instruction', 'ulr', 'current_course_local', openai_calls, 'services.ulr_runtime'),
+        ):
+            program_mode = mode
+            before = len(calls)
+            charges_before = WeeklyAIUsage.objects.get(user=user).ai_calls
+            compiler = (patch('ai_assistant.services.ulr_runtime.compile_current_course_locator', return_value=None)
+                        if label == 'model_instruction' else nullcontext())
+            with compiler, patch(f'ai_assistant.{executor}.execute_tool', wraps=execute_tool) as reads:
+                cards, stats = run(engine, calls, None, direct_prompt, course_context=selected_course)
+            call, = reads.call_args_list
+            arguments = call.kwargs['arguments'] if engine == 'dsh' else call.args[2]
+            assert call.args[1] == 'search_asr' and arguments == {**tool_args, 'course_id': course.pk}
+            assert cards == [source_cards[0]]
+            charges = WeeklyAIUsage.objects.get(user=user).ai_calls - charges_before
+            assert charges == 1
+            direct_stats[label] = {**stats, 'business_queries': reads.call_count, 'charges': charges,
+                'serialized_request_bytes': sum(len(json.dumps(request, ensure_ascii=False,
+                    separators=(',', ':')).encode()) for request in calls[before:])}
+        assert [stats['model_requests'] for stats in direct_stats.values()] == [2, 1, 0]
+        anchored_stats['direct_dispatch'] = direct_stats
         program_stats['current_course'] = anchored_stats
         other_course.delete()
         program_stats['unique_source'] = {'ulr': {**only_stats, 'asr_queries': 1},
@@ -2215,7 +2242,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         fail('dsh')
         fail('ulr')
         total_quota_charges = WeeklyAIUsage.objects.get(user=user).ai_calls
-        assert total_quota_charges == 80
+        assert total_quota_charges == 80 + len(direct_stats)
         print(json.dumps({'dsh': dsh_stats, 'ulr': ulr_stats, 'same_course_source_card': True,
                           'standalone_profile': {'debug': False, 'dsh_requests': 0, 'chat': isolated_stats,
                               'title': isolated.title, 'memory': True, 'score': native_score['score'],

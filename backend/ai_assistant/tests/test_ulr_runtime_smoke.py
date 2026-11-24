@@ -1561,7 +1561,8 @@ def test_ulr_recovers_course_program_reply_without_repeating_queries(auth_client
 @pytest.mark.parametrize('withdraw_stage', ['program_dependency', 'program_result', 'program_empty_result', 'program_revision',
                                            'direct_result', 'course_context', 'anchored', 'anchored_revision',
                                            'anchored_legacy', 'anchored_legacy_revision', 'anchored_card',
-                                           'anchored_card_empty', 'anchored_card_revision'])
+                                           'anchored_card_empty', 'anchored_card_revision', 'anchored_card_local',
+                                           'anchored_card_local_empty', 'anchored_card_local_revision'])
 def test_ulr_checks_course_scope_before_model_use_and_publication(auth_client, user, settings, tmp_path,
                                                             withdraw_stage):
     from ai_assistant.services.dsh_service import execute_tool
@@ -1579,7 +1580,8 @@ def test_ulr_checks_course_scope_before_model_use_and_publication(auth_client, u
     marker = '折现率 REVOKED_COURSE_SOURCE_MUST_NOT_APPEAR'
     anchored = withdraw_stage.startswith('anchored')
     direct_card = withdraw_stage.startswith('anchored_card')
-    if withdraw_stage == 'anchored_card_empty':
+    local_card = withdraw_stage.startswith('anchored_card_local')
+    if direct_card and withdraw_stage.endswith('_empty'):
         TranscriptSegment.objects.create(transcript=transcript, text='年金复习', start_time=60, end_time=70, index=0)
     elif withdraw_stage != 'program_empty_result':
         TranscriptSegment.objects.create(transcript=transcript, text=marker, start_time=60, end_time=70, index=0)
@@ -1664,14 +1666,21 @@ def test_ulr_checks_course_scope_before_model_use_and_publication(auth_client, u
                            '请定位当前课程的折现率并解释相关讲稿。')
     if withdraw_stage == 'anchored_card':
         body['message'] = '请问折现率是在哪一段？只返回时间点。'
+    if local_card:
+        body['message'] = '请定位当前课程的「折现率」讲稿。只要时间点。'
+    if withdraw_stage == 'anchored_card_local':
+        AIChatMessage.objects.create(user=user, bot=bot, conversation_id=body['conversation_id'], role='assistant',
+            content='之前查看了另一门课程。', metadata={'engine': 'ulr', 'ulr_context_sources': {
+                'courses': [other.pk], 'transcripts': [[other.pk, other_text.pk, other_text.revision]],
+                'question_answers': []}})
     with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider, \
             patch('ai_assistant.services.ulr_runtime.execute_tool', side_effect=tool):
         events = async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))
-        if withdraw_stage in ('anchored_card', 'anchored_card_empty'):
+        if direct_card and not withdraw_stage.endswith('_revision'):
             assert async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))[-1] == events[-1]
-    if withdraw_stage in ('anchored', 'anchored_legacy', 'anchored_card', 'anchored_card_empty'):
-        assert reads == ['search_asr'] and provider.call_count == (1 if direct_card else 2)
-        if withdraw_stage == 'anchored_card_empty':
+    if anchored and not withdraw_stage.endswith('_revision'):
+        assert reads == ['search_asr'] and provider.call_count == (0 if local_card else 1 if direct_card else 2)
+        if withdraw_stage.endswith('_empty'):
             assert events[-1]['full_content'] == '当前课程的讲稿没有找到相关片段。'
             assert events[-1]['metadata']['dsh_cards'] == []
         else:
@@ -1683,15 +1692,17 @@ def test_ulr_checks_course_scope_before_model_use_and_publication(auth_client, u
                 assert events[-1]['full_content'] == '折现率用于把未来现金流换算成现值。'
         metadata = AIChatMessage.objects.get(pk=events[-1]['message_id']).metadata
         assert metadata['ulr_context_sources']['transcripts'] == [[course.pk, transcript.pk, transcript.revision]]
+        assert metadata['ulr_context_sources']['courses'] == [course.pk]
         return
     assert reads == {'program_dependency': ['search_courses'], 'program_result': ['search_courses', 'search_asr'],
                      'program_empty_result': ['search_courses', 'search_asr'],
                      'program_revision': ['search_courses', 'search_asr'], 'direct_result': ['search_asr'],
                      'course_context': [], 'anchored_revision': ['search_asr'],
-                     'anchored_legacy_revision': ['search_asr'], 'anchored_card_revision': ['search_asr']}[withdraw_stage]
+                     'anchored_legacy_revision': ['search_asr'], 'anchored_card_revision': ['search_asr'],
+                     'anchored_card_local_revision': ['search_asr']}[withdraw_stage]
     assert forwarded == ([] if withdraw_stage.startswith('program_') or anchored else [marker])
     if withdraw_stage.endswith('_revision'):
-        assert provider.call_count == 1 and '讲稿已更新' in events[-1]['full_content']
+        assert provider.call_count == (0 if local_card else 1) and '讲稿已更新' in events[-1]['full_content']
     elif withdraw_stage.startswith('program_'):
         assert provider.call_count == 1
         assert '引用课程已不可访问' in events[-1]['full_content']

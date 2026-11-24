@@ -22,7 +22,8 @@ from .ulr_grading import grade_probe
 from .ulr_history import card_question_answers, require_current_practice_answers, scoped_history
 from .ulr_tool_program import (
     CURRENT_COURSE_NAME, MAX_RANKS, NAME as PROGRAM_NAME, PRACTICE_NAME, PROGRAM_OPS, PROGRAM_TOOLS, SOURCE_ACCESS_REVOKED,
-    TIMESTAMP_ONLY, VERSION as PROGRAM_VERSION, duplicate_program_scope, program_discovery, repair_program_tool, run_program,
+    TIMESTAMP_ONLY, VERSION as PROGRAM_VERSION, compile_current_course_locator, duplicate_program_scope, program_discovery,
+    repair_program_tool, run_program,
 )
 from .ulr_capabilities import (
     course_tools, require_visible_course_sources, require_visible_practice_review_sources,
@@ -166,6 +167,10 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
     available_programs = {name: PROGRAM_TOOLS[name] for name, ops in PROGRAM_OPS.items() if set(ops) <= allowed_names
                           and (name != CURRENT_COURSE_NAME or current_course_id is not None)
                           and (name != PRACTICE_NAME or practice_request and not re.search(r'诊断|diagnos', message, re.I))}
+    local_instruction = (compile_current_course_locator(message)
+                         if not task and not source_context['notes'] and CURRENT_COURSE_NAME in available_programs else None)
+    if local_instruction:
+        history.clear()
     course_card_request = PROGRAM_NAME in available_programs and TIMESTAMP_ONLY.search(message)
     discovery = next((tool for tool in tools if tool['function']['name'] == 'find_learning_tools'), None)
     named_tools = set(re.findall(r'(?<![a-zA-Z0-9_])session_[a-z][a-z0-9_]{0,39}(?![a-zA-Z0-9_])', message))
@@ -487,9 +492,12 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
                 if (function := tool['function'])['name'] == 'search_asr' else tool for tool in offered]
         if len(strategy_use_ids) == 1:
             offered = [task_tool_with_strategy_ref(tool) if tool['function']['name'] == TASK_TOOL else tool for tool in offered]
+        local_round = index == 0 and local_instruction is not None
+        if local_round:
+            offered = [available_programs[CURRENT_COURSE_NAME]]
         if remaining <= 0 or len(offered) > 8:
             raise ULRTurnUnavailable()
-        while not card_reply:
+        while not card_reply and not local_round:
             excerpts = [{**row, 'content': row['content'][:800]} for row, *_ in history]
             messages[0]['content'] = prompt + format_task_context({**source_context, 'history': excerpts})
             request_bytes = len(json.dumps({'messages': messages, 'tools': offered}, ensure_ascii=False).encode())
@@ -522,6 +530,10 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
         pending_text, next_text_at = [], 0
         if card_reply:
             finish, assistant, calls = 'stop', {'content': card_reply}, []
+        elif local_round:
+            finish, assistant = 'tool_calls', {}
+            calls = [{'type': 'function', 'function': {
+                'name': CURRENT_COURSE_NAME, 'arguments': json.dumps(local_instruction, ensure_ascii=False)}}]
         else:
             try:
                 response = AIEngine.call_provider(request_messages, operation=policy['operation'],
@@ -625,6 +637,10 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
             results.append({'role': 'tool', 'tool_call_id': outcome.call.call_id, 'content': accept_tool_result(outcome, call)})
             if program_phase == 'repair':
                 program_retry_of = outcome.call.call_id
+        if local_round:
+            if not card_reply:
+                raise ULRTurnUnavailable('讲稿定位未完成，请重试。')
+            continue
         messages.append({'role': 'assistant', 'content': content or None,
                          'tool_calls': [outcome.call.tool_call for outcome in outcomes],
                          **({'reasoning_content': assistant['reasoning_content']} if assistant.get('reasoning_content') else {})})

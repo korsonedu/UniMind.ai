@@ -108,6 +108,15 @@ PROGRAM_TOOLS = {
 }
 
 
+def compile_current_course_locator(message):
+    delivery = TIMESTAMP_ONLY.search(message)
+    if delivery and (locator := CURRENT_COURSE_LOCATOR.fullmatch(message[:delivery.start()])):
+        literal = re.fullmatch(r'「([^「」]+)」', locator['query'].strip())
+        if literal and (query := literal[1].strip()):
+            return {'query': query}
+    return None
+
+
 def program_properties(name):
     properties = PROGRAM_TOOLS[name]['function']['parameters']['properties']
     return {**properties, 'output': LEGACY_OUTPUT}
