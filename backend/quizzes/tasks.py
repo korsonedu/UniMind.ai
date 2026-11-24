@@ -112,6 +112,9 @@ def _run_queued_question_pipeline(task_id, execute, *, redelivered):
         if task is None:
             return
         native = task.payload.get('requires_ulr') is True or ulr_enabled()
+        if native and question_pipeline_may_have_partial_result(task):
+            logger.warning('Legacy bulk task %s has progress and needs review before ULR takeover', task_id)
+            return
         if native and task.payload.get('requires_ulr') is not True:
             task.payload['requires_ulr'] = True
             task.save(update_fields=['payload', 'updated_at'])

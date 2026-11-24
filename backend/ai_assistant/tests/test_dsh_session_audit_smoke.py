@@ -210,6 +210,16 @@ def test_ulr_requeues_a_lost_bulk_delivery_on_the_original_task(admin_client, ad
     assert ContentPipelineTask.objects.count() == 1 and task.status == 'completed' and not task.error_message
     assert Question.objects.get().knowledge_point_id == point.pk and task.result['questions_saved'] == 1
 
+    previous = {'status': 'running', 'progress': 30,
+        'payload': {**body, 'bulk_mode': True, 'current_stage': 'generating'}}
+    partial = ContentPipelineTask.objects.create(created_by=user, title='旧批量出题', task_type='ai_generate', **previous)
+    with patch.object(bulk_pipeline, '_author_generate', side_effect=AssertionError('Unexpected redelivery')) as author:
+        run_bulk_pipeline_task(**{**envelope, 'task_id': partial.pk})
+        author.assert_not_called()
+    partial.refresh_from_db()
+    assert {field: getattr(partial, field) for field in previous} == previous
+    assert not partial.result and Question.objects.count() == 1
+
 
 @pytest.mark.django_db(transaction=True)
 def test_legacy_arc_approval_commits_selected_questions_with_task_state(admin_client, admin_user, user, settings):
