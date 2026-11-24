@@ -1276,7 +1276,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             assert '字段 modules 未通过 type 校验' in calls[-1]['messages'][1]['content']
         settings.UNIMIND_DSH_GENERATION_ENABLED = False
 
-    def compare_full_build():
+    def compare_full_build(*, interrupt=False):
         nonlocal build_response
         from ai_engine import config
         from knowledge_builder.models import KnowledgeTreeBuild
@@ -1287,13 +1287,14 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         semantic = SemanticFixture()
         repo = Path(settings.BASE_DIR).parent
         tool = runpy.run_path(str(repo / 'scripts/ulr_review_pairs.py'))
-        output = tmp_path / 'full-build-comparison'
+        output = tmp_path / ('build-recovery-comparison' if interrupt else 'full-build-comparison')
         output.mkdir(mode=0o700)
         revision = capture_revision(repo)
         endpoint = '/api/knowledge-builder/'
         prompt = '合成微积分知识图谱'
         requirements = {'learning_goal': '理解极限、连续性及其先修关系'}
-        sample = {'case_id': 'six-stage-calculus-build', 'case': {'scenario': '六阶段知识树构建',
+        sample = {'case_id': 'six-stage-calculus-recovery' if interrupt else 'six-stage-calculus-build',
+            'case': {'scenario': '知识树发布中断恢复' if interrupt else '六阶段知识树构建',
             'prompt': prompt, 'reference': requirements['learning_goal'],
             'criteria': {'content': '模块、知识点和学习步骤符合给定目标。',
                          'dependencies': '先修关系、学习顺序和跨块衔接相互一致。'}}}
@@ -1318,13 +1319,34 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                 native = runtime == 'ulr'
                 before = len(calls)
                 started = monotonic()
+                body = {'subject': prompt, 'requirements': requirements}
                 with override_settings(UNIMIND_LEARNING_RUNTIME='ulr' if native else 'legacy',
                         UNIMIND_ULR_PROTOTYPE=False, UNIMIND_DSH_GENERATION_ENABLED=not native,
                         UNIMIND_KB_ONLINE_AUTO_MOUNT=False):
-                    created = auth_client.post(endpoint, {'subject': prompt, 'requirements': requirements}, format='json')
+                    created = auth_client.post(endpoint, body, format='json')
                     assert created.status_code == 202, created.data
-                    build_id = created.data['id']
+                    original_id = build_id = created.data['id']
                     assert enqueue.call_args.args == (build_id,)
+                    if interrupt:
+                        with patch('knowledge_builder.pipeline._persist', side_effect=RuntimeError('合成发布中断')):
+                            with pytest.raises(RuntimeError, match='合成发布中断'):
+                                build_knowledge_tree(build_id)
+                        failed = auth_client.get(f'{endpoint}{build_id}/').json()
+                        assert failed['status'] == 'FAILED' and failed['can_resume'] == native
+                        assert not any(failed[key] for key in ('modules', 'atoms', 'blocks'))
+                        tool['write'](output / f'{runtime}-interrupted.json', failed)
+                        assert len(calls) - before == 10
+                        after_failure = len(calls)
+                        available = auth_client.post(f'{endpoint}{build_id}/resume/')
+                        assert available.status_code == (202 if native else 409)
+                        if native:
+                            assert available.data['id'] == original_id
+                        else:
+                            rebuilt = auth_client.post(endpoint, body, format='json')
+                            assert rebuilt.status_code == 202
+                            build_id = rebuilt.data['id']
+                            assert build_id != original_id
+                        assert enqueue.call_args.args == (build_id,)
                     assert build_knowledge_tree(str(build_id)) == str(build_id)
                     response = auth_client.get(f'{endpoint}{build_id}/')
                 assert response.status_code == 200 and response.data['status'] == 'COMPLETED'
@@ -1343,27 +1365,43 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                                           for step in row['steps']]} for row in raw['blocks']],
                     'interfaces': list(build.cross_block_interfaces.order_by('pk').values(
                         'from_atom__code', 'to_atom__code', 'interface_role', 'bridge_explanation'))}
-                request_id = f'build:{build_id}'
-                observed = [row.args for row in caplog.records if row.name == 'ai_engine.observability'
-                            and row.args[4].get('request_id') == request_id]
-                attempt_id, = {row[4]['attempt_id'] for row in observed}
-                assert all(row[1] and row[4].get('reported_model') for row in observed)
-                model_requests = len(calls) - before
-                embeddings = sum(row[4].get('kind') == 'embedding' for row in observed)
-                assert model_requests == 10 and embeddings == 3 and len(observed) == model_requests + embeddings
-                records.append({**sample, 'runtime': runtime, 'trial': 1, 'revision': revision,
-                    'request_id': request_id, 'attempt_id': attempt_id, 'completed': True, 'evidence': 'protocol_smoke',
-                    'model': {row[0]: row[4]['reported_model'] for row in observed},
-                    'review': {'answer': '', 'sources': [], 'result': graph},
-                    'metrics': {'model_requests': model_requests, 'embedding_requests': embeddings,
-                                'completion_ms': round((monotonic() - started) * 1000)}})
-                totals[runtime] = {'model_requests': model_requests, 'embedding_requests': embeddings,
+                ids = tuple(dict.fromkeys((original_id, build_id)))
+                for task_id in ids:
+                    request_id = f'build:{task_id}'
+                    observed = [row.args for row in caplog.records if row.name == 'ai_engine.observability'
+                                and row.args[4].get('request_id') == request_id]
+                    attempts = list(dict.fromkeys(row[4]['attempt_id'] for row in observed))
+                    local = [row for row in observed if row[4].get('kind') == 'build_local']
+                    provider = [row for row in observed if row[4].get('kind') != 'build_local']
+                    assert all(row[1] and row[4].get('reported_model') for row in provider)
+                    assert len(attempts) == (2 if interrupt and native else 1)
+                    assert [row[0] for row in local] == (['knowledge_tree.checkpoint_publication'] if interrupt and native else [])
+                    embeddings = sum(row[4].get('kind') == 'embedding' for row in provider)
+                    model_requests = len(provider) - embeddings
+                    assert model_requests == 10 and embeddings == 3
+                    completed = task_id == build_id
+                    records.append({**sample, 'runtime': runtime, 'trial': 1, 'revision': revision,
+                        'request_id': request_id, 'completed': completed, 'evidence': 'protocol_smoke',
+                        **({'attempt_id': attempts[0]} if len(attempts) == 1 else {'attempt_ids': attempts}),
+                        'model': {row[0]: row[4]['reported_model'] for row in provider},
+                        'review': {'answer': '', 'sources': [], 'result': graph if completed else {'status': 'FAILED'}},
+                        'metrics': {'model_requests': model_requests, 'embedding_requests': embeddings,
+                                    'completion_ms': round((monotonic() - started) * 1000) if not interrupt else None}})
+                assert len(calls) - before == 10 * len(ids)
+                total_embeddings = sum(row['metrics']['embedding_requests'] for row in records if row['runtime'] == runtime)
+                totals[runtime] = {'model_requests': len(calls) - before, 'embedding_requests': total_embeddings,
                     'modules': len(raw['modules']), 'atoms': len(raw['atoms']), 'blocks': len(raw['blocks'])}
-        assert records[0]['review'] == records[1]['review']
-        operations = prepare_capture(repo, output, records, caplog, tool, ('dsh',))
+                if interrupt:
+                    totals[runtime].update(original_id=original_id, completed_id=build_id, resume_http_status=available.status_code,
+                        model_requests_after_interruption=len(calls) - after_failure, embedding_requests_after_interruption=total_embeddings - 3)
+        completed = [record for record in records if record['completed']]
+        assert completed[0]['review'] == completed[1]['review']
+        operations = prepare_capture(repo, output, records, caplog, tool, () if interrupt else ('dsh',))
         traces = [tool['reconcile'](row, dict.fromkeys(tool['METRICS']) | row['metrics'], operations) for row in records]
         assert all(trace['model_verified'] for trace in traces)
-        assert tool['request_config_issue'](*traces) is None
+        assert all(tool['request_config_issue'](traces[0], trace) is None for trace in traces[1:])
+        if interrupt:
+            tool['write'](output / 'recovery.json', totals)
         return totals
 
     try:
@@ -1726,6 +1764,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         invalid_outline = True
         knowledge_outline(True, openai_calls)
         full_build_comparison = compare_full_build()
+        build_recovery_comparison = compare_full_build(interrupt=True)
         settings.UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE = True
         settings.UNIMIND_LEARNING_VISUAL_REVIEW_ENABLED = False
         artifact_prompt = '解释6乘7为什么是42，使用计算工具和交互实验'
@@ -2466,6 +2505,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                           'knowledge_outline': {'dsh_valid_requests': 1, 'ulr_valid_requests': 1,
                                                 'ulr_requests_with_schema_repair': 2},
                           'full_knowledge_build': full_build_comparison,
+                          'knowledge_build_recovery': build_recovery_comparison,
                           'note_understanding': {'same_valid_result': True, 'requests_per_attempt': 1,
                                                  'duplicate_fields': {'dsh': 'saved_last_value', 'ulr': 'rejected'}},
                           'legacy_tree_export': {'requests_per_valid_tree': 1, 'imported_nodes': 112,
