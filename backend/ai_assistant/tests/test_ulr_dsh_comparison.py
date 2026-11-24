@@ -1035,6 +1035,11 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                 transaction.set_rollback(True)
         with override_settings(**({'DEBUG': False, 'UNIMIND_LEARNING_RUNTIME': 'ulr', 'UNIMIND_DSH_ENABLED': False,
                                    'UNIMIND_DSH_PYTHON': ''} if engine == 'dsh' else {})):
+            if engine == 'dsh' and reject_followup:
+                with transaction.atomic():
+                    AIUsageReservation.objects.get(user=user, request_id=request_id).delete()
+                    assert send_project_learning_followups()['sent'] == 0
+                    transaction.set_rollback(True)
             assert send_project_learning_followups()['sent'] == deliveries
             assert send_project_learning_followups()['sent'] == 0
         assert Notification.objects.filter(recipient=user, ntype='learning_followup',
@@ -2251,6 +2256,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                                   'automatic_question_writes': 0, 'confirmed_inserts_after_replay': 1,
                                   'inconsistent_review': {'dsh': 'review', 'ulr': 'failed'}},
                           'project_followup': {'deliveries_after_failed_answer': {'dsh': 1, 'ulr': 0},
+                                               'deliveries_after_switch_without_legacy_receipt': 0,
                                                'legacy_reminders_after_switch': {'failed': 0, 'completed': 1},
                                                'ulr_confirmed_deliveries_after_replay': 1},
                           'project_handoff': {'same_project_and_task': True, 'accepted_pending_plan': True,

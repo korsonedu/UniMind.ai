@@ -165,6 +165,19 @@ class ProjectLearningSmoke(APITestCase):
         self.assertEqual(send_project_learning_followups()['sent'], 0)
         self.assertFalse(Notification.objects.filter(recipient=self.user).exists())
 
+        for response in ({'engine': 'dsh', 'deleted': True}, {'engine': 'dsh', 'done': True, 'message_id': 0}, None):
+            if response is None:
+                receipt.delete()
+            else:
+                receipt.status, receipt.response = 'succeeded', response
+                receipt.save(update_fields=['status', 'response'])
+            ProjectLearning.objects.filter(pk=self.state.pk).update(followup_at=timezone.now(), followup_text='待核对的旧提醒')
+            self.assertEqual(send_project_learning_followups()['sent'], 0)
+            self.assertFalse(Notification.objects.filter(recipient=self.user).exists())
+            self.assertFalse(self.project.learning_events.filter(kind='followup').exists())
+            self.state.refresh_from_db()
+            self.assertIsNone(self.state.followup_at)
+
     @override_settings(UNIMIND_LEARNING_RUNTIME='ulr')
     def test_switch_hides_a_pending_legacy_proposal_until_its_reply_succeeds(self):
         self.make_plan()

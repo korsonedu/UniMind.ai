@@ -22,14 +22,22 @@ class LearningConflict(APIException):
 
 
 def model_event_reservation(event):
-    if not event or not event.request_key or not event.message_id:
-        return None
+    """Distinguish earlier untracked events from events missing their required receipt."""
+    if not event or not event.request_key:
+        return False, None
+    if not event.message_id:
+        return True, None
+    metadata = event.message.metadata
+    if 'runtime_request_id' not in metadata:
+        return False, None
     try:
-        request_id = UUID(event.message.metadata.get('runtime_request_id', ''))
+        request_id = UUID(metadata['runtime_request_id'])
     except (ValueError, TypeError, AttributeError):
-        return None
+        return True, None
     from users.models import AIUsageReservation
-    return AIUsageReservation.objects.filter(user_id=event.message.user_id, request_id=request_id).only('status', 'updated_at').first()
+    receipt = AIUsageReservation.objects.filter(user_id=event.message.user_id, request_id=request_id).only(
+        'user_id', 'status', 'updated_at', 'response').first()
+    return True, receipt
 
 
 def message_receipts(user_id, rows):

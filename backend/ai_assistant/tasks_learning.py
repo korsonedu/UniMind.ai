@@ -3,7 +3,7 @@ from celery import shared_task
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
-from ai_assistant.models import AIChatMessage, ProjectLearning, ProjectLearningEvent
+from ai_assistant.models import AIChatMessage, ProjectLearning, ProjectLearningEvent, chat_receipt_deleted
 from .services.ulr_config import ulr_enabled
 from notifications.models import Notification
 from users.feature_access import has_learning_feature
@@ -46,10 +46,12 @@ def send_project_learning_followups():
                     'plan', 'progress', 'pause', 'resume', 'complete', 'schedule', 'accept', 'reminders',
                 )).exclude(kind='plan', content__has_key='proposed_plan').exclude(
                     kind='progress', content__has_key='mainline', content__mainline=False).select_related('message').first()
-                receipt = model_event_reservation(source)
+                requires_receipt, receipt = model_event_reservation(source)
                 if receipt and receipt.status == 'pending' and receipt.updated_at >= now - CHAT_RESERVATION_TTL:
                     continue
-                if (receipt and receipt.status != 'succeeded') or (source and source.kind == 'progress'
+                unverified_receipt = requires_receipt and (
+                    not receipt or receipt.status != 'succeeded' or chat_receipt_deleted(receipt))
+                if unverified_receipt or (source and source.kind == 'progress'
                         and source.pk in unconfirmed_progress_ids(user.pk, state.project_id)):
                     state.followup_at = None
                     state.followup_text = ''
