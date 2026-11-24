@@ -1605,7 +1605,7 @@ def test_ulr_checks_course_scope_before_model_use_and_publication(auth_client, u
             if 'legacy' not in withdraw_stage:
                 assert not names and receipt['steps_executed'] == ['search_asr']
             assert [row['course_id'] for row in receipt['segments']] == [course.pk] and 'OTHER_COURSE' not in latest
-            return {'choices': [{'finish_reason': 'stop', 'message': {'content': '找到当前课程的讲稿。'}}]}
+            return {'choices': [{'finish_reason': 'stop', 'message': {'content': '折现率用于把未来现金流换算成现值。'}}]}
         if withdraw_stage == 'course_context':
             assert marker in messages[0]['content']
             forwarded.append(marker)
@@ -1619,12 +1619,14 @@ def test_ulr_checks_course_scope_before_model_use_and_publication(auth_client, u
         if anchored:
             instruction = {'query': '折现率'}
             if direct_card:
-                instruction['output'] = 'card'
                 kwargs['on_text']('正在定位讲稿。')
+            elif withdraw_stage == 'anchored':
+                instruction['output'] = 'card'
             if 'legacy' in withdraw_stage:
                 assert '仅查找当前课程讲稿' in tools['search_asr']['description']
                 name, arguments = 'search_asr', instruction
             elif CURRENT_COURSE_NAME in names:
+                assert 'output' not in tools[CURRENT_COURSE_NAME]['parameters']['properties']
                 name, arguments = CURRENT_COURSE_NAME, instruction
             else:
                 name = 'find_learning_tools'
@@ -1651,7 +1653,8 @@ def test_ulr_checks_course_scope_before_model_use_and_publication(auth_client, u
     if withdraw_stage == 'course_context' or anchored:
         body['course_context'] = {'course_id': course.pk, 'video_seconds': 65}
     if anchored:
-        body['message'] = '当前课程在哪一段讲折现率？只要时间点。' if direct_card else '请定位当前课程的折现率讲稿。'
+        body['message'] = ('当前课程在哪一段讲折现率？只要时间点。' if direct_card else
+                           '请定位当前课程的折现率并解释相关讲稿。')
     with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider, \
             patch('ai_assistant.services.ulr_runtime.execute_tool', side_effect=tool):
         events = async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', body, format='json'))
@@ -1667,6 +1670,8 @@ def test_ulr_checks_course_scope_before_model_use_and_publication(auth_client, u
             assert card['tool'] == 'search_asr' and card['payload']['items'][0]['action_link'] == f'/course/{course.pk}?t=60'
             if direct_card:
                 assert events[-1]['full_content'] == '已找到当前课程的讲稿片段。'
+            else:
+                assert events[-1]['full_content'] == '折现率用于把未来现金流换算成现值。'
         metadata = AIChatMessage.objects.get(pk=events[-1]['message_id']).metadata
         assert metadata['ulr_context_sources']['transcripts'] == [[course.pk, transcript.pk, transcript.revision]]
         return

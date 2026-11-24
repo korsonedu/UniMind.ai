@@ -14,7 +14,7 @@ NAME = 'run_course_tools'
 PRACTICE_NAME = 'run_practice_tools'
 CURRENT_COURSE_NAME = 'locate_current_course_transcript'
 # Bump when the instruction grammar or its bound operation contracts change.
-VERSION = 15
+VERSION = 16
 # Earlier versions with the same operations may still echo version and rank.
 LEGACY_VERSION = 6
 PROGRAM_OPS = {
@@ -85,6 +85,7 @@ QUERY_PROPERTY = {**TEXT, 'description': '讲稿关键词'}
 LEGACY_COURSE_OUTPUT = {'type': 'string', 'enum': ['card']}
 TIMESTAMP_ONLY = re.compile(r'(?:^|[。！？.!?]\s*)(?:只要(?:视频)?时间(?:点|戳)|'
                             r'(?:just|only) (?:the )?timestamps?)\s*[。.!！]?\s*$', re.IGNORECASE)
+CURRENT_COURSE_LOCATOR = re.compile(r'\s*(?:请)?(?:帮我)?定位当前课程的(?P<query>[^。！？；，、,.!?;：:\n]+)讲稿\s*[。.!！]?\s*')
 PROGRAM_TOOLS = {
     NAME: program_tool(NAME, 'find',
         {**FIND_PROPERTIES, 'query': {**QUERY_PROPERTY, 'description': '讲稿关键词，省略时沿用 find'},
@@ -95,15 +96,13 @@ PROGRAM_TOOLS = {
          'output': {'type': 'string', 'enum': ['card'], 'description': (
              '学生只要求领取练习、无需其他答复时填 card，内核发卡并用界面语言确认。其他情况省略。')}}, SELECTION_RULE),
     CURRENT_COURSE_NAME: program_tool(CURRENT_COURSE_NAME, 'query',
-        {'query': QUERY_PROPERTY, 'limit': SEARCH_ASR_SCHEMA['properties']['limit'],
-         'output': {'type': 'string', 'enum': ['card'], 'description': (
-             '只需要定位视频片段时填 card，内核返回时间戳来源卡。需要讲解时省略。')}}),
+        {'query': QUERY_PROPERTY, 'limit': SEARCH_ASR_SCHEMA['properties']['limit']}),
 }
 
 
 def program_properties(name):
     properties = PROGRAM_TOOLS[name]['function']['parameters']['properties']
-    return {**properties, 'output': LEGACY_COURSE_OUTPUT} if name == NAME else properties
+    return {**properties, 'output': LEGACY_COURSE_OUTPUT} if name != PRACTICE_NAME else properties
 
 
 def repair_program_tool(name, field):
@@ -184,10 +183,11 @@ def run_program(arguments, allowed_tools, execute, *, name=NAME, message='', cur
     if isinstance(arguments, dict) and not valid_program_version(arguments):
         return failure('stale_tool_version', '工具指令版本不符。', field='$.v', current_version=VERSION)
     schema = PROGRAM_TOOLS[name]['function']['parameters']
+    properties = program_properties(name)
     if not anchored:
         maximum_rank = MAX_RANKS[name]
-        schema = {**schema, 'properties': {**program_properties(name),
-                  'rank': {'type': 'integer', 'minimum': 1, 'maximum': maximum_rank}}}
+        properties = {**properties, 'rank': {'type': 'integer', 'minimum': 1, 'maximum': maximum_rank}}
+    schema = {**schema, 'properties': properties}
     if isinstance(arguments, dict):
         arguments = arguments.copy()
         arguments.pop('v', None)
@@ -219,7 +219,9 @@ def run_program(arguments, allowed_tools, execute, *, name=NAME, message='', cur
     if practice and arguments.get('q_type') == 'objective' and 'subjective_type' in arguments:
         return failure('invalid_arguments', '客观题不能指定主观题题型。', field='$.subjective_type')
 
-    card_only = TIMESTAMP_ONLY.search(message) is not None if name == NAME else arguments.get('output') == 'card'
+    card_only = arguments.get('output') == 'card' if practice else TIMESTAMP_ONLY.search(message) is not None
+    if anchored and not card_only and (locator := CURRENT_COURSE_LOCATOR.fullmatch(message)):
+        card_only = locator['query'].strip() == arguments['query'].strip()
     steps = []
     if anchored:
         if type(current_course_id) is not int or current_course_id < 1:

@@ -252,7 +252,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         if '折现率对照片段' in latest or 'missing_dependency' in latest or 'ambiguous_dependency' in latest:
             return None
         if program_mode == 'current_course_native':
-            args = {'v': PROGRAM_VERSION, 'query': '折现率', 'output': 'card'}
+            args = {'query': '折现率'}
             if CURRENT_COURSE_NAME in names:
                 return [(CURRENT_COURSE_NAME, args)]
             return [('find_learning_tools', {'program': CURRENT_COURSE_NAME, 'instruction': args})]
