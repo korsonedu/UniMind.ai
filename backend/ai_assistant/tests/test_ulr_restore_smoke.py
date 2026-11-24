@@ -83,6 +83,7 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
 
     from ai_assistant.services.external_video_context import prepare_external_video_context
     from ai_assistant.views import _reserve_chat_request
+    from quizzes.models import ContentPipelineTask
     from users.learning import confirm_ai_call
 
     assert shutil.which('psql') and shutil.which('pg_dump')
@@ -120,6 +121,8 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
     site_directory.mkdir()
     (site_directory / 'transcript.json').write_text(json.dumps({'id': site_session, 'messages': [
         {'role': row.role, 'content': row.content} for row in (prompt, answer)]}, ensure_ascii=False))
+    unsettled = ContentPipelineTask.objects.create(created_by=user, task_type='ai_generate',
+        title='合成待核对旧出题', status='failed', payload={'bulk_mode': True, 'current_stage': 'generating'})
 
     env = {'PATH': os.environ['PATH'], 'TMPDIR': str(tmp_path), 'DJANGO_ENV': 'test',
            'UNIMIND_DSH_ENABLED': 'false', 'UNIMIND_LEARNING_RUNTIME': 'ulr',
@@ -138,12 +141,15 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
     fingerprints = json.loads(inventory.getvalue())
     assert fingerprints['database_fingerprint'] == checksum
 
-    # The script must not load any repository deployment settings.
     script = tmp_path / 'scripts' / 'restore_db.sh'
     script.parent.mkdir()
     shutil.copy2(Path(settings.BASE_DIR).parent / 'scripts' / script.name, script)
     target = f'ulr_restore_{uuid4().hex}'
     failed_target = f'{target}_failed'
+    # Simulate a checkout configured for a different database on the same disposable cluster.
+    config = tmp_path / 'backend' / '.env'
+    config.parent.mkdir()
+    config.write_text(f'DB_NAME={failed_target}\n')
     restored_env = {**env, 'DB_NAME': target}
     command = [sys.executable, str(Path(settings.BASE_DIR) / 'manage.py'), 'audit_dsh_sessions',
                '--state-dir', str(state), '--api-url', api_url]
@@ -162,9 +168,19 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
                                   env=restored_env, capture_output=True, timeout=60)
         assert restored.returncode == 0, restored.stderr
         assert sql_probe(target, "SELECT to_regclass('old_record') IS NULL") == 't'
+        assert sql_probe(failed_target, 'SELECT value FROM old_record') == '19'
         imported = subprocess.run([*command, '--import-verified'], env=restored_env, capture_output=True,
                                   text=True, timeout=30, check=True)
         assert json.loads(imported.stdout)['imported'] == 1
+        blocked = subprocess.run(gate, env=restored_env, capture_output=True, text=True, timeout=30)
+        report = json.loads(blocked.stdout)
+        assert blocked.returncode != 0 and report['snapshot_pair_verified'] and report['database_restore_verified']
+        assert report['blockers'] == {'unsettled_legacy_question_pipelines': 1}
+        assert report['unsettled_question_pipeline_ids'] == [unsettled.pk]
+        # Settle the synthetic review on the restored copy for the continuation check.
+        sql_probe(target, f"UPDATE quizzes_contentpipelinetask SET status = 'cancelled' WHERE id = {unsettled.pk}")
+        unsettled.refresh_from_db()
+        assert unsettled.status == 'failed'
         verify = ('from ai_assistant.tests.test_ulr_restore_smoke import verify_restored_conversations; '
                   f'verify_restored_conversations({user.pk}, {site_body!r}, {str(UUID(hex=session_id))!r})')
         continued = subprocess.run([sys.executable, command[1], 'shell', '-c', verify],

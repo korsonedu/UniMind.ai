@@ -36,11 +36,20 @@ if [ -f "${BACKUP_FILE}.sha256" ]; then
 fi
 gzip -t -- "${BACKUP_FILE}"
 
-# 从 .env 读取数据库配置
+# .env 提供默认值，调用方指定的连接参数优先。
 if [ -f "${PROJECT_DIR}/backend/.env" ]; then
+    restore_overrides=()
+    for key in DB_NAME DB_HOST DB_PORT DB_USER DB_PASSWORD; do
+        if [[ ${!key+x} ]]; then
+            restore_overrides+=("${key}=${!key}")
+        fi
+    done
     set -a
     source "${PROJECT_DIR}/backend/.env"
     set +a
+    if [ "${#restore_overrides[@]}" -gt 0 ]; then
+        export "${restore_overrides[@]}"
+    fi
 fi
 
 DB_NAME="${DB_NAME:-unimind}"
