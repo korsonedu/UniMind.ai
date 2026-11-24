@@ -167,7 +167,7 @@ def reconcile(record, values, operations, cost_rates=None):
         if (record['runtime'] != 'ulr' or local['runtime'] != 'ulr' or len(attempts) != 1 or len(calls) != 1
                 or local['operation'] != 'assistant.chat.instruction' or not local['success'] or local['requests'] != 0
                 or local['model'] or local['reported_model'] or local['submitted_tools'] not in (
-                    ['locate_current_course_transcript'], ['run_practice_tools'])):
+                    ['locate_current_course_transcript'], ['run_practice_tools'], ['run_course_tools'])):
             raise ValueError(f'{request_id} 的本地指令回执与调用记录不符。')
     for call in local_build_calls:
         if (prefix != 'build' or record['runtime'] != 'ulr' or call['requests'] != 0
