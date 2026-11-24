@@ -56,7 +56,9 @@ def verify_restored_conversations(user_id, site_body, imported_id):
             patch('ai_assistant.services.dsh_xiaoyu.extract_memories_async'), \
             patch('ai_assistant.services.dsh_xiaoyu.schedule_conversation_title'):
         assert send(site_body) == legacy and not seen
-        assert WeeklyAIUsage.objects.get(user=user).ai_calls == initial_charge
+        changed = {**site_body, 'external_video_context': {**site_body['external_video_context'], 'part': 2}}
+        assert client.post('/api/ai/chat/', changed, format='json').status_code == 400
+        assert not seen and WeeklyAIUsage.objects.get(user=user).ai_calls == initial_charge
         histories = ((site_body['conversation_id'], legacy['full_content']), (imported_id, '合成迁移答复'))
         for index, (conversation_id, old_reply) in enumerate(histories, start=1):
             body = {'bot_id': site_body['bot_id'], 'conversation_id': conversation_id, 'request_id': str(uuid4()),
@@ -77,6 +79,9 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
     if connection.vendor != 'postgresql':
         pytest.skip('Requires a disposable PostgreSQL test database.')
     from django.db.backends.postgresql.psycopg_any import sql
+    from types import SimpleNamespace
+
+    from ai_assistant.services.external_video_context import prepare_external_video_context
     from ai_assistant.views import _reserve_chat_request
     from users.learning import confirm_ai_call
 
@@ -100,14 +105,17 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
     site_id, site_session = uuid4(), uuid4().hex
     site = {'user': user, 'bot': bot, 'conversation_id': site_id}
     Conversation.objects.create(**site, title='合成原小宇对话')
-    site_body = {'bot_id': bot.pk, 'conversation_id': str(site_id), 'request_id': str(uuid4()), 'message': '合成原问答'}
+    site_body = {'bot_id': bot.pk, 'conversation_id': str(site_id), 'request_id': str(uuid4()), 'message': '合成原问答',
+        'external_video_context': {'platform': 'bilibili', 'external_id': 'BV1Restore', 'video_seconds': 60}}
+    video = prepare_external_video_context(SimpleNamespace(data=site_body), bot, site_id)
     receipt = _reserve_chat_request(user, site_body, bot, conversation_id=site_id)
     prompt = AIChatMessage.objects.create(**site, role='user', content=site_body['message'],
-        metadata={'runtime_request_id': site_body['request_id']})
-    metadata = {'engine': 'dsh', 'dsh_session_id': site_session, 'learning_turn': {'message_id': prompt.pk}}
+        metadata={'runtime_request_id': site_body['request_id'], 'external_video_context': video})
+    metadata = {'engine': 'dsh', 'dsh_session_id': site_session, 'external_video_context': video,
+                'learning_turn': {'message_id': prompt.pk}}
     answer = AIChatMessage.objects.create(**site, role='assistant', content='合成原会话答复', metadata=metadata)
     confirm_ai_call(receipt, response={'engine': 'dsh', 'done': True, 'session_id': site_session,
-        'full_content': answer.content, 'message_id': answer.pk, 'user_message': {'message_id': prompt.pk}, 'metadata': metadata})
+        'full_content': answer.content, 'message_id': answer.pk, 'user_message': {'message_id': prompt.pk, 'metadata': prompt.metadata}, 'metadata': metadata})
     site_directory = state / owner / site_session
     site_directory.mkdir()
     (site_directory / 'transcript.json').write_text(json.dumps({'id': site_session, 'messages': [
@@ -141,10 +149,19 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
                '--state-dir', str(state), '--api-url', api_url]
     gate = [*command, '--require-migrated', '--database-backup', str(backup), '--expected-state-fingerprint',
             fingerprints['state_fingerprint'], '--expected-database-fingerprint', checksum]
+    def sql_probe(database, query):
+        return subprocess.run(['psql', '-XAtv', 'ON_ERROR_STOP=1', *pg_options, '-d', database, '-c', query],
+                              env=pg_env, capture_output=True, text=True, timeout=10, check=True).stdout.strip()
+
     try:
+        for database in (target, failed_target):
+            with connection.cursor() as cursor:
+                cursor.execute(sql.SQL('CREATE DATABASE {}').format(sql.Identifier(database)))
+            sql_probe(database, 'CREATE TABLE old_record AS SELECT 19 AS value')
         restored = subprocess.run(['bash', str(script), str(backup)], input='YES\n', text=True,
                                   env=restored_env, capture_output=True, timeout=60)
         assert restored.returncode == 0, restored.stderr
+        assert sql_probe(target, "SELECT to_regclass('old_record') IS NULL") == 't'
         imported = subprocess.run([*command, '--import-verified'], env=restored_env, capture_output=True,
                                   text=True, timeout=30, check=True)
         assert json.loads(imported.stdout)['imported'] == 1
@@ -174,10 +191,9 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
         failed = subprocess.run(['bash', str(script), str(broken)], input='YES\n', text=True,
                                 env={**env, 'DB_NAME': failed_target}, capture_output=True, timeout=30)
         assert failed.returncode != 0 and 'division by zero' in failed.stderr
-        check = subprocess.run(['psql', '-XAt', *pg_options, '-d', failed_target, '-c',
-            "SELECT to_regclass('restore_probe') IS NULL AND current_setting('unimind.restore_sha256', true) IS NULL"],
-            env=pg_env, capture_output=True, text=True, timeout=10, check=True)
-        assert check.stdout.strip() == 't'
+        assert sql_probe(failed_target, 'SELECT value FROM old_record') == '19'
+        assert sql_probe(failed_target, "SELECT to_regclass('restore_probe') IS NULL AND "
+                                        "current_setting('unimind.restore_sha256', true) IS NULL") == 't'
     finally:
         with connection.cursor() as cursor:
             for database in (target, failed_target):

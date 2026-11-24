@@ -56,7 +56,7 @@ echo "  主机:   ${DB_HOST}:${DB_PORT}"
 echo "  备份:   ${BACKUP_FILE}"
 echo "============================================"
 echo ""
-echo "⚠️  警告: 此操作将覆盖当前数据库所有数据！"
+echo "⚠️  警告: 备份通过校验并导入后，将替换当前数据库！"
 read -p "确认恢复? (输入 YES 继续): " CONFIRM
 
 if [ "${CONFIRM}" != "YES" ]; then
@@ -66,34 +66,42 @@ fi
 
 echo "[$(date)] 开始恢复..."
 
-# 终止现有连接
-PGPASSWORD="${DB_PASSWORD}" psql \
-    -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d postgres \
-    -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${DB_NAME}' AND pid <> pg_backend_pid();" \
-    2>/dev/null || true
+psql_restore() {
+    PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" \
+        --no-psqlrc --set=ON_ERROR_STOP=1 "$@"
+}
 
-# 删除并重建数据库
-PGPASSWORD="${DB_PASSWORD}" psql \
-    -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d postgres \
-    -c "DROP DATABASE IF EXISTS ${DB_NAME};"
+RESTORE_WORK="$(mktemp -d)"
+STAGED_DATABASE="ulr_restore_${RESTORE_WORK##*.}"
+PREVIOUS_DATABASE="ulr_previous_${RESTORE_WORK##*.}"
+RESTORE_STAGED=false
 
-PGPASSWORD="${DB_PASSWORD}" psql \
-    -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d postgres \
-    -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};"
+cleanup() {
+    if [ "${RESTORE_STAGED}" = true ]; then
+        psql_restore -d postgres --quiet --set="staged_database=${STAGED_DATABASE}" --file=- <<'SQL' || true
+DROP DATABASE IF EXISTS :"staged_database";
+SQL
+    fi
+    rm -f "${RESTORE_WORK}/stream" "${RESTORE_WORK}/sha256"
+    rmdir "${RESTORE_WORK}"
+}
+trap cleanup EXIT
+
+psql_restore -d postgres --set="staged_database=${STAGED_DATABASE}" --set="restore_owner=${DB_USER}" --file=- <<'SQL'
+CREATE DATABASE :"staged_database" OWNER :"restore_owner";
+SQL
+RESTORE_STAGED=true
 
 # 校验实际导入的流，并让数据和恢复凭据一起提交。
 verified_restore_stream() (
-    RESTORE_WORK="$(mktemp -d)"
     HASH_PID=''
-    cleanup_restore() {
+    stop_hash() {
         if [ -n "${HASH_PID}" ]; then
             kill "${HASH_PID}" 2>/dev/null || true
             wait "${HASH_PID}" 2>/dev/null || true
         fi
-        rm -f "${RESTORE_WORK}/stream" "${RESTORE_WORK}/sha256"
-        rmdir "${RESTORE_WORK}"
     }
-    trap cleanup_restore EXIT
+    trap stop_hash EXIT
     mkfifo "${RESTORE_WORK}/stream"
     shasum -a 256 < "${RESTORE_WORK}/stream" > "${RESTORE_WORK}/sha256" &
     HASH_PID=$!
@@ -112,9 +120,25 @@ SQL
     exit 1
 )
 
-verified_restore_stream | PGPASSWORD="${DB_PASSWORD}" psql \
-    -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d "${DB_NAME}" \
-    --no-psqlrc --quiet --single-transaction --set=ON_ERROR_STOP=1 --file=- \
-    --set="restore_database=${DB_NAME}" --set="restore_sha=${BACKUP_SHA}"
+verified_restore_stream | psql_restore -d "${STAGED_DATABASE}" --quiet --single-transaction --file=- \
+    --set="restore_database=${STAGED_DATABASE}" --set="restore_sha=${BACKUP_SHA}"
+
+# 暂存库完整提交后，在同一事务里切换两个库名。
+psql_restore -d postgres --single-transaction --file=- \
+    --set="target_database=${DB_NAME}" --set="staged_database=${STAGED_DATABASE}" \
+    --set="previous_database=${PREVIOUS_DATABASE}" <<'SQL'
+SELECT EXISTS (SELECT FROM pg_database WHERE datname = :'target_database') AS target_exists \gset
+\if :target_exists
+SELECT pg_terminate_backend(pid, 5000) FROM pg_stat_activity
+    WHERE datname = :'target_database' AND pid <> pg_backend_pid();
+ALTER DATABASE :"target_database" RENAME TO :"previous_database";
+\endif
+ALTER DATABASE :"staged_database" RENAME TO :"target_database";
+SQL
+RESTORE_STAGED=false
+
+psql_restore -d postgres --quiet --set="previous_database=${PREVIOUS_DATABASE}" --file=- <<'SQL'
+DROP DATABASE IF EXISTS :"previous_database";
+SQL
 
 echo "[$(date)] 恢复完成!"
