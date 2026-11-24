@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from celery import shared_task
 from django.db import transaction
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from ai_assistant.models import AIChatMessage, Bot, Conversation
@@ -19,12 +20,16 @@ TEACHING_JOB_KINDS = ('quick', 'arc', 'bulk', 'parse', 'chat', 'report')
 TEACHING_JOB_TIMEOUT = timedelta(seconds=1020)
 
 
-def expire_stale_teaching_tasks(queryset):
+def running_teaching_tasks(queryset):
     return queryset.filter(
-        status='running', started_at__lt=timezone.now() - TEACHING_JOB_TIMEOUT,
-        payload__kind__in=TEACHING_JOB_KINDS,
-    ).update(status='failed', error_message='任务处理超时或工作进程已退出，请重试。',
-             finished_at=timezone.now(), updated_at=timezone.now())
+        status='running', payload__kind__in=TEACHING_JOB_KINDS,
+    ).alias(effective_started_at=Coalesce('started_at', 'updated_at'))
+
+
+def expire_stale_teaching_tasks(queryset):
+    now = timezone.now()
+    return running_teaching_tasks(queryset).filter(effective_started_at__lt=now - TEACHING_JOB_TIMEOUT).update(
+        status='failed', error_message='任务处理超时或工作进程已退出，请重试。', finished_at=now, updated_at=now)
 
 
 @shared_task(name='backoffice.run_teaching_task', soft_time_limit=900, time_limit=960)

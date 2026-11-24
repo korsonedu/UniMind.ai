@@ -128,6 +128,8 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
         title='合成待核对旧出题', status='failed', payload={'bulk_mode': True, 'current_stage': 'generating'})
     legacy_outline = CourseOutline.objects.create(course=Course.objects.create(title='合成旧大纲课程'),
                                                    status='generating')
+    legacy_teaching = ContentPipelineTask.objects.create(created_by=user, task_type='other',
+        title='合成旧教研任务', status='running', payload={'kind': 'chat'})
 
     env = {'PATH': os.environ['PATH'], 'TMPDIR': str(tmp_path), 'DJANGO_ENV': 'test',
            'UNIMIND_DSH_ENABLED': 'false', 'UNIMIND_LEARNING_RUNTIME': 'ulr',
@@ -197,14 +199,18 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
         report = json.loads(blocked.stdout)
         assert blocked.returncode != 0 and report['snapshot_pair_verified'] and report['database_restore_verified']
         assert not report['paired_migration_verified']
-        assert report['blockers'] == {'unsettled_legacy_question_pipelines': 1, 'active_legacy_course_outlines': 1}
+        assert report['blockers'] == {'unsettled_legacy_question_pipelines': 1, 'active_legacy_course_outlines': 1,
+                                      'active_unpinned_teaching_tasks': 1}
         assert report['active_course_outline_ids'] == [legacy_outline.pk]
+        assert report['active_teaching_task_ids'] == [legacy_teaching.pk]
         print(json.dumps({'restored_legacy_outline_gate': report}, ensure_ascii=False))
         assert report['unsettled_question_pipeline_ids'] == [unsettled.pk]
         # Settle the synthetic review on the restored copy for the continuation check.
         sql_probe(target, f"UPDATE quizzes_contentpipelinetask SET status = 'cancelled' WHERE id = {unsettled.pk}")
         sql_probe(target, "UPDATE courses_courseoutline SET updated_at = now() - interval '11 minutes' "
                   f"WHERE id = {legacy_outline.pk}")
+        sql_probe(target, "UPDATE quizzes_contentpipelinetask SET updated_at = now() - interval '18 minutes' "
+                  f"WHERE id = {legacy_teaching.pk}")
         unsettled.refresh_from_db()
         assert unsettled.status == 'failed'
         verify = ('from ai_assistant.tests.test_ulr_restore_smoke import verify_restored_conversations; '

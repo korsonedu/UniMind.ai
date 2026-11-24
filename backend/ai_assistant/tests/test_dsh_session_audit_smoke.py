@@ -823,7 +823,7 @@ def test_dsh_migration_gate_requires_a_recoverable_receipt_for_each_product_turn
         audit({})
         pending.refresh_from_db()
         assert pending.status == 'pending'
-    from backoffice.tasks import TEACHING_JOB_TIMEOUT
+    from backoffice.tasks import TEACHING_JOB_TIMEOUT, expire_stale_teaching_tasks
     from quizzes.models import ContentPipelineTask
 
     job = ContentPipelineTask.objects.create(created_by=user, title='合成教研任务', task_type='other',
@@ -833,11 +833,24 @@ def test_dsh_migration_gate_requires_a_recoverable_receipt_for_each_product_turn
     assert audit({'active_unpinned_teaching_tasks': 1})['active_teaching_task_ids'] == [job.pk]
     ContentPipelineTask.objects.filter(pk=job.pk).update(payload={'kind': 'chat', 'requires_ulr': True})
     audit({})
+    ContentPipelineTask.objects.filter(pk=job.pk).update(payload={'kind': 'chat', 'requires_ulr': None})
+    assert audit({'active_unpinned_teaching_tasks': 1})['active_teaching_task_ids'] == [job.pk]
     ContentPipelineTask.objects.filter(pk=job.pk).update(
         payload={'kind': 'chat'}, started_at=timezone.now() - TEACHING_JOB_TIMEOUT - timedelta(seconds=1))
     audit({})
     job.refresh_from_db()
     assert job.status == 'running'
+    job_row = ContentPipelineTask.objects.filter(pk=job.pk)
+    job_row.update(started_at=None, updated_at=timezone.now())
+    assert audit({'active_unpinned_teaching_tasks': 1})['active_teaching_task_ids'] == [job.pk]
+    assert expire_stale_teaching_tasks(job_row) == 0
+    job_row.update(updated_at=timezone.now() - TEACHING_JOB_TIMEOUT - timedelta(seconds=1))
+    audit({})
+    job.refresh_from_db()
+    assert job.status == 'running'
+    assert expire_stale_teaching_tasks(job_row) == 1
+    job.refresh_from_db()
+    assert job.status == 'failed' and job.finished_at is not None
 
     arc = ContentPipelineTask.objects.create(created_by=user, title='合成旧 ARC 出题', task_type='ai_generate',
         status='running', started_at=timezone.now(), payload={'kp_ids': [1], 'questions_per_kp': 3})

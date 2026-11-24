@@ -518,7 +518,7 @@ class Command(BaseCommand):
         if options['user_id'] is None:
             counts['unmatched_owners'] = len(owners)
         if gate:
-            from backoffice.tasks import TEACHING_JOB_KINDS, TEACHING_JOB_TIMEOUT
+            from backoffice.tasks import TEACHING_JOB_TIMEOUT, running_teaching_tasks
             from courses.models import CourseOutline
             from knowledge_builder.models import KnowledgeTreeBuild
             from quizzes.models import ContentPipelineTask, QuizExam
@@ -529,9 +529,9 @@ class Command(BaseCommand):
                 Q(conversation_id__isnull=True, updated_at__gte=now - AI_RESERVATION_TTL)).count()
             if active:
                 counts['active_chat_requests'] = active
-            active_teaching = list(ContentPipelineTask.objects.filter(
-                status='running', started_at__gte=now - TEACHING_JOB_TIMEOUT, payload__kind__in=TEACHING_JOB_KINDS,
-            ).filter(Q(payload__requires_ulr__isnull=True) | Q(payload__requires_ulr=False))
+            active_teaching = list(running_teaching_tasks(ContentPipelineTask.objects.all())
+                .filter(effective_started_at__gte=now - TEACHING_JOB_TIMEOUT)
+                .filter(Q(payload__requires_ulr__isnull=True) | ~Q(payload__requires_ulr=True))
                 .order_by('pk').values_list('pk', flat=True))
             if active_teaching:
                 counts['active_unpinned_teaching_tasks'] = len(active_teaching)
