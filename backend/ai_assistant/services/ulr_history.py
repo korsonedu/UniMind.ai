@@ -12,7 +12,9 @@ from ai_assistant.models import AIChatMessage
 from courses.models import TranscriptSegment
 from quizzes.services.practice_results import practice_question_reviews
 from .course_context import current_transcript_sources, require_current_transcript_sources
-from .ulr_capabilities import require_visible_course_sources, visible_course_ids, visible_practice_review_sources
+from .ulr_capabilities import (
+    require_visible_course_sources, require_visible_practice_review_sources, visible_course_ids, visible_practice_review_sources,
+)
 
 
 COURSE_LINK = re.compile(r'/course/([1-9][0-9]*)(?:\?t=(-?[0-9.]+(?:e[+-]?[0-9]+)?))?')
@@ -100,13 +102,15 @@ def require_receipt_sources(user, receipt):
     answer = messages.filter(pk=receipt['message_id'], role='assistant').values('bot_id', 'conversation_id', **SOURCE_FIELDS).first()
     if not answer:
         raise ValidationError('原答复已不可用。')
+    history = messages.filter(bot_id=answer['bot_id'], conversation_id=answer['conversation_id'],
+                              pk__lte=receipt['message_id']).order_by()
+    legacy = receipt['engine'] == 'dsh' and answer['sources'] is None
     rows = (answer,)
-    if receipt['engine'] == 'dsh' and answer['sources'] is None:
+    if legacy:
         # Older replies could quote an earlier turn without emitting another source card.
-        rows = messages.filter(bot_id=answer['bot_id'], conversation_id=answer['conversation_id'],
-                               pk__lte=receipt['message_id']).order_by().values(
-                                   notes_context_used=F('metadata__notes_context_used'), **SOURCE_FIELDS).iterator()
+        rows = history.values(notes_context_used=F('metadata__notes_context_used'), **SOURCE_FIELDS).iterator()
     courses, transcripts, excerpts, notes = set(), set(), set(), set()
+    question_answers, practice_reviews = set(), set()
     for row in rows:
         versions = reply_transcript_sources(None, row)
         transcripts.update(versions)
@@ -119,6 +123,16 @@ def require_receipt_sources(user, receipt):
             raise ValidationError('旧笔记来源无法核对，请重新提问。')
         notes.update(attached)
         notes.update(map(tuple, sources.get('notes', ())))
+        question_answers.update(reply_question_answers(row))
+        practice_reviews.update(reply_practice_reviews(row))
+    if not legacy and 'question_answers' not in (answer['sources'] or {}):
+        earlier = history.filter(role='assistant', pk__lt=receipt['message_id']).values(
+            sources=SOURCE_FIELDS['sources'], cards=SOURCE_FIELDS['cards'])
+        for row in earlier.iterator():
+            question_answers.update(reply_question_answers(row))
+            question_answers.update(pk for pk, _ in reply_practice_reviews(row))
+    require_current_practice_answers(user, question_answers)
+    require_visible_practice_review_sources(user, practice_reviews)
     courses.update(course for course, _, _ in transcripts | excerpts)
     require_visible_course_sources(user, courses)
     require_current_transcript_sources(transcripts)
@@ -155,6 +169,11 @@ def reply_question_answers(reply):
 
 def bound_practice_answers(user, questions):
     return practice_question_reviews(user, questions).keys()
+
+
+def require_current_practice_answers(user, question_ids):
+    if bound_practice_answers(user, question_ids):
+        raise PermissionDenied('原题已进入正式练习，请重新提问。')
 
 
 def reply_practice_reviews(reply):

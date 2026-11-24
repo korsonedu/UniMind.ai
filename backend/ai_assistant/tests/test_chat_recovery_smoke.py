@@ -180,3 +180,78 @@ def test_private_note_receipt_rechecks_original_note_and_consent(auth_client, us
         provider.assert_not_called()
     assert AIUsageReservation.objects.get(request_id=body['request_id']).response == receipt
     assert WeeklyAIUsage.objects.get(user=user).ai_calls == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_practice_answer_receipts_are_protected_without_changing_the_official_submission(auth_client, user, settings):
+    from ai_assistant.views import _reserve_chat_request
+    from quizzes.ai_workflow import run_exam_grading
+    from quizzes.models import KnowledgePoint, Question, QuizExam
+    from users.learning import confirm_ai_call
+    from users.models import CourseStudentStatus, WeeklyAIQuotaConfig
+
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    settings.UNIMIND_DSH_ENABLED = settings.USE_MEM0 = False
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 30})
+    bot = Bot.objects.create(name='小宇', is_xiaoyu=True, bot_type='planner')
+    point = KnowledgePoint.objects.create(name='久期保护')
+    question = Question.objects.create(knowledge_point=point, text='合成题干', options=['甲', '乙'], correct_answer='B')
+    marker = 'SYNTHETIC_PRE_PRACTICE_ANSWER'
+    card = {'tool': 'lookup_question', 'type': 'question_preview',
+            'payload': {'questions': [{'id': question.pk, 'answer': marker}]}}
+    originals = []
+    for engine, versioned in (('dsh', False), ('ulr', False), ('ulr', True)):
+        conversation = Conversation.objects.create(user=user, bot=bot, title='旧查题', conversation_id=uuid4())
+        scope = {'user': user, 'bot': bot, 'conversation_id': conversation.conversation_id}
+        metadata = {'engine': engine}
+        if versioned:
+            metadata['ulr_context_sources'] = {'question_answers': [question.pk]}
+        else:
+            AIChatMessage.objects.create(**scope, role='assistant', content=marker,
+                metadata={'engine': engine, 'dsh_cards': [card]})
+        answer = AIChatMessage.objects.create(**scope, role='assistant', content=marker, metadata=metadata)
+        body = {'bot_id': bot.pk, 'conversation_id': str(conversation.conversation_id),
+                'request_id': str(uuid4()), 'message': '重复上次的答案。'}
+        reserved = _reserve_chat_request(user, body, bot, conversation_id=conversation.conversation_id)
+        receipt = {'engine': engine, 'done': True, 'message_id': answer.pk, 'full_content': marker}
+        confirm_ai_call(reserved, response=receipt)
+        assert auth_client.get(f"/api/ai/chat-requests/{body['request_id']}/").data['response'] == receipt
+        originals.append((body, receipt))
+
+    def model(messages, **kwargs):
+        tools = {tool['function']['name'] for tool in kwargs['tools']}
+        name, args = 'run_practice_tools', {'find': point.name, 'limit': 1, 'output': 'card'}
+        if name not in tools:
+            name, args = 'find_learning_tools', {'program': name, 'instruction': args}
+        return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+            'id': 'prepared', 'type': 'function', 'function': {'name': name, 'arguments': json.dumps(args)},
+        }]}}]}
+
+    active = Conversation.objects.create(user=user, bot=bot, title='新的正式练习', conversation_id=uuid4())
+    body = {'bot_id': bot.pk, 'conversation_id': str(active.conversation_id),
+            'request_id': str(uuid4()), 'message': '按久期保护知识点给我一道练习题。'}
+    with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider, \
+            patch('ai_assistant.services.dsh_xiaoyu.extract_memories_async'):
+        created = async_to_sync(consume_receipt)(auth_client.post('/api/ai/chat/stream/', body, format='json'))
+        practice, = created['metadata']['dsh_cards']
+        assert practice['type'] == 'practice_quiz' and provider.call_count == 1
+        for original, receipt in originals:
+            assert_replay_denied(auth_client, original, '原题已进入正式练习', 403, marker)
+            assert AIUsageReservation.objects.get(request_id=original['request_id']).response == receipt
+        assert provider.call_count == 1
+
+    submission = {'submission_id': practice['payload']['practice_id'],
+                  'answers': [{'question_id': question.pk, 'answer': 'B'}]}
+    with patch('quizzes.views_exam.dispatch_exam_grading') as dispatch:
+        accepted = auth_client.post('/api/quizzes/submit-exam/', submission, format='json')
+        assert accepted.status_code == 202, accepted.data
+    with patch('ai_engine.service.AIEngine.call_provider') as provider, \
+            patch('quizzes.ai_workflow._queue_experience_verification'):
+        run_exam_grading(*dispatch.call_args.args)
+        provider.assert_not_called()
+    exam = QuizExam.objects.get(pk=accepted.data['exam_id'])
+    assert exam.total_score == question.get_max_score()
+    assert auth_client.post('/api/quizzes/submit-exam/', submission, format='json').data == accepted.data
+    assert WeeklyAIUsage.objects.get(user=user).ai_calls == 4

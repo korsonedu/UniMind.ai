@@ -194,7 +194,8 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                 from .ulr_capabilities import (
                     require_visible_course_sources, require_visible_practice_review_sources, require_visible_practice_sources,
                 )
-                from .ulr_runtime import commit_project_change, require_current_practice_answers, run_turn
+                from .ulr_history import require_current_practice_answers
+                from .ulr_runtime import commit_project_change, run_turn
 
                 def check_active():
                     state = AIUsageReservation.objects.filter(pk=reservation.pk).values_list(
@@ -261,13 +262,12 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                     require_current_transcript_sources(transcripts, lock=True)
                 if handoff:
                     from .ulr_capabilities import require_visible_course_sources
-                    from .ulr_history import bound_practice_answers, card_question_answers, legacy_courses
+                    from .ulr_history import card_question_answers, legacy_courses, require_current_practice_answers
                     task_context(user, chat_context, message)
                     course_ids = set(context_sources['courses']) | legacy_courses({'course_id': None, 'cards': cards})
                     require_visible_course_sources(user, course_ids)
                     question_answers = set(context_sources['question_answers']) | card_question_answers(cards)
-                    if bound_practice_answers(user, question_answers):
-                        raise PermissionDenied('原题已进入正式练习，请重新提问。')
+                    require_current_practice_answers(user, question_answers)
                     context_sources.update(courses=sorted(course_ids), question_answers=sorted(question_answers))
                 if ulr:
                     require_visible_course_sources(user, set(context_sources.get('courses', ())))

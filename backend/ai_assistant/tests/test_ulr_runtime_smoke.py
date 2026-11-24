@@ -820,6 +820,8 @@ def test_ulr_reviews_saved_ordinary_exam_without_dsh(auth_client, user, settings
     assert card['payload']['href'] == f'/tests/results/{exam.pk}'
     saved = AIChatMessage.objects.get(pk=events[-1]['message_id'])
     assert saved.metadata['ulr_context_sources']['practice_reviews'] == [[question.pk, item.pk]]
+    recovery_url = f"/api/ai/chat-requests/{body['request_id']}/"
+    assert auth_client.get(recovery_url).data['response'] == events[-1]
     version = memory_snapshot(user)['version']
     args = {'exam_id': exam.pk}
     summary = execute_tool(user, 'get_recent_practice_result', args, version, practice_questions=set())
@@ -834,6 +836,9 @@ def test_ulr_reviews_saved_ordinary_exam_without_dsh(auth_client, user, settings
     held = execute_tool(user, 'get_recent_practice_result', {**args, 'review': True}, version, practice_questions=set())
     assert held['reviewed_items'] == []
     assert not visible_practice_review_sources(user, {(question.pk, item.pk)})
+    blocked = auth_client.get(recovery_url).data
+    assert blocked['status'] == 'failed' and '原练习评阅或权限已变化' in blocked['response']['full_content']
+    assert auth_client.get(f'/api/quizzes/exams/{exam.pk}/').status_code == 200
 
 
 @pytest.mark.django_db(transaction=True)

@@ -19,7 +19,7 @@ from .learning_knowledge import probe_question_in_reply
 from .project_learning_tools import PROGRESS_STRATEGY_TOOL, planning_for_chat
 from .ulr_artifacts import TurnArtifacts
 from .ulr_grading import grade_probe
-from .ulr_history import bound_practice_answers, card_question_answers, scoped_history
+from .ulr_history import card_question_answers, require_current_practice_answers, scoped_history
 from .ulr_tool_program import (
     CURRENT_COURSE_NAME, MAX_RANKS, NAME as PROGRAM_NAME, PRACTICE_NAME, PROGRAM_OPS, PROGRAM_TOOLS, SOURCE_ACCESS_REVOKED,
     TIMESTAMP_ONLY, VERSION as PROGRAM_VERSION, duplicate_program_scope, program_discovery, repair_program_tool, run_program,
@@ -78,11 +78,6 @@ def task_tool_with_strategy_ref(tool):
 class ULRTurnUnavailable(APIException):
     status_code = 503
     default_detail = '小宇本轮未完成，请稍后恢复同一请求。'
-
-
-def require_current_practice_answers(user, question_ids):
-    if bound_practice_answers(user, question_ids):
-        raise PermissionDenied('原题已进入正式练习，请重新提问。')
 
 
 def run_turn(user, message, chat_context, emit, *, source, check_active):
