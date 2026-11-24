@@ -162,6 +162,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
     inconsistent_review = False
     invalid_classifier = False
     invalid_outline = False
+    build_response = None
     outline = {'modules': [{'code': 'M1', 'parent_code': '', 'title': '折现率', 'path': '折现率', 'depth': 1, 'order': 1}]}
     workbench_notice = '请为学员准备一条学习通知。'
     workbench_arc = '请为折现率准备 ARC 精修草稿。'
@@ -200,6 +201,9 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
     settings.UNIMIND_DSH_FIXTURE_URL = f'http://127.0.0.1:{anthropic.server_port}/v1/messages'
 
     def structured_decision(names, messages):
+        if build_response is not None:
+            assert names == {build_response[0]}
+            return build_response
         if 'outline_decompose' in names:
             if invalid_outline and 'schema_error' not in json.dumps(messages, ensure_ascii=False):
                 return 'outline_decompose', {'modules': 'malformed'}
@@ -782,7 +786,11 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps({'choices': [choice]}, ensure_ascii=False).encode())
+            response = {'choices': [choice]}
+            if build_response is not None:
+                response.update(model='deepseek-flash', usage={'prompt_tokens': 50, 'completion_tokens': 10,
+                                                              'prompt_cache_hit_tokens': 30})
+            self.wfile.write(json.dumps(response, ensure_ascii=False).encode())
 
         def tool_reply(self, name, result):
             self.reply({'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
@@ -1268,6 +1276,96 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             assert '字段 modules 未通过 type 校验' in calls[-1]['messages'][1]['content']
         settings.UNIMIND_DSH_GENERATION_ENABLED = False
 
+    def compare_full_build():
+        nonlocal build_response
+        from ai_engine import config
+        from knowledge_builder.models import KnowledgeTreeBuild
+        from knowledge_builder.prompts import render_messages
+        from knowledge_builder.tasks import build_knowledge_tree
+        from knowledge_builder.tests.test_pipeline_e2e import SemanticFixture
+
+        semantic = SemanticFixture()
+        repo = Path(settings.BASE_DIR).parent
+        tool = runpy.run_path(str(repo / 'scripts/ulr_review_pairs.py'))
+        output = tmp_path / 'full-build-comparison'
+        output.mkdir(mode=0o700)
+        revision = capture_revision(repo)
+        endpoint = '/api/knowledge-builder/'
+        prompt = '合成微积分知识图谱'
+        requirements = {'learning_goal': '理解极限、连续性及其先修关系'}
+        sample = {'case_id': 'six-stage-calculus-build', 'case': {'scenario': '六阶段知识树构建',
+            'prompt': prompt, 'reference': requirements['learning_goal'],
+            'criteria': {'content': '模块、知识点和学习步骤符合给定目标。',
+                         'dependencies': '先修关系、学习顺序和跨块衔接相互一致。'}}}
+
+        def scripted_stage(name, context, operation):
+            nonlocal build_response
+            system, question = render_messages(name, context)
+            build_response = (name, semantic.ai(tool_name=name, raise_on_error=True, system_prompt=system, user_prompt=question))
+            try:
+                return build_stage(name, context, operation)
+            finally:
+                build_response = None
+
+        records, totals = [], {}
+        with patch.object(config, 'EMBEDDING_BASE_URL', 'http://127.0.0.1:8012/v1'), \
+                patch.object(config, 'EMBEDDING_MODEL', 'Qwen/Qwen3-Embedding-0.6B'), \
+                patch.object(config, 'EMBEDDING_DIMENSIONS', 24), \
+                patch('knowledge_builder.pipeline.ask', side_effect=scripted_stage), \
+                patch('knowledge_builder.embedding_client.httpx.post', side_effect=semantic.http), \
+                patch.object(build_knowledge_tree, 'delay') as enqueue:
+            for runtime, calls in (('dsh', anthropic_calls), ('ulr', openai_calls)):
+                native = runtime == 'ulr'
+                before = len(calls)
+                started = monotonic()
+                with override_settings(UNIMIND_LEARNING_RUNTIME='ulr' if native else 'legacy',
+                        UNIMIND_ULR_PROTOTYPE=False, UNIMIND_DSH_GENERATION_ENABLED=not native,
+                        UNIMIND_KB_ONLINE_AUTO_MOUNT=False):
+                    created = auth_client.post(endpoint, {'subject': prompt, 'requirements': requirements}, format='json')
+                    assert created.status_code == 202, created.data
+                    build_id = created.data['id']
+                    assert enqueue.call_args.args == (build_id,)
+                    assert build_knowledge_tree(str(build_id)) == str(build_id)
+                    response = auth_client.get(f'{endpoint}{build_id}/')
+                assert response.status_code == 200 and response.data['status'] == 'COMPLETED'
+                raw = response.json()
+                tool['write'](output / f'{runtime}-tree.json', raw)
+                build = KnowledgeTreeBuild.objects.get(pk=build_id)
+                assert build.requires_ulr == native and not build.checkpoint
+                atoms = {row['id']: row['code'] for row in raw['atoms']}
+                graph = {'archetype': raw['archetype'], 'stats': raw['stats'],
+                    'module_paths': [row['path'] for row in raw['modules']],
+                    'atoms': [[row['code'], row['name'], row['goal_statement']] for row in raw['atoms']],
+                    'dependencies': [[atoms[row['from_atom']], atoms[row['to_atom']], row['edge_strength']]
+                                     for row in raw['atom_edges']],
+                    'blocks': [{'title': row['short_title'], 'entry': row['is_entry_block'], 'layer': row['layer'],
+                                'steps': [[step['step_title'], [atoms[membership['atom']] for membership in step['step_atoms']]]
+                                          for step in row['steps']]} for row in raw['blocks']],
+                    'interfaces': list(build.cross_block_interfaces.order_by('pk').values(
+                        'from_atom__code', 'to_atom__code', 'interface_role', 'bridge_explanation'))}
+                request_id = f'build:{build_id}'
+                observed = [row.args for row in caplog.records if row.name == 'ai_engine.observability'
+                            and row.args[4].get('request_id') == request_id]
+                attempt_id, = {row[4]['attempt_id'] for row in observed}
+                assert all(row[1] and row[4].get('reported_model') for row in observed)
+                model_requests = len(calls) - before
+                embeddings = sum(row[4].get('kind') == 'embedding' for row in observed)
+                assert model_requests == 10 and embeddings == 3 and len(observed) == model_requests + embeddings
+                records.append({**sample, 'runtime': runtime, 'trial': 1, 'revision': revision,
+                    'request_id': request_id, 'attempt_id': attempt_id, 'completed': True, 'evidence': 'protocol_smoke',
+                    'model': {row[0]: row[4]['reported_model'] for row in observed},
+                    'review': {'answer': '', 'sources': [], 'result': graph},
+                    'metrics': {'model_requests': model_requests, 'embedding_requests': embeddings,
+                                'completion_ms': round((monotonic() - started) * 1000)}})
+                totals[runtime] = {'model_requests': model_requests, 'embedding_requests': embeddings,
+                    'modules': len(raw['modules']), 'atoms': len(raw['atoms']), 'blocks': len(raw['blocks'])}
+        assert records[0]['review'] == records[1]['review']
+        operations = prepare_capture(repo, output, records, caplog, tool, ('dsh',))
+        traces = [tool['reconcile'](row, dict.fromkeys(tool['METRICS']) | row['metrics'], operations) for row in records]
+        assert all(trace['model_verified'] for trace in traces)
+        assert tool['request_config_issue'](*traces) is None
+        return totals
+
     try:
         prompt = '请查折现率课程讲稿，并给一个概念提示。'
         dsh_cards, dsh_stats = run('dsh', anthropic_calls, task, prompt)
@@ -1627,6 +1725,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
         knowledge_outline(True, openai_calls)
         invalid_outline = True
         knowledge_outline(True, openai_calls)
+        full_build_comparison = compare_full_build()
         settings.UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE = True
         settings.UNIMIND_LEARNING_VISUAL_REVIEW_ENABLED = False
         artifact_prompt = '解释6乘7为什么是42，使用计算工具和交互实验'
@@ -2366,6 +2465,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
                                               'confirmed_inserts_after_replay': 1},
                           'knowledge_outline': {'dsh_valid_requests': 1, 'ulr_valid_requests': 1,
                                                 'ulr_requests_with_schema_repair': 2},
+                          'full_knowledge_build': full_build_comparison,
                           'note_understanding': {'same_valid_result': True, 'requests_per_attempt': 1,
                                                  'duplicate_fields': {'dsh': 'saved_last_value', 'ulr': 'rejected'}},
                           'legacy_tree_export': {'requests_per_valid_tree': 1, 'imported_nodes': 112,
