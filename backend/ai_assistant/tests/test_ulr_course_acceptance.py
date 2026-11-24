@@ -182,7 +182,7 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
             correct_answer=source['correct_answer'], grading_points=source['grading_points'])
         individual = [('search_knowledge_tree', {'query': point.name}),
                       ('get_practice_questions', {'knowledge_point_id': point.pk, 'limit': 1})]
-        combined = [('run_practice_tools', {'find': point.name, 'limit': 1, 'output': 'card'})]
+        combined = [('run_practice_tools', {'find': point.name, 'limit': 1})]
         reply = '练习已准备好，请在卡片里独立作答。'
     else:
         course = Course.objects.create(is_published=True, title=source['course_title'])

@@ -972,6 +972,7 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
     old_rubric = 'OLD_PRACTICE_RUBRIC'
     old_derivation = 'OLD_PRACTICE_DERIVATION'
     safe_history = 'SAFE_PRACTICE_HISTORY'
+    practice_tip = '先想一想现值和未来现金流的关系。'
     selection_cases = {
         'direct_card_missing': ('missing_dependency', '找不到指定的知识点。请核对名称或补充学科。', '请给我一道未收录知识点的练习题。'),
         'direct_card_ambiguous': ('ambiguous_dependency', '匹配到多个知识点。请补充学科或更具体的名称。', '请给我一道现金流折现知识点的练习题。'),
@@ -995,13 +996,16 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
 
     def model(messages, **kwargs):
         if messages[-1]['role'] == 'user':
-            names = [tool['function']['name'] for tool in kwargs['tools']]
+            tools = {tool['function']['name']: tool['function'] for tool in kwargs['tools']}
+            names = list(tools)
             model_offers.extend(names)
             assert 'run_practice_tools' in names and len(names) <= 8
+            assert 'output' not in tools['run_practice_tools']['parameters']['properties']
             arguments = {'find': '现金流折现', 'limit': 2}
             if direct:
-                arguments['output'] = 'card'
                 kwargs['on_text']('练习已准备好。')
+            if withdraw is None:
+                arguments['output'] = 'card'
             if withdraw == 'direct_card_empty':
                 arguments['q_type'] = 'subjective'
             if withdraw == 'direct_card_missing':
@@ -1020,8 +1024,8 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
         assert not {'questions', 'visual'} & receipt.keys()
         if withdraw == 'question':
             Question.objects.filter(pk=question.pk).update(institution=institution)
-        kwargs['on_text']('练习已准备好。')
-        return {'choices': [{'finish_reason': 'stop', 'message': {'content': '练习已准备好。'}}]}
+        kwargs['on_text'](practice_tip)
+        return {'choices': [{'finish_reason': 'stop', 'message': {'content': practice_tip}}]}
 
     async def consume(response):
         return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')]
@@ -1029,6 +1033,8 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
     request_id = str(uuid4())
     body = {'bot_id': bot.pk, 'conversation_id': str(uuid4()), 'request_id': request_id,
             'message': selection[2] if selection else '请先查现金流折现知识点，再根据第一项出一道练习题。'}
+    if not direct:
+        body['message'] += '再给我一个概念提示，不要透露答案。'
 
     def discuss_practice(status, *, conversation_id=None, tool_name='lookup_question', revoke=False):
         replies = []
@@ -1112,6 +1118,7 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
         assert not PracticeSubmission.objects.exists()
         assert not AIChatMessage.objects.filter(conversation_id=body['conversation_id'], role='assistant').exists()
     else:
+        assert events[-1]['full_content'] == practice_tip
         card, = events[-1]['metadata']['dsh_cards']
         selected, = card['payload']['questions']
         assert card['tool'] == 'get_practice_questions' and selected['id'] == question.pk
@@ -1200,7 +1207,7 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
 
                 def continue_without_review(messages, **kwargs):
                     assert saved.content not in messages[0]['content']
-                    assert '练习已准备好。' in messages[0]['content']
+                    assert practice_tip in messages[0]['content']
                     return {'choices': [{'finish_reason': 'stop', 'message': {'content': '继续看当前可用内容。'}}]}
 
                 with patch('ai_engine.service.AIEngine.call_provider', side_effect=continue_without_review), \

@@ -649,7 +649,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
             elif last_user == practice_prompt:
                 assert request['messages'][-1]['role'] == 'user'
                 assert 'run_practice_tools' in names and practice_marker not in json.dumps(request['messages'])
-                program = {'v': PROGRAM_VERSION, 'find': practice_point.name, 'rank': 1, 'limit': 1, 'output': 'card'}
+                program = {'v': PROGRAM_VERSION, 'find': practice_point.name, 'rank': 1, 'limit': 1}
                 deltas = [{'tool_calls': [{'index': 0, 'id': 'practice-program', 'type': 'function',
                     'function': {'name': 'run_practice_tools', 'arguments': json.dumps(program)}}]}]
                 reason = 'tool_calls'
