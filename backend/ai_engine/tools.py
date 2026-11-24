@@ -423,6 +423,10 @@ GET_RECENT_PRACTICE_RESULT_SCHEMA = {
 GET_PRACTICE_QUESTIONS_SCHEMA = {
     "type": "object",
     "properties": {
+        "knowledge_point_id": {
+            "type": "integer", "minimum": 1,
+            "description": "限定一个确切的知识点（来自 search_knowledge_tree 的 id）",
+        },
         "kp_name": {
             "type": "string",
             "description": "知识点名称（模糊匹配）",

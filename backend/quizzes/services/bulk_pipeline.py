@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from django.db.models import Count, Q
 from django.utils import timezone
 
+from ai_assistant.services.ulr_structured import teaching_enabled
 from ai_engine.config import get_model_for_task
 from quizzes.models import ContentPipelineTask, KnowledgePoint, Question
 from quizzes.services.adversarial_pipeline import (
@@ -132,6 +133,9 @@ def _execute_bulk_pipeline(
     """执行批量出题管线。"""
     stage_log: List[Dict] = []
     pending_questions = []
+    ulr_review = review_only and strict_scope and teaching_enabled('pipeline.author')
+    if ulr_review:
+        from backoffice.teaching import validate_kps
 
     # ── Phase 1: 选择目标知识点 ──
     _update_task(task, 2, f"正在为「{subject}」选择目标知识点…", stage_log, "select_kps")
@@ -161,6 +165,8 @@ def _execute_bulk_pipeline(
     processed = 0
 
     for kp, quotas in quota_map.items():
+        if ulr_review:
+            validate_kps([kp.pk])
         processed += 1
         progress = 8 + int(87 * processed / total_kps)
         _update_task(task, progress, f"正在处理 {kp.name}（{processed}/{total_kps}）…", stage_log, "generating")
@@ -174,6 +180,10 @@ def _execute_bulk_pipeline(
 
             # Stage A: Author 生成
             drafts = _author_generate([kp], q_per_kp=count, difficulty=difficulty, types=types)
+            if ulr_review:
+                if not drafts:
+                    raise ValueError('批量命题未返回该考点的候选题，请重试。')
+                drafts = drafts[:count]
             result.total_generated += len(drafts)
 
             if not drafts:
@@ -224,6 +234,8 @@ def _execute_bulk_pipeline(
     # ── Phase 4: 写入结果 ──
     from ai_assistant.services.dsh_scope import check_teaching_task
     check_teaching_task()
+    if ulr_review:
+        validate_kps([kp.pk for kp in quota_map])
     stage_log.append({
         "stage": "bulk_done",
         "total_generated": result.total_generated,
@@ -255,6 +267,9 @@ def _execute_bulk_pipeline(
         },
     }
     task.status = "review" if review_only else "completed"
+    if ulr_review and not pending_questions:
+        task.status = 'failed'
+        task.error_message = '本批次没有通过审计的题目，请调整要求后重试。'
     task.progress = 100
     task.finished_at = timezone.now()
     task.save()

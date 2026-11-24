@@ -99,8 +99,10 @@ def confirm(user, data):
         if claims['expires_at'] < time.time():
             raise ValidationError('本次诊断或草稿已超时，请重新准备；未提交任何结果。')
         if claims.get('source'):
-            source = AIUsageReservation.objects.filter(pk=claims['source'], user=user, status='succeeded').first()
-            if not source or source.response.get('engine') != 'dsh' or source.response.get('deleted'):
+            # Conversation deletion revokes this row in the same transaction as the messages.
+            source = AIUsageReservation.objects.select_for_update().filter(
+                pk=claims['source'], user=user, status='succeeded').first()
+            if not source or source.response.get('engine') not in ('dsh', 'ulr') or source.response.get('deleted'):
                 raise Conflict('原提问未完成或已删除，请重新准备草稿。')
         if actor.has_completed_initial_assessment:
             raise Conflict('首次诊断已完成，请到诊断页重新评估。')

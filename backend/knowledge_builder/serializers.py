@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from . import models
 from .archetypes import PROFILES
+from .build_state import can_resume_build, lock_build_for_resume
 from .public_asset_service import compute_atom_difficulty
 
 
@@ -55,9 +56,18 @@ class RequirementIntakeSerializer(serializers.Serializer):
 
 
 class BuildSummarySerializer(serializers.ModelSerializer):
+    can_resume = serializers.SerializerMethodField()
+
     class Meta:
         model = models.KnowledgeTreeBuild
-        fields = ('id', 'subject', 'requirements', 'status', 'current_stage', 'archetype', 'dispatch_profile', 'stats', 'error_message', 'created_at', 'updated_at', 'completed_at')
+        fields = ('id', 'subject', 'requirements', 'status', 'current_stage', 'archetype', 'dispatch_profile', 'stats', 'error_message', 'created_at', 'updated_at', 'completed_at', 'can_resume')
+
+    def get_can_resume(self, obj):
+        request = self.context.get('request')
+        return bool(request and obj.created_by_id == request.user.pk
+                    and can_resume_build(obj)
+                    and (obj.status == models.KnowledgeTreeBuild.Status.FAILED
+                         or self.context.get('check_build_lock') and lock_build_for_resume(obj)))
 
 
 class ModuleSerializer(serializers.ModelSerializer):

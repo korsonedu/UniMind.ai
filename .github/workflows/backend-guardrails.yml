@@ -6,6 +6,8 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - 'scripts/**'
+      - 'deploy/unimind-learning-followups.*'
+      - 'deploy/unimind-celery-beat.service'
       - 'requirements.txt'
       - '.github/workflows/backend-guardrails.yml'
   pull_request:
@@ -13,12 +15,28 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - 'scripts/**'
+      - 'deploy/unimind-learning-followups.*'
+      - 'deploy/unimind-celery-beat.service'
       - 'requirements.txt'
       - '.github/workflows/backend-guardrails.yml'
 
 jobs:
   backend-checks:
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ulr_smoke
+          POSTGRES_PASSWORD: ulr_smoke
+          POSTGRES_DB: unimind
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U ulr_smoke -d unimind"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     env:
       ACCOUNT_DEV_LOCAL_CACHE: "true"
       CELERY_BROKER_URL: "memory://"
@@ -50,11 +68,11 @@ jobs:
         working-directory: backend
         run: python manage.py makemigrations --check --dry-run
 
-      - name: Install Chinese fonts for visual smoke checks
+      - name: Install Chinese fonts and Redis for smoke checks
         run: |
           printf '%s\n' 'https://archive.ubuntu.com/ubuntu' 'https://security.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk
+          sudo apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk redis-server
 
       - name: Install browser for learning tool smoke checks
         run: python -m playwright install --only-shell chromium
@@ -78,6 +96,22 @@ jobs:
       - name: Backend regression tests
         working-directory: backend
         run: python -m pytest
+
+      - name: Standalone ULR release smoke
+        working-directory: backend
+        env:
+          DB_ENGINE: django.db.backends.postgresql
+          DB_NAME: unimind
+          DB_USER: ulr_smoke
+          DB_PASSWORD: ulr_smoke
+          DB_HOST: 127.0.0.1
+          DB_PORT: ${{ job.services.postgres.ports[5432] }}
+          ULR_QUEUE_SMOKE: "1"
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          python -m pytest -p pytest_django.plugin -x -W error::pytest.PytestWarning
+          ai_assistant/tests/test_ulr_process_smoke.py
+          ai_assistant/tests/test_ulr_queue_smoke.py
 
       - name: QA smoke check
         working-directory: backend

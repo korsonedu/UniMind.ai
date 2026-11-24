@@ -18,6 +18,8 @@ class KnowledgeTreeBuild(models.Model):
     requirements = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     current_stage = models.CharField(max_length=64, blank=True)
+    requires_ulr = models.BooleanField(default=False)
+    checkpoint = models.JSONField(default=dict, editable=False)
     archetype = models.CharField(max_length=40, default='auto')
     dispatch_profile = models.JSONField(default=dict)
     stats = models.JSONField(default=dict)

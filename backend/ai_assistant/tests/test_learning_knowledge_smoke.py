@@ -7,7 +7,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from django.http import Http404
 from rest_framework.test import APITestCase
-from users.models import User
+from users.models import AIUsageReservation, User
 from ai_assistant.models import AIChatMessage, Bot, Conversation, ConversationProject, ProjectLearning, ProjectLearningEvent
 from ai_assistant.services.project_learning import change_learning, completed_learning_turn, LearningConflict
 from ai_assistant.services.learning_resources import find_resources
@@ -92,6 +92,26 @@ class LearningKnowledgeSmoke(APITestCase):
         with self.assertRaises(ValidationError):
             self.progress(probe, outcome='failure')
 
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr')
+    def test_failed_legacy_check_does_not_inflate_knowledge_or_consume_the_probe(self):
+        probe = self.probe()
+        self.present(probe)
+        answer = self.turn('先将 a 设为一，再加二，最后是三。')
+        request = uuid.uuid4()
+        answer.metadata = {'runtime_request_id': str(request)}
+        answer.save(update_fields=['metadata'])
+        with override_settings(UNIMIND_LEARNING_RUNTIME='legacy', UNIMIND_ULR_PROTOTYPE=False):
+            self.assertEqual(len(self.progress(probe)['knowledge']['evidence']), 1)
+        AIUsageReservation.objects.create(user=self.user, request_id=request, attempt_id=uuid.uuid4(),
+            week=timezone.now().date(), status='released')
+        state = ProjectLearning.objects.get(project=self.project)
+        current = knowledge_state(self.project, state)
+        self.assertFalse(current['evidence'])
+        self.assertEqual(current['nodes'][0]['beliefs']['apply']['independent_count'], 0)
+        self.turn('先执行赋值，再执行加法，计算得到三。')
+        evidence, = self.progress(probe)['knowledge']['evidence']
+        self.assertEqual(evidence['quote'], self.message.content)
+
     def test_map_cycles_quotes_ownership_and_immutable_versions(self):
         cycle = deepcopy(self.nodes); cycle[0]['prerequisites'] = ['branch']
         with self.assertRaises(ValidationError):
@@ -120,6 +140,46 @@ class LearningKnowledgeSmoke(APITestCase):
         self.turn('我又独立检查了一次。')
         with self.assertRaises(ValidationError): self.progress(probe)
         self.assertFalse(ProjectLearningEvent.objects.filter(kind='progress').exists())
+
+    def test_probe_rubric_is_private_until_verified_review(self):
+        from ai_assistant.services.project_learning import project_context
+
+        probe = self.probe()
+        self.present(probe)
+        rubric = probe['rubric']
+        url = f'/api/ai/projects/{self.project.pk}/learning/'
+
+        pending = self.client.get(url)
+        self.assertEqual(pending.status_code, 200, pending.data)
+        self.assertEqual(pending.data['knowledge']['probes'][0]['question'], probe['question'])
+        self.assertNotIn(rubric, str(pending.data))
+        update = self.client.patch(url, {'action': 'reminders', 'enabled': False, 'revision': 1}, format='json')
+        self.assertEqual(update.status_code, 200, update.data)
+        self.assertNotIn(rubric, str(update.data))
+
+        other = Conversation.objects.create(user=self.user, bot=self.bot, project=self.project, conversation_id=uuid.uuid4())
+        other_message = AIChatMessage.objects.create(user=self.user, bot=self.bot, conversation_id=other.conversation_id,
+            role='user', content='请继续学习。',
+            metadata={'learning_snapshot': {'project_id': self.project.pk, 'context': rubric}})
+        self.assertNotIn(rubric, project_context(self.user, other.conversation_id, message=other_message))
+        context = {'message_id': other_message.pk, 'conversation_id': str(other.conversation_id), 'bot_id': self.bot.pk}
+        self.assertNotIn(rubric, build_context(self.user, other_message.content, chat_context=context)['system_prompt'])
+
+        answer = self.turn('先赋值为一，再加二，得到三。')
+        context = {'message_id': answer.pk, 'conversation_id': str(answer.conversation_id), 'bot_id': self.bot.pk}
+        self.assertIn(rubric, build_context(self.user, answer.content, chat_context=context)['system_prompt'])
+        answer.refresh_from_db()
+        self.assertIn(rubric, answer.metadata['learning_snapshot']['context'])
+        history = self.client.get('/api/ai/history/', {'conversation_id': str(answer.conversation_id), 'bot_id': self.bot.pk})
+        self.assertEqual(history.status_code, 200, history.data)
+        self.assertNotIn('learning_snapshot', str(history.data))
+        self.assertNotIn(rubric, str(history.data))
+
+        self.progress(probe)
+        completed = self.client.get(url).data
+        self.assertEqual(completed['knowledge']['evidence'][0]['rubric'], rubric)
+        AIChatMessage.objects.filter(conversation_id=self.conversation.conversation_id, role='assistant').delete()
+        self.assertNotIn(rubric, str(self.client.get(url).data))
 
     def test_duplicate_question_answer_and_fabricated_quote_are_rejected(self):
         first = self.probe(); self.present(first)

@@ -186,3 +186,14 @@ def course_context_text(request, context):
     if 'visual' in context:
         text_context['visual'] = _visual_description(context['visual'])
     return template.format(context=json.dumps(text_context, ensure_ascii=False))
+
+
+def require_course_transcript(context, *, lock=False):
+    if context is None:
+        return
+    transcripts = VideoTranscript.objects.filter(course_id=context['course_id'],
+        asr_status='completed', revision=context.get('revision'))
+    if lock:
+        transcripts = transcripts.select_for_update()
+    if not transcripts.exists():
+        raise ValidationError('当前课程讲稿已更新，请重新发起提问。')

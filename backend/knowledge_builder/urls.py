@@ -1,12 +1,13 @@
 from django.urls import path
 
-from .views import BuildCreateView, BuildDetailView, BuildStatusView, BuildIntakeView, BlockResourceView, BlockQuizView, TreePublicAssetView
+from .views import BuildCreateView, BuildDetailView, BuildResumeView, BuildStatusView, BuildIntakeView, BlockResourceView, BlockQuizView, TreePublicAssetView
 
 app_name = 'knowledge_builder'
 urlpatterns = [
     path('', BuildCreateView.as_view(), name='create'),
     path('intake/', BuildIntakeView.as_view(), name='knowledge-builder-intake'),
     path('<uuid:build_id>/status/', BuildStatusView.as_view(), name='status'),
+    path('<uuid:build_id>/resume/', BuildResumeView.as_view(), name='resume'),
     path('<uuid:build_id>/', BuildDetailView.as_view(), name='detail'),
     path('<uuid:build_id>/public-assets/', TreePublicAssetView.as_view(), name='knowledge-builder-public-assets'),
     path('<uuid:build_id>/blocks/<int:block_id>/resources/', BlockResourceView.as_view(), name='knowledge-builder-block-resources'),

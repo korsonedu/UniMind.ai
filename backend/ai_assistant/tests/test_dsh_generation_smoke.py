@@ -27,6 +27,41 @@ def test_internal_generation_uses_dsh_without_legacy_fallback(settings):
         legacy.assert_not_called()
 
 
+def test_native_generation_rejects_incomplete_text_and_invalid_arrays(settings):
+    from ai_assistant.services.dsh_scope import current_execution, generation_scope
+    from ai_assistant.services.ulr_structured import InvalidStructuredOutput
+
+    settings.DEBUG = False
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    messages = [{'role': 'system', 'content': '只提取给定事实。'}, {'role': 'user', 'content': '合成材料'}]
+    response = {'choices': [{'finish_reason': 'length', 'message': {'content': '{"partial": true}'}}]}
+    with patch.object(AIEngine, 'call_provider', return_value=response) as provider:
+        assert AIEngine.call_ai(messages, operation='notes.understanding', _response_format={'type': 'json_object'}) is None
+        assert provider.call_args.args[8] == {'type': 'json_object'}
+        assert provider.call_args.kwargs['max_retries'] == 0
+
+    def cancelled_result(*args, **kwargs):
+        current_execution()['cancelled'].set()
+        return {'choices': [{'finish_reason': 'stop', 'message': {'content': '任务退出后的合成结果'}}]}
+
+    with generation_scope(), patch.object(AIEngine, 'call_provider', side_effect=cancelled_result) as provider:
+        with pytest.raises(DshUnavailable):
+            AIEngine.call_ai(messages, operation='notes.understanding')
+        provider.assert_called_once()
+
+    schema = {'type': 'array', 'items': {'type': 'integer', 'minimum': 0}}
+    invalid = {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+        'function': {'name': 'emit_items', 'arguments': '{"items": [-1]}'},
+    }]}}]}
+    with patch.object(AIEngine, 'call_provider', return_value=invalid) as provider, \
+            patch('ai_assistant.services.dsh_generation.generate') as legacy:
+        with pytest.raises(InvalidStructuredOutput, match='minimum'):
+            AIEngine.structured_output(messages, schema, tool_name='emit_items', raise_on_error=True)
+        provider.assert_called_once()
+        assert provider.call_args.args[0] == messages
+        legacy.assert_not_called()
+
+
 def test_teaching_switch_routes_research_and_preserves_executor(settings):
     settings.UNIMIND_DSH_TEACHING_ENABLED = True
     executor = lambda name, arguments: '{}'

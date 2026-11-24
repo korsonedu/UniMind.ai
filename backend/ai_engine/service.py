@@ -4,12 +4,14 @@ import ssl
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from functools import wraps
 
 import requests
 from requests.adapters import HTTPAdapter
 from django.conf import settings
+from . import AIExecutionCancelled
 from .config import get_model_for_task
-from .observability import record_ai_operation
+from .observability import model_token_counts, record_ai_operation, runtime_observation
 from .tool_policy import READ_ONLY_TOOLS
 
 
@@ -29,6 +31,19 @@ def _create_deepseek_session() -> requests.Session:
 
 
 _session = _create_deepseek_session()
+
+
+def _scope_tool_agent(method):
+    @wraps(method)
+    def run(*args, **kwargs):
+        from ai_assistant.services.ulr_config import standalone_ulr
+        if standalone_ulr():
+            from ai_assistant.services.dsh_scope import generation_scope
+            with generation_scope():
+                return method(*args, **kwargs)
+        return method(*args, **kwargs)
+
+    return run
 
 
 class AICallError(Exception):
@@ -158,32 +173,25 @@ class AIEngine:
             for invoke_match in invoke_pattern.finditer(text):
                 func_name = invoke_match.group(1)
                 invoke_body = invoke_match.group(2)
-                args = {}
+                args = []
                 for p in param_pattern.finditer(invoke_body):
-                    pname = p.group(1)
-                    if has_string_attr:
-                        is_string = p.group(2) == 'true'
-                        pval = p.group(3).strip()
-                        if is_string:
-                            args[pname] = pval
-                        else:
-                            try:
-                                args[pname] = json.loads(pval)
-                            except (json.JSONDecodeError, TypeError):
-                                args[pname] = pval
+                    pname, value = p.group(1), p.groups()[-1].strip()
+                    if has_string_attr and p.group(2) == 'true':
+                        value = json.dumps(value, ensure_ascii=False)
                     else:
-                        pval = p.group(2).strip()
                         try:
-                            args[pname] = json.loads(pval)
-                        except (json.JSONDecodeError, ValueError):
-                            args[pname] = pval
+                            json.loads(value)
+                        except ValueError:
+                            value = json.dumps(value, ensure_ascii=False)
+                    # Preserve repeated fields until the shared argument decoder can reject them.
+                    args.append(f'{json.dumps(pname, ensure_ascii=False)}:{value}')
 
                 tool_calls.append({
                     "id": f"dsml_{len(tool_calls)}_{func_name}",
                     "type": "function",
                     "function": {
                         "name": func_name,
-                        "arguments": json.dumps(args, ensure_ascii=False),
+                        "arguments": '{' + ','.join(args) + '}',
                     },
                 })
 
@@ -249,12 +257,84 @@ class AIEngine:
         tools / tool_choice: OpenAI 兼容的 function calling 参数。
         不传则行为与之前完全一致。
         """
+        from ai_assistant.services.ulr_config import standalone_ulr
+        if standalone_ulr():
+            from ai_assistant.services.dsh_scope import generation_scope, current_execution, check_execution
+            with generation_scope():
+                execution = current_execution()
+                response = cls.call_provider(
+                    messages, temperature, max_tokens, raise_on_error, operation, tools,
+                    tool_choice, _preserve_tool_choice, _response_format,
+                    timeout_seconds=max(0.001, execution['deadline'] - time.monotonic()), max_retries=0,
+                )
+                check_execution(execution)
+                choices = (response or {}).get('choices') or []
+                if not tools and choices and choices[0].get('finish_reason') in {'length', 'content_filter'}:
+                    if raise_on_error:
+                        raise AICallError('生成结果未完整返回。', error_category='incomplete')
+                    return None
+                return response
         from ai_assistant.services.dsh_generation import enabled, generate, chat_result
         if enabled(operation):
             if tools:
                 from ai_assistant.services.dsh_runtime import DshUnavailable
                 raise DshUnavailable('工具调用须使用受控的 DSH 执行器。')
             return chat_result(generate(messages, operation, max_tokens=max_tokens, temperature=temperature))
+        return cls.call_provider(
+            messages, temperature, max_tokens, raise_on_error, operation, tools,
+            tool_choice, _preserve_tool_choice, _response_format,
+        )
+
+    @classmethod
+    def _read_provider_stream(cls, response, on_text, deadline):
+        text, reasoning, sent = '', '', 0
+        calls, usage, finish, model = {}, {}, None, None
+        for line in response.iter_lines(chunk_size=128):
+            if time.monotonic() >= deadline:
+                raise requests.Timeout('Model stream exceeded its deadline')
+            if not line.startswith(b'data: '):
+                continue
+            data = line[6:]
+            if data == b'[DONE]':
+                break
+            packet = json.loads(data)
+            model = packet.get('model') or model
+            choices = packet.get('choices') or []
+            if (finish or (choices and choices[0].get('finish_reason'))) and isinstance(counts := packet.get('usage'), dict):
+                usage = counts
+            if not choices:
+                continue
+            choice = choices[0]
+            finish = choice.get('finish_reason') or finish
+            delta = choice.get('delta') or {}
+            reasoning += delta.get('reasoning_content') or ''
+            if fragment := delta.get('content'):
+                text += fragment
+                clean = cls._strip_dsml(text, withhold_partial_marker=True)
+                if not cls._has_open_dsml(text) and len(clean) > sent:
+                    on_text(clean[sent:])
+                    sent = len(clean)
+            for chunk in delta.get('tool_calls') or ():
+                call = calls.setdefault(chunk['index'], {'id': '', 'type': 'function',
+                    'function': {'name': '', 'arguments': ''}})
+                if chunk.get('id'):
+                    call['id'] = chunk['id']
+                function = chunk.get('function') or {}
+                for field in ('name', 'arguments'):
+                    call['function'][field] += function.get(field) or ''
+        if not finish:
+            raise ValueError('Incomplete model stream')
+        return {'choices': [{'finish_reason': finish, 'message': {
+            'content': text, 'reasoning_content': reasoning, 'tool_calls': [calls[key] for key in sorted(calls)],
+        }}], 'usage': usage, **({'model': model} if model else {})}
+
+    @classmethod
+    def call_provider(
+        cls, messages, temperature=0.7, max_tokens=8192, raise_on_error=False,
+        operation='general', tools=None, tool_choice=None, _preserve_tool_choice=False,
+        _response_format=None, *, timeout_seconds=None, max_retries=None, on_text=None,
+    ):
+        """Use the configured model transport after the caller has selected an executor."""
         from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
         from .config import get_model_tier_for_operation
         started_at = time.monotonic()
@@ -285,12 +365,20 @@ class AIEngine:
                 raise AICallError(msg, status_code=500, retryable=False, error_category='config')
             return None
 
-        timeout_seconds = max(10, int(getattr(settings, "LLM_REQUEST_TIMEOUT_SECONDS", 120) or 120))
-        max_retries = max(0, int(getattr(settings, "LLM_REQUEST_MAX_RETRIES", 1) or 1))
+        if timeout_seconds is None:
+            timeout_seconds = max(10, int(getattr(settings, "LLM_REQUEST_TIMEOUT_SECONDS", 120) or 120))
+        if max_retries is None:
+            max_retries = max(0, int(getattr(settings, "LLM_REQUEST_MAX_RETRIES", 1) or 1))
 
         for attempt in range(max_retries + 1):
+            request_metadata = {'model': config['model']}
             try:
-                body = cls._build_body(config, messages, temperature, max_tokens, tools, tool_choice, _preserve_tool_choice=_preserve_tool_choice, _response_format=_response_format)
+                attempt_started_at = time.monotonic()
+                body = cls._build_body(config, messages, temperature, max_tokens, tools, tool_choice,
+                    stream=on_text is not None, _preserve_tool_choice=_preserve_tool_choice, _response_format=_response_format)
+                if runtime_observation.get():
+                    request_metadata['offered_tools'] = ','.join(tool['function']['name'] for tool in body.get('tools', ()))
+                    request_metadata['max_output_tokens'] = body['max_completion_tokens']
 
                 logger.info(
                     "ai.call_ai request: model=%s operation=%s tool_choice=%s thinking=%s",
@@ -304,28 +392,28 @@ class AIEngine:
                         "Content-Type": "application/json"
                     },
                     json=body,
-                    timeout=timeout_seconds
+                    timeout=timeout_seconds, **({'stream': True} if on_text is not None else {}),
                 )
-                r.raise_for_status()
-                payload = r.json()
+                if on_text is None:
+                    r.raise_for_status()
+                    payload = r.json()
+                else:
+                    with r:
+                        r.raise_for_status()
+                        payload = cls._read_provider_stream(r, on_text, attempt_started_at + timeout_seconds)
                 AICircuitBreaker.record_success(operation, model_tier=get_model_tier_for_operation(operation))
                 duration_ms = int((time.monotonic() - started_at) * 1000)
                 usage = payload.get('usage', {}) if isinstance(payload, dict) else {}
-                details = usage.get('prompt_tokens_details') or {}
-                cached_tokens = usage.get('prompt_cache_hit_tokens')
-                if cached_tokens is None and isinstance(details, dict):
-                    cached_tokens = details.get('cached_tokens')
+                reported_model = payload.get('model') if isinstance(payload, dict) else None
                 metadata = {
                     'attempts': attempt + 1,
                     'max_retries': max_retries,
                     'status': r.status_code,
-                    'prompt_tokens': usage.get('prompt_tokens', 0),
-                    'completion_tokens': usage.get('completion_tokens', 0),
+                    **request_metadata,
+                    **model_token_counts(usage),
                 }
-                if cached_tokens is not None:
-                    metadata['cached_tokens'] = cached_tokens
-                if 'prompt_cache_miss_tokens' in usage:
-                    metadata['cache_miss_tokens'] = usage['prompt_cache_miss_tokens']
+                if isinstance(reported_model, str) and len(reported_model) <= 160:
+                    metadata['reported_model'] = reported_model
                 record_ai_operation(
                     operation=operation,
                     success=True,
@@ -352,7 +440,7 @@ class AIEngine:
                     success=False,
                     duration_ms=duration_ms,
                     error_category='timeout',
-                    metadata={'attempts': attempt + 1, 'max_retries': max_retries},
+                    metadata={**request_metadata, 'attempts': attempt + 1, 'max_retries': max_retries},
                 )
                 if raise_on_error:
                     raise AICallError(
@@ -386,7 +474,7 @@ class AIEngine:
                     success=False,
                     duration_ms=duration_ms,
                     error_category=error_category,
-                    metadata={'attempts': attempt + 1, 'status': status},
+                    metadata={**request_metadata, 'attempts': attempt + 1, 'status': status},
                 )
                 msg = "AI 服务暂时不可用，请稍后重试。" if retryable else "AI 服务请求失败，请检查模型配置。"
                 if raise_on_error:
@@ -411,7 +499,7 @@ class AIEngine:
                     success=False,
                     duration_ms=duration_ms,
                     error_category='network',
-                    metadata={'attempts': attempt + 1, 'max_retries': max_retries},
+                    metadata={**request_metadata, 'attempts': attempt + 1, 'max_retries': max_retries},
                 )
                 if raise_on_error:
                     raise AICallError(
@@ -430,7 +518,7 @@ class AIEngine:
                     success=False,
                     duration_ms=duration_ms,
                     error_category='invalid_json',
-                    metadata={'attempts': attempt + 1},
+                    metadata={**request_metadata, 'attempts': attempt + 1},
                 )
                 if raise_on_error:
                     raise AICallError(
@@ -440,6 +528,8 @@ class AIEngine:
                         error_category='invalid_json',
                     ) from e
                 return None
+            except AIExecutionCancelled:
+                raise
             except Exception as e:
                 logger.exception("AI 调用异常: %s", e)
                 duration_ms = int((time.monotonic() - started_at) * 1000)
@@ -448,7 +538,7 @@ class AIEngine:
                     success=False,
                     duration_ms=duration_ms,
                     error_category='unexpected',
-                    metadata={'attempts': attempt + 1},
+                    metadata={**request_metadata, 'attempts': attempt + 1},
                 )
                 if raise_on_error:
                     raise AICallError(
@@ -553,6 +643,17 @@ class AIEngine:
             logger.warning("_extract_content failed for response")
             return None
 
+    @staticmethod
+    def _native_structured_output(messages, *, raise_on_error, **options):
+        from ai_assistant.services.ulr_structured import InvalidStructuredOutput, collect_messages
+        try:
+            return collect_messages(messages, **options)
+        except InvalidStructuredOutput:
+            if raise_on_error:
+                raise
+            logger.warning('ULR rejected invalid structured data: operation=%s', options['operation'])
+            return None
+
     @classmethod
     def structured_output(cls, messages, schema, tool_name="output",
                           tool_description="Submit the structured output",
@@ -566,6 +667,10 @@ class AIEngine:
         "auto"（即不传 tool_choice）。当 thinking 开启时自动降级为 "auto"，
         并通过 prompt 引导模型调用工具，同时保留 content fallback。
         """
+        from ai_assistant.services.ulr_config import standalone_ulr
+        if standalone_ulr():
+            return cls._native_structured_output(messages, operation=operation, name=tool_name, schema=schema,
+                description=tool_description, max_tokens=max_tokens, temperature=temperature, raise_on_error=raise_on_error)
         from ai_assistant.services.dsh_generation import enabled, generate
         if enabled(operation):
             return generate(messages, operation, schema=schema, tool_name=tool_name, max_tokens=max_tokens, temperature=temperature)
@@ -654,7 +759,14 @@ class AIEngine:
             # 不使用上下文管理器，避免 __exit__ 在超时后继续等待运行中的工具。
             executor.shutdown(wait=False, cancel_futures=True)
 
+    @staticmethod
+    def _complete_tool_round(finish_reason, tool_calls, tools, tool_choice=None):
+        if tool_calls:
+            return bool(tools) and tool_choice != 'none' and finish_reason in {'stop', 'tool_calls'}
+        return finish_reason == 'stop'
+
     @classmethod
+    @_scope_tool_agent
     def call_ai_with_tools(cls, messages, tools, tool_executor,
                            tool_choice="auto", temperature=0.7, max_tokens=8192,
                            operation='general', max_tool_rounds=5,
@@ -669,11 +781,14 @@ class AIEngine:
             return chat_result(generate(messages, operation, tools=tools, executor=tool_executor,
                                         max_tokens=max_tokens, max_requests=max_tool_rounds, temperature=temperature))
         from .tool_run import ToolRunCoordinator
+        from ai_assistant.services.dsh_scope import current_execution, check_execution
+        from ai_assistant.services.ulr_config import standalone_ulr
 
+        execution = current_execution() if standalone_ulr() else None
         all_messages = list(messages)
         coordinator = ToolRunCoordinator(
             tool_executor, tools or [], read_only_tools=cls._READ_ONLY_TOOLS,
-            tool_timeout_seconds=120,
+            tool_timeout_seconds=120, execution=execution,
         )
 
         for round_i in range(max_tool_rounds):
@@ -690,6 +805,13 @@ class AIEngine:
                 return None
 
             tool_calls = cls._extract_tool_calls(response)
+            choice = (response.get('choices') or [{}])[0]
+            if execution and not cls._complete_tool_round(
+                choice.get('finish_reason'), tool_calls, tools, tool_choice,
+            ):
+                if raise_on_error:
+                    raise AICallError('生成结果未完整返回。', error_category='incomplete')
+                return None
             if not tool_calls:
                 # 剥离可能混入 content 的 DSML 工具调用标记
                 raw_content = response['choices'][0]['message'].get('content') or ''
@@ -702,6 +824,7 @@ class AIEngine:
             # DeepSeek thinking mode 要求后续轮次完整回传 reasoning_content
             raw_msg = response['choices'][0]['message']
             outcomes = coordinator.execute_batch(tool_calls, round_i + 1)
+            check_execution(execution)
             assistant_msg = {
                 "role": "assistant",
                 "content": raw_msg.get('content'),
@@ -727,7 +850,7 @@ class AIEngine:
         logger.warning(
             "call_ai_with_tools: exhausted max_tool_rounds=%s, "
             "forcing final text reply after %s tool_calls",
-            max_tool_rounds, len(cls._extract_tool_calls(response)),
+            max_tool_rounds, len(cls._extract_tool_calls(response)) if max_tool_rounds else 0,
         )
         all_messages.append({
             "role": "system",
@@ -739,10 +862,17 @@ class AIEngine:
             max_tokens=max_tokens, operation=operation, raise_on_error=raise_on_error,
         )
         if response:
+            if execution and not cls._complete_tool_round(
+                (response.get('choices') or [{}])[0].get('finish_reason'), cls._extract_tool_calls(response), None,
+            ):
+                if raise_on_error:
+                    raise AICallError('生成结果未完整返回。', error_category='incomplete')
+                return None
             response['run_id'] = coordinator.run_id
         return response
 
     @classmethod
+    @_scope_tool_agent
     def call_ai_with_streaming_tools(cls, messages, tools, tool_executor,
                                       on_step=None, on_message=None, tool_choice="auto",
                                       temperature=0.7, max_tokens=8192,
@@ -767,6 +897,10 @@ class AIEngine:
         from .config import get_model_tier_for_operation
         from .tool_run import ToolRunCoordinator
         from django.conf import settings as _settings
+        from ai_assistant.services.dsh_scope import current_execution, check_execution
+        from ai_assistant.services.ulr_config import standalone_ulr
+
+        execution = current_execution() if standalone_ulr() else None
 
         all_messages = list(messages)
         accumulated_text = ""
@@ -779,154 +913,184 @@ class AIEngine:
             tool_definitions=tools or [],
             on_step=on_step,
             read_only_tools=cls._READ_ONLY_TOOLS,
+            execution=execution,
         )
 
         for round_i in range(max_tool_rounds):
-            config = get_model_for_task(operation)
-            if not config['api_key']:
-                if on_step:
-                    on_step({"type": "error", "message": "LLM_API_KEY 未设置"})
-                return {"content": "", "run_id": coordinator.run_id}
+            if execution:
+                llm_started = time.monotonic()
+                round_ttft_ms = None
+                text_emitted_this_round = 0
 
-            try:
-                AICircuitBreaker.check(operation, model_tier=get_model_tier_for_operation(operation))
-            except CircuitBreakerError:
-                if on_step:
-                    on_step({"type": "error", "message": "AI 服务熔断中，请稍后重试"})
-                return {"content": "", "run_id": coordinator.run_id}
-
-            body = cls._build_body(
-                config, [*all_messages, coordinator.response_context()],
-                temperature, max_tokens, tools, tool_choice, stream=True,
-            )
-
-            timeout_seconds = max(30, int(getattr(_settings, "LLM_REQUEST_TIMEOUT_SECONDS", 120) or 120))
-
-            # Log request body (without full messages/tools for readability)
-            _body_log = {k: v for k, v in body.items() if k not in ('messages', 'tools')}
-            _body_log['tools_count'] = len(body.get('tools', []))
-            logger.info(
-                "ai.call_ai_stream request: model=%s operation=%s round=%s msgs=%s body=%s",
-                config['model'], operation, round_i, len(all_messages), json.dumps(_body_log, ensure_ascii=False),
-            )
-            if round_i > 0:
-                for i, m in enumerate(all_messages):
-                    role = m.get('role', '?')
-                    tc = len(m.get('tool_calls', [])) if m.get('tool_calls') else 0
-                    tcid = m.get('tool_call_id', '')
-                    content_len = len(str(m.get('content', '')))
-                    logger.info("  msg[%s] role=%s content_len=%s tool_calls=%s tool_call_id=%s", i, role, content_len, tc, tcid)
-
-            # Debug: dump message format on follow-up rounds
-            if round_i > 0:
-                for mi, m in enumerate(all_messages):
-                    if m.get('role') == 'assistant' and m.get('tool_calls'):
-                        logger.info("  follow-up assistant msg[%s] keys=%s has_reasoning=%s tc_count=%s",
-                                    mi, list(m.keys()), 'reasoning_content' in m, len(m.get('tool_calls', [])))
-                        # Log first tool_call structure
-                        tc0 = m['tool_calls'][0] if m['tool_calls'] else {}
-                        logger.info("  tc[0] keys=%s", list(tc0.keys()))
-
-            llm_started = time.monotonic()
-            round_ttft_ms = None
-            try:
-                r = _session.post(
-                    config['base_url'],
-                    headers={
-                        "Authorization": f"Bearer {config['api_key'].strip()}",
-                        "Content-Type": "application/json",
-                    },
-                    json=body,
-                    timeout=timeout_seconds,
-                    stream=True,
-                )
-                r.raise_for_status()
-            except Exception as e:
-                # Log full request body for 4xx errors
-                error_body = ""
-                try:
-                    if hasattr(e, 'response') and e.response is not None:
-                        error_body = e.response.text[:800]
-                except Exception:
-                    pass
-                # Also dump the messages that caused the error
-                if round_i > 0:
-                    for mi, m in enumerate(all_messages):
-                        role = m.get('role', '?')
-                        keys = list(m.keys())
-                        tc = len(m.get('tool_calls', [])) if m.get('tool_calls') else 0
-                        logger.error("  FAIL msg[%s] role=%s keys=%s tc=%s content_preview=%s",
-                                     mi, role, keys, tc, str(m.get('content', ''))[:100])
-                logger.error("call_ai_with_streaming_tools HTTP error: operation=%s round=%s err=%s body=%s", operation, round_i, e, error_body)
-                AICircuitBreaker.record_failure(operation, model_tier=get_model_tier_for_operation(operation))
-                if on_step:
-                    on_step({"type": "error", "message": "AI 服务暂时不可用，请稍后重试"})
-                return {
-                    "content": accumulated_text or "AI 服务暂时不可用，请稍后重试。",
-                    "run_id": coordinator.run_id,
-                }
-
-            # Consume SSE stream
-            tool_calls_map = {}
-            finish_reason = None
-            reasoning_content = ""
-            text_emitted_this_round = 0  # Track how much clean text was already emitted
-
-            for line in r.iter_lines(decode_unicode=True):
-                if not line or not line.startswith('data: '):
-                    continue
-                data_str = line[6:]
-                if data_str.strip() == '[DONE]':
-                    break
-                try:
-                    data = json.loads(data_str)
-                except json.JSONDecodeError:
-                    continue
-
-                choice = data.get('choices', [{}])[0]
-                delta = choice.get('delta', {})
-                finish_reason = choice.get('finish_reason') or finish_reason
-
-                # Capture reasoning_content for thinking mode (DeepSeek requires it in follow-up)
-                rc = delta.get('reasoning_content') or ''
-                if rc:
-                    reasoning_content += rc
-
-                content = delta.get('content', '')
-                if content:
+                def emit_text(delta):
+                    nonlocal round_ttft_ms, text_emitted_this_round
+                    check_execution(execution)
                     if round_ttft_ms is None:
                         round_ttft_ms = int((time.monotonic() - llm_started) * 1000)
-                    accumulated_text += content
-                    # 流式 DSML 过滤：如果在 DSML 块中（有 <龘 且未闭合），
-                    # 暂不 emit，等完整后再一次性剥离+发送，防止 DSML 泄露到前端
-                    in_dsml = cls._has_open_dsml(accumulated_text)
-                    if not in_dsml:
-                        clean_text = cls._strip_dsml(accumulated_text, withhold_partial_marker=True)
-                        new_clean = clean_text[text_emitted_this_round:]
-                        if new_clean and on_step:
-                            on_step({"type": "text_delta", "delta": new_clean})
-                        text_emitted_this_round = len(clean_text)
+                    text_emitted_this_round += len(delta)
+                    if on_step:
+                        on_step({"type": "text_delta", "delta": delta})
 
-                for tc_chunk in delta.get('tool_calls', []):
-                    idx = tc_chunk.get('index', 0)
-                    if idx not in tool_calls_map:
-                        tool_calls_map[idx] = {
-                            "id": tc_chunk.get('id', ''),
-                            "type": "function",
-                            "function": {"name": '', "arguments": ''},
-                        }
-                    tc = tool_calls_map[idx]
-                    if tc_chunk.get('id'):
-                        tc['id'] = tc_chunk['id']
-                    func_chunk = tc_chunk.get('function', {})
-                    if func_chunk.get('name'):
-                        tc['function']['name'] = func_chunk['name']
-                    if func_chunk.get('arguments'):
-                        tc['function']['arguments'] += func_chunk['arguments']
+                check_execution(execution)
+                response = cls.call_provider(
+                    [*all_messages, coordinator.response_context()],
+                    temperature, max_tokens, raise_on_error, operation, tools, tool_choice,
+                    timeout_seconds=max(0.001, execution['deadline'] - time.monotonic()),
+                    max_retries=0, on_text=emit_text,
+                )
+                check_execution(execution)
+                choice = ((response or {}).get('choices') or [{}])[0]
+                message = choice.get('message') or {}
+                accumulated_text = message.get('content') or ''
+                reasoning_content = message.get('reasoning_content') or ''
+                tool_calls = message.get('tool_calls') or []
+                finish_reason = choice.get('finish_reason')
+            else:
+                config = get_model_for_task(operation)
+                if not config['api_key']:
+                    if on_step:
+                        on_step({"type": "error", "message": "LLM_API_KEY 未设置"})
+                    return {"content": "", "run_id": coordinator.run_id}
 
-            AICircuitBreaker.record_success(operation, model_tier=get_model_tier_for_operation(operation))
+                try:
+                    AICircuitBreaker.check(operation, model_tier=get_model_tier_for_operation(operation))
+                except CircuitBreakerError:
+                    if on_step:
+                        on_step({"type": "error", "message": "AI 服务熔断中，请稍后重试"})
+                    return {"content": "", "run_id": coordinator.run_id}
 
-            tool_calls = [tool_calls_map[k] for k in sorted(tool_calls_map.keys())] if tool_calls_map else []
+                body = cls._build_body(
+                    config, [*all_messages, coordinator.response_context()],
+                    temperature, max_tokens, tools, tool_choice, stream=True,
+                )
+
+                timeout_seconds = max(30, int(getattr(_settings, "LLM_REQUEST_TIMEOUT_SECONDS", 120) or 120))
+
+                # Log request body (without full messages/tools for readability)
+                _body_log = {k: v for k, v in body.items() if k not in ('messages', 'tools')}
+                _body_log['tools_count'] = len(body.get('tools', []))
+                logger.info(
+                    "ai.call_ai_stream request: model=%s operation=%s round=%s msgs=%s body=%s",
+                    config['model'], operation, round_i, len(all_messages), json.dumps(_body_log, ensure_ascii=False),
+                )
+                if round_i > 0:
+                    for i, m in enumerate(all_messages):
+                        role = m.get('role', '?')
+                        tc = len(m.get('tool_calls', [])) if m.get('tool_calls') else 0
+                        tcid = m.get('tool_call_id', '')
+                        content_len = len(str(m.get('content', '')))
+                        logger.info("  msg[%s] role=%s content_len=%s tool_calls=%s tool_call_id=%s", i, role, content_len, tc, tcid)
+
+                # Debug: dump message format on follow-up rounds
+                if round_i > 0:
+                    for mi, m in enumerate(all_messages):
+                        if m.get('role') == 'assistant' and m.get('tool_calls'):
+                            logger.info("  follow-up assistant msg[%s] keys=%s has_reasoning=%s tc_count=%s",
+                                        mi, list(m.keys()), 'reasoning_content' in m, len(m.get('tool_calls', [])))
+                            # Log first tool_call structure
+                            tc0 = m['tool_calls'][0] if m['tool_calls'] else {}
+                            logger.info("  tc[0] keys=%s", list(tc0.keys()))
+
+                llm_started = time.monotonic()
+                round_ttft_ms = None
+                try:
+                    r = _session.post(
+                        config['base_url'],
+                        headers={
+                            "Authorization": f"Bearer {config['api_key'].strip()}",
+                            "Content-Type": "application/json",
+                        },
+                        json=body,
+                        timeout=timeout_seconds,
+                        stream=True,
+                    )
+                    r.raise_for_status()
+                except Exception as e:
+                    # Log full request body for 4xx errors
+                    error_body = ""
+                    try:
+                        if hasattr(e, 'response') and e.response is not None:
+                            error_body = e.response.text[:800]
+                    except Exception:
+                        pass
+                    # Also dump the messages that caused the error
+                    if round_i > 0:
+                        for mi, m in enumerate(all_messages):
+                            role = m.get('role', '?')
+                            keys = list(m.keys())
+                            tc = len(m.get('tool_calls', [])) if m.get('tool_calls') else 0
+                            logger.error("  FAIL msg[%s] role=%s keys=%s tc=%s content_preview=%s",
+                                         mi, role, keys, tc, str(m.get('content', ''))[:100])
+                    logger.error("call_ai_with_streaming_tools HTTP error: operation=%s round=%s err=%s body=%s", operation, round_i, e, error_body)
+                    AICircuitBreaker.record_failure(operation, model_tier=get_model_tier_for_operation(operation))
+                    if on_step:
+                        on_step({"type": "error", "message": "AI 服务暂时不可用，请稍后重试"})
+                    return {
+                        "content": accumulated_text or "AI 服务暂时不可用，请稍后重试。",
+                        "run_id": coordinator.run_id,
+                    }
+
+                # Consume SSE stream
+                tool_calls_map = {}
+                finish_reason = None
+                reasoning_content = ""
+                text_emitted_this_round = 0  # Track how much clean text was already emitted
+
+                for line in r.iter_lines(decode_unicode=True):
+                    if not line or not line.startswith('data: '):
+                        continue
+                    data_str = line[6:]
+                    if data_str.strip() == '[DONE]':
+                        break
+                    try:
+                        data = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        continue
+
+                    choice = data.get('choices', [{}])[0]
+                    delta = choice.get('delta', {})
+                    finish_reason = choice.get('finish_reason') or finish_reason
+
+                    # Capture reasoning_content for thinking mode (DeepSeek requires it in follow-up)
+                    rc = delta.get('reasoning_content') or ''
+                    if rc:
+                        reasoning_content += rc
+
+                    content = delta.get('content', '')
+                    if content:
+                        if round_ttft_ms is None:
+                            round_ttft_ms = int((time.monotonic() - llm_started) * 1000)
+                        accumulated_text += content
+                        # 流式 DSML 过滤：如果在 DSML 块中（有 <龘 且未闭合），
+                        # 暂不 emit，等完整后再一次性剥离+发送，防止 DSML 泄露到前端
+                        in_dsml = cls._has_open_dsml(accumulated_text)
+                        if not in_dsml:
+                            clean_text = cls._strip_dsml(accumulated_text, withhold_partial_marker=True)
+                            new_clean = clean_text[text_emitted_this_round:]
+                            if new_clean and on_step:
+                                on_step({"type": "text_delta", "delta": new_clean})
+                            text_emitted_this_round = len(clean_text)
+
+                    for tc_chunk in delta.get('tool_calls', []):
+                        idx = tc_chunk.get('index', 0)
+                        if idx not in tool_calls_map:
+                            tool_calls_map[idx] = {
+                                "id": tc_chunk.get('id', ''),
+                                "type": "function",
+                                "function": {"name": '', "arguments": ''},
+                            }
+                        tc = tool_calls_map[idx]
+                        if tc_chunk.get('id'):
+                            tc['id'] = tc_chunk['id']
+                        func_chunk = tc_chunk.get('function', {})
+                        if func_chunk.get('name'):
+                            tc['function']['name'] = func_chunk['name']
+                        if func_chunk.get('arguments'):
+                            tc['function']['arguments'] += func_chunk['arguments']
+
+                AICircuitBreaker.record_success(operation, model_tier=get_model_tier_for_operation(operation))
+
+                tool_calls = [tool_calls_map[k] for k in sorted(tool_calls_map.keys())] if tool_calls_map else []
 
             # DSML fallback: 如果 DeepSeek 把工具调用作为 DSML 文本输出而没有标准 tool_calls，
             # 从 accumulated_text 中解析 DSML 并转为 tool_calls
@@ -952,6 +1116,11 @@ class AIEngine:
             # 预先剥离 DSML，避免后续多处重复计算
             clean_accumulated = cls._strip_dsml(accumulated_text)
 
+            if execution and not cls._complete_tool_round(finish_reason, tool_calls, tools, tool_choice):
+                if raise_on_error:
+                    raise AICallError('生成结果未完整返回。', error_category='incomplete')
+                return {'content': '', 'run_id': coordinator.run_id, 'finish_reason': 'incomplete'}
+
             if not tool_calls:
                 return {"content": clean_accumulated, "run_id": coordinator.run_id, "finish_reason": finish_reason or "incomplete"}
 
@@ -967,6 +1136,7 @@ class AIEngine:
                     on_message(clean_accumulated)
 
             outcomes = coordinator.execute_batch(tool_calls, round_i + 1)
+            check_execution(execution)
             normalized_tool_calls = [outcome.call.tool_call for outcome in outcomes]
 
             assistant_msg = {
@@ -1101,12 +1271,16 @@ class AIEngine:
                 max_tokens=max_tokens,
                 operation=operation,
             )
+            if execution:
+                choice = ((final_resp or {}).get('choices') or [{}])[0]
+                if not cls._complete_tool_round(choice.get('finish_reason'), cls._extract_tool_calls(final_resp), None):
+                    return {'content': '', 'run_id': coordinator.run_id, 'finish_reason': 'incomplete'}
             final_text = ""
             if final_resp and isinstance(final_resp, dict):
                 # 优先读 content，fallback 到 reasoning_content（V4 默认 thinking ON 时回复可能在这里）
                 msg = (final_resp.get('choices', [{}])[0].get('message', {}) 
                        if 'choices' in final_resp else final_resp)
-                final_text = msg.get('content') or msg.get('reasoning_content') or ""
+                final_text = msg.get('content') or ('' if execution else msg.get('reasoning_content')) or ""
             if final_text:
                 final_text = cls._strip_dsml(final_text)
                 if on_step:
@@ -1143,6 +1317,11 @@ class AIEngine:
         tool_executor:  callable(tool_name, arguments_dict) -> str   研究工具执行器
         schema/tool_name/tool_description: 最终提交工具的 JSON Schema
         """
+        from ai_assistant.services.ulr_config import standalone_ulr
+        if standalone_ulr():
+            return cls._native_structured_output(messages, operation=operation, name=tool_name, schema=schema,
+                description=tool_description, max_tokens=max_tokens, temperature=temperature, raise_on_error=raise_on_error,
+                research_tools=research_tools, executor=tool_executor, max_requests=max_tool_rounds)
         from ai_assistant.services.dsh_generation import enabled, generate
         if enabled(operation):
             return generate(messages, operation, schema=schema, tool_name=tool_name,

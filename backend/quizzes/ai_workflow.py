@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, List
 
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -14,6 +14,8 @@ from ai_service import AIService
 from notifications.models import Notification
 from quizzes.memorix.service import MemorixService
 from quizzes.models import ExamQuestionResult, Question, QuizExam, UserQuestionStatus
+from quizzes.services.exam_grading_state import grading_lock_key
+from quizzes.services.practice_results import validate_grading_question
 from users.models import User
 from users.feature_access import has_learning_feature
 
@@ -47,7 +49,7 @@ def _apply_memorix_status(user: User, question: Question, normalized_score: floa
     return status_obj
 
 
-def _grade_answer(question: Question, user_answer: Any, *, objective_only=False, language='zh-CN') -> Dict[str, Any]:
+def _grade_answer(question: Question, user_answer: Any, *, objective_only=False, language='zh-CN', ulr=False) -> Dict[str, Any]:
     max_score = question.get_max_score()
     correct_answer = question.correct_answer
     if question.q_type == 'objective':
@@ -70,6 +72,7 @@ def _grade_answer(question: Question, user_answer: Any, *, objective_only=False,
             options=question.options,
             rubric=question.rubric,
             subjective_type=_subjective_type_label(question),
+            **({'ulr': True} if ulr else {}),
         )
 
     score_val = _clamp_score(float(grade_data.get('score', 0)), max_score)
@@ -169,7 +172,7 @@ def _refresh_exam_counts(exam_id: int) -> None:
 def _mark_item_failed(item_id: int, message: str) -> None:
     with transaction.atomic():
         item = ExamQuestionResult.objects.select_for_update().filter(pk=item_id).first()
-        if not item or item.status == 'graded':
+        if not item or item.status != 'pending':
             return
         item.status = 'failed'
         item.attempts += 1
@@ -182,7 +185,7 @@ def _mark_item_failed(item_id: int, message: str) -> None:
 def _fail_pending_items(exam_id: int, message: str) -> None:
     with transaction.atomic():
         items = list(ExamQuestionResult.objects.select_for_update().filter(
-            exam_id=exam_id, status__in=['pending', 'failed'],
+            exam_id=exam_id, status='pending',
         ))
         for item in items:
             item.status = 'failed'
@@ -196,10 +199,7 @@ def _fail_pending_items(exam_id: int, message: str) -> None:
         _refresh_exam_counts(exam_id)
 
 
-def _create_exam_notification(exam_id: int) -> None:
-    exam = QuizExam.objects.select_related('user').filter(pk=exam_id).first()
-    if not exam or not exam.notified_at:
-        return
+def _create_exam_notification(exam: QuizExam) -> None:
     if exam.status == 'completed':
         title = '练习批改完成'
         rate = exam.total_score / exam.max_score * 100 if exam.max_score else 0
@@ -215,7 +215,7 @@ def _create_exam_notification(exam_id: int) -> None:
         content = (f'Score: {exam.total_score}/{exam.max_score}. Open your question review.' if exam.status == 'completed'
                    else f'Graded {exam.graded_count}/{exam.total_questions} questions. Open the results to retry unfinished questions.')
     Notification.objects.create(
-        recipient=exam.user,
+        recipient_id=exam.user_id,
         ntype='practice_result',
         title=title,
         content=content,
@@ -272,18 +272,45 @@ def _finalize_exam(user_id: int, exam_id: int) -> None:
             update_fields.append('notified_at')
         exam.save(update_fields=update_fields)
         if notify:
-            transaction.on_commit(lambda: _create_exam_notification(exam.id), robust=True)
+            _create_exam_notification(exam)
 
 
 def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, Any]] = None):
+    # PostgreSQL releases this lock when the worker connection closes. No transaction spans a model call.
+    if connection.vendor != 'postgresql':
+        return _run_exam_grading(user_id, exam_id)
+    key = grading_lock_key(user_id, exam_id)
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_try_advisory_lock(%s)', [key])
+        if not cursor.fetchone()[0]:
+            # A retry can be enqueued as the previous run finishes releasing its lock.
+            if not QuizExam.objects.filter(pk=exam_id, user_id=user_id, status='grading', started_at__isnull=True).exists():
+                return
+            cursor.execute('SELECT pg_advisory_lock(%s)', [key])
+    try:
+        return _run_exam_grading(user_id, exam_id)
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT pg_advisory_unlock(%s)', [key])
+
+
+def _run_exam_grading(user_id: int, exam_id: int):
+    from ai_assistant.services.ulr_config import ulr_enabled
+
     user = User.objects.filter(id=user_id).first()
-    exam = QuizExam.objects.filter(id=exam_id, user_id=user_id).first()
-    if not user or not user.is_active or not has_learning_feature(user, 'quiz.exam') or not exam:
+    if not user or not user.is_active or not has_learning_feature(user, 'quiz.exam'):
         return
-    if exam.status in ('completed', 'partial', 'failed') and not exam.results.filter(
-        status__in=['pending', 'failed'],
-    ).exists():
-        return
+    with transaction.atomic():
+        exam = QuizExam.objects.select_for_update().filter(id=exam_id, user_id=user_id).first()
+        if not exam or exam.status not in ('pending', 'grading'):
+            return
+        native_worker = ulr_enabled()
+        exam.requires_ulr = (exam.requires_ulr or native_worker
+                             or exam.results.filter(question_snapshot__has_key='ulr_practice_version').exists())
+        exam.status = 'grading'
+        exam.started_at = timezone.now()
+        exam.save(update_fields=['status', 'started_at', 'requires_ulr'])
+    force_ulr = exam.requires_ulr and not native_worker
 
     from ai_assistant.models import ProjectLearningTask
     from ai_assistant.services.learning_tasks import validate_task_question, sync_exam_task_result, task_result_snapshot, personal_question
@@ -296,23 +323,15 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
         _finalize_exam(user_id, exam_id)
         return
 
-    with transaction.atomic():
-        exam = QuizExam.objects.select_for_update().filter(id=exam_id, user_id=user_id).first()
-        if not exam:
-            return
-        exam.status = 'grading'
-        if not exam.started_at:
-            exam.started_at = timezone.now()
-        exam.save(update_fields=['status', 'started_at'])
-
-    items = list(ExamQuestionResult.objects.filter(exam_id=exam_id).order_by('position', 'id'))
+    items = list(ExamQuestionResult.objects.filter(exam_id=exam_id, status='pending').order_by('position', 'id'))
     if not items:
         _finalize_exam(user_id, exam_id)
         return
 
     for item in items:
-        if item.status == 'graded':
-            continue
+        snapshot = item.question_snapshot or {}
+        practice_card = 'ulr_practice_version' in snapshot
+        versioned = practice_card or 'ulr_grading_version' in snapshot
         try:
             if personal_task:
                 task_result_snapshot(learning_task, item)
@@ -327,10 +346,15 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
                     raise ValidationError('题目不存在或不在当前内容范围')
                 if learning_task:
                     validate_task_question(learning_task, question)
-            if learning_task and question.q_type == 'objective':
+                elif versioned:
+                    validate_grading_question(question, snapshot, scope)
+            if (learning_task or practice_card) and question.q_type == 'objective':
                 graded = _grade_answer(question, item.user_answer or '', objective_only=True, language=exam.ui_language)
+                if practice_card:
+                    graded['analysis'] = item.question_snapshot['ai_answer']
             else:
-                graded = _grade_answer(question, item.user_answer or '', language=exam.ui_language)
+                graded = _grade_answer(question, item.user_answer or '', language=exam.ui_language,
+                                       **({'ulr': True} if force_ulr else {}))
         except Exception as exc:
             logger.exception('Exam item grading failed: exam_id=%s item_id=%s', exam_id, item.pk)
             _mark_item_failed(item.pk, str(exc))
@@ -341,7 +365,7 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
                 # Do not select_related('question') here: question is nullable,
                 # and PostgreSQL rejects FOR UPDATE on the nullable side of an outer join.
                 locked = ExamQuestionResult.objects.select_for_update().filter(pk=item.pk).first()
-                if not locked or locked.status == 'graded':
+                if not locked or locked.status != 'pending':
                     continue
                 if personal_task:
                     task_result_snapshot(learning_task, locked)
@@ -354,6 +378,8 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
                         raise ValidationError('题目或内容范围已变更')
                     if learning_task:
                         task_result_snapshot(learning_task, locked)
+                    elif versioned:
+                        validate_grading_question(question, locked.question_snapshot, scope)
                     _apply_memorix_status(
                         user, question, graded['normalized_score'], graded['memorix_rating'],
                     )

@@ -64,9 +64,9 @@ RETRY_ONCE_OPERATIONS = {'quizzes.grade_question'}
 
 
 def wire_schema(schema):
-    """Lower nullable unions to the installed SDK's supported equivalent."""
+    """Translate unsupported SDK schema constraints without changing server validation."""
     result = deepcopy(schema)
-    bounds = {key: result.pop(key) for key in ('minimum', 'maximum') if key in result}
+    bounds = {key: result.pop(key) for key in ('minimum', 'maximum', 'minLength', 'minItems', 'maxItems') if key in result}
     if bounds:
         result['description'] = (result.get('description', '') + ' ' + json.dumps(bounds)).strip()
     if isinstance(result.get('type'), list):

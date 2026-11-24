@@ -1,9 +1,10 @@
 import uuid
 from unittest.mock import patch
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework.exceptions import ValidationError
-from users.models import User
+from users.models import AIUsageReservation, User
 from ai_assistant.models import (AIChatMessage, Bot, Conversation, ConversationProject, ProjectLearning,
     ProjectLearningEvent, LearningResource, LearningStrategy, LearningStrategyReview)
 from ai_assistant.views_projects import save_new_conversation_project
@@ -55,6 +56,33 @@ class LearningLibrarySmoke(APITestCase):
 
     def save_strategy(self):
         return strategy_operation(self.project, {'action': 'save', 'event_id': self.event.pk, 'domain': '数学'})['strategy_id']
+
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr')
+    def test_switch_excludes_failed_progress_and_its_method_without_losing_earlier_feedback(self):
+        valid_strategy = self.save_strategy()
+        message = self.turn(self.project, '这次答复随后失败。')
+        request_id = uuid.uuid4()
+        message.metadata = {'runtime_request_id': str(request_id)}
+        message.save(update_fields=['metadata'])
+        with override_settings(UNIMIND_LEARNING_RUNTIME='legacy', UNIMIND_ULR_PROTOTYPE=False):
+            failed = self.progress(self.project, message)
+            failed.content.update(feedback='失败答复里的反馈', next_action='失败答复里的安排')
+            failed.save(update_fields=['content'])
+            ProjectLearning.objects.filter(project=self.project).update(feedback=failed.content['feedback'], next_action=failed.content['next_action'])
+            strategy_operation(self.project, {'action': 'save', 'event_id': failed.pk})
+        receipt = AIUsageReservation.objects.create(user=self.user, request_id=request_id, attempt_id=uuid.uuid4(),
+            week=timezone.now().date(), status='released', response={})
+        url = f'/api/ai/projects/{self.project.pk}/learning/'
+        for status in ('released', 'pending', 'succeeded'):
+            if status != 'released':
+                AIUsageReservation.objects.filter(pk=receipt.pk).update(status=status, updated_at=timezone.now(),
+                    response={'engine': 'ulr', 'metadata': {}})
+            data = self.client.get(url).data
+            self.assertNotIn(failed.pk, [item['id'] for item in data['events']])
+            self.assertEqual((data['feedback'], data['next_action']), (self.event.content['feedback'], self.event.content['next_action']))
+            self.assertEqual([row['id'] for row in library_data(self.user, compact=True)['strategies']], [valid_strategy])
+            self.assertEqual(self.client.post(f'{url}library/', {'kind': 'strategy', 'action': 'save', 'event_id': failed.pk}, format='json').status_code, 404)
+        self.assertTrue(ProjectLearningEvent.objects.filter(pk=failed.pk).exists())
 
     def test_owned_resource_reuse_keeps_traceable_project_snapshot(self):
         saved = self.client.post(self.url, {'kind': 'resource', 'action': 'save', 'source_id': self.resource['id'], 'domain': '数学'}, format='json')

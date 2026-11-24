@@ -31,7 +31,7 @@ COPY --from=frontend-build /app/frontend/dist ./frontend/dist/
 
 # Collect static
 WORKDIR /app/backend
-RUN python manage.py collectstatic --noinput 2>/dev/null || true
+RUN DJANGO_ENV=development python manage.py collectstatic --noinput
 
 EXPOSE 8000
 

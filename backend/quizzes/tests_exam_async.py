@@ -1,11 +1,14 @@
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from notifications.models import Notification
 from quizzes.ai_workflow import run_exam_grading
 from quizzes.models import ExamQuestionResult, KnowledgePoint, Question, QuizExam
+from quizzes.services.exam_grading_state import GRADING_RECOVERY_DELAY
 from users.models import CourseStudentStatus, Institution, User
 
 
@@ -199,6 +202,39 @@ class ExamAsyncTests(APITestCase):
             or '题目不存在' in (item.error_metadata or {}).get('error', '')
             for item in exam.results.all()
         ))
+
+    def test_lost_queue_delivery_and_interrupted_finalization_can_resume(self):
+        response, _ = self.submit()
+        exam_id = response.data['exam_id']
+        detail_url = f'/api/quizzes/exams/{exam_id}/'
+        expired = timezone.now() - GRADING_RECOVERY_DELAY - timedelta(seconds=1)
+        QuizExam.objects.filter(pk=exam_id).update(grading_queued_at=expired)
+        self.assertTrue(self.client.get(detail_url).data['can_resume'])
+        with patch('quizzes.views_exam.dispatch_exam_grading') as dispatch, self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(self.client.post(f'{detail_url}retry/', {}, format='json').status_code, 202)
+            self.assertEqual(self.client.post(f'{detail_url}retry/', {}, format='json').status_code, 200)
+        dispatch.assert_called_once_with(self.user.pk, exam_id)
+
+        with patch('quizzes.ai_workflow._grade_answer', side_effect=grade_ok), \
+                patch('quizzes.ai_workflow._queue_experience_verification'), \
+                patch('quizzes.ai_workflow._create_exam_notification', side_effect=RuntimeError('synthetic interruption')):
+            with self.assertRaisesRegex(RuntimeError, 'synthetic interruption'):
+                run_exam_grading(self.user.pk, exam_id)
+        exam = QuizExam.objects.get(pk=exam_id)
+        self.assertEqual(exam.status, 'grading')
+        self.assertIsNone(exam.notified_at)
+        self.assertEqual(exam.results.filter(status='graded', attempts=1).count(), 2)
+        QuizExam.objects.filter(pk=exam_id).update(started_at=expired)
+        with patch('quizzes.views_exam.dispatch_exam_grading'):
+            self.assertEqual(self.client.post(f'{detail_url}retry/', {}, format='json').status_code, 202)
+        with patch('quizzes.ai_workflow._grade_answer') as model:
+            run_exam_grading(self.user.pk, exam_id)
+            run_exam_grading(self.user.pk, exam_id)
+        model.assert_not_called()
+        exam.refresh_from_db()
+        self.assertEqual((exam.status, exam.total_score), ('completed', 20))
+        self.assertEqual(Notification.objects.filter(recipient=self.user, ntype='practice_result',
+                                                      link=f'/tests/results/{exam_id}').count(), 1)
 
     def test_other_user_cannot_read_exam(self):
         response, _ = self.submit()

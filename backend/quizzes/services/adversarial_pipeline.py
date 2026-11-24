@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 
 from django.utils import timezone
 
+from ai_assistant.services.ulr_structured import teaching_enabled
 from ai_service import AIService
 from ai_engine.tools import (
     AUTHOR_OUTPUT_SCHEMA, REVIEWER_OUTPUT_SCHEMA,
@@ -166,6 +167,9 @@ def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_pe
             logger.error(f"Pipeline draft {i} failed: {e}")
             continue
 
+    if review_only and teaching_enabled('pipeline.reviewer') and not reviewed:
+        raise ValueError('没有完成评审的候选题，请重试生成。')
+
     stage_log.append({
         "stage": "review_done",
         "total": len(reviewed),
@@ -227,6 +231,9 @@ def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_pe
     # ── 写入结果 ──
     from ai_assistant.services.dsh_scope import check_teaching_task
     check_teaching_task()
+    if review_only and strict_scope and teaching_enabled('pipeline.author'):
+        from backoffice.teaching import validate_kps
+        validate_kps([k.pk for k in kps])
     task.result = {
         "questions": reviewed,
         "stages": stage_log,
@@ -424,6 +431,8 @@ def _author_generate(kps: List[KnowledgePoint], q_per_kp: int, difficulty: str =
                     q["kp_id"] = kp.id
                 questions.extend(q_list)
         except Exception as exc:
+            if teaching_enabled('pipeline.author'):
+                raise
             logger.warning("Author generation failed for kp=%s: %s", kp.code, exc)
 
     return questions
@@ -553,12 +562,19 @@ def _reviewer_evaluate(question: Dict, institution=None, strict_scope=False) -> 
         if result is None:
             logger.warning("Reviewer agentic_structured_output returned None")
             return {"score": 0.0, "feedback": "[System Error] Reviewer returned empty", "dimensions": {}}
+        score = float(result.get("score", 0.5))
+        dimensions = result.get("dimensions", {})
+        if (teaching_enabled('pipeline.reviewer') and score > 0.5
+                and min(dimensions[key] for key in ('discrimination', 'clarity', 'coverage')) < 0.4):
+            raise ValueError('评审总分与单项低分上限不一致，请重试。')
         return {
-            "score": float(result.get("score", 0.5)),
+            "score": score,
             "feedback": str(result.get("feedback", "")),
-            "dimensions": result.get("dimensions", {}),
+            "dimensions": dimensions,
         }
     except Exception as exc:
+        if teaching_enabled('pipeline.reviewer'):
+            raise
         logger.warning("Reviewer failed: %s", exc)
         return {"score": 0.0, "feedback": f"[System Error] Reviewer failed: {exc}", "dimensions": {}}
 
@@ -675,6 +691,8 @@ def _classifier_tag(question: Dict, kps: List[KnowledgePoint], target_difficulty
             logger.warning("Classifier structured_output returned None")
         return result or {}
     except Exception as exc:
+        if teaching_enabled('pipeline.classifier'):
+            raise
         logger.warning("Classifier failed: %s", exc)
         return {
             "detected_difficulty": target_difficulty, "difficulty_match": False,

@@ -1,4 +1,5 @@
 import logging
+from contextvars import ContextVar
 from typing import Any, Dict, Optional
 
 from django.core.cache import cache
@@ -6,6 +7,33 @@ from django.utils import timezone
 
 
 logger = logging.getLogger(__name__)
+runtime_observation = ContextVar('runtime_observation', default={})
+
+
+def model_token_counts(usage, *, anthropic=False):
+    """Express both DeepSeek protocols in total input and output tokens."""
+    if not isinstance(usage, dict):
+        return {}
+
+    def count(key, values=usage):
+        value = values.get(key)
+        return value if type(value) is int and value >= 0 else None
+
+    if anthropic:
+        uncached, output_count = count('input_tokens'), count('output_tokens')
+        cached = count('cache_read_input_tokens')
+        created = count('cache_creation_input_tokens')
+        misses = uncached + (created or 0) if uncached is not None else None
+        input_count = misses + (cached or 0) if misses is not None else None
+    else:
+        input_count, output_count = count('prompt_tokens'), count('completion_tokens')
+        cached, misses = count('prompt_cache_hit_tokens'), count('prompt_cache_miss_tokens')
+        if cached is None and isinstance(details := usage.get('prompt_tokens_details'), dict):
+            cached = count('cached_tokens', details)
+    return {key: value for key, value in {
+        'prompt_tokens': input_count, 'completion_tokens': output_count,
+        'cached_tokens': cached, 'cache_miss_tokens': misses,
+    }.items() if value is not None}
 
 
 def _safe_incr(key: str, timeout_seconds: int = 48 * 3600) -> None:
@@ -48,13 +76,17 @@ def record_ai_operation(
     if not success:
         _safe_incr(f'{base}:err:{err}')
 
-    meta = _as_text_dict(metadata)
+    log_ai_operation(op, success, duration_ms, err, metadata)
+
+
+def log_ai_operation(operation, success, duration_ms, error_category='none', metadata=None):
+    meta = {**_as_text_dict(runtime_observation.get()), **_as_text_dict(metadata)}
     logger.info(
         "ai.obs operation=%s success=%s duration_ms=%s error=%s meta=%s",
-        op,
+        operation,
         success,
         max(0, int(duration_ms or 0)),
-        err,
+        error_category,
         meta,
     )
 

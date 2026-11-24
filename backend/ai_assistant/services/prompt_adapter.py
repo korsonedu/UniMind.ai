@@ -190,7 +190,13 @@ def get_adaptive_directives_llm(
             profile_to_directives
         )
 
-        profile = analyze_user_profile(memories, bot_type=bot_type, user_id=user_id)
+        from .ulr_config import standalone_ulr
+        if standalone_ulr() and user_id:
+            from .ulr_profile import profile_for_user
+            memories = []
+            profile, memories = profile_for_user(user_id)
+        else:
+            profile = analyze_user_profile(memories, bot_type=bot_type, user_id=user_id)
         if profile and profile.confidence >= 0.6:
             logger.info(
                 "LLM analysis succeeded with confidence %.2f for bot_type=%s",

@@ -1,26 +1,30 @@
 """Read existing request state without reserving quota or starting execution."""
-from datetime import timedelta
-
 from django.utils import timezone
 from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from users.learning import AI_RESERVATION_TTL, CHAT_RESERVATION_TTL
 from users.models import AIUsageReservation
+from .models import chat_receipt_deleted
+from .services.dsh_runtime import quota_write_lock
 
 
 class ChatRequestStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, request_id):
-        reservation = AIUsageReservation.objects.filter(user=request.user, request_id=request_id).first()
+        with quota_write_lock():
+            reservation = AIUsageReservation.objects.filter(user=request.user, request_id=request_id).first()
+            deleted = reservation is not None and chat_receipt_deleted(reservation)
         payload = {'request_id': str(request_id), 'status': 'unknown'}
         if reservation:
-            if reservation.status == 'succeeded' and not reservation.response.get('deleted'):
+            ttl = CHAT_RESERVATION_TTL if reservation.conversation_id else AI_RESERVATION_TTL
+            if reservation.status == 'succeeded' and not deleted:
                 payload.update(status='completed', response=reservation.response)
             elif reservation.status == 'released' and reservation.response.get('is_error'):
                 payload.update(status='failed', response=reservation.response)
-            elif reservation.status == 'pending' and reservation.updated_at >= timezone.now() - timedelta(hours=1):
+            elif reservation.status == 'pending' and reservation.updated_at >= timezone.now() - ttl:
                 payload['status'] = 'pending'
         response = Response(payload)
         response['Cache-Control'] = 'no-store'

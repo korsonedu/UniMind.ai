@@ -15,8 +15,12 @@
 import json
 import math
 import time
+from collections import Counter
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
+from rest_framework.exceptions import PermissionDenied
+
+from ai_assistant.services.ulr_config import standalone_ulr
 from quizzes.models import KnowledgePoint, KnowledgeEdge
 
 RELATION_TYPES = ['prerequisite', 'similar', 'contrast', 'confusion', 'co_occur', 'derivation']
@@ -55,6 +59,24 @@ class Command(BaseCommand):
         subject = options['subject']
         min_conf = options['min_confidence']
         dry_run = options['dry_run']
+
+        if standalone_ulr():
+            from core.utils import get_content_institution
+            from quizzes.services.semantic_edge_analyzer import run_semantic_edge_analysis
+
+            try:
+                institution = get_content_institution()
+            except PermissionDenied as exc:
+                raise CommandError(str(exc)) from exc
+            result = run_semantic_edge_analysis(subject=subject, institution_id=institution.pk if institution else None,
+                                                min_confidence=min_conf, dry_run=dry_run)
+            self.stdout.write(f"\n有效边: {result['valid_edges']} / {result['raw_results']} 条判定")
+            if dry_run:
+                self._preview(result.get('preview', []))
+            else:
+                self.stdout.write(f"✅ 创建 {result['created']} 条边（source_type=llm, 待审核）")
+            self.stdout.write(f"⏱ 总耗时: {result['elapsed']:.1f}s")
+            return
 
         t0 = time.time()
 
@@ -145,26 +167,23 @@ class Command(BaseCommand):
 
         # ═══ 4. 写入 ═══
         if dry_run:
-            self.stdout.write("\n[Dry-run] 预览:")
-            # 按类型分组统计
-            from collections import Counter
-            type_dist = Counter(r['relation'] for r in valid)
-            for rel, cnt in type_dist.most_common():
-                self.stdout.write(f"  {rel:14}: {cnt}")
-            self.stdout.write(f"\n预览前 20 条:")
-            for r in valid[:20]:
-                self.stdout.write(
-                    f"  {r.get('source_name', '?')[:30]:30} → "
-                    f"{r.get('target_name', '?')[:30]:30} "
-                    f"{r['relation']:14} conf={r['confidence']:.2f}"
-                )
-            self.stdout.write(f"\n总计 {len(valid)} 条边（未写入）")
+            self._preview(valid)
         else:
             created = self._create_edges(valid)
             self.stdout.write(f"✅ 创建 {created} 条边（source_type=llm, 待审核）")
 
         elapsed = time.time() - t0
         self.stdout.write(f"⏱ 总耗时: {elapsed:.1f}s")
+
+    def _preview(self, valid):
+        self.stdout.write("\n[Dry-run] 预览:")
+        for relation, count in Counter(row['relation'] for row in valid).most_common():
+            self.stdout.write(f"  {relation:14}: {count}")
+        self.stdout.write("\n预览前 20 条:")
+        for row in valid[:20]:
+            self.stdout.write(f"  {row.get('source_name', '?')[:30]:30} → {row.get('target_name', '?')[:30]:30} "
+                              f"{row['relation']:14} conf={row['confidence']:.2f}")
+        self.stdout.write(f"\n总计 {len(valid)} 条边（未写入）")
 
     def _call_llm(self, system_msg, user_msg):
         """调用 LLM，使用 structured_output 保证 JSON 合法性"""

@@ -662,6 +662,8 @@ class QuestionGenerator:
         options: Optional[Any] = None,
         subjective_type: str = '主观题',
         language: str = 'zh-CN',
+        *,
+        ulr: bool = False,
     ) -> Dict[str, Any]:
         from quizzes.services.ai_task_service import QuizAITaskService
 
@@ -675,7 +677,7 @@ class QuestionGenerator:
             grading_points=grading_points,
             rubric=rubric,
             options=options,
-            subjective_type=subjective_type, language=language,
+            subjective_type=subjective_type, language=language, ulr=ulr,
         )
 
     def parse_questions_from_text(self, raw_text: str) -> List[Dict[str, Any]]:

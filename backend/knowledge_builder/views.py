@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.db.models import F, Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
@@ -8,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.authentication import CookieTokenAuthentication
+from .build_state import can_resume_build, lock_build_for_resume, reset_for_queue
 from .models import (KnowledgeTreeBuild, LearningBlock, BlockStepAtom,
                      BlockResourceFeedback, ConceptAssetIndex, PublicAssetCatalog)
 from .pipeline import create_build
@@ -21,7 +23,7 @@ from .serializers import (AttachBlockResourceSerializer, BlockQuizRequestSeriali
 
 def _visible_builds(user):
     """Builds created by the user or shared system/CLI builds with no owner."""
-    return KnowledgeTreeBuild.objects.filter(Q(created_by=user) | Q(created_by__isnull=True))
+    return KnowledgeTreeBuild.objects.filter(Q(created_by=user) | Q(created_by__isnull=True)).defer('checkpoint')
 
 
 def _listable_builds(user):
@@ -29,7 +31,7 @@ def _listable_builds(user):
     return KnowledgeTreeBuild.objects.filter(
         Q(created_by=user)
         | Q(created_by__isnull=True, status=KnowledgeTreeBuild.Status.COMPLETED)
-    ).order_by(F('completed_at').desc(nulls_last=True), '-created_at')
+    ).defer('checkpoint').order_by(F('completed_at').desc(nulls_last=True), '-created_at')
 
 
 class BuildCreateView(APIView):
@@ -38,7 +40,7 @@ class BuildCreateView(APIView):
 
     def get(self, request):
         builds = _listable_builds(request.user)
-        return Response(BuildSummarySerializer(builds, many=True).data)
+        return Response(BuildSummarySerializer(builds, many=True, context={'request': request}).data)
 
     def post(self, request):
         serializer = CreateBuildSerializer(data=request.data)
@@ -50,7 +52,7 @@ class BuildCreateView(APIView):
             requirements=serializer.validated_data.get('requirements') or {},
         )
         enqueue_build(build)
-        return Response(BuildSummarySerializer(build).data, status=status.HTTP_202_ACCEPTED)
+        return Response(BuildSummarySerializer(build, context={'request': request}).data, status=status.HTTP_202_ACCEPTED)
 
 
 class BuildIntakeView(APIView):
@@ -68,9 +70,12 @@ def enqueue_build(build):
     try:
         return build_knowledge_tree.delay(str(build.pk))
     except Exception as exc:
-        build.status = KnowledgeTreeBuild.Status.FAILED
-        build.error_message = f'Task submission failed: {exc}'
-        build.save(update_fields=('status', 'error_message', 'updated_at'))
+        KnowledgeTreeBuild.objects.filter(
+            pk=build.pk, status=KnowledgeTreeBuild.Status.PENDING, updated_at=build.updated_at,
+        ).update(
+            status=KnowledgeTreeBuild.Status.FAILED, error_message=f'Task submission failed: {exc}',
+            updated_at=timezone.now(),
+        )
         raise
 
 
@@ -81,7 +86,21 @@ class BuildStatusView(APIView):
 
     def get(self, request, build_id):
         build = get_object_or_404(_visible_builds(request.user), pk=build_id)
-        return Response(self.serializer_class(build).data)
+        return Response(self.serializer_class(build, context={'request': request, 'check_build_lock': True}).data)
+
+
+class BuildResumeView(BuildStatusView):
+    http_method_names = ['post', 'options']
+
+    def post(self, request, build_id):
+        builds = KnowledgeTreeBuild.objects.filter(created_by=request.user).defer('checkpoint')
+        with transaction.atomic():
+            build = get_object_or_404(builds, pk=build_id)
+            if not (can_resume_build(build) and lock_build_for_resume(build) and reset_for_queue(build)):
+                return Response({'detail': '该构建当前无法继续。'}, status=status.HTTP_409_CONFLICT)
+        enqueue_build(build)
+        build.refresh_from_db()
+        return Response(self.serializer_class(build, context={'request': request}).data, status=status.HTTP_202_ACCEPTED)
 
 
 class BuildDetailView(BuildStatusView):

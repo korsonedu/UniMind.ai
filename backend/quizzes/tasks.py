@@ -3,13 +3,15 @@ import logging
 from celery import shared_task
 
 from quizzes.ai_workflow import run_exam_grading
+from quizzes.services.exam_grading_state import GRADING_HARD_LIMIT
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name='quizzes.run_exam_grading_task', soft_time_limit=120, time_limit=180)
-def run_exam_grading_task(user_id: int, exam_id: int, questions_data):
-    run_exam_grading(user_id, exam_id, questions_data)
+@shared_task(name='quizzes.run_exam_grading_task', soft_time_limit=120, time_limit=GRADING_HARD_LIMIT)
+def run_exam_grading_task(user_id: int, exam_id: int, questions_data=None):
+    # Existing broker messages can still carry answers. Persisted results own grading input.
+    run_exam_grading(user_id, exam_id)
 
 
 

@@ -133,8 +133,11 @@ def record_strategy_use(use, *, created):
     version = ensure_method_version(use.strategy)
     frozen = use.message.metadata.get('rsi_sidecar')
     eligible = []
-    for strategy in LearningStrategy.objects.filter(user_id=use.project.user_id, is_retired=False,
-            source_event__message__isnull=False).select_related('source_event__message').order_by('pk'):
+    from .project_learning import unconfirmed_progress_ids
+    candidates = (LearningStrategy.objects.filter(user_id=use.project.user_id, is_retired=False,
+            source_event__message__isnull=False).exclude(source_event_id__in=unconfirmed_progress_ids(use.project.user_id))
+            .select_related('source_event__message').order_by('pk'))
+    for strategy in candidates:
         candidate = ensure_method_version(strategy)
         eligible.append({'strategy_id': strategy.pk, 'version_id': candidate.pk, 'digest': candidate.digest})
     use.method_version = version
@@ -185,9 +188,11 @@ def record_turn_completion(reply):
 
 
 def validate_strategy_use(project, use_id):
+    from .project_learning import unconfirmed_progress_ids
     use = LearningStrategyUse.objects.select_related('strategy__source_event__message', 'message').filter(
         pk=use_id, project=project, strategy__user_id=project.user_id, strategy__is_retired=False,
-        strategy__source_event__message__user_id=project.user_id, message__user_id=project.user_id).first()
+        strategy__source_event__message__user_id=project.user_id, message__user_id=project.user_id).exclude(
+            strategy__source_event_id__in=unconfirmed_progress_ids(project.user_id)).first()
     if not use or not Conversation.objects.filter(user_id=project.user_id,
             conversation_id=use.message.conversation_id, project=project).exists():
         raise ValidationError('教学方法使用记录已失效或不属于当前项目。')

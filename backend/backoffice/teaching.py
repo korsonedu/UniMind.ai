@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core import signing
 from django.db import transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
@@ -12,6 +13,8 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from ai_assistant.models import AIChatMessage, Bot, Conversation
+from ai_assistant.services.teaching_sidecar import canonical_hash
+from ai_assistant.services.ulr_config import ulr_enabled
 from quizzes.models import ContentPipelineTask, KnowledgePoint, Question
 from quizzes.serializers import ContentPipelineTaskSerializer
 from .common import content_institution, identity, paginate
@@ -68,7 +71,10 @@ def bot():
 def owned_tasks(request):
     qs = scoped(ContentPipelineTask).filter(
         Q(payload__kind__isnull=True) | ~Q(payload__kind__in=['chat', 'restored', 'notification']) |
-        Q(created_by=request.user))
+        Q(created_by=request.user)).filter(Q(payload__notification_receipt_hidden__isnull=True) |
+                                          Q(payload__notification_receipt_hidden=False))
+    qs = qs.filter(Q(payload__arc_confirmation__isnull=True) | Q(created_by=request.user),
+        Q(payload__arc_receipt_hidden__isnull=True) | Q(payload__arc_receipt_hidden=False))
     from .tasks import expire_stale_teaching_tasks
     expire_stale_teaching_tasks(qs)
     return qs
@@ -185,7 +191,7 @@ def history(request, data):
 
 def locked_actor(request):
     # Serialize retries for one administrator without a new idempotency table.
-    get_user_model().objects.select_for_update().get(pk=request.user.pk)
+    return get_user_model().objects.select_for_update().get(pk=request.user.pk)
 
 
 def request_key(data):
@@ -193,15 +199,48 @@ def request_key(data):
 
 
 def create_task(request, data, kind, payload, title):
-    locked_actor(request)
+    actor = locked_actor(request)
     key = request_key(data)
     existing = scoped(ContentPipelineTask).filter(created_by=request.user, request_id=key).first()
-    if existing:
+    if existing and existing.payload.get('arc_confirmation'):
+        _confirm_arc_authority(actor, data)
+        if (kind != 'arc' or (data.get('source_task_id') and
+                identity(data, 'source_task_id') != existing.payload['arc_confirmation'])
+                or any(existing.payload.get(field) != value for field, value in arc_parameters(data).items())):
+            raise serializers.ValidationError('精修参数已改变，请按原草稿确认。')
+        if existing.status == 'cancelled':
+            raise serializers.ValidationError('原精修草稿已取消，请重新准备。')
+        if existing.status != 'draft':
+            request.backoffice_no_change = True
+            return task_item(existing, True)
+        if existing.payload.get('requires_ulr') and not ulr_enabled():
+            raise serializers.ValidationError('这份精修草稿需要 ULR，请在该运行配置恢复后确认。')
+        task = existing
+        if ulr_enabled():
+            task.payload['requires_ulr'] = True
+        task.status = 'pending'
+        task.save(update_fields=['payload', 'status', 'updated_at'])
+    elif existing:
         request.backoffice_no_change = True
         return task_item(existing, True)
-    task = ContentPipelineTask.objects.create(created_by=request.user, institution=content_institution(required=True),
-        task_type='ai_generate' if kind in ['quick', 'arc', 'bulk', 'parse'] else 'other',
-        title=title[:200], status='pending', payload={'kind': kind, **payload}, request_id=key)
+    else:
+        if kind == 'arc' and payload.get('arc_confirmation'):
+            _confirm_arc_authority(actor, data)
+        elif kind == 'arc' and ulr_enabled() and (
+                'source_task_id' in data or data.get('confirmed') is True):
+            _confirm_arc_authority(actor, data)
+            source_id = identity(data, 'source_task_id')
+            parameters = arc_parameters(data)
+            confirmations = _saved_chat_confirmations(actor, source_id, content_institution(required=True))
+            if not any(item['type'] == 'arc' and item['payload']['request_id'] == key
+                       and arc_parameters(item['payload']) == parameters for item in confirmations):
+                raise serializers.ValidationError('精修参数已改变，请按原草稿确认。')
+            payload = {**parameters, 'arc_confirmation': source_id}
+        if ulr_enabled():
+            payload = {**payload, 'requires_ulr': True}
+        task = ContentPipelineTask.objects.create(created_by=request.user, institution=content_institution(required=True),
+            task_type='ai_generate' if kind in ['quick', 'arc', 'bulk', 'parse'] else 'other',
+            title=title[:200], status='pending', payload={'kind': kind, **payload}, request_id=key)
     from .tasks import run_teaching_task
 
     def enqueue():
@@ -215,11 +254,21 @@ def create_task(request, data, kind, payload, title):
     return task_item(task, True)
 
 
+def parse_enabled():
+    return ulr_enabled() or settings.UNIMIND_DSH_TEACHING_ENABLED
+
+
+def generation_parameters(data, kind):
+    return {'difficulty': serializers.ChoiceField(choices=DIFFICULTIES).run_validation(data.get('difficulty', 'normal')),
+        'count': serializers.IntegerField(min_value=1, max_value=1000 if kind == 'bulk' else 100).run_validation(data.get('count', 5)),
+        'types': serializers.ListField(child=serializers.ChoiceField(choices=['objective', 'subjective:noun', 'subjective:short', 'subjective:essay', 'subjective:calculate']), required=False).run_validation(data.get('types', []))}
+
+
 def launch(request, data):
     kind = serializers.ChoiceField(choices=['quick', 'arc', 'bulk', 'parse']).run_validation(data.get('kind', 'quick'))
     if kind == 'parse':
-        if not getattr(settings, 'UNIMIND_DSH_TEACHING_ENABLED', False):
-            raise serializers.ValidationError('DSH 教研解析尚未开通，可继续人工录入题目。')
+        if not parse_enabled():
+            raise serializers.ValidationError('教研解析尚未开通，可继续人工录入题目。')
         ids = validate_kps(data.get('kp_ids'))
         if len(ids) != 1:
             raise serializers.ValidationError('文本解析须选定一个考点，其他考点请分批录入。')
@@ -231,9 +280,7 @@ def launch(request, data):
         if size > 40000:
             raise serializers.ValidationError('资料超过本次解析范围，请分批录入。')
         return create_task(request, data, kind, {'kp_ids': ids, 'raw_text': text}, '文本解析，人工审核')
-    payload = {'difficulty': serializers.ChoiceField(choices=DIFFICULTIES).run_validation(data.get('difficulty', 'normal')),
-        'count': serializers.IntegerField(min_value=1, max_value=1000 if kind == 'bulk' else 100).run_validation(data.get('count', 5)),
-        'types': serializers.ListField(child=serializers.ChoiceField(choices=['objective', 'subjective:noun', 'subjective:short', 'subjective:essay', 'subjective:calculate']), required=False).run_validation(data.get('types', []))}
+    payload = generation_parameters(data, kind)
     if kind == 'bulk':
         payload['subject'] = serializers.CharField(max_length=120).run_validation(data.get('subject'))
         payload['kp_code'] = str(data.get('kp_code') or '')
@@ -261,6 +308,35 @@ def validate_kps(value):
     if scoped(KnowledgePoint).filter(pk__in=set(ids), level='kp').count() != len(set(ids)):
         raise serializers.ValidationError('考点不在科晟内容范围内。')
     return list(dict.fromkeys(ids))
+
+
+def arc_parameters(data):
+    parameters = generation_parameters(data, 'arc')
+    ids = validate_kps(data.get('kp_ids'))
+    per_point, remainder = divmod(parameters['count'], len(ids))
+    declared = serializers.IntegerField(min_value=1, max_value=10).run_validation(data.get('questions_per_kp', per_point))
+    if remainder or not 1 <= per_point <= 10 or declared != per_point:
+        raise serializers.ValidationError('精修草稿须为每个考点指定相同题量，每个考点 1 至 10 题。')
+    return {**parameters, 'kp_ids': ids, 'questions_per_kp': per_point}
+
+
+def save_arc_draft(source, preview):
+    ContentPipelineTask.objects.create(created_by_id=source.created_by_id, institution_id=source.institution_id,
+        task_type='ai_generate', title='ARC 精修', status='draft', request_id=preview['request_id'],
+        payload={'kind': 'arc', 'arc_confirmation': source.pk, 'requires_ulr': True, **arc_parameters(preview)})
+
+
+def _confirm_arc_authority(actor, data):
+    from users.permissions import is_platform_admin
+    require_confirmation(data)
+    if not is_platform_admin(actor):
+        raise serializers.ValidationError('管理员权限已变化，请重新登录。')
+
+
+def _saved_chat_confirmations(user, source_id, scope):
+    task = ContentPipelineTask.objects.filter(pk=source_id, created_by=user, institution=scope,
+        payload__kind='chat', status__in=('completed', 'review')).first()
+    return (task.result or {}).get('confirmations', []) if task else []
 
 
 def chat(request, data):
@@ -333,13 +409,16 @@ def retry(request, data):
     if source.status not in ['failed', 'cancelled']:
         raise serializers.ValidationError('只能重试失败或已取消的任务。')
     payload = source.payload or {}
+    if payload.get('requires_ulr') and not ulr_enabled():
+        raise serializers.ValidationError('这条任务需要 ULR，请在该运行配置恢复后重试。')
     kind = payload.get('kind')
     if kind not in ['quick', 'arc', 'bulk', 'parse', 'chat', 'report']:
         # Legacy ARC/bulk tasks contain enough parameters to rerun the original service.
         kind = 'bulk' if payload.get('subject') and payload.get('total_target') else 'arc' if payload.get('kp_ids') else None
     if not kind:
         raise serializers.ValidationError('该历史任务缺少可执行参数，不能自动重试。')
-    clean = {key: value for key, value in payload.items() if key not in ['kind', 'stages', 'current_stage', 'status_text']}
+    clean = {key: value for key, value in payload.items()
+             if key not in ['kind', 'stages', 'current_stage', 'status_text', 'requires_ulr']}
     if kind == 'parse':
         return launch(request, {**clean, 'kind': 'parse', 'request_id': data.get('request_id')})
     if kind == 'bulk':
@@ -347,6 +426,8 @@ def retry(request, data):
     elif kind in ['quick', 'arc']:
         validate_kps(clean.get('kp_ids'))
         clean.setdefault('count', clean.get('questions_per_kp', 3)*len(clean['kp_ids']))
+        if kind == 'arc' and clean.get('arc_confirmation'):
+            data = {**data, **clean, 'confirmed': True, 'source_task_id': clean['arc_confirmation']}
     return create_task(request, data, kind, clean, '[重试] '+source.title)
 
 
@@ -358,33 +439,102 @@ def delete_task(request, data):
     if task and task.status in ['pending', 'running']:
         raise serializers.ValidationError('任务执行中，暂不能删除。')
     if task:
-        task.delete()
+        if task.payload.get('kind') == 'notification' and task.payload.get('preview_digest'):
+            # Remove it from the task list while keeping the confirmed send idempotent.
+            task.payload['notification_receipt_hidden'] = True
+            task.save(update_fields=['payload', 'updated_at'])
+        elif task.payload.get('arc_confirmation'):
+            task.payload['arc_receipt_hidden'] = True
+            if task.status == 'draft':
+                task.status = 'cancelled'
+                task.finished_at = timezone.now()
+            task.save(update_fields=['payload', 'status', 'finished_at', 'updated_at'])
+        else:
+            task.delete()
     else:
         request.backoffice_no_change = True
     return {'id': identity(data), 'deleted': True}
 
 
-def notification_preview(request, data):
+NOTIFICATION_PREVIEW_SALT = 'unimind.teaching.notification-preview.v1'
+
+
+def _notification_text(data):
+    return {'title': serializers.CharField(max_length=200).run_validation(data.get('title', '学习提醒')),
+            'content': serializers.CharField(max_length=10000).run_validation(data.get('content'))}
+
+
+def _notification_digest(data):
+    return canonical_hash({'student_id': identity(data, 'student_id'), 'recipient': data.get('recipient'),
+                           **_notification_text(data)})
+
+
+def notification_draft(data):
     item = student(data)
     return {'student_id': item.pk, 'recipient': item.nickname or item.username, 'request_id': str(uuid4()),
-        'title': serializers.CharField(max_length=200).run_validation(data.get('title', '学习提醒')),
-        'content': serializers.CharField(max_length=10000).run_validation(data.get('content'))}
+            **_notification_text(data)}
+
+
+def seal_notification_preview(user, preview):
+    scope = content_institution(required=True)
+    claims = [user.pk, scope.pk if scope else None, preview['request_id'], _notification_digest(preview)]
+    return {**preview, 'preview_token': signing.dumps(claims, salt=NOTIFICATION_PREVIEW_SALT)}
+
+
+def notification_preview(request, data):
+    preview = notification_draft(data)
+    return seal_notification_preview(request.user, preview) if ulr_enabled() else preview
+
+
+def _require_notification_preview(user, scope, key, digest, data):
+    if 'preview_token' in data:
+        token = data['preview_token']
+        try:
+            if isinstance(token, str) and signing.loads(token, salt=NOTIFICATION_PREVIEW_SALT) == [
+                user.pk, scope.pk if scope else None, key, digest,
+            ]:
+                return
+        except signing.BadSignature:
+            pass
+    elif data.get('source_task_id'):
+        confirmations = _saved_chat_confirmations(user, identity(data, 'source_task_id'), scope)
+        for confirmation in confirmations:
+            preview = confirmation['payload']
+            if (confirmation['type'] == 'notification' and 'preview_token' not in preview
+                    and preview['request_id'] == key and _notification_digest(preview) == digest):
+                return
+    raise serializers.ValidationError('通知内容与已确认的预览不一致，请重新预览。')
 
 
 def send_notification(request, data):
     require_confirmation(data)
-    locked_actor(request)
+    actor = locked_actor(request)
     key = request_key(data)
-    existing = scoped(ContentPipelineTask).filter(created_by=request.user, request_id=key, payload__kind='notification').first()
+    scope = content_institution(required=True)
+    existing = ContentPipelineTask.objects.filter(created_by=actor, institution=scope, request_id=key,
+                                                   payload__kind='notification').first()
+    if ulr_enabled() or 'preview_token' in data or (existing and existing.payload.get('preview_digest')):
+        from users.permissions import is_platform_admin
+        if not is_platform_admin(actor):
+            raise serializers.ValidationError('管理员权限已变化，请重新登录。')
     if existing:
+        if (digest := existing.payload.get('preview_digest')) and digest != _notification_digest(data):
+            raise serializers.ValidationError('该请求已用于另一份通知，请重新预览。')
         request.backoffice_no_change = True
         return existing.result
-    preview = notification_preview(request, data)
+    preview = notification_draft(data)
+    payload = {'kind': 'notification'}
+    if ulr_enabled() or 'preview_token' in data:
+        digest = _notification_digest(preview)
+        if digest != _notification_digest(data):
+            raise serializers.ValidationError('通知接收人已变化，请重新预览。')
+        _require_notification_preview(actor, scope, key, digest, data)
+        payload['preview_digest'] = digest
     from notifications.models import Notification
     notification = Notification.objects.create(recipient_id=preview['student_id'], title=preview['title'], content=preview['content'], ntype='system', link='/xiaoyu')
     result = {'id': notification.pk, 'recipient': preview['recipient'], 'sent': True}
-    ContentPipelineTask.objects.create(created_by=request.user, institution=content_institution(required=True), task_type='other',
-        status='completed', title=preview['title'], payload={'kind': 'notification'}, result=result, request_id=key, finished_at=timezone.now())
+    ContentPipelineTask.objects.create(created_by=actor, institution=scope, task_type='other',
+        status='completed', title=preview['title'], payload=payload, result=result, request_id=key, finished_at=timezone.now())
     return result
 
 

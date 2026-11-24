@@ -3,6 +3,7 @@ import os
 import threading
 import logging
 import time
+from contextlib import closing
 from asgiref.sync import sync_to_async
 from django.utils.decorators import method_decorator
 from django.conf import settings
@@ -12,8 +13,9 @@ from rest_framework import generics, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from users.workspaces.identity import selected_institution
-from .models import AIChatMessage, AgentMemory, Bot, Conversation
+from .models import AIChatMessage, AgentMemory, Bot, Conversation, chat_receipt_deleted, mark_runtime_requests_deleted
 from .services.language import request_language
+from .services.ulr_config import ulr_enabled
 from .serializers import AIChatMessageSerializer, AgentMemorySerializer, BotSerializer, ConversationSerializer
 from .utils import get_student_academic_context
 from .views_projects import add_project_context, save_new_conversation_project, learning_activity_metadata
@@ -51,7 +53,7 @@ def _can_use_learning_context(user):
     return has_learning_feature(user, 'full.report')
 
 
-def _reserve_chat_request(user, data, bot):
+def _reserve_chat_request(user, data, bot, *, conversation_id=None):
     import hashlib
     import json
     from users.learning import reserve_ai_call
@@ -65,10 +67,15 @@ def _reserve_chat_request(user, data, bot):
     if 'learning_activity' in data:
         request_content['learning_activity'] = data['learning_activity']
     fingerprint = hashlib.sha256(json.dumps(request_content, sort_keys=True).encode()).hexdigest()
-    return reserve_ai_call(user, data.get('request_id'), fingerprint=fingerprint)
+    reservation = reserve_ai_call(user, data.get('request_id'), fingerprint=fingerprint, conversation_id=conversation_id)
+    if not reservation.acquired and chat_receipt_deleted(reservation):
+        reservation.response = {'deleted': True}
+    return reservation
 
 
 def _duplicate_chat_response(reservation, *, stream=False):
+    if reservation.response.get('deleted'):
+        return Response({'error': '该会话已删除。'}, status=410)
     if reservation.status == 'pending':
         return Response({'error': '这条提问仍在处理中，请查看当前会话。',
                          'request_id': str(reservation.request_id)}, status=409)
@@ -212,7 +219,8 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
             )
             full_history = history_msgs + [{'role': 'user', 'content': user_message}]
             if _can_use_learning_context(user) and not conversation_uses_notes(user, conversation_id):
-                extract_memories_async(user, full_history, str(conversation_id))
+                extract_memories_async(user, full_history, str(conversation_id),
+                                       source_message_id=current_user_message_id, answer_message_id=pending_msg_id)
                 extract_memories_with_mem0(user, full_history)
         except Exception:
             logger.warning("Memory extraction failed (polling)", exc_info=True)
@@ -282,6 +290,15 @@ class AIChatView(APIView):
         bot = Bot.objects.filter(pk=bot_id, is_xiaoyu=True, is_active=True).first()
         if not bot:
             return Response({'error': 'Bot not found'}, status=404)
+        from .services.course_context import prepare_course_context
+        from .services.dsh_xiaoyu import dsh_handoff_enabled, polling_response
+        ulr = ulr_enabled()
+        if ulr or dsh_handoff_enabled(request.user, bot, conversation_id):
+            message = user_message.strip()
+            if not message:
+                return Response({'error': 'Message is required'}, status=400)
+            course_context = prepare_course_context(request, bot, conversation_id)
+            return polling_response(request, bot, conversation_id, message, course_context=course_context, ulr=ulr)
         sync_bot_prompt(bot)
 
         reservation = _reserve_chat_request(request.user, request.data, bot)
@@ -398,15 +415,20 @@ class AIChatResetView(APIView):
         qs = AIChatMessage.objects.filter(user=request.user)
         if bot_id:
             qs = qs.filter(bot_id=bot_id)
-        if settings.UNIMIND_DSH_XIAOYU_ENABLED or qs.filter(metadata__engine='dsh').exists():
+        if (settings.UNIMIND_DSH_XIAOYU_ENABLED or ulr_enabled()
+                or qs.filter(metadata__engine__in=('dsh', 'ulr', 'dsh_import')).exists()):
             from .services.dsh_xiaoyu import delete_state
-            from .services.dsh_runtime import site_request_lock
-            with site_request_lock(request.user), transaction.atomic():
+            from .services.dsh_runtime import quota_write_lock, site_request_lock
+            conversations = Conversation.objects.filter(user=request.user, **({'bot_id': bot_id} if bot_id else {}))
+            with site_request_lock(request.user), quota_write_lock(), transaction.atomic():
+                list(conversations.select_for_update().order_by('pk').values_list('pk', flat=True))
                 delete_state(request.user, qs)
                 qs.delete()
-                Conversation.objects.filter(user=request.user, **({'bot_id': bot_id} if bot_id else {})).delete()
+                conversations.delete()
             return Response({'status': 'cleared'})
-        qs.delete()
+        with transaction.atomic():
+            mark_runtime_requests_deleted(qs, request.user.pk)
+            qs.delete()
         return Response({'status': 'cleared'})
 
 
@@ -419,18 +441,22 @@ class AIChatDeleteConversationView(APIView):
         if not conversation_id:
             return Response({'error': 'conversation_id is required'}, status=400)
         qs = AIChatMessage.objects.filter(user=request.user, conversation_id=conversation_id)
-        if settings.UNIMIND_DSH_XIAOYU_ENABLED or qs.filter(metadata__engine='dsh').exists():
+        if (settings.UNIMIND_DSH_XIAOYU_ENABLED or ulr_enabled()
+                or qs.filter(metadata__engine__in=('dsh', 'ulr', 'dsh_import')).exists()):
             from .services.dsh_xiaoyu import delete_state
-            from .services.dsh_runtime import site_request_lock
-            with site_request_lock(request.user, conversation_id), transaction.atomic():
+            from .services.dsh_runtime import quota_write_lock, site_request_lock
+            from .models import cancel_conversation_requests
+            conversations = Conversation.objects.filter(user=request.user, conversation_id=conversation_id)
+            with site_request_lock(request.user, conversation_id), quota_write_lock(), transaction.atomic():
+                if not conversations.select_for_update().exists():
+                    cancel_conversation_requests(request.user.pk, conversation_id, conversations.db)
                 delete_state(request.user, qs)
                 deleted, _ = qs.delete()
-                Conversation.objects.filter(user=request.user, conversation_id=conversation_id).delete()
+                conversations.delete()
             return Response({'status': 'deleted', 'count': deleted})
         with transaction.atomic():
-            deleted, _ = AIChatMessage.objects.filter(
-                user=request.user, conversation_id=conversation_id
-            ).delete()
+            mark_runtime_requests_deleted(qs, request.user.pk)
+            deleted, _ = qs.delete()
             Conversation.objects.filter(user=request.user, conversation_id=conversation_id).delete()
         return Response({'status': 'deleted', 'count': deleted})
 
@@ -470,9 +496,10 @@ class AIChatStreamView(APIView):
         from .services.course_context import prepare_course_context, course_context_text, course_visual_messages
         course_context = prepare_course_context(request, bot, conversation_id)
 
-        if settings.UNIMIND_DSH_XIAOYU_ENABLED:
+        ulr = ulr_enabled()
+        if ulr or settings.UNIMIND_DSH_XIAOYU_ENABLED:
             from .services.dsh_xiaoyu import response
-            return response(request, bot, conversation_id, user_message, course_context=course_context)
+            return response(request, bot, conversation_id, user_message, course_context=course_context, ulr=ulr)
 
         from .services.learning_experiments import available_to, attach_to_chat
         experiment_prototype = available_to(request.user)
@@ -738,7 +765,6 @@ class AIChatStreamView(APIView):
                     metadata['visual'] = visuals[-1]  # Last visual for backward compat
                     if len(visuals) > 1:
                         metadata['all_visuals'] = visuals
-
                 if not is_error and _complete_ai_result(result, ai_content, metadata):
                     from .services.project_learning import completed_learning_turn
                     metadata['learning_turn'] = completed_learning_turn(user_msg.pk)
@@ -818,7 +844,8 @@ class AIChatStreamView(APIView):
                     full_history = history_msgs + [{'role': 'user', 'content': user_message}]
                     if (await sync_to_async(_can_use_learning_context)(request.user)
                             and not await sync_to_async(conversation_uses_notes)(request.user, conversation_id)):
-                        await sync_to_async(extract_memories_async)(request.user, full_history, str(conversation_id))
+                        await sync_to_async(extract_memories_async)(request.user, full_history, str(conversation_id),
+                            source_message_id=user_msg.pk, answer_message_id=pending_msg.pk)
                         await sync_to_async(extract_memories_with_mem0)(request.user, full_history)
                 except Exception:
                     logger.warning("Memory extraction failed (SSE)", exc_info=True)
@@ -891,9 +918,9 @@ class SemanticMemoryListView(APIView):
 
         try:
             from ai_assistant.services.tenant_memory import TenantMemoryManager
-            manager = TenantMemoryManager(institution_id=institution.pk)
             limit = min(int(request.query_params.get('limit', 100)), 200)
-            memories = manager.get_all(user_id=user.id)[:limit]
+            with closing(TenantMemoryManager(institution_id=institution.pk)) as manager:
+                memories = manager.get_all(user_id=user.id, limit=limit)
             return Response({"memories": memories})
         except Exception:
             logger.exception("Failed to list semantic memories")
@@ -912,16 +939,12 @@ class SemanticMemoryDeleteView(APIView):
 
         try:
             from ai_assistant.services.tenant_memory import TenantMemoryManager
-            manager = TenantMemoryManager(institution_id=institution.pk)
-            if memory_id:
-                # Verify ownership: only delete if memory belongs to this user
-                user_memories = manager.get_all(user_id=user.id)
-                user_memory_ids = {m.get('id') for m in user_memories if m.get('id')}
-                if memory_id not in user_memory_ids:
-                    return Response({"error": "记忆不存在"}, status=404)
-                manager.delete(memory_id=memory_id)
-            else:
-                manager.delete_all(user_id=user.id)
+            with closing(TenantMemoryManager(institution_id=institution.pk)) as manager:
+                if memory_id:
+                    if not manager.delete(memory_id, user_id=user.id):
+                        return Response({"error": "记忆不存在"}, status=404)
+                else:
+                    manager.delete_all(user_id=user.id)
             return Response({"status": "ok"})
         except Exception:
             logger.exception("Failed to delete semantic memory")

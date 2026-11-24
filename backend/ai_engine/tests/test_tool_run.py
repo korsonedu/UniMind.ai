@@ -194,6 +194,22 @@ def test_rejects_invalid_arguments_before_executor_runs():
     assert all(json.loads(outcome.result)["error"]["code"] == "invalid_arguments" for outcome in outcomes)
 
 
+def test_rejects_duplicate_tool_fields_in_json_and_dsml_before_execution():
+    from ai_engine.service import AIEngine
+
+    definition = _tool_definition(parameters={'type': 'object', 'properties': {'target': {'type': 'object'}}})
+    executor = RecordingExecutor([definition])
+    coordinator = ToolRunCoordinator(executor, [definition])
+    raw = _tool_call(arguments='{"target":{"id":1,"id":2}}')
+    dsml, = AIEngine._parse_dsml_tool_calls('<invoke name="lookup">'
+        '<parameter name="target">{"id":1}</parameter><parameter name="target">{"id":2}</parameter></invoke>')
+    outcomes = coordinator.execute_batch([raw, dsml], round_number=1)
+    assert not executor.calls
+    assert [(outcome.error['code'], outcome.error['field']) for outcome in outcomes] == [
+        ('duplicate_argument', 'id'), ('duplicate_argument', 'target'),
+    ]
+
+
 def test_distinguishes_unknown_tool_from_permission_denial():
     routed_definition = _tool_definition("routed")
     permitted_definition = _tool_definition("permitted")

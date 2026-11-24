@@ -68,6 +68,8 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'get_exam_history': lambda a: "查询考试历史",
         'search_courses': lambda a: f"搜索课程「{a.get('query', '')}」",
         'search_asr': lambda a: f"搜索视频字幕「{a.get('query', '')}」",
+        'run_course_tools': lambda a: '查找课程并定位讲稿',
+        'locate_current_course_transcript': lambda a: '定位当前课程的讲稿',
         'search_articles': lambda a: f"搜索文章「{a.get('query', '')}」",
         'search_knowledge': lambda a: f"搜索知识点「{a.get('query', '')}」",
         'get_practice_questions': lambda a: f"抽取{a.get('kp_name', '')}相关练习题" if a.get('kp_name') else "抽取练习题",
@@ -356,7 +358,8 @@ class BaseToolExecutor:
         from rest_framework.exceptions import NotFound, ValidationError
         from .learning_experiments import execute, ExperimentConflict
         try:
-            result = execute(self.user, name, args, getattr(self, 'experiment_context', None))
+            result = execute(self.user, name, args, getattr(self, 'experiment_context', None),
+                             artifacts=getattr(self, 'turn_artifacts', None))
         except (NotFound, ValidationError, ExperimentConflict) as error:
             return {'error': str(error.detail)}
         if result.get('visual'):
@@ -520,6 +523,8 @@ class BaseToolExecutor:
 class PlannerToolExecutor(BaseToolExecutor):
     """扩展基础工具执行器，增加规划相关工具。继承全部基础工具。"""
 
+    include_practice_sources = False
+
     def __init__(self, user, institution=None):
         super().__init__(user, institution)
 
@@ -615,6 +620,8 @@ class PlannerToolExecutor(BaseToolExecutor):
             institution=self.institution,
             q_type=q_type,
             subjective_type=subjective_type,
+            knowledge_point_id=args.get('knowledge_point_id'),
+            include_sources=self.include_practice_sources and args.get('purpose') != 'explanation',
         )
         if args.get('purpose') == 'explanation':
             result.pop('practice_url', None)

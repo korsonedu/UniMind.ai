@@ -1,10 +1,13 @@
 import logging
 from pathlib import Path
+from uuid import UUID
 from django.conf import settings
+from psycopg2.extensions import make_dsn
 from ai_engine.config import (
     EMBEDDING_MODEL, EMBEDDING_BASE_URL, EMBEDDING_API_KEY, EMBEDDING_DIMENSIONS,
     get_model_for_task,
 )
+from .ulr_config import standalone_ulr
 
 try:
     from mem0 import Memory
@@ -23,11 +26,9 @@ def _get_mem0_config(institution_id: int) -> dict:
         "vector_store": {
             "provider": "pgvector",
             "config": {
-                "host": db['HOST'],
-                "port": db['PORT'] or '5432',
-                "dbname": db['NAME'],
-                "user": db['USER'],
-                "password": db['PASSWORD'],
+                "connection_string": make_dsn(host=db['HOST'], port=db['PORT'] or '5432', dbname=db['NAME'],
+                                              user=db['USER'], password=db['PASSWORD'],
+                                              sslmode=db.get('OPTIONS', {}).get('sslmode')),
                 "collection_name": f"inst_{institution_id}",
                 "embedding_model_dims": EMBEDDING_DIMENSIONS,
             },
@@ -75,9 +76,20 @@ class TenantMemoryManager:
             Path(self._config['history_db_path']).parent.mkdir(parents=True, exist_ok=True)
         self.memory = Memory.from_config(self._config)
 
+    def close(self):
+        try:
+            self.memory.close()
+        finally:
+            # The SDK's close() releases SQLite history. pgvector owns separate pools.
+            for name in ('vector_store', '_entity_store', '_telemetry_vector_store'):
+                pool = getattr(getattr(self.memory, name, None), 'connection_pool', None)
+                if pool is not None:
+                    (getattr(pool, 'closeall', None) or pool.close)()
+
     def add(self, user_id: int, message: str | list[dict], metadata: dict = None):
         """Add a memory. mem0 auto-extracts and deduplicates."""
-        if getattr(settings, 'UNIMIND_DSH_MEMORY_ENABLED', False) or getattr(settings, 'UNIMIND_DSH_GENERATION_ENABLED', False):
+        if (standalone_ulr() or getattr(settings, 'UNIMIND_DSH_MEMORY_ENABLED', False)
+                or getattr(settings, 'UNIMIND_DSH_GENERATION_ENABLED', False)):
             return
         meta = metadata or {}
         meta["institution_id"] = self.institution_id
@@ -99,29 +111,32 @@ class TenantMemoryManager:
             logger.exception("mem0 search failed for user %d", user_id)
             return []
 
-    def get_all(self, user_id: int) -> list:
-        """Get all memories for a user."""
-        try:
-            result = self.memory.get_all(filters={'user_id': str(user_id)})
-            return result.get('results', []) if isinstance(result, dict) else result
-        except Exception:
-            logger.exception("mem0 get_all failed for user %d", user_id)
+    def get_all(self, user_id: int, *, limit: int = 20) -> list:
+        """List at most the requested number of memories in the user's scope."""
+        if limit <= 0:
             return []
+        result = self.memory.get_all(filters={'user_id': str(user_id)}, top_k=limit)
+        return result['results'] if isinstance(result, dict) else result
 
-    def delete(self, memory_id: str):
-        """Delete a single memory by ID.
-
-        Note: mem0 deletes by memory_id directly. Caller must verify
-        the memory belongs to the authenticated user before calling.
-        """
+    def delete(self, memory_id: str, *, user_id: int) -> bool:
+        """Verify ownership directly and confirm the memory has left active storage."""
         try:
-            self.memory.delete(memory_id)
-        except Exception:
-            logger.exception("mem0 delete failed for memory %s", memory_id)
+            memory_id = str(UUID(memory_id))
+        except ValueError:
+            return False
+        record = self.memory.get(memory_id)
+        if not record or str(record.get('user_id')) != str(user_id):
+            return False
+        self.memory.delete(memory_id)
+        if self.memory.get(memory_id) is not None:
+            raise RuntimeError('Semantic memory is still present after deletion.')
+        return True
 
     def delete_all(self, user_id: int):
-        """Delete all memories for a user."""
-        try:
-            self.memory.delete_all(user_id=str(user_id))
-        except Exception:
-            logger.exception("mem0 delete_all failed for user %d", user_id)
+        """The SDK's pgvector bulk delete processes one batch per call."""
+        filters = {'user_id': str(user_id)}
+        while batch := self.memory.vector_store.list(filters=filters, top_k=100)[0]:
+            for record in batch:
+                self.memory.delete(record.id)
+            if self.memory.get(batch[0].id) is not None:
+                raise RuntimeError('Semantic memory clear made no progress.')

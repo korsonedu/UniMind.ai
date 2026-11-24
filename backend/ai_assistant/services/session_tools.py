@@ -54,7 +54,7 @@ def current_anchor(executor):
         conversation_id=claims.get('conversation_id'), bot_id=claims.get('bot_id')).first()
     if not current:
         raise ValidationError('会话工具需要当前对话授权。')
-    return anchor_for(executor.user, current.conversation_id)
+    return anchor_for(executor.user, current.conversation_id, artifacts=getattr(executor, 'turn_artifacts', None))
 
 
 def definition(item):
@@ -130,8 +130,12 @@ def register(executor, arguments):
         return {'error': '会话工具自检结果不符，尚未注册。请复核源码和期望值。', 'tests': tests}
     item = {key: arguments[key] for key in ('name', 'description', 'parameters', 'source', 'tests')}
     item['revision'] = previous['revision'] + 1 if previous else 1
-    metadata = {**anchor.metadata, 'session_tools': {**items, name: item}}
-    if not AIChatMessage.objects.filter(pk=anchor.pk, metadata=anchor.metadata).update(metadata=metadata):
+    updated = {**items, name: item}
+    artifacts = getattr(executor, 'turn_artifacts', None)
+    if artifacts is not None:
+        artifacts.stage(anchor, 'session_tools', updated)
+    elif not AIChatMessage.objects.filter(pk=anchor.pk, metadata=anchor.metadata).update(
+            metadata={**anchor.metadata, 'session_tools': updated}):
         raise ExperimentConflict()
     refresh(executor)
     return {'registered': True, 'name': name, 'revision': item['revision'], 'definition': definition(item),

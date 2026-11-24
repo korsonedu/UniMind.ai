@@ -47,6 +47,29 @@ def test_grading_opt_in_and_no_model_fallback(settings, monkeypatch):
         legacy.assert_not_called()
 
 
+@pytest.mark.parametrize('malformed', ['truncated', 'duplicate_score'])
+def test_ulr_grading_repairs_malformed_arguments_but_rejects_out_of_range_score(malformed):
+    from ai_assistant.services.ulr_grading import grade_submission
+
+    def result(arguments):
+        return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [
+            {'function': {'name': 'submit_grading_result', 'arguments': arguments}},
+        ]}}]}
+
+    valid = {'score': 8, 'feedback': '按合成规则评分。', 'analysis': '合成解析。', 'memorix_rating': 3, 'error_analysis': None}
+    invalid = '{' if malformed == 'truncated' else '{"score":2,' + json.dumps(valid)[1:]
+    with patch('ai_engine.service.AIEngine.call_provider', side_effect=[result(invalid), result(json.dumps(valid))]) as model:
+        assert grade_submission('合成题目、标准和原作答。', 10) == valid
+        assert model.call_count == 2
+        policy = model.call_args.kwargs
+        assert (policy['tool_choice'], policy['max_tokens'], policy['max_retries']) == ('required', 2500, 0)
+        assert policy['tools'][0]['function']['parameters']['properties']['score']['maximum'] == 10
+    with patch('ai_engine.service.AIEngine.call_provider', return_value=result(json.dumps({**valid, 'score': 11}))) as model:
+        with pytest.raises(ValueError, match='评分结果不符合'):
+            grade_submission('合成题目、标准和原作答。', 10)
+        model.assert_called_once()
+
+
 def test_structured_result_validation_private_config_and_timeout(settings, tmp_path):
     from ai_assistant.services.dsh_tasks import run_structured
     settings.DEBUG = True
