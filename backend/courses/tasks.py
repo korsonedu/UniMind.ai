@@ -95,6 +95,6 @@ def dispatch_pending_course_questions():
 
     if not standalone_ulr():
         return 0
-    ids = list(PendingCourseQuestions.objects.filter(dispatch_after__lte=timezone.now())
+    ids = list(PendingCourseQuestions.objects.filter(completed_at__isnull=True, dispatch_after__lte=timezone.now())
                .order_by('dispatch_after', 'pk').values_list('pk', flat=True)[:50])
     return sum(publish_course_questions(job_id) for job_id in ids)

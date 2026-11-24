@@ -192,8 +192,16 @@ class CourseVideoQuestion(models.Model):
 class PendingCourseQuestions(models.Model):
     transcript = models.ForeignKey(VideoTranscript, on_delete=models.CASCADE)
     revision = models.PositiveIntegerField()
-    dispatch_after = models.DateTimeField(default=timezone.now, db_index=True)
+    dispatch_after = models.DateTimeField(default=timezone.now)
     running_until = models.DateTimeField(null=True)
+    completed_at = models.DateTimeField(null=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['dispatch_after'], condition=models.Q(completed_at__isnull=True),
+                                name='course_questions_due_idx')]
+        constraints = [models.UniqueConstraint(
+            fields=['transcript', 'revision'], name='unique_course_questions_transcript_revision',
+        )]
 
 
 class StartupMaterial(models.Model):

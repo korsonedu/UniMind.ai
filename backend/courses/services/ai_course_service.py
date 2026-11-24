@@ -359,7 +359,7 @@ class AICourseService:
             if (not Course.objects.select_for_update().filter(pk=course.pk).exists()
                     or not self._current_transcript(transcript).select_for_update().exists()):
                 return []
-            if pending_job is not None and not pending_job.delete()[0]:
+            if pending_job is not None and not pending_job.update(completed_at=timezone.now(), running_until=None):
                 return []
             for q_data in questions:
                 CourseVideoQuestion.objects.create(course=course, question_data=q_data)

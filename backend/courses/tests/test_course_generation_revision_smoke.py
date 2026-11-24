@@ -163,6 +163,39 @@ def test_revised_transcript_discards_late_and_queued_questions(course_source):
 
 
 @pytest.mark.django_db
+def test_outline_replay_does_not_regenerate_questions_for_the_same_transcript(course_source):
+    course, transcript, revise = course_source
+    question_sources = []
+
+    def model(messages, **kwargs):
+        if kwargs['operation'] == 'courses.generate_outline':
+            return submit('submit_outline', {'title': '课程大纲', 'timestamp_seconds': 0, 'description': '合成摘要'})
+        assert kwargs['operation'] == 'courses.generate_questions'
+        question_sources.append(REVISED if REVISED in messages[-1]['content'] else ORIGINAL)
+        return question_result(question_sources[-1] + '练习')
+
+    with patch('ai_engine.service.AIEngine.call_provider', side_effect=model), \
+            patch('courses.services.course_question_jobs.publish_after_commit') as publish:
+        generate_outline_task.run(course.pk)
+        job = PendingCourseQuestions.objects.get(transcript=transcript)
+        generate_outline_task.run(course.pk)
+        publish.assert_called_once_with(publish_course_questions, job.pk)
+        assert generate_course_questions_task.run(job.pk) == 1
+        generate_outline_task.run(course.pk)
+        publish.assert_called_once()
+        assert generate_course_questions_task.run(job.pk) == 0
+        assert question_sources == [ORIGINAL]
+
+        assert revise() == 1
+        generate_outline_task.run(course.pk)
+        revised_job = PendingCourseQuestions.objects.get(transcript=transcript, revision=1)
+        assert revised_job.pk != job.pk
+        assert generate_course_questions_task.run(revised_job.pk) == 1
+    assert question_sources == [ORIGINAL, REVISED]
+    assert CourseVideoQuestion.objects.filter(course=course).count() == 2
+
+
+@pytest.mark.django_db
 def test_course_question_work_recovers_the_original_job_once(course_source):
     course, transcript, _ = course_source
     job = PendingCourseQuestions.objects.create(transcript=transcript, revision=transcript.revision)
@@ -192,5 +225,11 @@ def test_course_question_work_recovers_the_original_job_once(course_source):
         assert generate_course_questions_task.run(job.pk) == 1
         assert generate_course_questions_task.run(job.pk) == 0
     assert provider.call_count == 2
-    assert not jobs.exists()
+    job.refresh_from_db()
+    assert job.completed_at is not None and job.running_until is None
+    jobs.update(dispatch_after=timezone.now())
+    with patch.object(generate_course_questions_task, 'apply_async') as enqueue:
+        assert dispatch_pending_course_questions.run() == 0
+        assert not publish_course_questions(job.pk)
+        enqueue.assert_not_called()
     assert CourseVideoQuestion.objects.get(course=course).question_data['question'] == '按原讲稿生成的练习'

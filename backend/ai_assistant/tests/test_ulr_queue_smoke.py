@@ -293,6 +293,7 @@ def submit_from_web():
     assert extract_memory_turn.delay(extraction.source_message_id, extraction.answer_message_id).get(timeout=10) == 0
     course_question = wait_for(lambda: CourseVideoQuestion.objects.filter(course=course).first())
     assert course_question.question_data == COURSE_EXERCISE
+    assert AICourseService().generate_outline(course.pk)
     assert CourseVideoQuestion.objects.filter(course=course).count() == 1
     if bulk_id is not None:
         bulk = wait_for(lambda: ContentPipelineTask.objects.filter(pk=bulk_id, status='completed').first())
@@ -574,10 +575,11 @@ def test_standalone_web_and_celery_share_runtime(user, settings, tmp_path):
                                          for name in ('web', 'daphne', 'worker', 'legacy-worker', 'beat'))
         assert [calls.count(name) for name in ('chat', 'submit_title', 'submit_profile', 'submit_questions', 'submit_edges')] == [1, 2, 1, 2, 2]
         assert calls.count('submit_memories') == 1
-        assert (calls.count('submit_outline'), calls.count('course-questions')) == (1, 1)
+        assert (calls.count('submit_outline'), calls.count('course-questions')) == (2, 1)
         assert calls.count('bulk-questions') == calls.count('submit_classification') == int(connection.vendor == 'postgresql')
         assert not any(model.objects.filter(pk=dropped[name]).exists() for name, model in work.items())
-        assert not PendingCourseQuestions.objects.filter(pk=course_job.pk).exists()
+        settled = PendingCourseQuestions.objects.get(transcript_id=course_job.transcript_id, revision=course_job.revision)
+        assert settled.pk == course_job.pk and settled.completed_at is not None and settled.running_until is None
         assert (calls.count('submit_grading_result'), calls.count('submit_objective_analysis')) == (
             (4, 2) if connection.vendor == 'postgresql' else (2, 1))
         worker_log = (tmp_path / 'worker.log').read_text()
