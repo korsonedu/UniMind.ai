@@ -2,6 +2,7 @@
 from contextlib import ExitStack, contextmanager
 from functools import partial
 from hashlib import sha256
+from itertools import permutations
 import json
 import os
 from pathlib import Path
@@ -42,6 +43,12 @@ REPLY = 'PV = FV / (1 + r)^t。一年后 110 元按 10% 折现，现值 100 元�
 async def consume(response, started):
     return [{'elapsed_ms': round((monotonic() - started) * 1000), 'event': json.loads(frame[6:])}
             async for frame in response.streaming_content if frame.startswith(b'data: ')]
+
+
+def capture_order(paths, trial):
+    forward = [order for order in permutations(paths) if order[0] < order[-1]]
+    order = forward[((trial - 1) // 2) % len(forward)]
+    return enumerate(order if trial % 2 else reversed(order), start=1)
 
 
 def bounded_context(builder, limit, model, *args, **kwargs):
@@ -221,7 +228,7 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
     settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
     settings.USE_MEM0 = False
     caplog.set_level('INFO', logger='ai_engine.observability')
-    trial = int(os.environ.get('ULR_OFFICIAL_TRIAL', '1')) if official else 1
+    trial = int(os.environ.get('ULR_OFFICIAL_TRIAL', '1'))
     assert trial > 0
     output_key = f'ULR_{case_name.upper()}{"_" + delivery.upper() if delivery else ""}_OFFICIAL_OUTPUT'
     output = Path(os.environ[output_key]) if official else tmp_path / 'capture'
@@ -267,7 +274,8 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
     revision = capture_revision(repo)
     records = []
     compile_instruction = ulr_runtime.run_program
-    for runtime, limit in limits.items():
+    for position, runtime in capture_order(limits, trial):
+        limit = limits[runtime]
         dsh = runtime == 'dsh'
         settings.UNIMIND_LEARNING_RUNTIME = 'legacy' if dsh else 'ulr'
         settings.UNIMIND_DSH_ENABLED = settings.UNIMIND_DSH_SITE_ENABLED = settings.UNIMIND_DSH_XIAOYU_ENABLED = dsh
@@ -335,7 +343,7 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
         assert all(row['model'] == config['model'] and int(row['max_output_tokens']) == OUTPUT_LIMIT for row in rows)
         count = sum(int(row.get('attempts', 1)) for row in rows)
         assert count <= limit
-        record = tool['capture_turn']({**sample, 'runtime': runtime, 'trial': trial, 'revision': revision,
+        record = tool['capture_turn']({**sample, 'runtime': runtime, 'trial': trial, 'execution_position': position, 'revision': revision,
             'request_id': request_id, 'attempt_id': str(reservation.attempt_id), 'model': config['model'],
             'evidence': 'same_model' if official else 'protocol_smoke', 'metrics': {'model_requests': count}}, events)
         if runtime == 'ulr' and delivery and not direct:
@@ -361,7 +369,9 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
         expected_requests = ([3 if practice else 2, 1, 0] if direct else
             {'course': [4, 4, 2], 'practice': [3, 3, 1], 'project': [3, 3],
              'timestamp': [3, 3, 1], 'explanation': [3, 3, 2]}[delivery or case_name])
-        assert [record['metrics']['model_requests'] for record in records] == expected_requests
+        by_runtime = {record['runtime']: record for record in records}
+        assert {runtime: row['metrics']['model_requests'] for runtime, row in by_runtime.items()} == dict(
+            zip(limits, expected_requests, strict=True))
         for record in records:
             assert record['completed'] and record['metrics']['tool_failures'] == 0
             values = dict.fromkeys(tool['METRICS']) | record['metrics']
@@ -401,7 +411,7 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
         if practice:
             assert not QuizExam.objects.filter(user=user).exists()
         if delivery and not direct:
-            native = records[-1]
+            native = by_runtime['ulr']
             expected = sample['case']['expected_delivery']
             requested = 'automatic' if delivery == 'timestamp' else 'card'
             assert native['delivery_selection'] == {'expected': expected,
@@ -423,7 +433,7 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
                 issue, = scenario['quality_issues']
                 assert issue['delivery_mode_mismatch'] == {'expected': 'card', 'compiled': 'answer'}
                 assert all(issue[key] == value for key, value in location.items())
-        baseline = records[0]
+        baseline = by_runtime['dsh']
         if len(baseline['tool_outcomes']) > 1:
             reversed_path = {**baseline, 'tool_outcomes': list(reversed(baseline['tool_outcomes']))}
             trace = {'operations': list(reversed(operations[baseline['request_id'], baseline['attempt_id']]))}
@@ -483,7 +493,7 @@ def test_capture_grading_acceptance(official, auth_client, user, settings, tmp_p
     CourseStudentStatus.objects.create(user=user, is_course_student=True)
     question = Question.objects.create(text=sample['case']['prompt'], q_type='subjective', subjective_type='short',
         correct_answer=source['reference_answer'], grading_points=source['grading_points'])
-    trial = int(os.environ.get('ULR_OFFICIAL_TRIAL', '1')) if official else 1
+    trial = int(os.environ.get('ULR_OFFICIAL_TRIAL', '1'))
     assert trial > 0
     output = Path(os.environ['ULR_GRADING_OFFICIAL_OUTPUT']) if official else tmp_path / 'capture'
     output.mkdir(mode=0o700)
@@ -493,7 +503,7 @@ def test_capture_grading_acceptance(official, auth_client, user, settings, tmp_p
     revision = capture_revision(repo)
     records = []
     attempts = {}
-    for runtime in ('dsh', 'ulr'):
+    for position, runtime in capture_order(('dsh', 'ulr'), trial):
         settings.UNIMIND_LEARNING_RUNTIME = 'legacy' if runtime == 'dsh' else 'ulr'
         settings.UNIMIND_DSH_GRADING_ENABLED = runtime == 'dsh'
         body = {'submission_id': str(uuid4()), 'answers': [{'question_id': question.pk, 'answer': source['answer']}]}
@@ -542,7 +552,7 @@ def test_capture_grading_acceptance(official, auth_client, user, settings, tmp_p
         snapshot = {key: item[key] for key in ('user_answer', 'score', 'max_score', 'status', 'label_source', 'analysis')}
         snapshot['same_exam_on_replay'] = True
         tool['write'](output / f'{runtime}-exam.json', {'id': exam_id, 'feedback': item['feedback'], **snapshot})
-        records.append({**sample, 'runtime': runtime, 'trial': trial, 'revision': revision,
+        records.append({**sample, 'runtime': runtime, 'trial': trial, 'execution_position': position, 'revision': revision,
             'request_id': request_id, 'attempt_id': attempt_id, 'model': config['model'],
             'evidence': 'same_model' if official else 'protocol_smoke', 'completed': completed,
             'review': {'answer': item['feedback'], 'sources': [], 'result': snapshot},
@@ -571,7 +581,7 @@ def test_capture_memory_acceptance(official, auth_client, user, settings, tmp_pa
     settings.USE_MEM0 = False
     CourseStudentStatus.objects.create(user=user, is_course_student=True)
     bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
-    trial = int(os.environ.get('ULR_OFFICIAL_TRIAL', '1')) if official else 1
+    trial = int(os.environ.get('ULR_OFFICIAL_TRIAL', '1'))
     assert trial > 0
     output = Path(os.environ['ULR_MEMORY_OFFICIAL_OUTPUT']) if official else tmp_path / 'capture'
     output.mkdir(mode=0o700)
@@ -583,7 +593,7 @@ def test_capture_memory_acceptance(official, auth_client, user, settings, tmp_pa
     fields = ('memory_type', 'key', 'value', 'evidence')
     rows = AgentMemory.objects.filter(user=user)
     records, attempts = [], {}
-    for runtime in ('dsh', 'ulr'):
+    for position, runtime in capture_order(('dsh', 'ulr'), trial):
         native = runtime == 'ulr'
         settings.UNIMIND_LEARNING_RUNTIME = 'ulr' if native else 'legacy'
         assert not rows.exists()
@@ -648,7 +658,7 @@ def test_capture_memory_acceptance(official, auth_client, user, settings, tmp_pa
         snapshot = {'memories': persisted, 'available_before_withdrawal': available,
                     'available_after_withdrawal': withdrawn, 'available_after_replay': replayed}
         tool['write'](output / f'{runtime}-memory.json', {'source_message_id': question.pk, 'answer_message_id': answer.pk, **snapshot})
-        records.append({**sample, 'runtime': runtime, 'trial': trial, 'revision': revision,
+        records.append({**sample, 'runtime': runtime, 'trial': trial, 'execution_position': position, 'revision': revision,
             'request_id': request_id, 'attempt_id': attempt_id, 'model': config['model'],
             'evidence': 'same_model' if official else 'protocol_smoke', 'completed': settled,
             'review': {'answer': '', 'sources': [], 'result': snapshot},
@@ -656,7 +666,8 @@ def test_capture_memory_acceptance(official, auth_client, user, settings, tmp_pa
                         'completion_ms': elapsed if settled else None}})
     prepare_capture(repo, output, records, caplog, tool, ('dsh',))
     if not official:
-        for record, value in zip(records, (candidate['value'], source['evidence']), strict=True):
+        for record in records:
+            value = candidate['value'] if record['runtime'] == 'dsh' else source['evidence']
             assert record['completed'] and record['metrics']['model_requests'] == 1
             assert record['review']['result'] == {'memories': [{**{key: candidate[key] for key in fields}, 'value': value}],
                 'available_before_withdrawal': [value], 'available_after_withdrawal': [], 'available_after_replay': []}
@@ -679,7 +690,7 @@ def test_capture_teaching_parse_acceptance(official, auth_client, admin_user, dj
     settings.UNIMIND_DIRECTUS_ADMIN_MAP = {operator: admin_user.pk, str(uuid4()): second_admin.pk}
     auth_client.force_authenticate(admin_user, token=operator)
     point = KnowledgePoint.objects.create(name=source['knowledge_point'], level='kp')
-    trial = int(os.environ.get('ULR_OFFICIAL_TRIAL', '1')) if official else 1
+    trial = int(os.environ.get('ULR_OFFICIAL_TRIAL', '1'))
     assert trial > 0
     output = Path(os.environ['ULR_TEACHING_PARSE_OFFICIAL_OUTPUT']) if official else tmp_path / 'capture'
     output.mkdir(mode=0o700)
@@ -691,7 +702,7 @@ def test_capture_teaching_parse_acceptance(official, auth_client, admin_user, dj
     scripted = {'questions': [{**chosen, 'options': [f'{key}. {value}' for key, value in chosen_options.items() if value]},
                               incomplete]}
     records, attempts = [], {}
-    for runtime in ('dsh', 'ulr'):
+    for position, runtime in capture_order(('dsh', 'ulr'), trial):
         native = runtime == 'ulr'
         settings.UNIMIND_LEARNING_RUNTIME = 'ulr' if native else 'legacy'
         settings.UNIMIND_DSH_TEACHING_ENABLED = not native
@@ -757,7 +768,7 @@ def test_capture_teaching_parse_acceptance(official, auth_client, admin_user, dj
             'repeated_confirmation_status': second_review.status_code if second_review is not None else None,
             'bank_after_confirmation': list(bank.order_by('pk').values('text', 'options', 'correct_answer'))}
         tool['write'](output / f'{runtime}-task.json', {'id': task_id, 'status': preview.data['status'], **snapshot})
-        records.append({**sample, 'runtime': runtime, 'trial': trial, 'revision': revision,
+        records.append({**sample, 'runtime': runtime, 'trial': trial, 'execution_position': position, 'revision': revision,
             'request_id': request_id, 'attempt_id': attempt_id, 'model': config['model'],
             'evidence': 'same_model' if official else 'protocol_smoke', 'completed': completed,
             'review': {'answer': '', 'sources': [], 'result': snapshot},

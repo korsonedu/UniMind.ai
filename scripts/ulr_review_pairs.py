@@ -270,6 +270,10 @@ def prepare(records, output, baseline, operations=None):
     for number, (group, by_runtime) in enumerate(groups.items(), start=1):
         if not {baseline, 'ulr'} <= by_runtime.keys():
             raise ValueError(f'{group} 缺少成对记录。')
+        positions = [record['execution_position'] for record in by_runtime.values() if 'execution_position' in record]
+        invalid_position = any(type(slot) is not int or not 1 <= slot <= len(SYSTEMS) for slot in positions)
+        if positions and (invalid_position or len(positions) != len(by_runtime) or len(set(positions)) != len(positions)):
+            raise ValueError(f'{group} 的执行顺序缺失、冲突或无效。')
         legacy, native = by_runtime[baseline], by_runtime['ulr']
         for field in ('case', 'model', 'evidence'):
             if legacy[field] != native[field]:
@@ -292,6 +296,8 @@ def prepare(records, output, baseline, operations=None):
                 raise ValueError(f'{group} 包含非法计量值。')
             responses[label] = {field: record['review'][field] for field in ('answer', 'sources', 'result')}
             mapping[label] = {field: record[field] for field in ('runtime', 'revision', 'completed')}
+            if positions:
+                mapping[label]['execution_position'] = record['execution_position']
             if official:
                 require_same_revision(revisions, mapping[label])
                 if operations is None:
@@ -386,6 +392,7 @@ def report(manifest, review):
         all_passed = completed.copy()
         tool_results = {runtime: Counter() for runtime in completed}
         delivery_results = Counter()
+        execution_order = dict.fromkeys((*completed, 'missing'), 0)
         compared_pairs = model_verified_pairs = local_instruction_pairs = 0
         unverified_model_pairs, request_config_issues, quality_issues, evidence_gaps = [], [], [], []
         for pair in pairs:
@@ -428,6 +435,11 @@ def report(manifest, review):
                     request_config_issues.append({**location, 'reason': issue})
                     continue
             compared_pairs += 1
+            if 'execution_position' in old and 'execution_position' in new:
+                first = baseline if old['execution_position'] < new['execution_position'] else 'ulr'
+                execution_order[first] += 1
+            else:
+                execution_order['missing'] += 1
             if selection:
                 delivery_results['samples'] += 1
                 delivery_results['reached_compiler'] += bool(attempts)
@@ -461,6 +473,7 @@ def report(manifest, review):
         results[scenario] = {'pair_count': len(pairs), 'model_verified_pairs': model_verified_pairs,
                              **({'local_instruction_pairs': local_instruction_pairs} if local_instruction_pairs else {}),
                              'compared_pairs': compared_pairs, 'unverified_model_pairs': unverified_model_pairs,
+                             'execution_order_first': execution_order,
                              'request_config_issues': request_config_issues, 'quality_issues': quality_issues,
                              'evidence_gaps': evidence_gaps,
                              'completed': completed, 'all_criteria_passed': all_passed,
