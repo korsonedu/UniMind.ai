@@ -137,6 +137,33 @@ class DshMemorySmoke(TestCase):
         log = MemoryExtractionLog.objects.get()
         self.assertEqual((log.source_message_id, log.answer_message_id), (repeated.pk, new_answer.pk))
 
+    def test_ulr_memory_delivery_must_match_the_pending_exchange(self):
+        from ai_assistant.models import PendingMemoryExtraction
+        from ai_assistant.tasks import extract_memory_turn
+
+        CourseStudentStatus.objects.create(user=self.user, is_course_student=True)
+        job = PendingMemoryExtraction.objects.create(source_message=self.question, answer_message=self.answer)
+        other = AIChatMessage.objects.create(user=self.user, bot=self.question.bot, conversation_id=self.conversation_id,
+            role='user', content='这是另一轮提问。')
+        other_answer = self.answer_for(other)
+        dispatch_after = job.dispatch_after
+        with patch('ai_assistant.services.ulr_memory.run_collector', return_value={'memories': [self.candidate]}) as collect, \
+                patch('django.db.connections.close_all'):
+            for ids in ((other.pk, self.answer.pk), (self.question.pk, other_answer.pk)):
+                assert extract_memory_turn.run(*ids, pending_job_id=job.pk) == 0
+            collect.assert_not_called()
+            job.refresh_from_db()
+            assert job.running_until is None and job.dispatch_after == dispatch_after
+            assert not AgentMemory.objects.exists() and not MemoryExtractionLog.objects.exists()
+            assert extract_memory_turn.run(self.question.pk, self.answer.pk, pending_job_id=job.pk) == 1
+            assert extract_memory_turn.run(self.question.pk, self.answer.pk, pending_job_id=job.pk) == 0
+            collect.assert_called_once()
+
+        log = MemoryExtractionLog.objects.get()
+        assert (log.source_message_id, log.answer_message_id) == (self.question.pk, self.answer.pk)
+        assert AgentMemory.objects.count() == 1
+        assert not PendingMemoryExtraction.objects.filter(pk=job.pk).exists()
+
     def test_ulr_memory_retries_transient_provider_failure_once(self):
         from ai_assistant.models import PendingMemoryExtraction
         from ai_assistant.services.ulr_memory import extract_pending_memory
@@ -152,10 +179,11 @@ class DshMemorySmoke(TestCase):
             with self.subTest(recovered=second_result is valid):
                 job = PendingMemoryExtraction.objects.create(source_message=self.question, answer_message=self.answer)
                 jobs = PendingMemoryExtraction.objects.filter(pk=job.pk)
+                binding = (job.pk, self.question.pk, self.answer.pk)
                 with patch('ai_engine.service.AIEngine.call_provider', side_effect=[unavailable, second_result]) as provider:
-                    self.assertEqual(extract_pending_memory(job.pk), 0)
+                    self.assertEqual(extract_pending_memory(*binding), 0)
                     self.assertTrue(jobs.get().provider_retry_used)
-                    self.assertEqual(extract_pending_memory(job.pk), 0)
+                    self.assertEqual(extract_pending_memory(*binding), 0)
                     provider.assert_called_once()
                     self.assertFalse(MemoryExtractionLog.objects.exists())
                     jobs.update(running_until=timezone.now(), dispatch_after=timezone.now())
@@ -165,11 +193,11 @@ class DshMemorySmoke(TestCase):
                         {'pending_job_id': job.pk}, retry=False, ignore_result=True)
                     if second_result is unavailable:
                         with self.assertRaises(ValueError):
-                            extract_pending_memory(job.pk)
+                            extract_pending_memory(*binding)
                     else:
-                        self.assertEqual(extract_pending_memory(job.pk), 1)
+                        self.assertEqual(extract_pending_memory(*binding), 1)
                     self.assertFalse(jobs.exists())
-                    self.assertEqual(extract_pending_memory(job.pk), 0)
+                    self.assertEqual(extract_pending_memory(*binding), 0)
                     self.assertEqual(provider.call_count, 2)
         log = MemoryExtractionLog.objects.get()
         self.assertEqual((log.source_message_id, log.answer_message_id), (self.question.pk, self.answer.pk))
@@ -216,8 +244,8 @@ class DshMemorySmoke(TestCase):
             assert PendingMemoryExtraction.objects.filter(pk=job.pk, running_until__isnull=True).exists()
             assert dispatch_pending_memory_extractions.run() == 0
         with patch('ai_assistant.services.ulr_memory.extract_answer_memory', return_value=1) as extract:
-            assert extract_pending_memory(job.pk) == 1
-            assert extract_pending_memory(job.pk) == 0
+            assert extract_pending_memory(job.pk, *args) == 1
+            assert extract_pending_memory(job.pk, *args) == 0
             extract.assert_called_once_with(*args, redelivered=True)
         assert not PendingMemoryExtraction.objects.exists()
 

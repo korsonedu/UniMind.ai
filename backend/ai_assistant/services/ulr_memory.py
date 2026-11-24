@@ -32,9 +32,10 @@ def publish_memory_extraction(job_id):
                                         retry=False, ignore_result=True))
 
 
-def extract_pending_memory(job_id):
+def extract_pending_memory(job_id, question_id, answer_id):
+    jobs = PendingMemoryExtraction.objects.filter(pk=job_id, source_message_id=question_id, answer_message_id=answer_id)
     # An older delivery for the same question may already hold the extraction lock.
-    return consume_job(PendingMemoryExtraction.objects.filter(pk=job_id), lambda job, _:
+    return consume_job(jobs, lambda job, _:
         extract_answer_memory(job.source_message_id, job.answer_message_id, redelivered=True),
         retry_provider_failure=True) or 0
 

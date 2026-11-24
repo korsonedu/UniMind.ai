@@ -105,17 +105,15 @@ def publish_conversation_title(job_id):
     return publish_job(PendingConversationTitle.objects.select_related('conversation').filter(pk=job_id), send)
 
 
-def generate_pending_title(job_id):
+def generate_pending_title(job_id, conversation_id, user_id, bot_id, *, expected_title, answer_message_id):
     from ..models import PendingConversationTitle
     from .ulr_outbox import consume_job
 
-    def generate(job, claimed):
-        conversation = job.conversation
-        return sync_generate_title(str(conversation.conversation_id), conversation.user_id, conversation.bot_id,
-                                   expected_title=job.expected_title, ulr=True, answer_message_id=job.answer_message_id,
-                                   pending_job=claimed)
-
-    return consume_job(PendingConversationTitle.objects.select_related('conversation').filter(pk=job_id), generate)
+    jobs = PendingConversationTitle.objects.filter(pk=job_id, conversation__conversation_id=conversation_id,
+        conversation__user_id=user_id, conversation__bot_id=bot_id, expected_title=expected_title,
+        answer_message_id=answer_message_id)
+    return consume_job(jobs, lambda _, claimed: sync_generate_title(conversation_id, user_id, bot_id,
+        expected_title=expected_title, ulr=True, answer_message_id=answer_message_id, pending_job=claimed))
 
 
 def sync_generate_title(conversation_id, user_id, bot_id, *, expected_title='', ulr=False, answer_message_id=None,

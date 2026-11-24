@@ -94,6 +94,43 @@ class DshTitleSmoke(TestCase):
             assert question.content in prompt and answer.content in prompt and '无关插入' not in prompt
 
 
+    def test_ulr_title_delivery_must_match_the_pending_exchange(self):
+        from ai_assistant.models import PendingConversationTitle
+        from ai_assistant.tasks import generate_conversation_title
+
+        messages = AIChatMessage.objects.filter(conversation_id=self.conversation.conversation_id)
+        question, answer = messages.get(role='user'), messages.get(role='assistant')
+        answer.metadata = {'learning_turn': {'message_id': question.pk, 'completed': True}}
+        answer.save(update_fields=['metadata'])
+        self.conversation.title = '临时标题'
+        self.conversation.save(update_fields=['title'])
+        job = PendingConversationTitle.objects.create(conversation=self.conversation, answer_message=answer,
+                                                       expected_title=self.conversation.title)
+        conversation_id = str(self.conversation.conversation_id)
+        args = (conversation_id, self.user.pk, self.bot.pk)
+        fields = {'expected_title': job.expected_title, 'answer_message_id': answer.pk, 'pending_job_id': job.pk}
+        dispatch_after = job.dispatch_after
+        with patch('ai_assistant.services.ulr_structured.run_collector', return_value={'title': '久期'}) as collect, \
+                patch('django.db.connections.close_all'):
+            for stale in ((str(uuid.uuid4()), *args[1:]), (conversation_id, self.user.pk + 1, self.bot.pk),
+                          (conversation_id, self.user.pk, self.bot.pk + 1)):
+                generate_conversation_title.run(*stale, **fields)
+            for stale in ({'expected_title': '旧临时标题'}, {'answer_message_id': question.pk}):
+                generate_conversation_title.run(*args, **(fields | stale))
+            collect.assert_not_called()
+            job.refresh_from_db()
+            self.conversation.refresh_from_db()
+            assert job.running_until is None and job.dispatch_after == dispatch_after
+            assert self.conversation.title == job.expected_title
+            generate_conversation_title.run(*args, **fields)
+            generate_conversation_title.run(*args, **fields)
+            collect.assert_called_once()
+
+        self.conversation.refresh_from_db()
+        assert self.conversation.title == '久期'
+        assert not PendingConversationTitle.objects.filter(pk=job.pk).exists()
+
+
 def test_title_task_uses_fast_single_request(settings, tmp_path, monkeypatch):
     from ai_assistant.services.dsh_tasks import run_structured
     settings.DEBUG = True

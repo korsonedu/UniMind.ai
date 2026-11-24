@@ -523,7 +523,8 @@ def generate_conversation_title(conversation_id: str, user_id: int, bot_id: int,
         from .services.title_generator import generate_pending_title, sync_generate_title
         from .services.ulr_config import standalone_ulr
         if pending_job_id is not None:
-            generate_pending_title(pending_job_id)
+            generate_pending_title(pending_job_id, conversation_id, user_id, bot_id,
+                                   expected_title=expected_title, answer_message_id=answer_message_id)
             return
         # ULR submissions already set an initial title. Keep the source checks even on a legacy-configured worker.
         if expected_title or answer_message_id is not None or standalone_ulr():
@@ -540,7 +541,7 @@ def extract_memory_turn(self, question_id, answer_id, *, pending_job_id=None):
     from .services.ulr_memory import extract_answer_memory, extract_pending_memory
     try:
         if pending_job_id is not None:
-            return extract_pending_memory(pending_job_id)
+            return extract_pending_memory(pending_job_id, question_id, answer_id)
         return extract_answer_memory(question_id, answer_id,
                                      redelivered=bool((self.request.delivery_info or {}).get('redelivered')))
     finally:

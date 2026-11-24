@@ -563,7 +563,7 @@ def test_capture_memory_acceptance(official, auth_client, user, settings, tmp_pa
                 conversation.conversation_id, source_message_id=question.pk, answer_message_id=answer.pk)
             if native:
                 job = PendingMemoryExtraction.objects.get(answer_message_id=answer.pk)
-                ulr_memory.extract_pending_memory(job.pk)
+                ulr_memory.extract_pending_memory(job.pk, question.pk, answer.pk)
 
         def available_values():
             return [item['value'] for item in build_context(user, source['followup'], ulr=native)['memory']['items']]
