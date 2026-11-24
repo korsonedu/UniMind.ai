@@ -246,19 +246,30 @@ if CORS_ALLOW_CAPACITOR_ORIGINS:
 
 # The account rollout is opt-in. No credentials are stored in the frontend.
 ACCOUNT_ENABLED = _get_bool("ACCOUNT_ENABLED")
-UNIMIND_DSH_ENABLED = _get_bool("UNIMIND_DSH_ENABLED")
+UNIMIND_LEARNING_RUNTIME = os.getenv("UNIMIND_LEARNING_RUNTIME", "legacy").strip().lower()
+if UNIMIND_LEARNING_RUNTIME not in {"legacy", "ulr"}:
+    raise ImproperlyConfigured("UNIMIND_LEARNING_RUNTIME must be legacy or ulr.")
+
+
+def _dsh_flag(name):
+    return UNIMIND_LEARNING_RUNTIME == "legacy" and _get_bool(name)
+
+
+UNIMIND_DSH_ENABLED = _dsh_flag("UNIMIND_DSH_ENABLED")
 UNIMIND_PUBLIC_ASSET_EDITION = os.getenv("UNIMIND_PUBLIC_ASSET_EDITION", "cn")
 UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE = _get_bool("UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE")
 UNIMIND_LEARNING_EXPERIMENTS_ENABLED = _get_bool("UNIMIND_LEARNING_EXPERIMENTS_ENABLED")
 UNIMIND_LEARNING_VISUAL_REVIEW_ENABLED = _get_bool("UNIMIND_LEARNING_VISUAL_REVIEW_ENABLED")
 UNIMIND_LEARNING_WORKER_ROOT = os.getenv("UNIMIND_LEARNING_WORKER_ROOT", "")
-UNIMIND_DSH_GENERATION_ENABLED = _get_bool("UNIMIND_DSH_GENERATION_ENABLED")
-UNIMIND_DSH_TEACHING_ENABLED = _get_bool("UNIMIND_DSH_TEACHING_ENABLED")
-UNIMIND_DSH_TITLE_ENABLED = _get_bool("UNIMIND_DSH_TITLE_ENABLED")
-UNIMIND_DSH_MEMORY_ENABLED = _get_bool("UNIMIND_DSH_MEMORY_ENABLED")
-UNIMIND_DSH_GRADING_ENABLED = _get_bool("UNIMIND_DSH_GRADING_ENABLED")
-UNIMIND_DSH_XIAOYU_ENABLED = _get_bool("UNIMIND_DSH_XIAOYU_ENABLED")
-UNIMIND_DSH_SITE_ENABLED = _get_bool("UNIMIND_DSH_SITE_ENABLED")
+UNIMIND_DSH_GENERATION_ENABLED = _dsh_flag("UNIMIND_DSH_GENERATION_ENABLED")
+UNIMIND_DSH_TEACHING_ENABLED = _dsh_flag("UNIMIND_DSH_TEACHING_ENABLED")
+UNIMIND_DSH_TITLE_ENABLED = _dsh_flag("UNIMIND_DSH_TITLE_ENABLED")
+UNIMIND_DSH_MEMORY_ENABLED = _dsh_flag("UNIMIND_DSH_MEMORY_ENABLED")
+UNIMIND_DSH_GRADING_ENABLED = _dsh_flag("UNIMIND_DSH_GRADING_ENABLED")
+UNIMIND_DSH_XIAOYU_ENABLED = _dsh_flag("UNIMIND_DSH_XIAOYU_ENABLED")
+UNIMIND_ULR_PROTOTYPE = DEBUG and _get_bool("UNIMIND_ULR_PROTOTYPE")
+UNIMIND_ULR_RECHECK_STRATEGY = os.getenv("UNIMIND_ULR_RECHECK_STRATEGY", "immediate")
+UNIMIND_DSH_SITE_ENABLED = _dsh_flag("UNIMIND_DSH_SITE_ENABLED")
 UNIMIND_DSH_PYTHON = os.getenv("UNIMIND_DSH_PYTHON", "")
 UNIMIND_DSH_API_URL = os.getenv("UNIMIND_DSH_API_URL", "")
 UNIMIND_DSH_STATE_DIR = os.getenv("UNIMIND_DSH_STATE_DIR", "")
@@ -556,6 +567,7 @@ CELERY_TASK_ROUTES = {
     # ── high_priority ──
     "ai_assistant.tasks.record_trajectory_async": {"queue": "high_priority"},
     "ai_assistant.tasks.generate_conversation_title": {"queue": "high_priority"},
+    "ai_assistant.tasks.extract_memory_turn": {"queue": "high_priority"},
     "ai_assistant.tasks.precompute_user_profile": {"queue": "high_priority"},
     # ── low_priority ──
     "ai_assistant.tasks.analyze_trajectory_task": {"queue": "low_priority"},
@@ -692,5 +704,17 @@ if SENTRY_DSN:
 
 CELERY_BEAT_SCHEDULE['project-learning-followups'] = {
     'task': 'ai_assistant.tasks_learning.send_project_learning_followups',
+    'schedule': 60.0,
+}
+CELERY_BEAT_SCHEDULE['pending-memory-extractions'] = {
+    'task': 'ai_assistant.tasks.dispatch_pending_memory_extractions',
+    'schedule': 60.0,
+}
+CELERY_BEAT_SCHEDULE['pending-conversation-titles'] = {
+    'task': 'ai_assistant.tasks.dispatch_pending_conversation_titles',
+    'schedule': 60.0,
+}
+CELERY_BEAT_SCHEDULE['pending-course-questions'] = {
+    'task': 'courses.tasks.dispatch_pending_course_questions',
     'schedule': 60.0,
 }

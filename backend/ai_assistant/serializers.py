@@ -58,6 +58,7 @@ class ConversationSerializer(serializers.ModelSerializer):
 
 class AIChatMessageSerializer(serializers.ModelSerializer):
     conversation_title = serializers.SerializerMethodField()
+    metadata = serializers.SerializerMethodField()
     conversation_project = serializers.IntegerField(source='_conversation_project', read_only=True, allow_null=True)
     conversation_pinned = serializers.BooleanField(source='_conversation_pinned', read_only=True, default=False)
 
@@ -68,6 +69,11 @@ class AIChatMessageSerializer(serializers.ModelSerializer):
     def get_conversation_title(self, obj):
         title = getattr(obj, '_conversation_title', None)
         return title or ''
+
+    def get_metadata(self, obj):
+        metadata = obj.metadata
+        return {key: value for key, value in metadata.items()
+                if key not in {'learning_snapshot', 'ulr_context_sources'}} if isinstance(metadata, dict) else metadata
 
 
 class AgentMemorySerializer(serializers.ModelSerializer):

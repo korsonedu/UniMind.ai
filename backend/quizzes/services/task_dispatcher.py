@@ -1,6 +1,5 @@
 import logging
 import threading
-from typing import Any, Dict, List
 
 from django.conf import settings
 from django.db import connections
@@ -12,10 +11,10 @@ from quizzes.tasks import run_exam_grading_task
 logger = logging.getLogger(__name__)
 
 
-def _start_thread_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, Any]]) -> None:
+def _start_thread_grading(user_id: int, exam_id: int) -> None:
     def grade():
         try:
-            run_exam_grading(user_id, exam_id, questions_data)
+            run_exam_grading(user_id, exam_id)
         finally:
             connections.close_all()
 
@@ -26,15 +25,16 @@ def _start_thread_grading(user_id: int, exam_id: int, questions_data: List[Dict[
     thread.start()
 
 
-def dispatch_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, Any]]) -> None:
+def dispatch_exam_grading(user_id: int, exam_id: int) -> None:
     use_celery = bool(getattr(settings, "QUIZ_EXAM_GRADING_USE_CELERY", False))
     if not use_celery:
-        _start_thread_grading(user_id, exam_id, questions_data)
+        _start_thread_grading(user_id, exam_id)
         return
 
     try:
-        run_exam_grading_task.delay(user_id, exam_id, questions_data)
+        # Keep the older broker signature while loading answers from the saved exam.
+        run_exam_grading_task.delay(user_id, exam_id, None)
     except Exception as exc:
         logger.exception("Celery dispatch exam grading unavailable, fallback thread mode: %s", exc)
-        _start_thread_grading(user_id, exam_id, questions_data)
+        _start_thread_grading(user_id, exam_id)
 

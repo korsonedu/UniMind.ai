@@ -31,6 +31,19 @@ def tool(name, description, schema):
     return {'type': 'function', 'function': {'name': name, 'description': description, 'parameters': schema}}
 
 
+CURRENT_PROGRESS = 'current_progress'
+PROGRESS_STRATEGY_TOOL = tool('manage_learning_strategies',
+    '用进展工具实际返回的 event_ref 绑定本轮观察。save 保留候选方法，review 核对以前试用的方法。'
+    '每种动作限一次，可以同一批提交。通过准备后请答复用户，运行时会用真实写入的观察记录完成绑定。',
+    obj({'action': {'type': 'string', 'enum': ['save', 'review']},
+         'event_ref': {'type': 'string', 'const': CURRENT_PROGRESS}, 'domain': text(), 'topic': text(),
+         'use_id': {'type': 'integer', 'minimum': 1}, 'judgement': {'enum': ['support', 'against', 'uncertain']},
+         'reason': text()}, ('action', 'event_ref')) | {
+            'oneOf': [{'properties': {'action': {'const': 'save'}}},
+                      {'properties': {'action': {'const': 'review'}}, 'required': ['use_id', 'judgement', 'reason']}],
+        })
+
+
 PROJECT_LEARNING_TOOLS = [
     tool('read_learning_project', '读取当前对话所属项目的目标、计划、进展、证据、来源和跟进安排。身份与项目由服务端确定。', obj({})),
     tool('plan_learning_project', '保存初步阶段路径，或修订原计划。目标改变、范围缩减、长期投入增加和延期会形成待用户确认方案。用户要求形成调整方案时，必须调用本工具保存，不能只在回复里列方案；提交待确认方案不会采用新计划，用户随后在界面确认，无需在保存方案前再问一次。先准备可开始的一段，来源只能使用实际读取的 id。',

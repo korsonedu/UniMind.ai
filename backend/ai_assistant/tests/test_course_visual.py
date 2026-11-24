@@ -162,6 +162,36 @@ def test_freezes_visual_and_original_transcript_without_base64_text(user, lesson
 
 
 @pytest.mark.django_db
+def test_ulr_sends_only_current_authorized_frames(user, lesson, visual, settings, tmp_path):
+    from ai_assistant.services.dsh_xiaoyu import complete_turn
+    from users.models import WeeklyAIQuotaConfig
+
+    settings.UNIMIND_DSH_STATE_DIR = str(tmp_path)
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'experience_calls': 20, 'course_calls': 200})
+    course, _, bot = lesson
+    request = question(user, course)
+    request.data['course_context']['visual'] = visual
+    context = prepare_course_context(request, bot, request.data['conversation_id'])
+
+    def model(messages, **kwargs):
+        system, user_message = messages
+        assert JPEG_PREFIX not in system['content']
+        blocks = user_message['content']
+        assert blocks[0] == {'type': 'text', 'text': request.data['message']}
+        assert [block['image_url']['url'] for block in blocks if block['type'] == 'image_url'] == [
+            visual['previous']['image'], visual['current']['image'],
+        ]
+        return {'choices': [{'finish_reason': 'stop', 'message': {'content': '合成课程画面解答。'}}]}
+
+    with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider:
+        result = complete_turn(request, bot, request.data['conversation_id'], request.data['message'],
+                               lambda event: None, course_context=context, ulr=True)
+    assert result['engine'] == 'ulr'
+    assert result['metadata']['course_context'] == context
+    provider.assert_called_once()
+
+
+@pytest.mark.django_db
 def test_injected_course_sources_persist_in_message_metadata(user, lesson, visual, settings, tmp_path):
     from ai_assistant.services.dsh_xiaoyu import complete_turn, task_context
     from users.models import WeeklyAIQuotaConfig

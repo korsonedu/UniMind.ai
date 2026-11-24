@@ -6,6 +6,11 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - 'scripts/**'
+      - 'deploy/unimind-learning-followups.*'
+      - 'deploy/unimind-celery-beat.service'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - '.dockerignore'
       - 'requirements.txt'
       - '.github/workflows/backend-guardrails.yml'
   pull_request:
@@ -13,12 +18,31 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - 'scripts/**'
+      - 'deploy/unimind-learning-followups.*'
+      - 'deploy/unimind-celery-beat.service'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - '.dockerignore'
       - 'requirements.txt'
       - '.github/workflows/backend-guardrails.yml'
 
 jobs:
   backend-checks:
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ulr_smoke
+          POSTGRES_PASSWORD: ulr_smoke
+          POSTGRES_DB: unimind
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U ulr_smoke -d unimind"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     env:
       ACCOUNT_DEV_LOCAL_CACHE: "true"
       CELERY_BROKER_URL: "memory://"
@@ -50,11 +74,11 @@ jobs:
         working-directory: backend
         run: python manage.py makemigrations --check --dry-run
 
-      - name: Install Chinese fonts for visual smoke checks
+      - name: Install Chinese fonts, Redis and PostgreSQL clients for smoke checks
         run: |
           printf '%s\n' 'https://archive.ubuntu.com/ubuntu' 'https://security.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk
+          sudo apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk redis-server postgresql-client-16
 
       - name: Install browser for learning tool smoke checks
         run: python -m playwright install --only-shell chromium
@@ -79,6 +103,24 @@ jobs:
         working-directory: backend
         run: python -m pytest
 
+      - name: Standalone ULR release smoke
+        working-directory: backend
+        env:
+          DB_ENGINE: django.db.backends.postgresql
+          DB_NAME: unimind
+          DB_USER: ulr_smoke
+          DB_PASSWORD: ulr_smoke
+          DB_HOST: 127.0.0.1
+          DB_PORT: ${{ job.services.postgres.ports[5432] }}
+          ULR_QUEUE_SMOKE: "1"
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          python -m pytest -p pytest_django.plugin -x -W error::pytest.PytestWarning
+          ai_assistant/tests/test_ulr_process_smoke.py
+          ai_assistant/tests/test_ulr_queue_smoke.py
+          ai_assistant/tests/test_ulr_restore_smoke.py
+          quizzes/tests_exam_async.py::test_ulr_exam_waits_for_the_question_edit_before_settlement
+
       - name: QA smoke check
         working-directory: backend
         env:
@@ -86,6 +128,148 @@ jobs:
         run: |
           python manage.py migrate
           bash ../scripts/smoke_qa.sh
+
+  container-release-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      COMPOSE_PROJECT_NAME: ulr-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and start the release containers
+        run: |
+          test ! -e .env
+          cat > .env <<'ENV'
+          DJANGO_ENV=production
+          DEBUG=false
+          SECRET_KEY=container-smoke-only-signing-key
+          ALLOWED_HOSTS=localhost,127.0.0.1
+          SECURE_SSL_REDIRECT=true
+          USE_X_FORWARDED_PROTO=true
+          CORS_ALLOW_ALL_ORIGINS=false
+          ACCOUNT_ENABLED=false
+          DB_ENGINE=django.db.backends.postgresql
+          DB_NAME=unimind
+          DB_USER=unimind
+          DB_PASSWORD=container-smoke-only-database
+          REDIS_PASSWORD=container-smoke-only-redis
+          CELERY_BEAT_SCHEDULE_FILENAME=/tmp/ulr-smoke-beat
+          UNIMIND_LEARNING_RUNTIME=ulr
+          UNIMIND_DSH_ENABLED=false
+          UNIMIND_CONTENT_INSTITUTION_ID=global
+          ENV
+          docker compose build --build-arg "UNIMIND_BUILD_REVISION=$GITHUB_SHA" web celery celery-beat
+          docker compose up --wait --wait-timeout 90 db redis
+          docker compose run --rm --no-deps web python manage.py migrate --noinput
+          docker compose up --wait --wait-timeout 90 web celery celery-beat
+
+      - name: Verify the packaged ULR services
+        run: |
+          for service in web celery celery-beat; do
+            image=$(docker compose images -q "$service")
+            revision=$(docker image inspect "$image" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')
+            [ "$revision" = "$GITHUB_SHA" ]
+          done
+          docker compose exec -T -e "ULR_EXPECTED_REVISION=$GITHUB_SHA" web python - <<'PYTHON'
+          import json
+          import os
+          from importlib.util import find_spec
+          from pathlib import Path
+          import re
+          from urllib.request import Request, urlopen
+
+          import django
+
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'school_system.settings')
+          django.setup()
+          from ai_assistant.services.ulr_config import standalone_ulr
+
+          assert standalone_ulr() and not Path('/app/dsh').exists()
+          assert find_spec('deepseek_harness') is None and find_spec('claude_agent_sdk') is None
+          expected_build = os.environ['ULR_EXPECTED_REVISION'][:7].encode()
+          assets_dir = Path('/app/frontend/dist/assets')
+          assert any(b'"' + expected_build + b'"' in asset.read_bytes() for asset in assets_dir.glob('*.js'))
+
+          def fetch(path):
+              return urlopen(Request(f'http://localhost:8000{path}', headers={'X-Forwarded-Proto': 'https'}), timeout=5)
+
+          with fetch('/health/') as response:
+              health = json.load(response)
+              assert response.status == 200
+              assert health['status'] == 'ok' and health['database'] is True and health['cache'] is True
+          with fetch('/xiaoyu') as response:
+              html = response.read().decode()
+              assert response.status == 200 and 'id="root"' in html
+          assets = re.findall(r'(?:src|href)="(/assets/[^"]+)"', html)
+          assert assets
+          for asset in assets:
+              with fetch(asset) as response:
+                  assert response.status == 200 and response.read(1), asset
+          PYTHON
+          for attempt in 1 2 3; do
+            if docker compose exec -T celery celery -A school_system inspect ping --timeout=4; then
+              break
+            fi
+            [ "$attempt" -lt 3 ] || exit 1
+            sleep 1
+          done
+          docker compose exec -T web python - <<'PYTHON'
+          from time import monotonic, sleep
+          from uuid import uuid4
+          import os
+
+          import django
+
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'school_system.settings')
+          django.setup()
+
+          from ai_assistant.models import AIChatMessage, Bot, Conversation, ConversationProject, ProjectLearning
+          from ai_assistant.tasks_learning import send_project_learning_followups
+          from django.utils import timezone
+          from notifications.models import Notification
+          from users.models import CourseStudentStatus, User
+
+          user = User.objects.create_user(username=f'ulr-smoke-{uuid4().hex}')
+          CourseStudentStatus.objects.create(user=user, is_course_student=True)
+          bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇', 'bot_type': 'planner'})
+          project = ConversationProject.objects.create(user=user, name='合成发布验收')
+          conversation = Conversation.objects.create(user=user, bot=bot, project=project, conversation_id=uuid4())
+          state = ProjectLearning.objects.create(project=project, status='active', planning_enabled=True,
+              reminders_enabled=True, last_conversation=conversation, followup_at=timezone.now(), followup_text='复习合成示例。')
+          deadline = monotonic() + 90
+          while state.followup_at is not None:
+              assert monotonic() < deadline, 'Celery Beat did not deliver the due follow-up'
+              sleep(1)
+              state.refresh_from_db(fields=['followup_at'])
+          assert send_project_learning_followups.delay().get(timeout=30)['sent'] == 0
+          assert Notification.objects.filter(recipient=user, ntype='learning_followup').count() == 1
+          assert AIChatMessage.objects.filter(user=user, conversation_id=conversation.conversation_id,
+              metadata__learning_followup__project_id=project.pk).count() == 1
+          assert project.learning_events.filter(kind='followup').count() == 1
+          PYTHON
+          docker compose exec -T celery-beat python - <<'PYTHON'
+          from pathlib import Path
+          from time import monotonic, sleep
+
+          deadline = monotonic() + 15
+          while not any(Path('/tmp').glob('ulr-smoke-beat*')):
+              assert monotonic() < deadline, 'Celery Beat did not open its schedule file'
+              sleep(0.5)
+          PYTHON
+
+      - name: Show container logs
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Remove the smoke stack
+        if: always()
+        run: |
+          if [ -f .env ]; then
+            docker compose down --volumes --remove-orphans
+          fi
 
   frontend-build-check:
     runs-on: ubuntu-latest

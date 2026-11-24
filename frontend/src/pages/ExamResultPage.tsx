@@ -49,6 +49,7 @@ interface ExamResultData {
   label_source?: string;
   id: number;
   status: ExamStatus;
+  can_resume?: boolean;
   created_at: string;
   completed_at: string | null;
   total_questions: number;
@@ -150,13 +151,18 @@ export const ExamResultPage = () => {
   }
 
   const active = isActive(data.status);
+  const canResume = active && data.can_resume === true;
   const modelEvaluation = data.label_source === 'model_rubric_grade';
   const canRetry = data.status === 'partial' || data.status === 'failed';
 
   const retry = async () => {
     setRetrying(true);
     try {
-      await api.post(`/quizzes/exams/${examId}/retry/`);
+      const response = await api.post(`/quizzes/exams/${examId}/retry/`);
+      if (response.status !== 202) {
+        await detail.refetch();
+        return;
+      }
       useExamActivityStore.getState().start({
         examId,
         total: data.total_questions,
@@ -212,12 +218,17 @@ export const ExamResultPage = () => {
         </header>
 
         {active && (
-          <section className="um-exam-result-banner" role="status">
-            <CircleNotch size={18} className="um-exam-result-spin" />
+          <section className={`um-exam-result-banner${canResume ? ' is-warning' : ''}`} role="status">
+            {!canResume && <CircleNotch size={18} className="um-exam-result-spin" />}
             <div>
-              <strong>{t('正在批改，已完成')} {data.graded_count}/{data.total_questions} {t('题')}</strong>
-              <span>{t('可以先看已经完成的部分，其余题目会自动补上。')}</span>
+              <strong>{canResume ? t('批改等待过久') : `${t('正在批改，已完成')} ${data.graded_count}/${data.total_questions} ${t('题')}`}</strong>
+              <span>{canResume ? t('重试后只批改未完成的题，已完成的结果不会重复计算。') : t('可以先看已经完成的部分，其余题目会自动补上。')}</span>
             </div>
+            {canResume && (
+              <Button size="sm" variant="outline" onClick={retry} disabled={retrying}>
+                <ArrowsClockwise size={14} /> {retrying ? t('提交中…') : t('继续批改')}
+              </Button>
+            )}
           </section>
         )}
 

@@ -66,6 +66,11 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         return ConversationProject.objects.filter(user=self.request.user).select_related('learning__last_conversation')
 
+    def perform_destroy(self, instance):
+        from .services.dsh_runtime import quota_write_lock
+        with quota_write_lock():
+            super().perform_destroy(instance)
+
 
 class ConversationUpdateSerializer(serializers.ModelSerializer):
     title = serializers.CharField(max_length=120, required=False)

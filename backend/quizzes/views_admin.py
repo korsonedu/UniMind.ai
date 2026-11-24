@@ -1,5 +1,6 @@
 import datetime
 import logging
+from django.db import transaction
 from django.utils import timezone
 from django.db.models import Max, Q
 from django.shortcuts import get_object_or_404
@@ -238,16 +239,26 @@ class AdminContentPipelineMetricsView(APIView):
 class AdminContentPipelineTaskRetryView(APIView):
     permission_classes = [IsAdmin]
 
+    @transaction.atomic
     def post(self, request, pk):
+        from quizzes.tasks import question_pipeline_delivery, resume_question_pipeline
         from users.permissions import is_platform_admin
+        sources = ContentPipelineTask.objects.select_for_update(of=('self',))
         if is_platform_admin(request.user):
-            source = get_object_or_404(ContentPipelineTask, pk=pk)
+            source = get_object_or_404(sources, pk=pk)
         else:
             inst = request.user.institution
             if inst:
-                source = get_object_or_404(ContentPipelineTask, Q(pk=pk) & (Q(created_by__institution=inst) | Q(created_by__institution__isnull=True)))
+                source = get_object_or_404(sources, Q(pk=pk) & (Q(created_by__institution=inst) | Q(created_by__institution__isnull=True)))
             else:
-                source = get_object_or_404(ContentPipelineTask, pk=pk, created_by__institution__isnull=True)
+                source = get_object_or_404(sources, pk=pk, created_by__institution__isnull=True)
+        if delivery := question_pipeline_delivery(source):
+            try:
+                queued = resume_question_pipeline(source, delivery)
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=409)
+            return Response(ContentPipelineTaskSerializer(source).data, status=202 if queued else 200)
+
         new_task = ContentPipelineTask.objects.create(
             task_type=source.task_type,
             status="pending",

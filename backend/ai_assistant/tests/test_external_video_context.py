@@ -343,6 +343,44 @@ def test_dsh_stream_reads_external_transcript_and_dual_frames(
     assert rows.count() == 2 and all(row.metadata['external_video_context'] == normalized for row in rows)
 
 
+@pytest.mark.django_db(transaction=True)
+def test_ulr_external_video_stream_and_polling_share_the_same_receipt(
+        auth_client, user, external_bot, external_context, settings, tmp_path):
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    settings.UNIMIND_DSH_ENABLED = False
+    settings.UNIMIND_DSH_STATE_DIR = str(tmp_path)
+    settings.USE_MEM0 = False
+    body = request_body(external_bot, external_context)
+    normalized = prepare(user, external_bot, external_context)
+    answer = '把现金流换算到今天，才能在同一时间点比较。'
+
+    def model(messages, **kwargs):
+        assert_injected(messages, external_context)
+        assert external_context['visual']['current']['image'] not in messages[0]['content']
+        return {'choices': [{'finish_reason': 'stop', 'message': {'content': answer}}]}
+
+    with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider, \
+         patch('ai_assistant.services.ulr_outbox.publish_after_commit'):
+        response = auth_client.post('/api/ai/chat/stream/', body, format='json')
+        assert response.status_code == 200
+        done = next(event for event in stream_events(response) if event.get('done'))
+        replay = auth_client.post('/api/ai/chat/', body, format='json')
+        assert replay.status_code == 200
+        assert replay.data['status'] == 'completed'
+        assert replay.data['full_content'] == done['full_content'] == answer
+        changed = copy.deepcopy(body)
+        changed['external_video_context']['part'] = 2
+        rejected = auth_client.post('/api/ai/chat/', changed, format='json')
+        assert rejected.status_code == 400
+        assert '请求标识已用于另一条提问' in str(rejected.data)
+
+    provider.assert_called_once()
+    assert done['metadata']['engine'] == 'ulr'
+    rows = AIChatMessage.objects.filter(user=user, conversation_id=body['conversation_id'])
+    assert rows.count() == 2 and all(row.metadata['external_video_context'] == normalized for row in rows)
+    assert WeeklyAIUsage.objects.get(user=user).ai_calls == 1
+
+
 @pytest.mark.django_db
 def test_signed_dsh_context_callback_exposes_only_authorized_external_sources(
         api_client, user, external_bot, external_context, settings):

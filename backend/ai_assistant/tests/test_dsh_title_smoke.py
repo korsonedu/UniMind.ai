@@ -1,5 +1,6 @@
 """Title generation through the server DSH structured task."""
 import json
+from datetime import timedelta
 from pathlib import Path
 import sys
 import uuid
@@ -47,6 +48,50 @@ class DshTitleSmoke(TestCase):
             ai.return_value.simple_chat_text.return_value = '旧标题'
             self.assertEqual(sync_generate_title(str(self.conversation.conversation_id), self.user.id, self.bot.id), '旧标题')
         ai.return_value.simple_chat_text.assert_called_once()
+
+    def test_ulr_discards_title_after_rename_or_delete(self):
+        conversation_id = str(self.conversation.conversation_id)
+        arguments = (conversation_id, self.user.id, self.bot.id)
+        response = {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+            'function': {'name': 'submit_title', 'arguments': json.dumps({'title': '自动标题'})},
+        }]}}]}
+
+        def rename(*args, **kwargs):
+            Conversation.objects.filter(pk=self.conversation.pk).update(title='用户自定义标题')
+            return response
+
+        with patch('ai_engine.service.AIEngine.call_provider', side_effect=rename) as call:
+            self.assertIsNone(sync_generate_title(*arguments, ulr=True))
+        call.assert_called_once()
+        self.conversation.refresh_from_db()
+        self.assertEqual(self.conversation.title, '用户自定义标题')
+
+        def delete(*args, **kwargs):
+            self.conversation.delete()
+            return response
+
+        with patch('ai_engine.service.AIEngine.call_provider', side_effect=delete) as call:
+            self.assertIsNone(sync_generate_title(*arguments, expected_title='用户自定义标题', ulr=True))
+            self.assertIsNone(sync_generate_title(*arguments, ulr=True))
+        call.assert_called_once()
+        self.assertFalse(Conversation.objects.filter(conversation_id=conversation_id).exists())
+
+    def test_ulr_queued_title_uses_the_bound_exchange(self):
+        messages = AIChatMessage.objects.filter(conversation_id=self.conversation.conversation_id)
+        question = messages.get(role='user')
+        answer = messages.get(role='assistant')
+        answer.metadata = {'learning_turn': {'message_id': question.pk, 'completed': True}}
+        answer.save(update_fields=['metadata'])
+        later_question = AIChatMessage.objects.create(user=self.user, bot=self.bot,
+            conversation_id=self.conversation.conversation_id, role='user', content='无关插入')
+        messages.filter(pk=answer.pk).update(timestamp=later_question.timestamp + timedelta(seconds=1))
+        args = (str(self.conversation.conversation_id), self.user.id, self.bot.id)
+        with patch('ai_assistant.services.ulr_structured.run_collector', return_value={'title': '久期'}) as model:
+            assert sync_generate_title(*args, ulr=True, answer_message_id=answer.pk + 1000) is None
+            model.assert_not_called()
+            assert sync_generate_title(*args, ulr=True, answer_message_id=answer.pk) == '久期'
+            prompt = model.call_args.args[0]
+            assert question.content in prompt and answer.content in prompt and '无关插入' not in prompt
 
 
 def test_title_task_uses_fast_single_request(settings, tmp_path, monkeypatch):

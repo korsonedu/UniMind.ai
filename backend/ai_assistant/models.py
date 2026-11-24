@@ -1,7 +1,10 @@
 from django.db import models
 from django.conf import settings
+from django.db.models.fields.json import KeyTextTransform
+from django.db.models.functions import Cast
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
+from django.utils import timezone
 import uuid
 
 class AIChatMessage(models.Model):
@@ -47,11 +50,67 @@ class Conversation(models.Model):
         unique_together = [('user', 'conversation_id')]
 
 
+def mark_runtime_requests_deleted(messages, user_id):
+    from users.models import AIUsageReservation
+
+    reservations = AIUsageReservation.objects.using(messages.db).filter(user_id=user_id)
+    answers = messages.filter(role='assistant')
+    linked = reservations.alias(message_key=Cast(KeyTextTransform('message_id', 'response'), models.CharField()))
+    answer_keys = answers.values(message_key=Cast('pk', models.CharField()))
+    linked.filter(response__engine='ulr', message_key__in=answer_keys).update(
+        response={'engine': 'ulr', 'deleted': True})
+    linked.filter(response__engine='dsh', response__metadata__dsh_handoff=True,
+                  message_key__in=answer_keys).update(response={'deleted': True})
+    prompt_keys = messages.filter(role='user').values(message_key=Cast('pk', models.CharField()))
+    legacy = linked.filter(status='succeeded', response__engine__isnull=True).alias(
+        prompt_key=Cast(KeyTextTransform.from_lookup('response__metadata__learning_turn__message_id'), models.CharField()))
+    legacy.filter(models.Q(response__done=True, message_key__in=answer_keys) |
+                  models.Q(response__type='done', prompt_key__in=prompt_keys)).update(response={'deleted': True})
+    sessions = answers.filter(metadata__engine__in=('dsh', 'dsh_import')).values_list(
+        'metadata__dsh_session_id', 'metadata__dsh_imported_session_id').distinct()
+    for legacy_id, imported_id in sessions:
+        session_id = legacy_id or imported_id
+        if session_id:
+            reservations.filter(response__engine='dsh', response__session_id=session_id).update(
+                response={'engine': 'dsh', 'session_id': session_id, 'deleted': True})
+
+
+def chat_receipt_deleted(reservation):
+    response = reservation.response
+    if response.get('deleted'):
+        return True
+    if reservation.status != 'succeeded':
+        return False
+    answers = AIChatMessage.objects.filter(user_id=reservation.user_id, role='assistant')
+    if response.get('done') is True:
+        message_id = response.get('message_id')
+        return type(message_id) is not int or not answers.filter(pk=message_id).exists()
+    if response.get('type') == 'done' and not response.get('engine'):
+        metadata = response.get('metadata')
+        turn = metadata.get('learning_turn') if isinstance(metadata, dict) else None
+        prompt_id = turn.get('message_id') if isinstance(turn, dict) else None
+        return type(prompt_id) is not int or not answers.filter(metadata__learning_turn__message_id=prompt_id).exists()
+    return False
+
+
+def cancel_conversation_requests(user_id, conversation_id, using):
+    from users.models import AIUsageReservation
+
+    AIUsageReservation.objects.using(using).filter(user_id=user_id,
+        conversation_id=conversation_id, status__in=('pending', 'released')).update(
+        status='released', response={'deleted': True}, updated_at=timezone.now())
+
+
 @receiver(pre_delete, sender=Conversation)
 def delete_conversation_messages(sender, instance, using, **kwargs):
-    AIChatMessage.objects.using(using).filter(
+    # Share the row lock with the runtime's final commit.
+    Conversation.objects.using(using).select_for_update().filter(pk=instance.pk).exists()
+    cancel_conversation_requests(instance.user_id, instance.conversation_id, using)
+    messages = AIChatMessage.objects.using(using).filter(
         user_id=instance.user_id, conversation_id=instance.conversation_id,
-    ).delete()
+    )
+    mark_runtime_requests_deleted(messages, instance.user_id)
+    messages.delete()
 
 
 class Bot(models.Model):
@@ -157,6 +216,8 @@ class MemoryExtractionLog(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='memory_extraction_logs')
     conversation_id = models.CharField(max_length=64, db_index=True)
     message_hash = models.CharField(max_length=64)
+    source_message_id = models.PositiveBigIntegerField(null=True, blank=True)
+    answer_message_id = models.PositiveBigIntegerField(null=True, blank=True)
     candidate_count = models.IntegerField(default=0)
     saved_count = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -169,6 +230,22 @@ class MemoryExtractionLog(models.Model):
             ),
         ]
         indexes = [models.Index(fields=['user', 'created_at'])]
+
+
+class PendingMemoryExtraction(models.Model):
+    source_message = models.ForeignKey(AIChatMessage, on_delete=models.CASCADE, related_name='+')
+    answer_message = models.OneToOneField(AIChatMessage, on_delete=models.CASCADE, related_name='+')
+    dispatch_after = models.DateTimeField(default=timezone.now, db_index=True)
+    running_until = models.DateTimeField(null=True)
+    provider_retry_used = models.BooleanField(default=False, db_default=False)
+
+
+class PendingConversationTitle(models.Model):
+    conversation = models.OneToOneField(Conversation, on_delete=models.CASCADE, related_name='+')
+    answer_message = models.OneToOneField(AIChatMessage, on_delete=models.CASCADE, related_name='+')
+    expected_title = models.CharField(max_length=120)
+    dispatch_after = models.DateTimeField(default=timezone.now, db_index=True)
+    running_until = models.DateTimeField(null=True)
 
 
 class DshSubmission(models.Model):

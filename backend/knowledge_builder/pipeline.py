@@ -2,15 +2,20 @@
 import heapq
 import json
 import logging
+from base64 import b64decode, b64encode
+from io import BytesIO
 from itertools import combinations
 
 import numpy as np
 from django.conf import settings
-from django.db import transaction
+from django.db import connection, transaction
 from django.utils import timezone
+from ai_engine.observability import observe_background, runtime_observation
 from ai_engine.service import AICallError
+from ai_assistant.services.ulr_config import ulr_enabled
 
-from .archetypes import get_profile
+from .archetypes import ArchetypeProfile, get_profile
+from .build_state import build_lock_key
 from .embedding_client import embed_views
 from .exceptions import AIResponseError, InvariantViolationError, PipelineRepairExhaustedError
 from .graph_math import (normalize_embeddings, compute_semantic_kernel,
@@ -22,6 +27,9 @@ from .prompts import ask
 from .validators import validate_atoms, validate_edges, validate_steps
 
 
+CHECKPOINT_VERSION = 1
+
+
 def create_build(subject: str, archetype_override: str = 'auto', created_by=None, requirements: dict | None = None) -> KnowledgeTreeBuild:
     subject = subject.strip()
     if not subject or len(subject) > 200:
@@ -31,7 +39,8 @@ def create_build(subject: str, archetype_override: str = 'auto', created_by=None
     if requirements is not None and not isinstance(requirements, dict):
         raise InvariantViolationError('requirements must be an object')
     json.dumps(requirements, allow_nan=False)
-    return KnowledgeTreeBuild.objects.create(subject=subject, archetype=archetype_override, created_by=created_by, requirements=requirements or {})
+    return KnowledgeTreeBuild.objects.create(subject=subject, archetype=archetype_override, created_by=created_by,
+                                             requirements=requirements or {}, requires_ulr=ulr_enabled())
 
 
 def base_context(build):
@@ -649,78 +658,179 @@ def _persist(build, modules, atoms, atom_edges, blocks, graph, plans, interfaces
         build.status = 'COMPLETED'
         build.completed_at = timezone.now()
         build.current_stage = 'completed'
-        build.save()
+        build.checkpoint = {}
+        build.save(update_fields=['status', 'completed_at', 'current_stage', 'checkpoint', 'stats', 'updated_at'])
 
 
-def run_build(build_id, progress=None):
-    # Compare-and-set prevents concurrent or repeated tasks from publishing twice.
-    claimed = KnowledgeTreeBuild.objects.filter(pk=build_id,status='PENDING').update(status='RUNNING',updated_at=timezone.now())
+def _build_outline(context, profile):
+    modules = _normalize_outline(ask('outline_decompose', context, 'knowledge_tree_decompose')['modules'])
+    outline = [{'code': m['code'], 'parent_code': m['parent_code'], 'title': m['title'], 'path': m['path']} for m in modules]
+    parents = {m['parent_code'] for m in modules}
+    atoms = []
+    for module in modules:
+        if module['code'] not in parents:
+            atoms.extend(ask('atom_generate', {**context, 'outline': outline, 'module': module, 'existing_names': [a['name'] for a in atoms]}, 'knowledge_tree_decompose')['atoms'])
+    atoms = _repair_atoms(atoms, modules, profile, context)
+    return modules, atoms
+
+
+def _plan_blocks(build, blocks, graph, atoms, edges, cosine, profile, context):
+    block_summaries = _block_summaries(blocks)
+    plans = {}
+    for block in blocks:
+        local_codes = {atom['code'] for atom in block['atoms']}
+        local_edges = [e for e in edges if e['from_atom'] in local_codes and e['to_atom'] in local_codes]
+        payload = {
+            **context,
+            'block_summaries': block_summaries,
+            'block': _block_step_view(block),
+            'atom_codes': [atom['code'] for atom in block['atoms']],
+            'suggested_step_buckets': _suggest_step_buckets(block['atoms'], local_edges),
+            'topological_order': _strong_topo_order(block['atoms'], local_edges),
+            'strong_edges': [[e['from_atom'], e['to_atom']] for e in local_edges if e['edge_strength'] == 'strong'],
+            'max_intra_lines': len(block['atoms']) // 2,
+            'atom_edges': local_edges,
+        }
+        plan = ask('intrablock_steps', payload, 'knowledge_tree_block')
+        plans[block['code']] = repair(plan, lambda value: validate_steps(value, block['atoms'], local_edges, profile), 'intrablock_repair', payload)
+    lookup = {a['code']:i for i,a in enumerate(atoms)}
+    by_block = {b['code']:{a['code']:a for a in b['atoms']} for b in blocks}
+    interfaces = {}
+    for edge in graph['edges']:
+        if edge['is_retained']:
+            a,b = edge['from_block'],edge['to_block']
+            interfaces[a,b] = _interfaces(edge, by_block[a], by_block[b], edges, cosine, lookup, profile, subject=build.subject, block_summaries=block_summaries, requirements=build.requirements)
+    return plans, interfaces
+
+
+def run_build(build_id, progress=None, *, redelivered=False):
+    if connection.vendor != 'postgresql':
+        return _run_build(build_id, progress, resume_running=False)
+    # The database releases the session lock when the worker exits.
+    key = build_lock_key(build_id)
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_try_advisory_lock(%s)', [key])
+        if not cursor.fetchone()[0]:
+            if not redelivered and not KnowledgeTreeBuild.objects.filter(pk=build_id, status='PENDING').exists():
+                raise InvariantViolationError('build is already running')
+            cursor.execute('SELECT pg_advisory_lock(%s)', [key])
+    try:
+        return _run_build(build_id, progress, resume_running=redelivered)
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT pg_advisory_unlock(%s)', [key])
+
+
+def _run_build(build_id, progress, *, resume_running):
+    native = ulr_enabled()
+    pending = KnowledgeTreeBuild.objects.filter(pk=build_id, status='PENDING')
+    changes = {'status': 'RUNNING', 'updated_at': timezone.now()}
+    if native:
+        changes['requires_ulr'] = True
+    claimed = pending.update(**changes)
+    build = KnowledgeTreeBuild.objects.filter(pk=build_id).first()
     if not claimed:
-        raise InvariantViolationError('build must be PENDING to start')
-    build = KnowledgeTreeBuild.objects.get(pk=build_id)
+        if resume_running and build and build.requires_ulr and build.status == 'COMPLETED':
+            return build
+        if not (resume_running and build and build.requires_ulr and build.status == 'RUNNING'):
+            raise InvariantViolationError('build must be PENDING to start')
+    with observe_background('ulr' if native else 'legacy', f'build:{build.pk}'):
+        return _build_stages(build, progress, native=native)
+
+
+def _build_stages(build, progress, *, native):
     def stage(name):
+        runtime_observation.get()['stage'] = name
         build.current_stage = name
-        build.save(update_fields=['current_stage','updated_at'])
+        build.save(update_fields=['current_stage', 'updated_at'])
         if progress:
             progress(name)
+        return build.checkpoint.get(name)
+
+    def save(value, *fields):
+        if native:
+            build.checkpoint['version'] = CHECKPOINT_VERSION
+            build.checkpoint[build.current_stage] = value
+            fields += ('checkpoint',)
+        if fields:
+            build.save(update_fields=[*fields, 'updated_at'])
+
     try:
-        stage('archetype_dispatch')
-        archetype = build.archetype
-        if archetype == 'auto':
-            archetype = ask('archetype_classify', base_context(build), 'knowledge_tree_dispatch')['archetype']
-        profile = get_profile(archetype)
-        build.archetype = archetype
-        build.dispatch_profile = profile.as_dict()
-        build.save(update_fields=['archetype','dispatch_profile','updated_at'])
-        context = {**base_context(build), 'profile':profile.as_dict()}
-        stage('outline_and_atoms')
-        modules = _normalize_outline(ask('outline_decompose', context, 'knowledge_tree_decompose')['modules'])
-        outline = [{'code': m['code'], 'parent_code': m['parent_code'], 'title': m['title'], 'path': m['path']} for m in modules]
-        parents = {m['parent_code'] for m in modules}
-        atoms = []
-        for module in modules:
-            if module['code'] not in parents:
-                atoms.extend(ask('atom_generate', {**context, 'outline': outline, 'module': module, 'existing_names': [a['name'] for a in atoms]}, 'knowledge_tree_decompose')['atoms'])
-        atoms = _repair_atoms(atoms, modules, profile, context)
-        stage('atom_edges')
-        views = embed_views(atoms)
-        edges,cosine = _atom_edges(atoms, views, profile.as_dict(), subject=build.subject, requirements=build.requirements)
-        stage('kernel_clustering')
-        groups,stats = _cluster(atoms,edges,views,profile)
-        blocks = [{'code':f'B{i+1:02d}','atoms':[atoms[j] for j in group]} for i,group in enumerate(groups)]
-        _name_blocks(blocks, context)
-        stage('interblock_graph')
-        graph = _review_blocks(blocks, groups, atoms, edges, views, profile, subject=build.subject, requirements=build.requirements)
-        stage('intrablock_steps_and_interfaces')
-        block_summaries = _block_summaries(blocks)
-        plans = {}
-        for block in blocks:
-            local_codes = {atom['code'] for atom in block['atoms']}
-            local_edges = [e for e in edges if e['from_atom'] in local_codes and e['to_atom'] in local_codes]
-            payload = {
-                **context,
-                'block_summaries': block_summaries,
-                'block': _block_step_view(block),
-                'atom_codes': [atom['code'] for atom in block['atoms']],
-                'suggested_step_buckets': _suggest_step_buckets(block['atoms'], local_edges),
-                'topological_order': _strong_topo_order(block['atoms'], local_edges),
-                'strong_edges': [[e['from_atom'], e['to_atom']] for e in local_edges if e['edge_strength'] == 'strong'],
-                'max_intra_lines': len(block['atoms']) // 2,
-                'atom_edges': local_edges,
-            }
-            plan = ask('intrablock_steps', payload, 'knowledge_tree_block')
-            plans[block['code']] = repair(plan, lambda value: validate_steps(value, block['atoms'], local_edges, profile), 'intrablock_repair', payload)
-        lookup = {a['code']:i for i,a in enumerate(atoms)}
-        by_block = {b['code']:{a['code']:a for a in b['atoms']} for b in blocks}
-        interfaces = {}
-        for edge in graph['edges']:
-            if edge['is_retained']:
-                a,b = edge['from_block'],edge['to_block']
-                interfaces[a,b] = _interfaces(edge, by_block[a], by_block[b], edges, cosine, lookup, profile, subject=build.subject, block_summaries=block_summaries, requirements=build.requirements)
+        if build.requires_ulr and not native:
+            raise InvariantViolationError('build requires an ULR worker')
+        if build.checkpoint and build.checkpoint.get('version') != CHECKPOINT_VERSION:
+            raise InvariantViolationError('unsupported knowledge build checkpoint')
+
+        if cached := stage('archetype_dispatch'):
+            profile = ArchetypeProfile(**cached)
+        else:
+            archetype = build.archetype
+            if archetype == 'auto':
+                archetype = ask('archetype_classify', base_context(build), 'knowledge_tree_dispatch')['archetype']
+            profile = get_profile(archetype)
+            build.archetype = archetype
+            build.dispatch_profile = profile.as_dict()
+            save(build.dispatch_profile, 'archetype', 'dispatch_profile')
+        context = {**base_context(build), 'profile': profile.as_dict()}
+
+        if cached := stage('outline_and_atoms'):
+            modules, atoms = cached
+        else:
+            modules, atoms = _build_outline(context, profile)
+            save([modules, atoms])
+
+        if cached := stage('atom_edges'):
+            edges, encoded = cached
+            with np.load(BytesIO(b64decode(encoded)), allow_pickle=False) as arrays:
+                views = dict(arrays)
+            vectors = views['namegoal']
+            cosine = np.clip(vectors @ vectors.T, -1.0, 1.0)
+        else:
+            views = embed_views(atoms)
+            edges, cosine = _atom_edges(atoms, views, profile.as_dict(), subject=build.subject,
+                                        requirements=build.requirements)
+            if native:
+                archive = BytesIO()
+                np.savez_compressed(archive, **views)
+                save([edges, b64encode(archive.getvalue()).decode('ascii')])
+
+        cached = stage('kernel_clustering')
+        if cached:
+            groups, stats, titles, *entry_codes = cached
+        else:
+            groups, stats = _cluster(atoms, edges, views, profile)
+            groups = [[int(index) for index in group] for group in groups]
+        blocks = [{'code': f'B{i+1:02d}', 'atoms': [atoms[j] for j in group]} for i, group in enumerate(groups)]
+        if cached and (entry_codes or 'interblock_graph' in build.checkpoint):
+            entries = set(entry_codes[0]) if entry_codes else set()
+            for block, title in zip(blocks, titles, strict=True):
+                block.update(short_title=title, is_entry_block=block['code'] in entries)
+        else:
+            # Earlier checkpoints stored only the titles. Restore the entry hints before graph review.
+            _name_blocks(blocks, context)
+            save([groups, stats, [block['short_title'] for block in blocks],
+                  [block['code'] for block in blocks if block['is_entry_block']]])
+
+        if cached := stage('interblock_graph'):
+            graph, entries = cached
+            for block in blocks:
+                block['is_entry_block'] = block['code'] in entries
+        else:
+            graph = _review_blocks(blocks, groups, atoms, edges, views, profile, subject=build.subject,
+                                   requirements=build.requirements)
+            save([graph, [block['code'] for block in blocks if block['is_entry_block']]])
+
+        if cached := stage('intrablock_steps_and_interfaces'):
+            plans, pairs = cached
+            interfaces = {tuple(pair): rows for pair, rows in pairs}
+        else:
+            plans, interfaces = _plan_blocks(build, blocks, graph, atoms, edges, cosine, profile, context)
+            save([plans, list(interfaces.items())])
         build.stats = {**stats,'atom_count':len(atoms),'atom_edge_count':len(edges),'block_count':len(blocks),
                        'module_count':len(modules),'layer_count':max(graph['layers'].values()),
                        'step_count':sum(len(p['steps']) for p in plans.values()),
                        'interface_count':sum(len(v) for v in interfaces.values())}
+        runtime_observation.get()['stage'] = 'publication'
         _persist(build,modules,atoms,edges,blocks,graph,plans,interfaces)
         try:
             from .block_study import auto_mount_internal_resources

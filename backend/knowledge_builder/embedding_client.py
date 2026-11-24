@@ -1,10 +1,12 @@
 """Strict batched client for configured online embedding endpoints (e.g. SiliconFlow / llama-server)."""
 import os
+from time import monotonic
 
 import httpx
 import numpy as np
 
 from ai_engine import config
+from ai_engine.observability import log_ai_operation, model_token_counts, runtime_observation
 from .exceptions import EmbeddingError
 
 _DIMENSION_PARAM_MODELS = ("qwen3-embedding", "text-embedding-3")
@@ -50,6 +52,8 @@ def _request_batch(texts):
     body = {"model": config.EMBEDDING_MODEL, "input": texts}
     if _should_send_dimensions(config.EMBEDDING_MODEL, expected_dim):
         body["dimensions"] = expected_dim
+    started = monotonic()
+    payload = None
     try:
         response = httpx.post(
             endpoint,
@@ -66,6 +70,16 @@ def _request_batch(texts):
         raise EmbeddingError(f"Embedding HTTP/JSON request failed: {error}{suffix}") from error
     except (httpx.HTTPError, ValueError) as error:
         raise EmbeddingError(f"Embedding HTTP/JSON request failed: {error}") from error
+    finally:
+        if runtime_observation.get():
+            details = payload if isinstance(payload, dict) else {}
+            reported = details.get('model')
+            log_ai_operation('knowledge_tree.embedding', payload is not None, round((monotonic() - started) * 1000),
+                'none' if payload is not None else 'upstream', metadata={
+                    'kind': 'embedding', 'model': config.EMBEDDING_MODEL, 'input_count': len(texts),
+                    'reported_model': reported if isinstance(reported, str) and len(reported) <= 160 else None,
+                    **model_token_counts(details.get('usage')),
+                })
     if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
         raise EmbeddingError("Embedding response must contain a data array")
     rows = payload["data"]

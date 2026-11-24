@@ -14,7 +14,7 @@ from ai_assistant.models import AIChatMessage
 
 VISUAL_DEMO_REQUEST = re.compile(r'可视化|演示|互动|交互实验|图解|示意图|画(?:一个|一张|一|个)?图|用图片|动态(?:展示|图)')
 EXERCISE_REQUEST = re.compile(r'出题|出(?:一|几|两|\d+)道|来(?:一|几|两|\d+)道|做(?:一|几|两|\d+)道|刷题|练一练|练练|'
-                              r'(?:生成|抽取).{0,8}(?:题目|练习题)')
+                              r'给(?:我)?(?:一|几|两|\d+)道(?:练习)?题|(?:生成|抽取).{0,8}(?:题目|练习题)')
 
 
 class ExperimentConflict(APIException):
@@ -83,13 +83,13 @@ def attach_to_chat(user, current, messages, tools, executor):
     return refresh(executor, [*tools, *fixed])
 
 
-def anchor_for(user, conversation_id):
+def anchor_for(user, conversation_id, *, artifacts=None):
     check_access(user)
     anchor = AIChatMessage.objects.filter(user=user, conversation_id=conversation_id,
         role='user', bot__bot_type='planner').order_by('id').first()
     if not anchor:
         raise NotFound('实验所在对话不存在。')
-    return anchor
+    return artifacts.overlay(anchor) if artifacts is not None else anchor
 
 
 def load_experiment(anchor, experiment_id):
@@ -99,8 +99,11 @@ def load_experiment(anchor, experiment_id):
     return experiment
 
 
-def save_experiment(anchor, experiment_id, experiment):
+def save_experiment(anchor, experiment_id, experiment, *, artifacts=None):
     experiments = {**anchor.metadata.get('learning_experiments', {}), experiment_id: experiment}
+    if artifacts is not None:
+        artifacts.stage(anchor, 'learning_experiments', experiments)
+        return
     metadata = {**anchor.metadata, 'learning_experiments': experiments}
     # Preserve concurrent note/context/state changes without adding a new table.
     if not AIChatMessage.objects.filter(pk=anchor.pk, metadata=anchor.metadata).update(metadata=metadata):
@@ -175,7 +178,7 @@ def preview(html, state, checks, *, current=None):
     return report
 
 
-def execute(user, name, arguments, chat_context):
+def execute(user, name, arguments, chat_context, *, artifacts=None):
     check_access(user)
     definition = next(tool['function'] for tool in EXPERIMENT_TOOLS if tool['function']['name'] == name)
     error = next(Draft202012Validator(definition['parameters'], format_checker=FormatChecker()).iter_errors(arguments), None)
@@ -188,7 +191,7 @@ def execute(user, name, arguments, chat_context):
         raise PermissionDenied('学习实验需要当前对话授权。')
     if name == 'build_learning_experiment' and not allows_interaction(current):
         raise PermissionDenied('交互卡片仅用于解答和讲解问题，本轮不能生成交互。')
-    anchor = anchor_for(user, current.conversation_id)
+    anchor = anchor_for(user, current.conversation_id, artifacts=artifacts)
     experiment_id = arguments.get('experiment_id')
     if name == 'read_learning_experiment':
         return load_experiment(anchor, experiment_id)
@@ -216,6 +219,8 @@ def execute(user, name, arguments, chat_context):
     experiment_id = experiment_id or str(uuid4())
     # Read the latest state after the preview; never persist state produced by automated checks.
     anchor.refresh_from_db()
+    if artifacts is not None:
+        artifacts.overlay(anchor)
     latest = load_experiment(anchor, experiment_id) if previous else None
     if latest and latest['revision'] != previous['revision']:
         raise ExperimentConflict()
@@ -226,7 +231,7 @@ def execute(user, name, arguments, chat_context):
         'revision': previous['revision'] + 1 if previous else 1,
         'state': latest['state'] if latest else {}, 'state_version': latest['state_version'] if latest else 0,
         'checks': arguments['checks'], 'preview': report}
-    save_experiment(anchor, experiment_id, experiment)
+    save_experiment(anchor, experiment_id, experiment, artifacts=artifacts)
     return {'experiment_id': experiment_id, 'revision': experiment['revision'], 'preview': report,
         'visual': {'type': 'learning_experiment', 'payload': {
             'title': experiment['title'], 'experiment_id': experiment_id,

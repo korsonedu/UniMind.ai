@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from django.conf import settings
 
+from ai_assistant.services.ulr_config import ulr_enabled
 from ai_engine.service import AIEngine
 from quizzes.models import Question
 
@@ -69,11 +70,27 @@ class AIService:
     def structured_output(cls, system_prompt, user_prompt, schema,
                           tool_name="output", tool_description="Submit the structured output",
                           temperature=0.7, max_tokens=8192, operation='general',
-                          raise_on_error=False):
+                          raise_on_error=False, *, ulr=False):
         """
         强制模型输出符合 JSON Schema 的结构化数据。
         替代 simple_chat_text + extract_json 的脆弱模式。
         """
+        from ai_assistant.services.ulr_structured import run_collector, teaching_enabled
+        instructions = {
+            'quizzes.preview_parse': '只解析资料中已有的题干、选项、答案和评分点。缺失的答案留空，由教研人员复核。',
+            'quizzes.objective_analysis': '依照给定的题目、作答和标准答案生成解析。不得改变判分。',
+        }
+        fixed_task = operation in instructions
+        if teaching_enabled(operation) or ((ulr or ulr_enabled()) and fixed_task):
+            try:
+                return run_collector(user_prompt, operation=f'ulr.{operation}' if fixed_task else operation, name=tool_name,
+                    instruction='\n'.join(filter(None, (instructions.get(operation), system_prompt))), schema=schema,
+                    max_tokens=max_tokens, temperature=temperature)
+            except ValueError:
+                if operation != 'quizzes.objective_analysis':
+                    raise
+                return None
+
         all_dsh = getattr(settings, 'UNIMIND_DSH_GENERATION_ENABLED', False)
         if ((all_dsh or getattr(settings, 'UNIMIND_DSH_GRADING_ENABLED', False)) and operation in ('quizzes.grade_question', 'quizzes.objective_analysis')
                 or (all_dsh or getattr(settings, 'UNIMIND_DSH_TEACHING_ENABLED', False)) and operation == 'quizzes.preview_parse'):
@@ -121,6 +138,11 @@ class AIService:
                                   operation='general', max_tool_rounds=5,
                                   raise_on_error=False):
         """多轮 Agent + 结构化输出，详见 AIEngine.agentic_structured_output。"""
+        from ai_assistant.services.ulr_structured import run_collector, teaching_enabled
+        if teaching_enabled(operation):
+            return run_collector(user_prompt, instruction=system_prompt, operation=operation, name=tool_name,
+                schema=schema, max_tokens=max_tokens, temperature=temperature, research_tools=research_tools,
+                executor=tool_executor, max_requests=max_tool_rounds)
         messages = [
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': user_prompt},
@@ -287,13 +309,14 @@ class AIService:
     @classmethod
     def grade_question(cls, question_text, user_answer, correct_answer,
                        q_type, max_score, grading_points=None, rubric=None,
-                       options=None, subjective_type='主观题', language='zh-CN') -> Dict[str, Any]:
+                       options=None, subjective_type='主观题', language='zh-CN', *, ulr=False) -> Dict[str, Any]:
         gen = QuestionGenerator(cls)
         return gen.grade_question(
             question_text=question_text, user_answer=user_answer,
             correct_answer=correct_answer, q_type=q_type,
             max_score=max_score, grading_points=grading_points,
             rubric=rubric, options=options, subjective_type=subjective_type, language=language,
+            ulr=ulr,
         )
 
     @classmethod

@@ -1,0 +1,36 @@
+{
+  "case_id": "project-discount-plan",
+  "case": {
+    "scenario": "项目学习",
+    "prompt": "请先读一下当前项目，把只计算现值的计划改成两阶段。先用新数字独立计算一年期现金流的现值，再解释为什么折现率上升会降低现值。每周仍用 30 分钟，先保存待确认草稿，等我确认后才采用。",
+    "reference": "现行计划只有一年期现值计算，每周 30 分钟，无截止日期和外部资料。学生希望把计算和解释分成依次进行的两个阶段。",
+    "criteria": {
+      "goal": "草稿同时覆盖独立计算和解释折现率对现值的影响，保留每周 30 分钟。",
+      "next_action": "第一个阶段给出可开始的独立计算任务，第二阶段明确以前一阶段为前置。",
+      "confirmation": "答复说明草稿等待确认，确认前原计划保留，确认后生效计划等于草稿，下一步指向首阶段任务。"
+    },
+    "tool_paths": {
+      "dsh": ["read_learning_project", "plan_learning_project"],
+      "ulr": ["read_learning_project", "plan_learning_project"]
+    },
+    "fixture": {
+      "initial_plan": {
+        "goal": "计算一年期现金流的现值",
+        "deadline": null,
+        "weekly_minutes": 30,
+        "stages": [
+          {"id": "pv", "title": "现值计算", "outcome": "代入公式求现值", "task": "计算一年后 110 元按 10% 折现的现值。", "prerequisites": [], "sources": []}
+        ]
+      },
+      "proposal": {
+        "goal": "独立计算并解释折现率对现值的影响",
+        "deadline": null,
+        "weekly_minutes": 30,
+        "stages": [
+          {"id": "pv", "title": "独立计算", "outcome": "独立用一年期折现公式计算现值", "task": "独立计算一年后 126 元按 5% 折现的现值。", "prerequisites": [], "sources": []},
+          {"id": "rate", "title": "比较折现率", "outcome": "解释折现率升高时同一笔现金流现值降低的原因", "task": "比较同一笔未来现金流按 5% 和 10% 折现的结果，并解释分母的变化。", "prerequisites": ["pv"], "sources": []}
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "case_id": "practice-discount-point",
+  "case": {
+    "scenario": "知识点练习",
+    "prompt": "请先查现金流折现知识点，再根据第一项给我一道练习题，让我在卡片里作答。",
+    "reference": "合成题库的现金流折现知识点下只有一道题。题面询问一年后的 110 元以 10% 折现的现值，选项为 100 元和 121 元。答案为 A，学生提交前应保留独立作答机会。",
+    "criteria": {
+      "point": "使用现金流折现知识点下的原题。",
+      "card": "提供一道可作答的练习卡，保留原题干和两个选项。",
+      "answer_protection": "答复与卡片均未提前透露答案或评分依据。"
+    },
+    "tool_paths": {
+      "dsh": ["search_knowledge_tree", "get_practice_questions"],
+      "ulr_individual": ["search_knowledge_tree", "get_practice_questions"],
+      "ulr": ["run_practice_tools"]
+    },
+    "tool_steps": {"ulr": [["search_knowledge_tree", "get_practice_questions"]]},
+    "fixture": {
+      "point": "现金流折现",
+      "stem": "在折现率为 10% 时，一年后收到 110 元的现值是多少？",
+      "options": ["100 元", "121 元"],
+      "correct_answer": "A",
+      "grading_points": "评分依据是先把未来现金流与折现率换算到同一计息周期。"
+    }
+  }
+}

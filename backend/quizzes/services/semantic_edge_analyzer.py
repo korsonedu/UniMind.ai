@@ -7,6 +7,9 @@
 import json
 import logging
 import time
+from collections import defaultdict
+
+from django.db import transaction
 
 from quizzes.models import KnowledgePoint, KnowledgeEdge
 
@@ -37,19 +40,17 @@ source_name 和 target_name 必须与给定列表中的名称**逐字一致**。
 
 
 def run_semantic_edge_analysis(*, subject: str, institution_id: int = None,
-                                min_confidence: float = 0.6) -> dict:
+                                min_confidence: float = 0.6, dry_run: bool = False) -> dict:
     """
     对指定学科执行全量语义边分析。
 
-    返回: {"created": int, "valid_edges": int, "raw_results": int, "elapsed": float}
+    dry_run 只返回待审核候选，不写入。
     """
     t0 = time.time()
 
     # ── 1. 加载 KP，按 SEC 分组 ──
-    qs = KnowledgePoint.objects.filter(subject=subject, level='kp').select_related('parent')
-    if institution_id:
-        qs = qs.filter(institution_id=institution_id)
-    kps = list(qs.order_by('parent_id', 'order', 'id'))
+    scoped_points = KnowledgePoint.objects.filter(subject=subject, level='kp', institution_id=institution_id)
+    kps = list(scoped_points.select_related('parent').order_by('parent_id', 'order', 'id'))
 
     if not kps:
         logger.warning("semantic_edge_analyzer: subject=%s has no KPs", subject)
@@ -57,20 +58,21 @@ def run_semantic_edge_analysis(*, subject: str, institution_id: int = None,
 
     sec_groups = {}
     for kp in kps:
-        sec_id = kp.parent_id
-        sec_name = kp.parent.name if kp.parent else '(无章节)'
+        parent = kp.parent if kp.parent and kp.parent.institution_id == institution_id else None
+        sec_id = parent.pk if parent else None
+        sec_name = parent.name if parent else '(无章节)'
         sec_groups.setdefault(sec_id, {'name': sec_name, 'kps': []})
         sec_groups[sec_id]['kps'].append({
             'id': kp.id, 'name': kp.name, 'order': kp.order,
         })
 
     all_summary_lines = []
-    id_to_name = {}
+    ids_by_name = defaultdict(list)
     for sec_id, group in sec_groups.items():
         for kp in group['kps']:
             line = f"[{kp['id']}] {group['name']} › {kp['name']}"
             all_summary_lines.append(line)
-            id_to_name[kp['id']] = kp['name']
+            ids_by_name[kp['name']].append(kp['id'])
     all_summary = "\n".join(all_summary_lines)
 
     sec_ids = list(sec_groups.keys())
@@ -78,6 +80,7 @@ def run_semantic_edge_analysis(*, subject: str, institution_id: int = None,
 
     # ── 2. 逐 SEC 送 LLM ──
     all_results = []
+    raw_results = 0
     for idx, sec_id in enumerate(sec_ids):
         group = sec_groups[sec_id]
         sec_kps = group['kps']
@@ -95,19 +98,17 @@ def run_semantic_edge_analysis(*, subject: str, institution_id: int = None,
         batch_results = _call_llm(SYSTEM_PROMPT, user_msg)
 
         if batch_results:
+            raw_results += len(batch_results)
+            section_points = {kp['id'] for kp in sec_kps}
             mapped = 0
             for r in batch_results:
-                src_name = r.get('source_name', '')
-                tgt_name = r.get('target_name', '')
-                src_id = _find_id(src_name, all_summary_lines)
-                tgt_id = _find_id(tgt_name, all_summary_lines)
-                if src_id and tgt_id:
-                    r['source_id'] = src_id
-                    r['target_id'] = tgt_id
+                sources = [pk for pk in ids_by_name.get(r.get('source_name'), ()) if pk in section_points]
+                targets = ids_by_name.get(r.get('target_name'), ())
+                if len(sources) == len(targets) == 1:
+                    all_results.append({**r, 'source_id': sources[0], 'target_id': targets[0]})
                     mapped += 1
             logger.info("  [%d/%d] %s: %d raw → %d mapped",
                         idx + 1, len(sec_ids), group['name'][:40], len(batch_results), mapped)
-            all_results.extend(batch_results)
         else:
             logger.info("  [%d/%d] %s: no results", idx + 1, len(sec_ids), group['name'][:40])
 
@@ -118,19 +119,28 @@ def run_semantic_edge_analysis(*, subject: str, institution_id: int = None,
     valid = [r for r in all_results
              if r.get('relation') != 'none'
              and r.get('confidence', 0) >= min_confidence
-             and r.get('source_id') and r.get('target_id')
              and r['source_id'] != r['target_id']]
 
     # ── 4. 写入 ──
-    created = _create_edges(valid, institution_id)
+    with transaction.atomic():
+        point_ids = {row[key] for row in valid for key in ('source_id', 'target_id')}
+        points = scoped_points.filter(pk__in=point_ids).order_by('pk')
+        if not dry_run:
+            points = points.select_for_update()
+        visible = set(points.values_list('pk', flat=True))
+        valid = [row for row in valid if row['source_id'] in visible and row['target_id'] in visible]
+        created = 0 if dry_run else _create_edges(valid, institution_id)
     elapsed = time.time() - t0
     logger.info("semantic_edge_analyzer: %d edges created, %.1fs", created, elapsed)
-    return {
+    result = {
         "created": created,
         "valid_edges": len(valid),
-        "raw_results": len(all_results),
+        "raw_results": raw_results,
         "elapsed": round(elapsed, 1),
     }
+    if dry_run:
+        result['preview'] = valid
+    return result
 
 
 def _call_llm(system_msg: str, user_msg: str) -> list:
@@ -184,32 +194,6 @@ def _call_llm(system_msg: str, user_msg: str) -> list:
     return result
 
 
-def _find_id(name: str, summary_lines: list[str]) -> int | None:
-    """在全局摘要中按名字精确匹配 KP ID。
-
-    summary line 格式: [id] SEC名称 › KP名称
-    只匹配 › 之后的 KP 名称部分，避免子串误匹配
-    （如 "极限" 误匹配 "极限存在准则" 或 SEC 名 "极限与连续"）。
-    """
-    if not name:
-        return None
-    for line in summary_lines:
-        sep = ' › '
-        sep_idx = line.rfind(sep)
-        if sep_idx == -1:
-            continue
-        if line[sep_idx + len(sep):] != name:
-            continue
-        start = line.find('[')
-        end = line.find(']')
-        if start >= 0 and end > start:
-            try:
-                return int(line[start + 1:end])
-            except ValueError:
-                pass
-    return None
-
-
 def _create_edges(results: list[dict], institution_id: int = None) -> int:
     """去重并写入 KnowledgeEdge（source_type='llm', is_active=False）。
 
@@ -234,9 +218,6 @@ def _create_edges(results: list[dict], institution_id: int = None) -> int:
             'source_type': 'llm',
             'is_active': False,
         }
-        if institution_id:
-            kwargs['institution_id'] = institution_id
-
         is_symmetric = r['relation'] in SYMMETRIC_RELATIONS
         directions = (
             [(r['source_id'], r['target_id']), (r['target_id'], r['source_id'])]
@@ -249,6 +230,7 @@ def _create_edges(results: list[dict], institution_id: int = None) -> int:
                     source_id=src,
                     target_id=tgt,
                     edge_type=r['relation'],
+                    institution_id=institution_id,
                     defaults=kwargs,
                 )
                 if is_new:

@@ -1,0 +1,36 @@
+{
+  "case_id": "teaching-parse-discount-sheet",
+  "case": {
+    "scenario": "教研录题",
+    "prompt": "从合成教研资料解析题目，保留题干、选项和已给出的答案。缺失内容交给人工审核。",
+    "reference": "1. 一年后收到 110 元，按 10% 折现的现值是多少？\nA. 100 元\nB. 121 元\n答案：A\n\n2. 在未来现金流固定时，为什么折现率越高，现值越低？",
+    "criteria": {
+      "source_fidelity": "两道题的原题干均保留，选择题的两个选项顺序及答案与原文一致。",
+      "missing_answer": "第二题缺少原答案和评分点，待审草稿中相应字段留空。",
+      "review_gate": "确认前题库无新增。只确认第一题时，仅第一题入库一次，重复确认不新增题目。"
+    },
+    "fixture": {
+      "knowledge_point": "现金流折现",
+      "questions": [
+        {
+          "question": "一年后收到 110 元，按 10% 折现的现值是多少？",
+          "q_type": "objective",
+          "subjective_type": null,
+          "options": ["100 元", "121 元"],
+          "answer": "A",
+          "grading_points": null,
+          "difficulty_level": "normal"
+        },
+        {
+          "question": "在未来现金流固定时，为什么折现率越高，现值越低？",
+          "q_type": "subjective",
+          "subjective_type": "short",
+          "options": null,
+          "answer": "",
+          "grading_points": null,
+          "difficulty_level": "normal"
+        }
+      ]
+    }
+  }
+}

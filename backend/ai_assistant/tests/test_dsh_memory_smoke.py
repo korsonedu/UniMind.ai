@@ -2,13 +2,15 @@
 import json
 import sys
 import uuid
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from ai_assistant.models import AgentMemory, MemoryExtractionLog, Bot, Conversation, AIChatMessage
 from ai_assistant.services.memory_service import _extract_memories_via_dsh, _merge_memory_candidates
-from users.models import User
+from ai_assistant.services.ulr_memory import extract_answer_memory
+from users.models import CourseStudentStatus, User
 
 
 class DshMemorySmoke(TestCase):
@@ -19,10 +21,11 @@ class DshMemorySmoke(TestCase):
             {'role': 'user', 'content': '我喜欢先看具体例子再看公式推导'},
             {'role': 'assistant', 'content': '明白，我会先用例子引入。'},
         ]
-        bot = Bot.objects.create(name='小宇', bot_type='planner', system_prompt='合成记忆验证')
+        bot = Bot.objects.create(is_xiaoyu=True, name='小宇', bot_type='planner', system_prompt='合成记忆验证')
         self.conversation = Conversation.objects.create(user=self.user, bot=bot, conversation_id=self.conversation_id)
-        AIChatMessage.objects.create(user=self.user, bot=bot, conversation_id=self.conversation_id,
+        self.question = AIChatMessage.objects.create(user=self.user, bot=bot, conversation_id=self.conversation_id,
             role='user', content=self.history[0]['content'])
+        self.answer = self.answer_for(self.question)
         self.candidate = {
             'memory_type': 'preference',
             'key': '讲解风格',
@@ -30,6 +33,11 @@ class DshMemorySmoke(TestCase):
             'confidence': 0.9,
             'evidence': '我喜欢先看具体例子再看公式推导',
         }
+
+    def answer_for(self, question):
+        return AIChatMessage.objects.create(user=self.user, bot=question.bot, conversation_id=self.conversation_id,
+            role='assistant', content=self.history[1]['content'],
+            metadata={'learning_turn': {'message_id': question.pk, 'completed': True}})
 
     def _run(self, candidates):
         with patch('ai_assistant.services.dsh_tasks.run_structured', return_value={'memories': candidates}) as task, \
@@ -88,6 +96,85 @@ class DshMemorySmoke(TestCase):
         self.assertFalse(AgentMemory.objects.exists())
         self.assertFalse(MemoryExtractionLog.objects.exists())
 
+    def test_ulr_discards_memory_when_entitlement_is_revoked_during_extraction(self):
+        status = CourseStudentStatus.objects.create(user=self.user, is_course_student=True)
+
+        def revoke(*args, **kwargs):
+            CourseStudentStatus.objects.filter(pk=status.pk).update(is_course_student=False)
+            return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+                'function': {'name': 'submit_memories', 'arguments': json.dumps({'memories': [self.candidate]})},
+            }]}}]}
+
+        with patch('ai_engine.service.AIEngine.call_provider', side_effect=revoke) as call:
+            extract_answer_memory(self.question.pk, self.answer.pk)
+            extract_answer_memory(self.question.pk, self.answer.pk)
+        call.assert_called_once()
+        self.assertFalse(AgentMemory.objects.exists())
+        self.assertFalse(MemoryExtractionLog.objects.exists())
+
+    def test_ulr_repeated_text_does_not_replace_a_deleted_source(self):
+        CourseStudentStatus.objects.create(user=self.user, is_course_student=True)
+        question_id, answer_id = self.question.pk, self.answer.pk
+
+        def replace_question(*_args, **_kwargs):
+            AIChatMessage.objects.filter(pk=question_id).delete()
+            return {'memories': [self.candidate]}
+
+        repeated = AIChatMessage.objects.create(user=self.user, bot=self.question.bot,
+            conversation_id=self.conversation_id, role='user', content=self.question.content)
+        new_answer = self.answer_for(repeated)
+        with patch('ai_assistant.services.ulr_memory.run_collector', side_effect=replace_question) as collect:
+            self.assertEqual(extract_answer_memory(repeated.pk, answer_id), 0)
+            self.assertEqual(extract_answer_memory(question_id, answer_id), 0)
+            self.assertEqual(extract_answer_memory(question_id, answer_id), 0)
+            collect.assert_called_once()
+        self.assertFalse(AgentMemory.objects.exists())
+        self.assertFalse(MemoryExtractionLog.objects.exists())
+        with patch('ai_assistant.services.ulr_memory.run_collector', return_value={'memories': [self.candidate]}) as collect:
+            self.assertEqual(extract_answer_memory(repeated.pk, new_answer.pk), 1)
+            self.assertEqual(extract_answer_memory(repeated.pk, new_answer.pk), 0)
+            collect.assert_called_once()
+        log = MemoryExtractionLog.objects.get()
+        self.assertEqual((log.source_message_id, log.answer_message_id), (repeated.pk, new_answer.pk))
+
+    def test_ulr_memory_retries_transient_provider_failure_once(self):
+        from ai_assistant.models import PendingMemoryExtraction
+        from ai_assistant.services.ulr_memory import extract_pending_memory
+        from ai_assistant.tasks import dispatch_pending_memory_extractions, extract_memory_turn
+        from ai_engine.service import AICallError
+
+        CourseStudentStatus.objects.create(user=self.user, is_course_student=True)
+        unavailable = AICallError('Synthetic provider outage', retryable=True, error_category='upstream_5xx')
+        valid = {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+            'function': {'name': 'submit_memories', 'arguments': json.dumps({'memories': [self.candidate]})},
+        }]}}]}
+        for second_result in (unavailable, valid):
+            with self.subTest(recovered=second_result is valid):
+                job = PendingMemoryExtraction.objects.create(source_message=self.question, answer_message=self.answer)
+                jobs = PendingMemoryExtraction.objects.filter(pk=job.pk)
+                with patch('ai_engine.service.AIEngine.call_provider', side_effect=[unavailable, second_result]) as provider:
+                    self.assertEqual(extract_pending_memory(job.pk), 0)
+                    self.assertTrue(jobs.get().provider_retry_used)
+                    self.assertEqual(extract_pending_memory(job.pk), 0)
+                    provider.assert_called_once()
+                    self.assertFalse(MemoryExtractionLog.objects.exists())
+                    jobs.update(running_until=timezone.now(), dispatch_after=timezone.now())
+                    with patch.object(extract_memory_turn, 'apply_async') as enqueue:
+                        self.assertEqual(dispatch_pending_memory_extractions.run(), 1)
+                    enqueue.assert_called_once_with((self.question.pk, self.answer.pk),
+                        {'pending_job_id': job.pk}, retry=False, ignore_result=True)
+                    if second_result is unavailable:
+                        with self.assertRaises(ValueError):
+                            extract_pending_memory(job.pk)
+                    else:
+                        self.assertEqual(extract_pending_memory(job.pk), 1)
+                    self.assertFalse(jobs.exists())
+                    self.assertEqual(extract_pending_memory(job.pk), 0)
+                    self.assertEqual(provider.call_count, 2)
+        log = MemoryExtractionLog.objects.get()
+        self.assertEqual((log.source_message_id, log.answer_message_id), (self.question.pk, self.answer.pk))
+        self.assertEqual(AgentMemory.objects.count(), 1)
+
     @override_settings(UNIMIND_DSH_MEMORY_ENABLED=True)
     def test_mem0_auto_extract_is_disabled_when_dsh_memory_enabled(self):
         from ai_assistant.services.memory_service import extract_memories_with_mem0
@@ -95,6 +182,52 @@ class DshMemorySmoke(TestCase):
              patch('ai_assistant.utils._THREAD_POOL.submit') as submit:
             extract_memories_with_mem0(self.user, self.history)
         submit.assert_not_called()
+
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr', UNIMIND_DSH_MEMORY_ENABLED=False,
+                       UNIMIND_DSH_GENERATION_ENABLED=False)
+    def test_ulr_routes_memory_extraction_and_keeps_semantic_search(self):
+        from ai_assistant.models import PendingMemoryExtraction
+        from ai_assistant.services.memory_service import extract_memories_async, extract_memories_with_mem0
+        from ai_assistant.services.tenant_memory import TenantMemoryManager
+        from ai_assistant.services.ulr_memory import extract_pending_memory, publish_memory_extraction
+        from ai_assistant.tasks import dispatch_pending_memory_extractions, extract_memory_turn
+        from kombu.exceptions import OperationalError
+
+        self.user.institution_id = 1
+        with (
+            patch('ai_assistant.services.memory_service.USE_MEM0', True),
+            patch('ai_assistant.utils._THREAD_POOL.submit') as submit,
+            patch('ai_assistant.services.ulr_memory.publish_after_commit') as dispatch,
+        ):
+            extract_memories_async(self.user, self.history, self.conversation_id,
+                                   source_message_id=self.question.pk, answer_message_id=self.answer.pk)
+            extract_memories_with_mem0(self.user, self.history)
+        job = PendingMemoryExtraction.objects.get(answer_message_id=self.answer.pk)
+        submit.assert_not_called()
+        dispatch.assert_called_once_with(publish_memory_extraction, job.pk)
+        args = (self.question.pk, self.answer.pk)
+        delivery = {'pending_job_id': job.pk}
+        with patch.object(extract_memory_turn, 'apply_async', side_effect=OperationalError('offline')) as enqueue:
+            assert not publish_memory_extraction(job.pk)
+            enqueue.assert_called_once_with(args, delivery, retry=False, ignore_result=True)
+        with patch.object(extract_memory_turn, 'apply_async') as enqueue:
+            assert dispatch_pending_memory_extractions.run() == 1
+            enqueue.assert_called_once_with(args, delivery, retry=False, ignore_result=True)
+            assert PendingMemoryExtraction.objects.filter(pk=job.pk, running_until__isnull=True).exists()
+            assert dispatch_pending_memory_extractions.run() == 0
+        with patch('ai_assistant.services.ulr_memory.extract_answer_memory', return_value=1) as extract:
+            assert extract_pending_memory(job.pk) == 1
+            assert extract_pending_memory(job.pk) == 0
+            extract.assert_called_once_with(*args, redelivered=True)
+        assert not PendingMemoryExtraction.objects.exists()
+
+        manager = object.__new__(TenantMemoryManager)
+        manager.memory, manager.institution_id = Mock(), self.user.institution_id
+        manager.add(self.user.pk, '我喜欢看具体例子。')
+        manager.memory.add.assert_not_called()
+        manager.memory.search.return_value = {'results': [{'memory': '合成学习偏好'}]}
+        assert manager.search(self.user.pk, '例子') == [{'memory': '合成学习偏好'}]
+        manager.memory.search.assert_called_once_with('例子', filters={'user_id': str(self.user.pk)}, top_k=5)
 
 
 def test_memory_task_uses_fast_single_request(settings, tmp_path, monkeypatch):

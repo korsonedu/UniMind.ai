@@ -154,6 +154,7 @@ class AIUsageReservation(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='ai_reservations')
     request_id = models.UUIDField()
     attempt_id = models.UUIDField()
+    conversation_id = models.UUIDField(null=True, blank=True, db_index=True)
     fingerprint = models.CharField(max_length=64, blank=True)
     week = models.DateField()
     status = models.CharField(max_length=12, choices=[('pending', '处理中'), ('succeeded', '已完成'), ('released', '已释放')], default='pending')
@@ -164,4 +165,8 @@ class AIUsageReservation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=['user', 'request_id'], name='unique_user_ai_request')]
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'request_id'], name='unique_user_ai_request'),
+            models.UniqueConstraint(fields=['user', 'conversation_id'],
+                condition=models.Q(status='pending', conversation_id__isnull=False), name='unique_pending_ai_conversation'),
+        ]

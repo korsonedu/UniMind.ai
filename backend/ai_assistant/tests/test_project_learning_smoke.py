@@ -11,7 +11,7 @@ from ai_assistant.services.dsh_service import build_context, execute_tool, memor
 from ai_assistant.services.learning_resources import find_resources, public_text
 from ai_assistant.tasks_learning import send_project_learning_followups
 from notifications.models import Notification
-from users.models import User, CourseStudentStatus
+from users.models import AIUsageReservation, User, CourseStudentStatus
 
 
 @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}},
@@ -138,6 +138,64 @@ class ProjectLearningSmoke(APITestCase):
         self.client.patch(self.url, {'action': 'pause', 'revision': state['revision']}, format='json')
         self.assertIsNone(ProjectLearning.objects.get(pk=self.state.pk).followup_at)
         self.assertEqual(send_project_learning_followups()['sent'], 0)
+
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr')
+    def test_switch_requires_successful_reply_for_old_model_plan_and_reminder(self):
+        CourseStudentStatus.objects.create(user=self.user, is_course_student=True)
+        self.make_plan()
+        request_id = uuid.uuid4()
+        self.message.metadata = {'runtime_request_id': str(request_id)}
+        self.message.save(update_fields=['metadata'])
+        receipt = AIUsageReservation.objects.create(user=self.user, request_id=request_id, attempt_id=uuid.uuid4(),
+            week=timezone.now().date(), status='released', response={'done': True, 'is_error': True})
+        with override_settings(UNIMIND_LEARNING_RUNTIME='legacy', UNIMIND_ULR_PROTOTYPE=False):
+            proposed = change_learning(self.project, {'action': 'plan', 'revision': 1,
+                'plan': {**self.plan, 'goal': '旧模型提出的新目标'}, 'require_confirmation': True},
+                model=True, message=self.message)
+        self.assertTrue(proposed['pending_plan'])
+        self.assertFalse(self.client.get(self.url).data['pending_plan'])
+        response = self.client.patch(self.url, {'action': 'accept', 'revision': 2}, format='json')
+        self.assertEqual(response.status_code, 409)
+        receipt.response = {}
+        receipt.save(update_fields=['response'])
+        ProjectLearning.objects.filter(pk=self.state.pk).update(reminders_enabled=True)
+        change_learning(self.project, {'action': 'schedule', 'revision': 2, 'followup_text': '失败答复留下的提醒'},
+                        model=True, message=self.message)
+        ProjectLearning.objects.filter(pk=self.state.pk).update(followup_at=timezone.now())
+        self.assertEqual(send_project_learning_followups()['sent'], 0)
+        self.assertFalse(Notification.objects.filter(recipient=self.user).exists())
+
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr')
+    def test_switch_hides_a_pending_legacy_proposal_until_its_reply_succeeds(self):
+        self.make_plan()
+        request_id = uuid.uuid4()
+        self.message.metadata = {'runtime_request_id': str(request_id)}
+        self.message.save(update_fields=['metadata'])
+        receipt = AIUsageReservation.objects.create(user=self.user, request_id=request_id, attempt_id=uuid.uuid4(),
+            week=timezone.now().date(), status='pending')
+        goal = '旧模型正在准备的新目标'
+        with override_settings(UNIMIND_LEARNING_RUNTIME='legacy', UNIMIND_ULR_PROTOTYPE=False):
+            proposed = change_learning(self.project, {'action': 'plan', 'revision': 1,
+                'plan': {**self.plan, 'goal': goal}, 'require_confirmation': True}, model=True, message=self.message)
+        event_id = proposed['events'][0]['id']
+        current = self.client.get(self.url).data
+        self.assertEqual(current['plan']['goal'], self.plan['goal'])
+        self.assertEqual(current['pending_plan'], {})
+        self.assertNotIn(event_id, [event['id'] for event in current['events']])
+        for action in ('accept', 'reject'):
+            self.assertEqual(self.client.patch(self.url, {'action': action, 'revision': 2}, format='json').status_code, 409)
+        receipt.status, receipt.response = 'succeeded', {'engine': 'ulr', 'metadata': {
+            'ulr_plan': {'pending_plan': True, 'event_id': event_id + 1}}}
+        receipt.save(update_fields=['status', 'response'])
+        self.assertEqual(self.client.get(self.url).data['pending_plan'], {})
+        receipt.status, receipt.response = 'succeeded', {'engine': 'dsh', 'done': True}
+        receipt.save(update_fields=['status', 'response'])
+        current = self.client.get(self.url).data
+        self.assertEqual(current['pending_plan']['plan']['goal'], goal)
+        self.assertIn(event_id, [event['id'] for event in current['events']])
+        accepted = self.client.patch(self.url, {'action': 'accept', 'revision': 2}, format='json')
+        self.assertEqual(accepted.status_code, 200, accepted.data)
+        self.assertEqual(accepted.data['plan']['goal'], goal)
 
     def test_sources_must_be_read_and_private_hosts_are_blocked(self):
         bad = {**self.plan, 'stages': [{**self.plan['stages'][0], 'sources': ['invented']}]}

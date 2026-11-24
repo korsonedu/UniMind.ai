@@ -5,15 +5,17 @@ from collections import Counter
 
 import httpx
 import pytest
+from django.test import override_settings
 
 from ai_engine import config
 from ai_engine.ai_service import AIService
-from ai_engine.service import AICallError
+from ai_engine.service import AICallError, AIEngine
 from knowledge_builder.exceptions import (AIResponseError, EmbeddingError,
                                           InvariantViolationError, PipelineRepairExhaustedError)
 from knowledge_builder.models import BlockStepAtom, KnowledgeTreeBuild
 from knowledge_builder.pipeline import create_build, run_build
 from knowledge_builder.serializers import FullKnowledgeTreeSerializer
+from knowledge_builder.tasks import build_knowledge_tree
 
 pytestmark = pytest.mark.django_db
 
@@ -195,6 +197,122 @@ def assert_failed(build, message):
     assert build.modules.count() == 0
     assert build.atoms.count() == 0
     assert build.blocks.count() == 0
+
+
+@pytest.mark.parametrize('failure_at', ['interblock_review', 'intrablock_steps', 'publication'])
+def test_ulr_build_resumes_validated_stages_and_publishes_once(monkeypatch, settings, user, api_client, failure_at, caplog):
+    from ai_engine.observability import runtime_observation
+    from knowledge_builder import pipeline
+
+    settings.DEBUG = settings.UNIMIND_ULR_PROTOTYPE = True
+    settings.ROOT_URLCONF = 'knowledge_builder.urls'
+    settings.UNIMIND_DSH_GENERATION_ENABLED = settings.UNIMIND_DSH_TEACHING_ENABLED = False
+    settings.UNIMIND_KB_ONLINE_AUTO_MOUNT = False
+    fixture = SemanticFixture()
+    monkeypatch.setattr(config, 'EMBEDDING_DIMENSIONS', 24)
+    requests = []
+    observations = []
+    reviews = []
+    embeddings = []
+    persist = pipeline._persist
+
+    def embed(url, **kwargs):
+        embeddings.append(url)
+        return fixture.http(url, **kwargs)
+
+    def interrupted_publish(*args):
+        raise RuntimeError('本次构建中断')
+
+    def provider(messages, *, tools, raise_on_error, **kwargs):
+        name = tools[0]['function']['name']
+        requests.append(name)
+        observations.append(runtime_observation.get().copy())
+        if name == 'interblock_review':
+            reviews.append((messages[0]['content'], messages[1]['content']))
+        if name == failure_at and requests.count(name) == 1:
+            raise RuntimeError('本次构建中断')
+        if name == 'outline_decompose' and requests.count(name) == 1:
+            output = {'modules': '格式错误'}
+        else:
+            if name == 'outline_decompose':
+                assert '字段 modules 未通过 type 校验' in messages[1]['content']
+            output = fixture.ai(tool_name=name, raise_on_error=raise_on_error,
+                                system_prompt=messages[0]['content'], user_prompt=messages[1]['content'])
+        return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+            'function': {'name': name, 'arguments': json.dumps(output)},
+        }]}}]}
+
+    monkeypatch.setattr(AIEngine, 'call_provider', provider)
+    monkeypatch.setattr('knowledge_builder.embedding_client.httpx.post', embed)
+    submissions = []
+    monkeypatch.setattr('knowledge_builder.views.build_knowledge_tree.delay', submissions.append)
+    if failure_at == 'publication':
+        monkeypatch.setattr(pipeline, '_persist', interrupted_publish)
+    api_client.force_authenticate(user=user)
+    caplog.set_level('INFO', logger='ai_engine.observability')
+    created = api_client.post('/', {'subject': '合成微积分知识图谱'}, format='json')
+    assert created.status_code == 202
+    build = KnowledgeTreeBuild.objects.get(pk=created.data['id'])
+    assert submissions == [str(build.pk)] and build.requires_ulr
+    with pytest.raises(RuntimeError, match='本次构建中断'):
+        build_knowledge_tree(str(build.pk))
+    build.refresh_from_db()
+    assert build.status == 'FAILED'
+    assert build.current_stage == ('interblock_graph' if failure_at == 'interblock_review' else 'intrablock_steps_and_interfaces')
+    assert not build.modules.exists() and not build.blocks.exists()
+    status = api_client.get(f'/{build.pk}/status/').data
+    assert status['can_resume'] and 'checkpoint' not in status
+    assert ('intrablock_steps_and_interfaces' in build.checkpoint) == (failure_at == 'publication')
+
+    count, embedding_count = len(requests), len(embeddings)
+    monkeypatch.setattr(pipeline, '_persist', persist)
+    url = f'/{build.pk}/resume/'
+    if failure_at == 'publication':
+        checkpoint = build.checkpoint
+        assert api_client.post(url).status_code == 202
+        with override_settings(UNIMIND_LEARNING_RUNTIME='legacy', UNIMIND_ULR_PROTOTYPE=False):
+            with pytest.raises(InvariantViolationError, match='requires an ULR worker'):
+                build_knowledge_tree(str(build.pk))
+        build.refresh_from_db()
+        assert build.status == 'FAILED' and build.checkpoint == checkpoint
+        assert (len(requests), len(embeddings)) == (count, embedding_count)
+
+    previous_submissions = len(submissions)
+    resumed = api_client.post(url)
+    assert resumed.status_code == 202 and resumed.data['id'] == str(build.pk)
+    assert api_client.post(url).status_code == 409
+    assert submissions == [str(build.pk)] * (previous_submissions + 1)
+    assert build_knowledge_tree(str(build.pk)) == str(build.pk)
+    build.refresh_from_db()
+    assert build.status == 'COMPLETED' and build.current_stage == 'completed'
+    assert build.checkpoint == {} and len(embeddings) == embedding_count
+    expected = {'intrablock_steps', 'interface_bind'} if failure_at != 'publication' else set()
+    if failure_at == 'interblock_review':
+        expected.add('interblock_review')
+        assert len(reviews) == 2 and reviews[0] == reviews[1]
+    assert set(requests[count:]) == expected
+    request_id = f'build:{build.pk}'
+    assert {row['request_id'] for row in observations} == {request_id}
+    assert len({row['attempt_id'] for row in observations[:count]}) == 1
+    if expected:
+        assert len({row['attempt_id'] for row in observations[count:]}) == 1
+        assert observations[0]['attempt_id'] != observations[count]['attempt_id']
+    embedded = [row.args[4] for row in caplog.records if row.name == 'ai_engine.observability'
+                and row.args[0] == 'knowledge_tree.embedding']
+    assert len(embedded) == embedding_count == 3
+    assert {row['request_id'] for row in embedded} == {request_id}
+    assert {row['attempt_id'] for row in embedded} == {str(observations[0]['attempt_id'])}
+    assert all(row['kind'] == 'embedding' and row['stage'] == 'atom_edges' for row in embedded)
+    assert '合成微积分知识图谱' not in repr(embedded)
+    assert not runtime_observation.get()
+    assert (build.modules.count(), build.atoms.count(), build.atom_edges.count(), build.blocks.count()) == (4, 6, 5, 2)
+    assert build.cross_block_interfaces.count() == 1
+    assert requests.count('outline_decompose') == 2
+    count = len(requests)
+    with pytest.raises(InvariantViolationError, match='PENDING'):
+        build_knowledge_tree(str(build.pk))
+    assert len(requests) == count
+    assert build.atoms.count() == 6
 
 
 def test_ai_failure_is_rethrown_and_recorded(monkeypatch):

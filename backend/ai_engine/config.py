@@ -18,6 +18,9 @@ _TASK_MODEL_MAP = {
     # 前缀匹配规则：'assistant.chat.planner' 精确匹配小宇，其他 agent 操作 fallback 到默认 flash
     'assistant.chat.planner': ('AI_MODEL_CHAT', 'fast'),
     'assistant.chat.planner.learning': ('AI_MODEL_CHAT', 'fast'),
+    'assistant.learning.probe_assessment': ('AI_MODEL_FAST', 'fast'),
+    'assistant.title': ('AI_MODEL_FAST', 'fast'),
+    'assistant.memory_extract': ('AI_MODEL_FAST', 'fast'),
     # ── Question generation pipeline ──
     'pipeline.author':    ('AI_MODEL_GENERATE_AUTHOR',    'fast'),
     'quizzes.bulk_generate': ('AI_MODEL_GENERATE_AUTHOR', 'fast'),
@@ -30,6 +33,8 @@ _TASK_MODEL_MAP = {
     'knowledge_edge_analyze': ('AI_MODEL_GENERATE_KNOWLEDGE_TREE', 'pro'),
     # ── Grading ──
     'quizzes.grade':  ('AI_MODEL_GRADE_SUBJECTIVE',   'pro'),
+    'ulr.quizzes.objective_analysis': ('AI_MODEL_OBJECTIVE_ANALYSIS', 'fast'),
+    'ulr.quizzes.preview_parse': ('AI_MODEL_FAST', 'fast'),
     # ── Single pipeline reviewer ──
     'quizzes.single_pipeline.reviewer': ('AI_MODEL_GENERATE_REVIEWER', 'pro'),
     # ── Light tasks ──

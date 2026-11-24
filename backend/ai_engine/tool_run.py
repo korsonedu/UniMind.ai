@@ -3,13 +3,43 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError, as_completed
+from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
+from django.db import connections
+from jsonschema import Draft202012Validator
+from . import AIExecutionCancelled
+from .observability import runtime_observation
+
 
 logger = logging.getLogger(__name__)
 TOOL_TIMEOUT_SECONDS = 30
+ULR_INSTRUCTION_TOOLS = frozenset({'find_learning_tools', 'run_course_tools', 'run_practice_tools',
+                                   'locate_current_course_transcript'})
+
+
+class DuplicateToolArgument(ValueError):
+    pass
+
+
+class ToolReferenceError(ValueError):
+    def __init__(self, field, message):
+        super().__init__(message)
+        self.field = field
+
+
+def unique_tool_arguments(pairs):
+    values = {}
+    for name, value in pairs:
+        if name in values:
+            raise DuplicateToolArgument(name)
+        values[name] = value
+    return values
+
+
+TOOL_ARGUMENT_DECODER = json.JSONDecoder(object_pairs_hook=unique_tool_arguments)
 
 
 @dataclass(frozen=True)
@@ -73,6 +103,21 @@ def validate_arguments(schema: dict, value: Any, path: str = '$') -> str | None:
     return None
 
 
+def validate_declared_arguments(schema, arguments):
+    try:
+        json.dumps(arguments, allow_nan=False)
+    except ValueError:
+        return {'code': 'invalid_arguments', 'message': '工具参数只能包含有限数值。', 'field': '$', 'rule': 'finite_number'}
+    if error := next(Draft202012Validator(schema).iter_errors(arguments), None):
+        field = error.json_path
+        rule = error.validator
+        if rule == 'required':
+            field += '.' + next(name for name in error.validator_value if name not in error.instance)
+        return {'code': 'invalid_arguments', 'message': f'{field} 未通过工具参数校验。', 'field': field, 'rule': rule,
+                **({'expected': error.validator_value} if rule in ('minimum', 'maximum', 'enum', 'type') else {})}
+    return None
+
+
 class ToolRunCoordinator:
     def __init__(
         self,
@@ -83,6 +128,8 @@ class ToolRunCoordinator:
         run_id=None,
         max_workers=4,
         tool_timeout_seconds=None,
+        execution=None,
+        strict_arguments=False,
     ):
         self.tool_executor = tool_executor
         self.tool_definitions = list(tool_definitions or [])
@@ -91,6 +138,9 @@ class ToolRunCoordinator:
         self.run_id = run_id or f'run_{uuid4().hex}'
         self.max_workers = max_workers
         self.tool_timeout_seconds = tool_timeout_seconds
+        self.execution = execution
+        self.strict_arguments = strict_arguments
+        self._runtime_observation = runtime_observation.get()
         self._seen_call_ids: set[str] = set()
         self._last_failed_by_tool: dict[str, str] = {}
         self._outcomes: list[ToolCallOutcome] = []
@@ -139,12 +189,19 @@ class ToolRunCoordinator:
             'function': dict(function),
         }
 
+        duplicate = None
         try:
-            arguments = json.loads(function.get('arguments') or '{}')
-        except (json.JSONDecodeError, TypeError):
+            arguments = TOOL_ARGUMENT_DECODER.decode(function.get('arguments') or '{}')
+        except DuplicateToolArgument as exc:
+            duplicate = str(exc)
+            arguments = None
+        except (ValueError, TypeError, RecursionError):
             arguments = None
 
         error = self._validate_call(name, arguments)
+        if duplicate is not None and error['code'] == 'invalid_arguments':
+            error = {'code': 'duplicate_argument', 'message': '工具参数重复，同一字段只能提交一次。', 'field': duplicate}
+            normalized_tool_call['function']['arguments'] = '{}'
         safe_arguments = arguments if isinstance(arguments, dict) else {}
         try:
             from ai_assistant.services.tool_executor import generate_step_label
@@ -179,6 +236,8 @@ class ToolRunCoordinator:
 
         function = permitted_registry[name].get('function') or {}
         schema = function.get('parameters') or {'type': 'object'}
+        if self.strict_arguments and (diagnostic := validate_declared_arguments(schema, arguments)):
+            return diagnostic
         validation_error = validate_arguments(schema, arguments)
         if validation_error:
             return {'code': 'invalid_arguments', 'message': validation_error}
@@ -243,20 +302,29 @@ class ToolRunCoordinator:
         call: PreparedToolCall,
         round_number: int,
     ):
+        timeout = self.tool_timeout_seconds if self.tool_timeout_seconds is not None else TOOL_TIMEOUT_SECONDS
+        if self.execution:
+            from ai_assistant.services.dsh_scope import check_execution, generation_scope
+            check_execution(self.execution)
+            timeout = min(timeout, self.execution['deadline'] - time.monotonic())
+
         def invoke():
             thread_id = threading.get_ident()
+            observation = runtime_observation.set(self._runtime_observation)
             with self._progress_lock:
                 self._active_progress[thread_id] = (call, round_number)
             try:
-                return self.tool_executor(call.name, call.arguments)
+                with generation_scope(self.execution) if self.execution else nullcontext():
+                    return self.tool_executor(call.name, call.arguments)
             finally:
+                runtime_observation.reset(observation)
                 with self._progress_lock:
                     self._active_progress.pop(thread_id, None)
+                connections.close_all()
 
         executor = ThreadPoolExecutor(max_workers=1)
         future = executor.submit(invoke)
         try:
-            timeout = self.tool_timeout_seconds if self.tool_timeout_seconds is not None else TOOL_TIMEOUT_SECONDS
             return future.result(timeout=timeout)
         except FutureTimeoutError as exc:
             future.cancel()
@@ -281,6 +349,8 @@ class ToolRunCoordinator:
             parsed = None
 
         if isinstance(parsed, dict) and not parsed.get('duplicate'):
+            if call.name in ULR_INSTRUCTION_TOOLS:
+                extras['steps_executed'] = parsed.get('steps_executed', [])
             visual = parsed.get('visual')
             if isinstance(visual, dict):
                 visual = dict(visual)
@@ -306,6 +376,11 @@ class ToolRunCoordinator:
             raw_result = self._run_with_timeout(call, round_number)
             result = raw_result if isinstance(raw_result, str) else json.dumps(raw_result, ensure_ascii=False, default=str)
             error = self._classify_result_error(result)
+        except AIExecutionCancelled:
+            raise
+        except ToolReferenceError as exc:
+            error = {'code': 'invalid_arguments', 'field': exc.field, 'rule': 'confirmed_reference', 'message': str(exc)}
+            result = self._error_result(error)
         except TimeoutError:
             logger.warning("tool timeout name=%s call_id=%s", call.name, call.call_id)
             error = {'code': 'timeout', 'message': '工具执行超时，请稍后重试'}
@@ -319,8 +394,8 @@ class ToolRunCoordinator:
         with self._progress_lock:
             self._terminal_call_ids.add(call.call_id)
         if error:
-            # Generated experiments need the browser diagnostics for code repair.
-            if call.name not in {'build_learning_experiment', 'register_session_tool'}:
+            # Generated artifacts and programs need their structured execution diagnostics.
+            if call.name not in ULR_INSTRUCTION_TOOLS | {'build_learning_experiment', 'register_session_tool'}:
                 result = self._error_result(error)
             self._emit(
                 call,

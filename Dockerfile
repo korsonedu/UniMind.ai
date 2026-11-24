@@ -4,10 +4,13 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./
+ARG UNIMIND_BUILD_REVISION
 RUN npm run build
 
 # ── Stage 2: Backend ──
 FROM python:3.12-slim AS backend
+ARG UNIMIND_BUILD_REVISION
+LABEL org.opencontainers.image.revision="$UNIMIND_BUILD_REVISION"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -31,13 +34,13 @@ COPY --from=frontend-build /app/frontend/dist ./frontend/dist/
 
 # Collect static
 WORKDIR /app/backend
-RUN python manage.py collectstatic --noinput 2>/dev/null || true
+RUN DJANGO_ENV=development python manage.py collectstatic --noinput
 
 EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health/ || exit 1
+    CMD probe_code=$(curl -fsS -o /dev/null -w '%{http_code}' -H 'X-Forwarded-Proto: https' http://localhost:8000/health/) && [ "$probe_code" = 200 ]
 
 # Default: gunicorn + uvicorn hybrid (Django ASGI)
 CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "school_system.asgi:application"]

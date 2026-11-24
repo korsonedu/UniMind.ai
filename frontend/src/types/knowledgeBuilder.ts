@@ -24,6 +24,7 @@ export interface BuildSummary {
   id: string;
   subject: string;
   status: BuildStatus;
+  can_resume?: boolean;
   current_stage: string;
   archetype: string;
   dispatch_profile: Record<string, unknown>;
