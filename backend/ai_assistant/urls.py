@@ -4,6 +4,7 @@ from .views import (
     AgentMemoryListCreateView, AgentMemoryDetailView,
     BotListView,
     ConversationListView,
+    ExternalAudioSnippetView,
     SemanticMemoryListView, SemanticMemoryDeleteView,
     ActionCardInteractionView,
 )
@@ -40,6 +41,7 @@ urlpatterns = [
     path('dashboard/', XiaoYuDashboardView.as_view(), name='xiaoyu-dashboard'),
     path('chat/', AIChatView.as_view(), name='ai-chat'),
     path('chat/stream/', AIChatStreamView.as_view(), name='ai-chat-stream'),
+    path('external-audio-snippet/', ExternalAudioSnippetView.as_view(), name='external-audio-snippet'),
     path('chat-requests/<uuid:request_id>/', ChatRequestStatusView.as_view(), name='ai-chat-request-status'),
     path('history/', AIChatListView.as_view(), name='ai-chat-history'),
     path('conversations/', ConversationListView.as_view(), name='conversation-list'),
