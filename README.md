@@ -339,7 +339,7 @@ WantedBy=multi-user.target
 sudo install -m 0644 /opt/unimind/deploy/unimind-celery-beat.service /etc/systemd/system/unimind-celery-beat.service
 ```
 
-网页、工作进程和定时进程读取同一个 `/opt/unimind/backend/.env`。获准切换时在该文件设置 `UNIMIND_LEARNING_RUNTIME=ulr`，并重启这三个进程。Celery Beat 使用随 Celery 安装的持久调度器。
+网页、工作进程和定时进程读取同一个 `/opt/unimind/backend/.env`。本版本在生产模式下默认运行 ULR。获准切换并完成迁移检查后，移除原环境中的 `UNIMIND_LEARNING_RUNTIME=legacy` 并统一重启这三个进程。回退时使用具备 DSH 依赖的部署环境，并为三个进程显式配置 `UNIMIND_LEARNING_RUNTIME=legacy`。Celery Beat 使用随 Celery 安装的持久调度器。
 
 启动所有服务：
 

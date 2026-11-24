@@ -79,6 +79,7 @@ def submit_from_web():
     from users.models import CourseStudentStatus, User, WeeklyAIUsage
 
     assert settings.IS_PROD and not settings.DEBUG and settings.UNIMIND_LEARNING_RUNTIME == 'ulr'
+    assert 'UNIMIND_LEARNING_RUNTIME' not in os.environ
     assert not settings.UNIMIND_DSH_ENABLED and not settings.UNIMIND_DSH_TEACHING_ENABLED
     assert find_spec('deepseek_harness') is None and not (settings.BASE_DIR.parent / 'dsh').exists()
     user_id, bot_id, kp_id, ready, public_url = sys.argv[1:]
@@ -433,7 +434,8 @@ def test_standalone_web_and_celery_share_runtime(user, settings, tmp_path):
         model = services.enter_context(ThreadingHTTPServer(('127.0.0.1', 0), Model))
         Thread(target=model.serve_forever, daemon=True).start()
         services.callback(model.shutdown)
-        env = {**{key: value for key, value in os.environ.items() if not key.startswith('UNIMIND_DSH_')},
+        env = {**{key: value for key, value in os.environ.items()
+                  if not key.startswith('UNIMIND_DSH_') and key != 'UNIMIND_LEARNING_RUNTIME'},
             **child_db, 'PYTHONPATH': str(bundle), 'DJANGO_SETTINGS_MODULE': 'school_system.settings',
             'DJANGO_ENV': 'production', 'DEBUG': 'false', 'ALLOWED_HOSTS': '127.0.0.1', 'SECRET_KEY': 'local-queue-smoke',
             'SECURE_SSL_REDIRECT': 'true', 'USE_X_FORWARDED_PROTO': 'true',
@@ -445,7 +447,7 @@ def test_standalone_web_and_celery_share_runtime(user, settings, tmp_path):
             'CELERY_TASK_DEFAULT_QUEUE': 'default', 'CELERY_TASK_IGNORE_RESULT': 'false',
             'QUIZ_EXAM_GRADING_USE_CELERY': 'true',
             'LLM_API_KEY': 'local-queue-smoke', 'LLM_BASE_URL': f'http://127.0.0.1:{model.server_port}/v1/chat/completions',
-            'UNIMIND_LEARNING_RUNTIME': 'ulr', 'UNIMIND_DSH_ENABLED': 'true', 'UNIMIND_DSH_TEACHING_ENABLED': 'true',
+            'UNIMIND_DSH_ENABLED': 'true', 'UNIMIND_DSH_TEACHING_ENABLED': 'true',
             'UNIMIND_DSH_STATE_DIR': 'invalid-legacy-directory',
             'UNIMIND_CONTENT_INSTITUTION_ID': 'global',
             'UNIMIND_DIRECTUS_ADMIN_MAP': json.dumps({str(uuid4()): admin.pk for admin in admins})}

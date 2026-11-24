@@ -246,7 +246,7 @@ if CORS_ALLOW_CAPACITOR_ORIGINS:
 
 # The account rollout is opt-in. No credentials are stored in the frontend.
 ACCOUNT_ENABLED = _get_bool("ACCOUNT_ENABLED")
-UNIMIND_LEARNING_RUNTIME = os.getenv("UNIMIND_LEARNING_RUNTIME", "legacy").strip().lower()
+UNIMIND_LEARNING_RUNTIME = os.getenv("UNIMIND_LEARNING_RUNTIME", "ulr" if IS_PROD else "legacy").strip().lower()
 if UNIMIND_LEARNING_RUNTIME not in {"legacy", "ulr"}:
     raise ImproperlyConfigured("UNIMIND_LEARNING_RUNTIME must be legacy or ulr.")
 
