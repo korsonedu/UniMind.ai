@@ -86,7 +86,7 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
     from ai_assistant.services.external_video_context import prepare_external_video_context
     from ai_assistant.views import _reserve_chat_request
     from courses.models import Course, CourseOutline
-    from quizzes.models import ContentPipelineTask
+    from quizzes.models import ContentPipelineTask, Question
     from users.learning import confirm_ai_call
 
     assert shutil.which('psql') and shutil.which('pg_dump')
@@ -125,7 +125,10 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
     (site_directory / 'transcript.json').write_text(json.dumps({'id': site_session, 'messages': [
         {'role': row.role, 'content': row.content} for row in (prompt, answer)]}, ensure_ascii=False))
     unsettled = ContentPipelineTask.objects.create(created_by=user, task_type='ai_generate',
-        title='合成待核对旧出题', status='failed', payload={'bulk_mode': True, 'current_stage': 'generating'})
+        title='合成待核对旧出题', status='failed', progress=35, error_message='合成出题中断',
+        payload={'bulk_mode': True, 'current_stage': 'generating'})
+    partial_question = Question.objects.create(text='合成旧任务已写入的题目', q_type='objective',
+                                               options=['甲', '乙'], correct_answer='A')
     legacy_outline = CourseOutline.objects.create(course=Course.objects.create(title='合成旧大纲课程'),
                                                    status='generating')
     legacy_teaching = ContentPipelineTask.objects.create(created_by=user, task_type='other',
@@ -205,8 +208,20 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
         assert report['active_teaching_task_ids'] == [legacy_teaching.pk]
         print(json.dumps({'restored_legacy_outline_gate': report}, ensure_ascii=False))
         assert report['unsettled_question_pipeline_ids'] == [unsettled.pk]
-        # Settle the synthetic review on the restored copy for the continuation check.
-        sql_probe(target, f"UPDATE quizzes_contentpipelinetask SET status = 'cancelled' WHERE id = {unsettled.pk}")
+        settle = [sys.executable, command[1], 'settle_legacy_bulk_task', str(unsettled.pk),
+                  '--review-reference', 'synthetic-review-1']
+        unconfirmed = subprocess.run(settle, env=restored_env, capture_output=True, text=True, timeout=30)
+        assert unconfirmed.returncode != 0 and '请停止旧工作进程' in unconfirmed.stderr
+        settle.append('--legacy-workers-stopped')
+        for closed in (True, False):
+            settled = subprocess.run(settle, env=restored_env, capture_output=True, text=True, timeout=30, check=True)
+            assert json.loads(settled.stdout) == {'task_id': unsettled.pk, 'status': 'cancelled', 'closed': closed}
+        assert sql_probe(target, "SELECT status, progress, error_message, payload->>'legacy_review_reference', "
+                         "payload->>'legacy_review_previous_status' FROM quizzes_contentpipelinetask "
+                         f"WHERE id = {unsettled.pk}") == 'cancelled|35|合成出题中断|synthetic-review-1|failed'
+        assert sql_probe(target, f'SELECT text FROM quizzes_question WHERE id = {partial_question.pk}') == partial_question.text
+        print(json.dumps({'restored_legacy_bulk_settlement': {'task_id': unsettled.pk, 'review_recorded': True,
+                                                               'same_question_preserved': True, 'repeat_closed': False}}))
         sql_probe(target, "UPDATE courses_courseoutline SET updated_at = now() - interval '11 minutes' "
                   f"WHERE id = {legacy_outline.pk}")
         sql_probe(target, "UPDATE quizzes_contentpipelinetask SET updated_at = now() - interval '18 minutes' "

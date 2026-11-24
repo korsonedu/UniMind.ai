@@ -61,6 +61,14 @@ def _question_pipeline_lock_key(task_id):
     return int.from_bytes(digest, 'big', signed=True)
 
 
+def lock_question_pipeline(task_id):
+    if connection.vendor != 'postgresql':
+        return True
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_try_advisory_xact_lock(%s)', [_question_pipeline_lock_key(task_id)])
+        return cursor.fetchone()[0]
+
+
 def question_pipeline_recovery_due(task):
     return task.status in ('pending', 'failed') or (task.status == 'running' and (
         task.error_message == QUESTION_PIPELINE_QUEUE_ERROR
@@ -79,11 +87,8 @@ def resume_question_pipeline(task, delivery):
         return False
     if question_pipeline_may_have_partial_result(task):
         raise ValueError('旧批量出题可能已经入库，请先核对原任务结果。')
-    if connection.vendor == 'postgresql':
-        with connection.cursor() as cursor:
-            cursor.execute('SELECT pg_try_advisory_xact_lock(%s)', [_question_pipeline_lock_key(task.pk)])
-            if not cursor.fetchone()[0]:
-                return False
+    if not lock_question_pipeline(task.pk):
+        return False
     if ulr_enabled():
         task.payload['requires_ulr'] = True
     task.status = 'running'

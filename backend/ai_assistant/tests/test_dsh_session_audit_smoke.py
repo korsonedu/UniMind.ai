@@ -183,7 +183,7 @@ def test_ulr_reuses_legacy_bulk_delivery_and_settles_all_questions_together(admi
 def test_dsh_migration_gate_holds_failed_legacy_bulk_after_partial_publication(admin_client, admin_user, user, settings, tmp_path):
     from types import SimpleNamespace
 
-    from django.db import transaction
+    from django.db import connection, transaction
     from rest_framework.exceptions import ValidationError
 
     from backoffice import teaching
@@ -233,6 +233,21 @@ def test_dsh_migration_gate_holds_failed_legacy_bulk_after_partial_publication(a
         teaching_queue.assert_not_called()
     task.refresh_from_db()
     assert task.status == 'failed' and ContentPipelineTask.objects.count() == 2 and Question.objects.count() == 1
+
+    if connection.vendor == 'postgresql':
+        question_ids = list(Question.objects.values_list('pk', flat=True))
+        call_command('settle_legacy_bulk_task', task.pk, legacy_workers_stopped=True,
+                     review_reference='synthetic-review-1', stdout=StringIO())
+        with patch.object(run_bulk_pipeline_task, 'delay') as queue, \
+                patch.object(bulk_pipeline, '_author_generate') as author:
+            assert admin_client.post(f'/api/quizzes/admin/pipeline-tasks/{task.pk}/retry/').status_code == 200
+            with transaction.atomic(), pytest.raises(ValidationError, match='已经结案'):
+                teaching.retry(SimpleNamespace(user=admin_user), {'id': task.pk, 'request_id': str(uuid4())})
+            run_bulk_pipeline_task(task.pk, subject, 20, {'normal': 1}, {'objective': 1})
+            queue.assert_not_called()
+            author.assert_not_called()
+        assert list(Question.objects.values_list('pk', flat=True)) == question_ids
+        assert ContentPipelineTask.objects.count() == 2
 
 
 @pytest.mark.django_db(transaction=True)

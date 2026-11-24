@@ -437,6 +437,8 @@ def review(request, data):
 
 def retry(request, data):
     source = task_object(request, data, lock=True)
+    if source.payload.get('legacy_review_reference'):
+        raise serializers.ValidationError('该旧批量出题已经结案。')
     if (source.status == 'failed' and question_pipeline_delivery(source)
             and source.payload.get('current_stage') == 'generating' and question_pipeline_may_have_partial_result(source)):
         raise serializers.ValidationError('旧批量出题可能已经入库，请先核对原任务结果。')
