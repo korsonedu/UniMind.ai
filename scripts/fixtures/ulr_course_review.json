@@ -1,5 +1,28 @@
 {
   "case_id": "course-discount-transcript",
+  "delivery_cases": {
+    "timestamp": {
+      "case_id": "course-discount-timestamp",
+      "scenario": "课程伴学时间戳直达",
+      "prompt": "请查折现率课程，再在匹配的第一门课里查折现率讲稿。只要时间点。",
+      "expected_delivery": "card",
+      "criteria": {
+        "source": "提供通向《折现率迁移课》01:00 的讲稿来源卡。",
+        "scope": "仅确认定位结果或提供时间点及来源，未附加讲解。"
+      }
+    },
+    "explanation": {
+      "case_id": "course-discount-timestamp-explanation",
+      "scenario": "课程伴学时间戳与讲解",
+      "prompt": "请查折现率课程，并在第一门课中查找讲稿。给出时间点，也请用讲稿里的例子解释折现率。",
+      "expected_delivery": "answer",
+      "criteria": {
+        "source": "提供通向《折现率迁移课》01:00 的讲稿来源卡。",
+        "explanation": "给出完整讲解，说明一年后的 110 元按 10% 折现得到现在的 100 元。",
+        "scope": "未经讲稿核实的内容未被归为讲稿原文。"
+      }
+    }
+  },
   "case": {
     "scenario": "课程伴学",
     "prompt": "请把折现率的公式推导和第一门相关课程的讲稿放在一起说。",

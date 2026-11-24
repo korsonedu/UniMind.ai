@@ -152,11 +152,18 @@ def scripted_structured_provider(scope, model, operation, collector, limit, resu
     return popen, worker, transport
 
 
-def capture_acceptance(case_name, official, auth_client, user, settings, request, tmp_path, caplog):
+def capture_acceptance(case_name, official, auth_client, user, settings, request, tmp_path, caplog, *, delivery=None):
     repo = Path(settings.BASE_DIR).parent
     tool = run_path(str(repo / 'scripts/ulr_review_pairs.py'))
     sample_path = repo / f'scripts/fixtures/ulr_{case_name}_review.json'
     sample = tool['read'](sample_path)
+    delivery_cases = sample.pop('delivery_cases', {})
+    if delivery:
+        variant = delivery_cases[delivery].copy()
+        sample['case_id'] = variant.pop('case_id')
+        sample['case'].update(variant)
+        for baseline in ('dsh', 'ulr_individual'):
+            sample['case']['tool_paths'][baseline] = ['search_courses', 'search_asr']
     source = sample['case']['fixture']
     practice = case_name == 'practice'
     project_case = case_name == 'project'
@@ -185,7 +192,11 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
         individual = [('find_learning_tools', {'group': 'resources'}), ('search_courses', {'query': '折现率'}),
                       ('search_asr', {'course_id': course.pk, 'query': '折现率'})]
         combined = [('run_course_tools', {'find': '折现率'})]
-        reply = REPLY
+        if delivery:
+            individual = individual[1:]
+            # The mixed task exercises the kernel's fallback after a wrong model choice.
+            combined[0][1]['output'] = 'card'
+        reply = '已找到 01:00 的讲稿片段。' if delivery == 'timestamp' else REPLY
     CourseStudentStatus.objects.create(user=user, is_course_student=True)
     WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 20})
     bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
@@ -200,7 +211,8 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
     caplog.set_level('INFO', logger='ai_engine.observability')
     trial = int(os.environ.get('ULR_OFFICIAL_TRIAL', '1')) if official else 1
     assert trial > 0
-    output = Path(os.environ[f'ULR_{case_name.upper()}_OFFICIAL_OUTPUT']) if official else tmp_path / 'capture'
+    output_key = f'ULR_{case_name.upper()}{"_" + delivery.upper() if delivery else ""}_OFFICIAL_OUTPUT'
+    output = Path(os.environ[output_key]) if official else tmp_path / 'capture'
     output.mkdir(mode=0o700)
     config = (get_model_for_task('assistant.chat.planner') if official else
               {'api_key': 'fixture', 'base_url': 'https://example.invalid/chat', 'model': 'capture-fixture-model'})
@@ -212,11 +224,11 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
 
     def fake_dsh(user, action, *, message, session_id, reservation, on_event, chat_context):
         offered = sample['case']['tool_paths']['dsh']
-        if practice or project_case:
+        if practice or project_case or delivery:
             context = views_dsh.build_context(user, message, chat_context=chat_context)
             offered = [tool['function']['name'] for tool in context['tools']]
         for index, (name, args) in enumerate([*individual, (None, None)], 1):
-            if (practice or project_case) and name:
+            if (practice or project_case or delivery) and name:
                 assert name in offered
                 result = views_dsh.execute_tool(user, name, args, context['memory']['version'],
                     source=reservation, chat_context=chat_context)
@@ -232,7 +244,7 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
                 on_event({'type': 'tool_status', 'call_id': f'scripted-{index}', 'name': name, 'status': 'succeeded'})
         if project_case:
             cards = []
-        elif practice:
+        elif practice or delivery:
             card = result['visual']
             cards = [card]
         else:
@@ -242,6 +254,7 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
 
     revision = capture_revision(repo)
     records = []
+    compile_instruction = ulr_runtime.run_program
     for runtime, limit in limits.items():
         dsh = runtime == 'dsh'
         settings.UNIMIND_LEARNING_RUNTIME = 'legacy' if dsh else 'ulr'
@@ -256,6 +269,18 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
         request_id = str(uuid4())
         body = {'bot_id': bot.pk, 'conversation_id': str(conversation.conversation_id),
                 'request_id': request_id, 'message': sample['case']['prompt']}
+        course_attempts = []
+
+        def observe_instruction(arguments, *args, **kwargs):
+            result = compile_instruction(arguments, *args, **kwargs)
+            if kwargs['name'] == 'run_course_tools':
+                submitted = 'invalid'
+                if isinstance(arguments, dict):
+                    submitted = 'answer' if 'output' not in arguments else 'card' if arguments['output'] == 'card' else 'invalid'
+                course_attempts.append({'requested': submitted,
+                    'compiled': None if result.get('error') else 'card' if result.get('_ulr_card_only') else 'answer'})
+            return result
+
         with ExitStack() as scope:
             for module in (views_dsh, ulr_runtime):
                 scope.enter_context(patch.object(module, 'build_context',
@@ -264,6 +289,8 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
             scope.enter_context(patch('ai_assistant.services.dsh_xiaoyu.extract_memories_async'))
             if runtime == 'ulr_individual':
                 scope.enter_context(patch.object(ulr_runtime, 'PROGRAM_OPS', {}))
+            if runtime == 'ulr' and delivery:
+                scope.enter_context(patch.object(ulr_runtime, 'run_program', side_effect=observe_instruction))
             if not official:
                 scope.enter_context(patch('ai_assistant.services.dsh_xiaoyu.run_site_action', side_effect=fake_dsh))
                 response = scripted_provider(combined if runtime == 'ulr' else individual, reply)
@@ -291,6 +318,8 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
         record = tool['capture_turn']({**sample, 'runtime': runtime, 'trial': trial, 'revision': revision,
             'request_id': request_id, 'attempt_id': str(reservation.attempt_id), 'model': config['model'],
             'evidence': 'same_model' if official else 'protocol_smoke', 'metrics': {'model_requests': count}}, events)
+        if runtime == 'ulr' and delivery:
+            record['delivery_selection'] = {'expected': sample['case']['expected_delivery'], 'attempts': course_attempts}
         if project_case:
             url = f'/api/ai/projects/{project.pk}/learning/'
             snapshot = auth_client.get(url)
@@ -309,7 +338,8 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
 
     operations = prepare_capture(repo, output, records, caplog, tool, limits.keys() - {'ulr'})
     if not official:
-        expected_requests = {'course': [4, 4, 2], 'practice': [3, 3, 1], 'project': [3, 3]}[case_name]
+        expected_requests = {'course': [4, 4, 2], 'practice': [3, 3, 1], 'project': [3, 3],
+                             'timestamp': [3, 3, 1], 'explanation': [3, 3, 2]}[delivery or case_name]
         assert [record['metrics']['model_requests'] for record in records] == expected_requests
         for record in records:
             assert record['completed'] and record['metrics']['tool_failures'] == 0
@@ -318,11 +348,12 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
             if record['runtime'] == 'ulr' and not project_case:
                 outcome, = record['tool_outcomes']
                 assert [outcome['steps_executed']] == sample['case']['tool_steps']['ulr']
-                legacy = {**record, 'tool_outcomes': [{key: value for key, value in outcome.items() if key != 'steps_executed'}]}
-                assert tool['tool_quality'](legacy, trace) is None
-                legacy['case'] = {key: value for key, value in record['case'].items() if key != 'tool_steps'}
-                assert tool['tool_quality'](legacy, trace) is None
-            if case_name == 'course' and record['runtime'] == 'ulr':
+                if not delivery:
+                    legacy = {**record, 'tool_outcomes': [{key: value for key, value in outcome.items() if key != 'steps_executed'}]}
+                    assert tool['tool_quality'](legacy, trace) is None
+                    legacy['case'] = {key: value for key, value in record['case'].items() if key != 'tool_steps'}
+                    assert tool['tool_quality'](legacy, trace) is None
+            if case_name == 'course' and not delivery and record['runtime'] == 'ulr':
                 initial = trace['operations'][0]
                 assert initial['tool_aliases'] == initial['submitted_tools'] == ['run_course_tools']
                 assert 'run_course_tools' not in initial['offered_tools']
@@ -341,6 +372,11 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
                            for card in record['review']['sources'] for item in card['payload'].get('items', ()))
         if practice:
             assert not QuizExam.objects.filter(user=user).exists()
+        if delivery:
+            native = records[-1]
+            expected = sample['case']['expected_delivery']
+            assert native['delivery_selection'] == {'expected': expected, 'attempts': [{'requested': 'card', 'compiled': expected}]}
+            assert native['review']['answer'] == ('已找到所选课程的讲稿片段。' if delivery == 'timestamp' else REPLY)
         baseline = records[0]
         trace = {'operations': operations[baseline['request_id'], baseline['attempt_id']]}
         reversed_path = {**baseline, 'tool_outcomes': list(reversed(baseline['tool_outcomes']))}
@@ -353,6 +389,15 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
     not os.environ.get('ULR_COURSE_OFFICIAL_OUTPUT'), reason='manual, authorized official-provider comparison'))])
 def test_capture_course_acceptance(official, auth_client, user, settings, request, tmp_path, caplog):
     capture_acceptance('course', official, auth_client, user, settings, request, tmp_path, caplog)
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize('delivery', ['timestamp', 'explanation'])
+@pytest.mark.parametrize('official', [False, True])
+def test_capture_course_delivery_acceptance(official, delivery, auth_client, user, settings, request, tmp_path, caplog):
+    if official and not os.environ.get(f'ULR_COURSE_{delivery.upper()}_OFFICIAL_OUTPUT'):
+        pytest.skip('manual, authorized official-provider comparison')
+    capture_acceptance('course', official, auth_client, user, settings, request, tmp_path, caplog, delivery=delivery)
 
 
 @pytest.mark.django_db(transaction=True)

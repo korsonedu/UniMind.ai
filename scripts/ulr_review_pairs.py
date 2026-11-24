@@ -296,6 +296,8 @@ def prepare(records, output, baseline, operations=None):
                 if quality is not None:
                     mapping[label]['tool_outcomes'] = [{field: event.get(field) for field in TOOL_OUTCOME_FIELDS}
                                                        for event in record['tool_outcomes']]
+            if 'delivery_selection' in record:
+                mapping[label]['delivery_selection'] = record['delivery_selection']
             mapping[label]['metrics'] = values
         packet.append({'pair_id': pair_id, 'case': {field: case[field] for field in
             ('scenario', 'prompt', 'reference', 'criteria')}, 'responses': responses,
@@ -370,6 +372,7 @@ def report(manifest, review):
         completed = dict.fromkeys((baseline, 'ulr'), 0)
         all_passed = completed.copy()
         tool_results = {runtime: Counter() for runtime in completed}
+        delivery_results = Counter()
         compared_pairs = model_verified_pairs = 0
         unverified_model_pairs, request_config_issues, quality_issues = [], [], []
         for pair in pairs:
@@ -395,6 +398,13 @@ def report(manifest, review):
                     request_config_issues.append({**location, 'reason': issue})
                     continue
             compared_pairs += 1
+            if selection := new.get('delivery_selection'):
+                attempts, expected = selection['attempts'], selection['expected']
+                delivery_results['samples'] += 1
+                delivery_results['reached_compiler'] += bool(attempts)
+                delivery_results['first_choice_correct'] += bool(attempts and attempts[0]['requested'] == expected)
+                delivery_results['completed_expected_mode'] += bool(
+                    new['completed'] and attempts and attempts[-1]['compiled'] == expected)
             for runtime, arm in arms.items():
                 completed[runtime] += arm['completed']
                 all_passed[runtime] += bool(arm['completed'] and all(arm['checks'].values()))
@@ -423,7 +433,8 @@ def report(manifest, review):
                              'compared_pairs': compared_pairs, 'unverified_model_pairs': unverified_model_pairs,
                              'request_config_issues': request_config_issues, 'quality_issues': quality_issues,
                              'completed': completed, 'all_criteria_passed': all_passed,
-                             'criterion_pass_counts': criteria, 'metrics': metrics, 'tool_quality': tool_results, 'pairs': pairs}
+                             'criterion_pass_counts': criteria, 'metrics': metrics, 'tool_quality': tool_results,
+                             **({'delivery_selection': delivery_results} if delivery_results else {}), 'pairs': pairs}
     return {'evidence': manifest['evidence'], 'baseline': baseline, 'scenarios': results}
 
 
