@@ -5,9 +5,11 @@ from io import StringIO
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
+import tarfile
 from uuid import UUID, uuid4
 
 import pytest
@@ -129,30 +131,46 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
            **child_database_environment(connection, tmp_path / 'unused.sqlite3')}
     pg_options = ['-h', env['DB_HOST'], '-p', env['DB_PORT'], '-U', env['DB_USER']]
     pg_env = {**env, 'PGPASSWORD': env['DB_PASSWORD']}
-    backup = tmp_path / 'paired.sql.gz'
-    source = subprocess.run(['pg_dump', *pg_options, '-d', env['DB_NAME'], '--no-owner', '--no-privileges'],
-                            env=pg_env, capture_output=True, check=True, timeout=30).stdout
-    backup.write_bytes(gzip.compress(source, mtime=0))
+    scripts = tmp_path / 'scripts'
+    scripts.mkdir()
+    for name in ('backup_db.sh', 'restore_db.sh'):
+        shutil.copy2(Path(settings.BASE_DIR).parent / 'scripts' / name, scripts / name)
+    config = tmp_path / 'backend' / '.env'
+    config.parent.mkdir()
+    for name in ('media', 'logs'):
+        (config.parent / name).mkdir()
+    config.write_text(f'UNIMIND_DSH_STATE_DIR={shlex.quote(str(state))}\n')
+    saved = subprocess.run(['bash', str(scripts / 'backup_db.sh')], env=env,
+                           capture_output=True, text=True, timeout=60)
+    assert saved.returncode == 0, saved.stderr
+    backup, = (tmp_path / 'backups').glob('*.sql.gz')
     checksum = hashlib.sha256(backup.read_bytes()).hexdigest()
-    backup.with_suffix('.gz.sha256').write_text(f'{checksum}  {backup.name}\n')
+    assert backup.with_suffix('.gz.sha256').read_text().split()[0] == checksum
+    timestamp = backup.name.removeprefix(f"{env['DB_NAME']}_").removesuffix('.sql.gz')
+    archive = backup.with_name(f'files_{timestamp}.tar.gz')
+    archive_hash = hashlib.sha256(archive.read_bytes()).hexdigest()
+    assert archive.with_suffix('.gz.sha256').read_text().split()[0] == archive_hash
     inventory = StringIO()
     call_command('audit_dsh_sessions', state_dir=str(state), api_url=api_url, state_fingerprint=True,
                  database_backup=str(backup), stdout=inventory)
     fingerprints = json.loads(inventory.getvalue())
-    assert fingerprints['database_fingerprint'] == checksum
+    assert fingerprints['database_fingerprint'] == checksum and fingerprints['state_transcripts'] == 2
 
-    script = tmp_path / 'scripts' / 'restore_db.sh'
-    script.parent.mkdir()
-    shutil.copy2(Path(settings.BASE_DIR).parent / 'scripts' / script.name, script)
+    restored_files = tmp_path / 'restored-files'
+    state_prefix = state.as_posix().lstrip('/')
+    with tarfile.open(archive, 'r:gz') as bundle:
+        state_entries = [entry for entry in bundle if entry.name.startswith(f'{state_prefix}/')]
+        bundle.extractall(restored_files, members=state_entries, filter='data')
+    restored_state = restored_files / state_prefix
+    assert restored_state.is_dir()
+    script = scripts / 'restore_db.sh'
     target = f'ulr_restore_{uuid4().hex}'
     failed_target = f'{target}_failed'
     # Simulate a checkout configured for a different database on the same disposable cluster.
-    config = tmp_path / 'backend' / '.env'
-    config.parent.mkdir()
     config.write_text(f'DB_NAME={failed_target}\n')
     restored_env = {**env, 'DB_NAME': target}
     command = [sys.executable, str(Path(settings.BASE_DIR) / 'manage.py'), 'audit_dsh_sessions',
-               '--state-dir', str(state), '--api-url', api_url]
+               '--state-dir', str(restored_state), '--api-url', api_url]
     gate = [*command, '--require-paired-restore', '--database-backup', str(backup), '--expected-state-fingerprint',
             fingerprints['state_fingerprint'], '--expected-database-fingerprint', checksum]
     def sql_probe(database, query):
