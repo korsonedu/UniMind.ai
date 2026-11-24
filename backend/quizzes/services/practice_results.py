@@ -255,6 +255,9 @@ def exam_result_payload(exam: QuizExam, include_results: bool = True) -> dict:
     max_score = sum(item['max_score'] for item in graded)
     correct_count = sum(1 for item in graded if item['is_correct'])
     total_questions = exam.total_questions or len(results)
+    failed = sum(1 for item in payload_results if item['status'] == 'failed')
+    if exam.requires_ulr and exam.status in ('failed', 'partial'):
+        failed = max(failed, exam.failed_count)
     payload = {
         'kind': 'exam',
         'id': exam.id,
@@ -264,8 +267,8 @@ def exam_result_payload(exam: QuizExam, include_results: bool = True) -> dict:
         'completed_at': exam.grading_completed_at,
         'total_questions': total_questions,
         'graded_count': len(graded),
-        'failed_count': sum(1 for item in payload_results if item['status'] == 'failed'),
-        'pending_count': max(0, total_questions - len(graded) - sum(1 for item in payload_results if item['status'] == 'failed')),
+        'failed_count': failed,
+        'pending_count': max(0, total_questions - len(graded) - failed),
         'total_score': round(total_score, 1),
         'max_score': round(max_score, 1),
         'correct_rate': round(total_score / max_score * 100, 1) if max_score else 0,
@@ -289,6 +292,8 @@ def exam_status_payload(exam: QuizExam) -> dict:
     )
     graded = aggregate['graded'] or 0
     failed = aggregate['failed'] or 0
+    if exam.requires_ulr and exam.status in ('failed', 'partial'):
+        failed = max(failed, exam.failed_count)
     total_score = aggregate['score'] or 0
     max_score = aggregate['max_score'] or 0
     total_questions = exam.total_questions or exam.results.count()

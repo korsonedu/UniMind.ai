@@ -346,6 +346,32 @@ class ExamAsyncTests(APITestCase):
         self.assertEqual(list(exam.results.order_by('position').values_list('user_answer', flat=True)),
                          ['B', '利率期限结构有三种理论。'])
 
+    def test_ulr_handoff_keeps_incomplete_submission_ungraded(self):
+        with override_settings(DEBUG=False, UNIMIND_LEARNING_RUNTIME='legacy'):
+            submitted, _ = self.submit()
+        self.assertEqual(submitted.status_code, 202, submitted.data)
+        exam = QuizExam.objects.get(pk=submitted.data['exam_id'])
+        self.assertFalse(exam.requires_ulr)
+        exam.results.filter(question=self.objective).delete()
+
+        with override_settings(DEBUG=False, UNIMIND_LEARNING_RUNTIME='ulr'), \
+                patch('quizzes.ai_workflow._grade_answer', side_effect=grade_ok) as model, \
+                patch('quizzes.ai_workflow._apply_memorix_status') as memorix, \
+                patch('quizzes.ai_workflow._queue_experience_verification'), \
+                self.captureOnCommitCallbacks(execute=True):
+            run_exam_grading(self.user.pk, exam.pk)
+            run_exam_grading(self.user.pk, exam.pk)
+        model.assert_not_called()
+        memorix.assert_not_called()
+        exam.refresh_from_db()
+        item = exam.results.get()
+        self.assertEqual((exam.status, exam.total_questions, exam.graded_count, exam.failed_count), ('failed', 2, 0, 2))
+        self.assertIn('原始作答记录不完整', exam.last_error)
+        self.assertEqual((item.user_answer, item.status, exam.total_score), ('利率期限结构有三种理论。', 'failed', 0))
+        detail = self.client.get(f'/api/quizzes/exams/{exam.pk}/').data
+        self.assertEqual((detail['status'], detail['failed_count'], detail['pending_count']), ('failed', 2, 0))
+        self.assertIn('原始作答记录不完整', detail['summary_text'])
+
     def test_lost_queue_delivery_and_interrupted_finalization_can_resume(self):
         response, _ = self.submit()
         exam_id = response.data['exam_id']

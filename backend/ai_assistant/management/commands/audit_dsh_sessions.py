@@ -14,7 +14,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.db.models.fields.json import KeyTextTransform
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -48,15 +48,22 @@ def valid_id(value):
 def blocked_queued_exam_ids():
     from ai_assistant.services.learning_tasks import task_result_snapshot
     from core.utils import get_content_institution_id
-    from quizzes.models import ExamQuestionResult
+    from quizzes.models import ExamQuestionResult, QuizExam
+    from quizzes.services.exam_grading_state import exam_submission_complete
     from quizzes.services.practice_results import validate_grading_question
     from users.feature_access import has_learning_feature
 
-    pending = ExamQuestionResult.objects.filter(status='pending', exam__requires_ulr=False).filter(
-        Q(exam__status='pending') | Q(exam__status='grading', exam__started_at__isnull=True),
+    queued = QuizExam.objects.filter(requires_ulr=False).filter(
+        Q(status='pending') | Q(status='grading', started_at__isnull=True),
+    )
+    counts = queued.annotate(saved_count=Count('results')).values_list('pk', 'total_questions', 'saved_count')
+    blocked = {pk for pk, total, saved in counts.iterator() if not exam_submission_complete(total, saved)}
+    pending = ExamQuestionResult.objects.filter(
+        status='pending', exam__in=queued,
     ).select_related('exam__user', 'exam__learning_task__project', 'question__knowledge_point').order_by('exam_id', 'pk')
-    blocked = []
     for exam_id, rows in groupby(pending.iterator(), key=lambda item: item.exam_id):
+        if exam_id in blocked:
+            continue
         first = next(rows)
         user = first.exam.user
         task = getattr(first.exam, 'learning_task', None)
@@ -75,8 +82,8 @@ def blocked_queued_exam_ids():
                         raise ValidationError('题目不存在或不在当前内容范围。')
                     validate_grading_question(question, item.question_snapshot, scope)
         except (PermissionDenied, ValidationError):
-            blocked.append(exam_id)
-    return blocked
+            blocked.add(exam_id)
+    return sorted(blocked)
 
 
 def restored_database_fingerprint():

@@ -725,6 +725,16 @@ def test_dsh_migration_gate_checks_pending_exam_inputs_before_cutover(
     ProjectLearningTask.objects.filter(pk=task.pk).update(definition=task.definition)
     call_command('audit_dsh_sessions', stdout=StringIO(), **options)
 
+    QuizExam.objects.get(pk=exam_ids[0]).results.all().delete()
+    report = StringIO()
+    with pytest.raises(CommandError, match='未完成的迁移项'):
+        call_command('audit_dsh_sessions', stdout=report, **options)
+    audit = json.loads(report.getvalue())
+    assert audit['blockers'] == {'queued_exam_grading_not_ready': 1}
+    assert audit['blocked_queued_exam_ids'] == exam_ids[:1]
+    assert QuizExam.objects.get(pk=exam_ids[0]).status == 'pending'
+    assert 'CUTOVER_' not in report.getvalue()
+
 
 @pytest.mark.django_db
 def test_dsh_migration_gate_requires_a_recoverable_receipt_for_each_product_turn(

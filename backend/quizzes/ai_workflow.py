@@ -15,12 +15,13 @@ from ai_engine.observability import observe_background
 from notifications.models import Notification
 from quizzes.memorix.service import MemorixService
 from quizzes.models import ExamQuestionResult, Question, QuizExam, UserQuestionStatus
-from quizzes.services.exam_grading_state import grading_lock_key
+from quizzes.services.exam_grading_state import exam_submission_complete, grading_lock_key
 from quizzes.services.practice_results import validate_grading_question
 from users.models import User
 from users.feature_access import has_learning_feature
 
 logger = logging.getLogger(__name__)
+INCOMPLETE_EXAM_SUBMISSION = '原始作答记录不完整，请联系管理员。'
 
 
 def _clamp_score(score: float, max_score: float) -> float:
@@ -246,7 +247,14 @@ def _finalize_exam(user_id: int, exam_id: int) -> None:
         total_score = counts['score'] or 0
         max_score = counts['max_score'] or 0
         failed = counts['failed'] or 0
-        if not graded_items and failed:
+        saved_count = len(graded_items) + failed
+        incomplete = exam.requires_ulr and not exam_submission_complete(exam.total_questions, saved_count)
+        if incomplete:
+            exam.status = 'partial' if graded_items and saved_count < exam.total_questions else 'failed'
+            exam.summary = ('The original submission is incomplete. Contact your administrator.'
+                            if exam.ui_language == 'en' else INCOMPLETE_EXAM_SUBMISSION)
+            failed += max(0, exam.total_questions - saved_count)
+        elif not graded_items and failed:
             exam.status = 'failed'
             exam.summary = 'Grading did not finish. Try again later.' if exam.ui_language == 'en' else '批改未完成，请稍后重试。'
         elif not graded_items and not failed:
@@ -270,7 +278,7 @@ def _finalize_exam(user_id: int, exam_id: int) -> None:
             'total_score', 'max_score', 'grading_completed_at',
         ]
 
-        exam.last_error = f'{failed} 道题未完成' if failed else ''
+        exam.last_error = exam.summary if incomplete else f'{failed} 道题未完成' if failed else ''
         update_fields.append('last_error')
         notify = exam.notified_at is None
         if notify:
@@ -322,6 +330,10 @@ def _run_exam_grading(user_id: int, exam_id: int):
 
 def _grade_claimed_exam(user, exam, *, force_ulr):
     user_id, exam_id = user.pk, exam.pk
+    if exam.requires_ulr and not exam_submission_complete(exam.total_questions, exam.results.count()):
+        _fail_pending_items(exam_id, INCOMPLETE_EXAM_SUBMISSION)
+        _finalize_exam(user_id, exam_id)
+        return
     from ai_assistant.models import ProjectLearningTask
     from ai_assistant.services.learning_tasks import validate_task_question, sync_exam_task_result, task_result_snapshot, personal_question
     learning_task = ProjectLearningTask.objects.select_related('project__user').filter(exam_id=exam_id).first()

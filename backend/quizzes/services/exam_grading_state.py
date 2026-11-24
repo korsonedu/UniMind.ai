@@ -9,6 +9,10 @@ GRADING_HARD_LIMIT = 180
 GRADING_RECOVERY_DELAY = timedelta(seconds=GRADING_HARD_LIMIT + 60)
 
 
+def exam_submission_complete(total_questions, saved_count):
+    return saved_count > 0 and (total_questions == 0 or total_questions == saved_count)
+
+
 def can_resume_grading(exam):
     progress_at = exam.started_at or exam.grading_queued_at or exam.created_at
     return exam.status in ('pending', 'grading') and progress_at <= timezone.now() - GRADING_RECOVERY_DELAY
