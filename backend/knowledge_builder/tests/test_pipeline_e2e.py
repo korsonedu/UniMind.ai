@@ -297,8 +297,10 @@ def test_ulr_build_resumes_validated_stages_and_publishes_once(monkeypatch, sett
     if expected:
         assert len({row['attempt_id'] for row in observations[count:]}) == 1
         assert observations[0]['attempt_id'] != observations[count]['attempt_id']
-    embedded = [row.args[4] for row in caplog.records if row.name == 'ai_engine.observability'
-                and row.args[0] == 'knowledge_tree.embedding']
+    embedding_logs = [row.args for row in caplog.records if row.name == 'ai_engine.observability'
+                      and row.args[0] == 'knowledge_tree.embedding']
+    assert all(row[1] and row[3] == 'none' for row in embedding_logs)
+    embedded = [row[4] for row in embedding_logs]
     assert len(embedded) == embedding_count == 3
     assert {row['request_id'] for row in embedded} == {request_id}
     assert {row['attempt_id'] for row in embedded} == {str(observations[0]['attempt_id'])}
@@ -329,30 +331,41 @@ def test_ai_failure_is_rethrown_and_recorded(monkeypatch):
 
 
 @pytest.mark.parametrize('status', [400, 503])
-def test_embedding_http_failure_is_rethrown_and_recorded(monkeypatch, semantic_fixture, status):
+def test_embedding_http_failure_is_rethrown_and_recorded(monkeypatch, semantic_fixture, status, caplog):
     def fail(url, **kwargs):
         return httpx.Response(status, request=httpx.Request('POST', url))
     monkeypatch.setattr('knowledge_builder.embedding_client.httpx.post', fail)
     build = create_build('微积分极限与连续性')
+    caplog.set_level('INFO', logger='ai_engine.observability')
     with pytest.raises(EmbeddingError, match='HTTP/JSON'):
         run_build(build.pk)
     assert_failed(build, 'EmbeddingError')
+    observation, = [row.args for row in caplog.records if row.name == 'ai_engine.observability'
+                    and row.args[0] == 'knowledge_tree.embedding']
+    assert observation[1] is False and observation[3] == 'upstream'
+    assert 'prompt_tokens' not in observation[4]
 
 
-def test_nonfinite_embedding_is_rethrown_and_recorded(monkeypatch, semantic_fixture):
+def test_nonfinite_embedding_is_rethrown_and_recorded(monkeypatch, semantic_fixture, caplog):
     original = semantic_fixture.http
     def fail(url, **kwargs):
         response = original(url, **kwargs)
         # Bypass JSON serialization only to model a decoded nonfinite provider payload.
         payload = response.json()
+        payload.update(model=config.EMBEDDING_MODEL, usage={'prompt_tokens': 41})
         payload['data'][0]['embedding'][0] = float('nan')
         response.json = lambda: copy.deepcopy(payload)
         return response
     monkeypatch.setattr('knowledge_builder.embedding_client.httpx.post', fail)
     build = create_build('微积分极限与连续性')
+    caplog.set_level('INFO', logger='ai_engine.observability')
     with pytest.raises(EmbeddingError, match='finite'):
         run_build(build.pk)
     assert_failed(build, 'EmbeddingError')
+    observation, = [row.args for row in caplog.records if row.name == 'ai_engine.observability'
+                    and row.args[0] == 'knowledge_tree.embedding']
+    assert observation[1] is False and observation[3] == 'invalid_response'
+    assert observation[4]['prompt_tokens'] == '41' and observation[4]['reported_model'] == config.EMBEDDING_MODEL
 
 
 def test_strong_cycle_repairs_stop_after_two_rounds(monkeypatch, semantic_fixture):
