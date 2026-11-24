@@ -1,6 +1,11 @@
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from threading import Event
+from time import monotonic, sleep
 from unittest.mock import patch
+import pytest
+from django.db import connection, transaction
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -316,3 +321,64 @@ class ProjectLearningSmoke(APITestCase):
         with self.assertRaises(LearningConflict):
             change_learning(self.project, {'action': 'plan', 'revision': 2, 'plan': self.plan}, message=newer, model=True)
         self.assertEqual(ProjectLearning.objects.get(pk=self.state.pk).status, 'paused')
+
+
+@pytest.mark.django_db(transaction=True)
+def test_followup_yields_to_concurrent_project_turn(auth_client, user, settings):
+    if connection.vendor != 'postgresql':
+        pytest.skip('Requires PostgreSQL row locks.')
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇', 'bot_type': 'planner'})
+    project = ConversationProject.objects.create(user=user, name='合成并发提醒')
+    conversation = Conversation.objects.create(user=user, bot=bot, project=project, conversation_id=uuid.uuid4())
+    state = ProjectLearning.objects.create(project=project, last_conversation=conversation, status='active',
+        planning_enabled=True, reminders_enabled=True, followup_at=timezone.now(), followup_text='复习折现率。',
+        current_stage='discount', next_action='复习折现率。', plan={'goal': '复习折现率', 'stages': [
+            {'id': 'discount', 'title': '折现率', 'task': '复习折现率。', 'outcome': '解释折现率'}]})
+    ready = Event()
+    worker_pid = None
+
+    def deliver():
+        nonlocal worker_pid
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute('SELECT pg_backend_pid()')
+                worker_pid, = cursor.fetchone()
+            ready.set()
+            return send_project_learning_followups()
+        finally:
+            connection.close()
+
+    url = f'/api/ai/projects/{project.pk}/learning/'
+    with ThreadPoolExecutor(max_workers=1) as worker:
+        with transaction.atomic(), connection.cursor() as cursor:
+            # XiaoYu holds the conversation row before it writes a project change.
+            Conversation.objects.select_for_update().get(pk=conversation.pk)
+            delivery = worker.submit(deliver)
+            assert ready.wait(timeout=10)
+            deadline = monotonic() + 5
+            while not delivery.done() and monotonic() < deadline:
+                cursor.execute('SELECT pg_backend_pid() = ANY(pg_blocking_pids(%s))', [worker_pid])
+                if cursor.fetchone()[0]:
+                    break
+                sleep(0.02)
+            else:
+                pytest.fail('The reminder worker did not wait for the conversation.')
+            paused = auth_client.patch(url, {'action': 'pause', 'revision': state.revision}, format='json')
+            assert paused.status_code == 200, paused.data
+        assert delivery.result(timeout=10) == {'sent': 0}
+
+    state.refresh_from_db()
+    assert state.status == 'paused' and state.followup_at is None
+    assert not Notification.objects.filter(recipient=user, ntype='learning_followup').exists()
+    assert not project.learning_events.filter(kind='followup').exists()
+    assert not AIChatMessage.objects.filter(conversation_id=conversation.conversation_id).exists()
+    resumed = auth_client.patch(url, {'action': 'resume', 'revision': state.revision}, format='json')
+    assert resumed.status_code == 200, resumed.data
+    ProjectLearning.objects.filter(pk=state.pk).update(followup_at=timezone.now())
+    assert send_project_learning_followups() == {'sent': 1}
+    assert send_project_learning_followups() == {'sent': 0}
+    assert Notification.objects.filter(recipient=user, ntype='learning_followup').count() == 1
+    assert project.learning_events.filter(kind='followup').count() == 1
+    assert AIChatMessage.objects.filter(conversation_id=conversation.conversation_id, role='assistant').count() == 1

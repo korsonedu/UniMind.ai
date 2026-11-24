@@ -3,7 +3,7 @@ from celery import shared_task
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
-from ai_assistant.models import AIChatMessage, ProjectLearning, ProjectLearningEvent, chat_receipt_deleted
+from ai_assistant.models import AIChatMessage, Conversation, ProjectLearning, ProjectLearningEvent, chat_receipt_deleted
 from .services.ulr_config import ulr_enabled
 from notifications.models import Notification
 from users.feature_access import has_learning_feature
@@ -17,16 +17,20 @@ def send_project_learning_followups():
     # Timed pauses still expire when notifications are muted.
     ProjectLearning.objects.filter(status='paused', planning_enabled=True, reminders_enabled=False,
         resume_at__lte=now).update(status='active', resume_at=None, revision=F('revision') + 1)
-    ids = ProjectLearning.objects.filter(planning_enabled=True, reminders_enabled=True, followup_at__lte=now,
-        status__in=['active', 'paused', 'completed']).values_list('pk', flat=True)[:100]
-    for pk in list(ids):
+    due = ProjectLearning.objects.filter(planning_enabled=True, reminders_enabled=True, followup_at__lte=now,
+        status__in=['active', 'paused', 'completed']).values_list('pk', 'last_conversation_id')[:100]
+    for pk, conversation_pk in list(due):
         with transaction.atomic():
-            state = ProjectLearning.objects.select_for_update(of=('self',)).select_related(
-                'project__user', 'last_conversation__bot').filter(pk=pk, planning_enabled=True, reminders_enabled=True, followup_at__lte=now).first()
+            # A XiaoYu turn acquires the conversation before the project state.
+            conversation = None
+            if conversation_pk is not None:
+                conversation = Conversation.objects.select_for_update(of=('self',)).select_related('bot').filter(pk=conversation_pk).first()
+            state = ProjectLearning.objects.select_for_update(of=('self',)).select_related('project__user').filter(
+                pk=pk, last_conversation_id=conversation_pk, planning_enabled=True, reminders_enabled=True,
+                followup_at__lte=now).first()
             if not state:
                 continue
             user = state.project.user
-            conversation = state.last_conversation
             if not user.is_active or not has_learning_feature(user, 'ai.assistant'):
                 state.followup_at = None
                 state.save(update_fields=['followup_at'])
