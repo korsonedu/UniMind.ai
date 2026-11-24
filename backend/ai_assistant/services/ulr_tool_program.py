@@ -160,14 +160,15 @@ def duplicate_program_scope(name, raw_arguments, advertised):
         if not isinstance(name, str) or name not in advertised or not isinstance(pairs, tuple):
             return None
     repeated = {field for field, count in Counter(field for field, _ in pairs).items() if count > 1}
-    if 'v' in repeated:
+    original = dict(pairs)
+    if 'v' in repeated or not valid_program_version(original):
         return name, {}, 'v'
     if len(repeated) != 1:
         return None
     field, = repeated
     if field not in program_properties(name) and not (field == 'rank' and name in MAX_RANKS):
         return None
-    original = {key: value for key, value in pairs if key != field}
+    del original[field]
     if any(isinstance(value, (tuple, list)) for value in original.values()):
         return None
     return name, original, field

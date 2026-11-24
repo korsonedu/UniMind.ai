@@ -1323,7 +1323,8 @@ def test_ulr_practice_program_binds_the_exact_point_and_keeps_the_question_out_o
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize('mode', ['select', 'direct', 'direct_forged_source', 'unavailable', 'omitted', 'inline_invalid_version',
-                                 'inline_duplicate_version', 'inline_decimal', 'inline_compact', 'inline_mixed', 'inline_missing_rank',
+                                 'inline_duplicate_version', 'inline_stale_duplicate_rank', 'direct_future_duplicate_find',
+                                 'inline_decimal', 'inline_compact', 'inline_mixed', 'inline_missing_rank',
                                  'inline_excluded_rank', 'inline_repair', 'inline_repair_drift',
                                  'inline_duplicate_rank', 'inline_duplicate_operation', 'direct_duplicate_find',
                                  'text_open', 'text_complete', 'text_invoke', 'group_only'])
@@ -1381,8 +1382,8 @@ def test_ulr_recovers_a_course_program_missing_from_the_initial_tools(auth_clien
                 name, args = 'run_practice_tools' if mode == 'unavailable' else 'run_course_tools', {'find': '折现率'}
                 if mode == 'direct_forged_source':
                     args['course_id'] = course.pk
-                elif mode == 'direct_duplicate_find':
-                    args = program
+                elif mode in ('direct_duplicate_find', 'direct_future_duplicate_find'):
+                    args = {**program, 'v': TOOL_PROGRAM_VERSION + int(mode == 'direct_future_duplicate_find')}
         else:
             receipt = json.loads(messages[-1]['content'])
             if mode == 'group_only':
@@ -1436,11 +1437,11 @@ def test_ulr_recovers_a_course_program_missing_from_the_initial_tools(auth_clien
             if mode in rank_repairs:
                 args = {'rank': 1, **({'find': '不同课程'} if mode.endswith('_drift') else {})}
         raw = json.dumps(args)
-        if mode == 'inline_duplicate_rank' and len(catalogs) == 1:
+        if mode in ('inline_duplicate_rank', 'inline_stale_duplicate_rank') and len(catalogs) == 1:
             raw = raw.replace('"rank":', '"rank":2,"rank":', 1)
         elif mode == 'inline_duplicate_operation' and len(catalogs) == 1:
             raw = raw.replace('"program":', '"program":"run_practice_tools","program":', 1)
-        elif mode == 'direct_duplicate_find' and len(catalogs) == 1:
+        elif mode in ('direct_duplicate_find', 'direct_future_duplicate_find') and len(catalogs) == 1:
             raw = raw.replace('"find":', '"find":"不同课程","find":', 1)
         elif mode == 'inline_duplicate_version':
             raw = raw.replace('"v":', f'"rank":2,"rank":1,"v":{TOOL_PROGRAM_VERSION},"v":', 1)
@@ -1473,16 +1474,16 @@ def test_ulr_recovers_a_course_program_missing_from_the_initial_tools(auth_clien
             patch('ai_assistant.services.dsh_xiaoyu.schedule_conversation_title'), \
             patch('ai_assistant.services.dsh_xiaoyu.extract_memories_async'):
         events = async_to_sync(consume)(auth_client.post('/api/ai/chat/stream/', request, format='json'))
-    if mode in ('omitted', 'inline_invalid_version', 'inline_duplicate_version', 'inline_mixed', 'text_open'):
+    if mode in ('omitted', 'inline_invalid_version', 'inline_duplicate_version', 'inline_stale_duplicate_rank',
+                'direct_future_duplicate_find', 'inline_mixed', 'text_open'):
         assert len(catalogs) == (2 if mode == 'omitted' else 1) and events[-1]['is_error']
         error = {'omitted': '组合指令未提交', 'inline_mixed': '请单独提交',
                  'text_open': '未完整返回'}.get(mode, '版本不符')
         assert error in events[-1]['full_content']
         assert not any(event.get('type') == 'text_delta' for event in events)
         assert AIUsageReservation.objects.get(request_id=request['request_id']).status == 'released'
-        if mode == 'text_open':
-            assert not AIChatMessage.objects.filter(conversation_id=request['conversation_id'], role='assistant').exists()
-            assert not WeeklyAIUsage.objects.filter(user=user, ai_calls__gt=0).exists()
+        assert not AIChatMessage.objects.filter(conversation_id=request['conversation_id'], role='assistant').exists()
+        assert not WeeklyAIUsage.objects.filter(user=user, ai_calls__gt=0).exists()
         if mode == 'inline_mixed':
             assert not any(event.get('call_id') for event in events)
         reads.assert_not_called()
