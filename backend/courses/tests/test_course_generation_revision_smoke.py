@@ -1,9 +1,14 @@
 import json
+from datetime import timedelta
+from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import transaction
+from django.test import override_settings
 from django.utils import timezone
 from kombu.exceptions import OperationalError
 
@@ -82,6 +87,56 @@ def test_revised_transcript_does_not_publish_a_late_outline(course_source, djang
 
 
 @pytest.mark.django_db
+def test_cutover_waits_for_a_running_legacy_course_outline(course_source, settings, tmp_path):
+    from ai_assistant.models import Bot
+
+    course, transcript, _ = course_source
+    Bot.objects.create(is_xiaoyu=True, name='小宇', bot_type='planner')
+    settings.UNIMIND_DSH_ENABLED = False
+    settings.UNIMIND_LEARNING_RUNTIME = 'legacy'
+    original = CourseOutline.objects.create(course=course, status='completed')
+    OutlineItem.objects.create(outline=original, title='上一版大纲', timestamp=0, index=0)
+
+    def audit(output):
+        call_command('audit_dsh_sessions', state_dir=str(tmp_path), api_url='http://127.0.0.1:8000',
+                     require_migrated=True, stdout=output)
+        return json.loads(output.getvalue())
+
+    def generate(service, transcript_text):
+        assert ORIGINAL in transcript_text
+        if provider.call_count == 1:
+            output = StringIO()
+            with pytest.raises(CommandError, match='未完成的迁移项'):
+                audit(output)
+            blocked = json.loads(output.getvalue())
+            assert blocked['blockers'] == {'active_legacy_course_outlines': 1}
+            assert blocked['active_course_outline_ids'] == [original.pk]
+            assert '上一版大纲' not in output.getvalue() and ORIGINAL not in output.getvalue()
+            original.refresh_from_db()
+            assert original.status == 'generating'
+            CourseOutline.objects.filter(pk=original.pk).update(updated_at=timezone.now() - timedelta(minutes=11))
+            with override_settings(UNIMIND_LEARNING_RUNTIME='ulr'):
+                assert audit(StringIO())['migrated']
+                generate_outline_task.run(course.pk)
+            return [{'title': '旧进程迟到的大纲', 'timestamp_seconds': 0}]
+        assert provider.call_count == 2
+        assert audit(StringIO())['migrated']
+        with override_settings(UNIMIND_LEARNING_RUNTIME='legacy'), patch.object(
+                timezone, 'now', return_value=timezone.now() + timedelta(minutes=11)):
+            generate_outline_task.run(course.pk)
+        return [{'title': 'ULR 完成的大纲', 'timestamp_seconds': 0}]
+
+    with patch.object(AICourseService, '_request_outline_items', autospec=True, side_effect=generate) as provider, \
+            patch('courses.services.course_question_jobs.publish_after_commit'):
+        generate_outline_task.run(course.pk)
+    assert provider.call_count == 2
+    assert list(original.items.values_list('title', flat=True)) == ['ULR 完成的大纲']
+    original.refresh_from_db()
+    assert original.status == 'completed'
+    assert PendingCourseQuestions.objects.get().transcript_id == transcript.pk
+
+
+@pytest.mark.django_db
 def test_revised_transcript_discards_late_and_queued_questions(course_source):
     course, transcript, revise = course_source
     service = AICourseService()
@@ -109,8 +164,6 @@ def test_revised_transcript_discards_late_and_queued_questions(course_source):
 
 @pytest.mark.django_db
 def test_course_question_work_recovers_the_original_job_once(course_source):
-    from django.test import override_settings
-
     course, transcript, _ = course_source
     job = PendingCourseQuestions.objects.create(transcript=transcript, revision=transcript.revision)
     jobs = PendingCourseQuestions.objects.filter(pk=job.pk)

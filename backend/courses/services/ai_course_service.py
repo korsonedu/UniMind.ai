@@ -161,16 +161,19 @@ class AICourseService:
         return VideoTranscript.objects.filter(pk=transcript.pk, revision=transcript.revision, asr_status='completed')
 
     def generate_outline(self, course_id: int) -> List[Dict[str, Any]]:
+        native = standalone_ulr()
         with transaction.atomic():
             course = Course.objects.select_for_update().get(pk=course_id)
             transcript = VideoTranscript.objects.select_for_update().filter(course=course, asr_status='completed').first()
             if not transcript or not transcript.full_text.strip():
                 raise ValueError("转录不可用或尚未完成")
             outline, _ = CourseOutline.objects.get_or_create(course=course)
+            if outline.status == 'generating' and outline.generating_with_ulr and not native:
+                return []
             claimed_at = timezone.now()
             claimed = CourseOutline.objects.filter(pk=outline.pk).filter(
-                ~Q(status='generating') | Q(updated_at__lt=claimed_at - timedelta(seconds=600)),
-            ).update(status='generating', updated_at=claimed_at)
+                ~Q(status='generating') | Q(updated_at__lt=claimed_at - CourseOutline.GENERATION_LEASE),
+            ).update(status='generating', updated_at=claimed_at, generating_with_ulr=native)
             if not claimed:
                 return []
             transcript_with_timestamps = self._format_transcript_with_timestamps(transcript)
@@ -215,7 +218,7 @@ class AICourseService:
                 OutlineItem.objects.bulk_create(replacements)
                 outline.status = 'completed'
                 outline.save(update_fields=['status', 'updated_at'])
-                if standalone_ulr():
+                if native:
                     from .course_question_jobs import schedule_course_questions
                     schedule_course_questions(transcript)
                 else:

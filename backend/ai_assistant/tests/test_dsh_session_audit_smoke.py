@@ -861,7 +861,8 @@ def test_dsh_migration_gate_requires_a_recoverable_receipt_for_each_product_turn
     settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
     settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
     CourseStudentStatus.objects.create(user=user, is_course_student=True)
-    QuizExam.objects.create(user=user, status='pending', grading_queued_at=timezone.now())
+    queued = QuizExam.objects.create(user=user, status='pending', grading_queued_at=timezone.now(), total_questions=1)
+    ExamQuestionResult.objects.create(exam=queued, status='graded', attempts=1, user_answer='A', score=4, max_score=5)
     QuizExam.objects.create(user=user, status='grading', started_at=timezone.now(), requires_ulr=True)
     audit({})
     exam = QuizExam.objects.create(user=user, status='grading', started_at=timezone.now(), total_questions=1)

@@ -85,6 +85,7 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
 
     from ai_assistant.services.external_video_context import prepare_external_video_context
     from ai_assistant.views import _reserve_chat_request
+    from courses.models import Course, CourseOutline
     from quizzes.models import ContentPipelineTask
     from users.learning import confirm_ai_call
 
@@ -125,6 +126,8 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
         {'role': row.role, 'content': row.content} for row in (prompt, answer)]}, ensure_ascii=False))
     unsettled = ContentPipelineTask.objects.create(created_by=user, task_type='ai_generate',
         title='合成待核对旧出题', status='failed', payload={'bulk_mode': True, 'current_stage': 'generating'})
+    legacy_outline = CourseOutline.objects.create(course=Course.objects.create(title='合成旧大纲课程'),
+                                                   status='generating')
 
     env = {'PATH': os.environ['PATH'], 'TMPDIR': str(tmp_path), 'DJANGO_ENV': 'test',
            'UNIMIND_DSH_ENABLED': 'false', 'UNIMIND_LEARNING_RUNTIME': 'ulr',
@@ -194,10 +197,14 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
         report = json.loads(blocked.stdout)
         assert blocked.returncode != 0 and report['snapshot_pair_verified'] and report['database_restore_verified']
         assert not report['paired_migration_verified']
-        assert report['blockers'] == {'unsettled_legacy_question_pipelines': 1}
+        assert report['blockers'] == {'unsettled_legacy_question_pipelines': 1, 'active_legacy_course_outlines': 1}
+        assert report['active_course_outline_ids'] == [legacy_outline.pk]
+        print(json.dumps({'restored_legacy_outline_gate': report}, ensure_ascii=False))
         assert report['unsettled_question_pipeline_ids'] == [unsettled.pk]
         # Settle the synthetic review on the restored copy for the continuation check.
         sql_probe(target, f"UPDATE quizzes_contentpipelinetask SET status = 'cancelled' WHERE id = {unsettled.pk}")
+        sql_probe(target, "UPDATE courses_courseoutline SET updated_at = now() - interval '11 minutes' "
+                  f"WHERE id = {legacy_outline.pk}")
         unsettled.refresh_from_db()
         assert unsettled.status == 'failed'
         verify = ('from ai_assistant.tests.test_ulr_restore_smoke import verify_restored_conversations; '
@@ -212,6 +219,7 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
         assert report['paired_migration_verified']
         assert report['site_matched'] == report['already_imported'] == 1
         assert report['target_runtime'] == 'ulr'
+        print(json.dumps({'verified_paired_migration': report}, ensure_ascii=False))
         legacy = subprocess.run(gate, env={**restored_env, 'UNIMIND_LEARNING_RUNTIME': 'legacy'},
                                 capture_output=True, text=True, timeout=30)
         report = json.loads(legacy.stdout)

@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.db import models, router, transaction
 from django.conf import settings
 from django.utils import timezone
@@ -122,12 +124,14 @@ class Course(models.Model):
 
 
 class CourseOutline(models.Model):
+    GENERATION_LEASE = timedelta(minutes=10)
     STATUS_CHOICES = [
         ('pending', '待处理'), ('generating', '生成中'),
         ('completed', '已完成'), ('failed', '失败'),
     ]
     course = models.OneToOneField(Course, on_delete=models.CASCADE, related_name='outline')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="大纲状态")
+    generating_with_ulr = models.BooleanField(default=False, db_default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -34,7 +34,7 @@ MIGRATION_BLOCKERS = frozenset({
     'deleted_with_active_ledger', 'deleted_with_imported_history', 'import_without_source', 'invalid_imported_link',
     'missing_site_receipt', 'invalid_site_receipt', 'duplicate_site_receipt', 'active_chat_requests',
     'active_unpinned_teaching_tasks', 'unsettled_unpinned_exam_grading', 'queued_exam_grading_not_ready',
-    'running_unpinned_knowledge_builds',
+    'running_unpinned_knowledge_builds', 'active_legacy_course_outlines',
     'unsettled_legacy_question_pipelines',
     'cross_owner_session', 'running_unpinned_block_assessments', 'state_fingerprint_mismatch', 'database_fingerprint_mismatch',
     'database_restore_fingerprint_mismatch', 'target_runtime_not_ulr',
@@ -519,6 +519,7 @@ class Command(BaseCommand):
             counts['unmatched_owners'] = len(owners)
         if gate:
             from backoffice.tasks import TEACHING_JOB_KINDS, TEACHING_JOB_TIMEOUT
+            from courses.models import CourseOutline
             from knowledge_builder.models import KnowledgeTreeBuild
             from quizzes.models import ContentPipelineTask, QuizExam
 
@@ -560,6 +561,12 @@ class Command(BaseCommand):
             if running_builds:
                 counts['running_unpinned_knowledge_builds'] = len(running_builds)
                 report['running_knowledge_build_ids'] = [str(pk) for pk in running_builds]
+            active_outlines = list(CourseOutline.objects.filter(
+                status='generating', generating_with_ulr=False, updated_at__gte=now - CourseOutline.GENERATION_LEASE,
+            ).order_by('pk').values_list('pk', flat=True))
+            if active_outlines:
+                counts['active_legacy_course_outlines'] = len(active_outlines)
+                report['active_course_outline_ids'] = active_outlines
             preparations = list(ProjectLearningEvent.objects.filter(kind='block_prepare', content__status='running')
                 .filter(Q(content__requires_ulr__isnull=True) | Q(content__requires_ulr=False))
                 .order_by('pk').values_list('pk', flat=True))
