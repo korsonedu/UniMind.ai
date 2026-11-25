@@ -23,6 +23,8 @@ from .serializers_workbench import (
     ProjectSourceUploadSerializer,
 )
 from .services.workbench_ingest import dispatch_project_source_processing
+from .services.workbench_grounding import active_sources
+from .services.workbench_overview import extractive_overview, source_signature, synthesize_overview
 
 
 class ProjectSourceView(APIView):
@@ -50,6 +52,38 @@ class ProjectSourceListView(ProjectSourceView):
             'ready_count': sum(source.status == ProjectSource.Status.READY for source in sources),
             'sources': ProjectSourceSummarySerializer(sources, many=True).data,
         })
+
+
+class ProjectWorkbenchOverviewView(ProjectSourceView):
+    def get(self, request, pk):
+        return self.overview(pk, synthesize=False)
+
+    def post(self, request, pk):
+        return self.overview(pk, synthesize=True)
+
+    def overview(self, pk, *, synthesize):
+        self.require_personal_space()
+        project = self.get_project(pk)
+        sources = active_sources(project)
+        signature = source_signature(sources)
+        if project.workbench_overview.get('source_signature') == signature:
+            return Response(project.workbench_overview)
+        if not synthesize or not sources:
+            return Response({**extractive_overview(sources), 'source_signature': signature})
+
+        overview = synthesize_overview(sources)
+        if overview is None:
+            return Response({'error': '本次未能生成项目概览，请稍后重试。'}, status=status.HTTP_502_BAD_GATEWAY)
+        payload = {**overview, 'source_signature': signature}
+        with transaction.atomic():
+            project = self.get_project(pk, for_update=True)
+            if source_signature(active_sources(project)) != signature:
+                return Response({'error': '已选资料发生变化，请刷新项目概览。'}, status=status.HTTP_409_CONFLICT)
+            if project.workbench_overview.get('source_signature') == signature:
+                return Response(project.workbench_overview)
+            project.workbench_overview = payload
+            project.save(update_fields=['workbench_overview'])
+        return Response(payload)
 
 
 class ProjectSourceUploadView(ProjectSourceView):

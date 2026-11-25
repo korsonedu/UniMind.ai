@@ -23,7 +23,7 @@ from .views_learning import ProjectLearningView, ProjectLearningLibraryView, Pro
 from .views_learning_tasks import ProjectLearningTaskListView, ProjectLearningTaskDetailView
 from .views_workbench import (
     ProjectSourceBatchSelectView, ProjectSourceDetailView, ProjectSourceFileView,
-    ProjectSourceImportView, ProjectSourceListView, ProjectSourceUploadView,
+    ProjectSourceImportView, ProjectSourceListView, ProjectSourceUploadView, ProjectWorkbenchOverviewView,
 )
 
 urlpatterns = [
@@ -52,6 +52,7 @@ urlpatterns = [
     path('conversations/<uuid:conversation_id>/', ConversationDetailView.as_view(), name='conversation-detail'),
     path('projects/', ProjectListCreateView.as_view(), name='conversation-project-list'),
     path('projects/<int:pk>/', ProjectDetailView.as_view(), name='conversation-project-detail'),
+    path('projects/<int:pk>/workbench-overview/', ProjectWorkbenchOverviewView.as_view(), name='project-workbench-overview'),
     path('projects/<int:pk>/sources/', ProjectSourceListView.as_view(), name='project-source-list'),
     path('projects/<int:pk>/sources/upload/', ProjectSourceUploadView.as_view(), name='project-source-upload'),
     path('projects/<int:pk>/sources/import/', ProjectSourceImportView.as_view(), name='project-source-import'),

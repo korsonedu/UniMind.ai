@@ -133,6 +133,7 @@ def save_new_conversation_project(request, bot, conversation_id):
                 state.followup_at = None
             state.save(update_fields=['last_conversation', 'followup_at', 'updated_at'])
             ProjectLearningEvent.objects.create(project=conversation.project, kind='turn', content={})
+    return conversation
 
 
 def add_project_context(user, conversation_id, history):

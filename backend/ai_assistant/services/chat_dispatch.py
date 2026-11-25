@@ -33,6 +33,7 @@ def dispatch_bot_chat(
     memory_context: str = '',
     adaptive_directives: str = '',
     chat_context=None,
+    workbench_grounding=None,
 ):
     """
     统一的 bot 对话调度。
@@ -48,6 +49,8 @@ def dispatch_bot_chat(
     from .project_learning import turn_project_context
     turn_project_context(user, chat_context)
     tool_executor.learning_context = chat_context
+    if workbench_grounding is not None:
+        tool_executor.workbench_grounding = workbench_grounding
 
     # 通用状态恢复钩子
     if profile.restore_state:
@@ -87,6 +90,7 @@ def dispatch_bot_chat_sync(
     memory_context: str = '',
     adaptive_directives: str = '',
     chat_context=None,
+    workbench_grounding=None,
 ):
     """
     同步版调度（用于 SSE 的 _sync_setup）。
@@ -101,6 +105,8 @@ def dispatch_bot_chat_sync(
     from .project_learning import turn_project_context
     turn_project_context(user, chat_context)
     tool_executor.learning_context = chat_context
+    if workbench_grounding is not None:
+        tool_executor.workbench_grounding = workbench_grounding
 
     # 通用状态恢复钩子
     if profile.restore_state:
@@ -145,7 +151,10 @@ def dispatch_bot_chat_sync(
     messages = [{'role': 'system', 'content': system_prompt}]
     for msg in history:
         if msg['role'] in ('user', 'assistant') and msg['content']:
-            messages.append(msg)
+            messages.append(dict(msg))
+    if workbench_grounding is not None:
+        from .workbench_grounding import inject_workbench_context
+        inject_workbench_context(messages, tool_executor, message)
     messages.append({'role': 'user', 'content': message})
 
     tools = profile.tools_factory()
