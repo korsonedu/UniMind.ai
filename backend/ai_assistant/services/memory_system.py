@@ -375,14 +375,13 @@ class MemorySystem:
         }
 
     @staticmethod
-    def query_knowledge_tree(query: str, subject: str, user, institution=None) -> Dict:
+    def query_knowledge_tree(query: str, subject: str, user, institution=None, *, exact_name=False) -> Dict:
         """搜索知识点树。"""
         from django.db.models import Q, Count
         from quizzes.models import KnowledgePoint
 
-        qs = KnowledgePoint.objects.filter(
-            Q(name__icontains=query) | Q(description__icontains=query),
-        )
+        match = Q(name__iexact=query) if exact_name else Q(name__icontains=query) | Q(description__icontains=query)
+        qs = KnowledgePoint.objects.filter(match)
         if subject:
             qs = qs.filter(subject=subject)
         else:
@@ -455,15 +454,21 @@ class MemorySystem:
                                  difficulty: str = '', limit: int = 5,
                                  exclude_mastered: bool = True,
                                  institution=None, q_type: str = '',
-                                 subjective_type: str = '') -> Dict:
+                                 subjective_type: str = '', knowledge_point_id: int | None = None,
+                                 include_sources: bool = False) -> Dict:
         """从题库中抽取练习题。优先返回做错过的题目。"""
         from quizzes.models import Question, UserQuestionStatus
 
         limit = min(int(limit), 10)
         qs = Question.objects.select_related('knowledge_point')
 
-        qs = qs.filter(institution_id=get_content_institution_id(user))
+        scope_id = get_content_institution_id(user)
+        qs = qs.filter(institution_id=scope_id)
+        if include_sources:
+            qs = qs.filter(models.Q(knowledge_point__isnull=True) | models.Q(knowledge_point__institution_id=scope_id))
 
+        if knowledge_point_id is not None:
+            qs = qs.filter(knowledge_point_id=knowledge_point_id, knowledge_point__institution_id=scope_id)
         if kp_name:
             qs = qs.filter(knowledge_point__name__icontains=kp_name)
         if subject:
@@ -504,6 +509,7 @@ class MemorySystem:
 
         return {
             "total_found": qs.count(),
+            **({'_ulr_practice_points': [q.knowledge_point_id for q in all_questions]} if include_sources else {}),
             "questions": [
                 {
                     "id": q.id,

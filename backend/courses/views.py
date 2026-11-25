@@ -858,9 +858,8 @@ class CourseOutlineView(APIView):
 
         from .models import CourseOutline
         outline, _ = CourseOutline.objects.get_or_create(course=course)
-        from datetime import timedelta
         from django.utils import timezone
-        stale = outline.status == 'generating' and outline.updated_at < timezone.now() - timedelta(seconds=600)
+        stale = outline.status == 'generating' and outline.updated_at < timezone.now() - CourseOutline.GENERATION_LEASE
         if outline.status not in ('completed', 'generating') or stale:
             from .services.task_dispatcher import dispatch_outline_generation
             try:

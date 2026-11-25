@@ -7,6 +7,7 @@ class NotificationsConfig(AppConfig):
     verbose_name = '站内通知'
 
     def ready(self):
+        from django.db import transaction
         from django.db.models.signals import post_save
         from django.dispatch import receiver
         from notifications.models import Notification
@@ -18,4 +19,4 @@ class NotificationsConfig(AppConfig):
         def _on_notification(sender, instance, created, **kwargs):
             if created and instance.ntype in _EMAIL_TYPES:
                 from notifications.tasks_reminder import send_notification_email
-                send_notification_email.delay(instance.id)
+                transaction.on_commit(lambda: send_notification_email.delay(instance.pk), using=kwargs['using'], robust=True)

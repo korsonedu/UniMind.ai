@@ -3,8 +3,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from users.permissions import IsMember
-from .models import ConversationProject, ProjectLearningTask
-from .services.learning_tasks import create_task, task_data
+from .models import ConversationProject
+from .services.learning_tasks import available_project_tasks, create_task, task_data
 
 
 class ProjectLearningTaskListView(APIView):
@@ -12,7 +12,8 @@ class ProjectLearningTaskListView(APIView):
 
     def get(self, request, pk):
         project = get_object_or_404(ConversationProject, pk=pk, user=request.user)
-        return Response({'tasks': [task_data(task) for task in project.learning_tasks.select_related('exam', 'project').order_by('created_at', 'id')]})
+        tasks = available_project_tasks(project).select_related('exam', 'project').order_by('created_at', 'id')
+        return Response({'tasks': [task_data(task) for task in tasks]})
 
     def post(self, request, pk):
         project = get_object_or_404(ConversationProject, pk=pk, user=request.user)
@@ -28,6 +29,6 @@ class ProjectLearningTaskDetailView(APIView):
     permission_classes = [IsMember]
 
     def get(self, request, pk, task_id):
-        task = get_object_or_404(ProjectLearningTask.objects.select_related('project', 'exam'),
-                                pk=task_id, project_id=pk, project__user=request.user)
+        project = get_object_or_404(ConversationProject, pk=pk, user=request.user)
+        task = get_object_or_404(available_project_tasks(project).select_related('project', 'exam'), pk=task_id)
         return Response(task_data(task))

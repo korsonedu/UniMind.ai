@@ -30,6 +30,11 @@ def build_tool_card(name, result):
         return data_card('确认学习路径', [item(stage['title'], stage['outcome'])
             for stage in result.get('pending_plan', {}).get('plan', {}).get('stages', [])[:10]],
             ('查看并确认学习路径', result['href']), '确认后开始，原学习安排在确认前保持不变。')
+    if name == 'manage_learning_tasks' and result.get('diagnostic_support', {}).get('status') == 'disclosed':
+        timing = '作答前' if result.get('status') == 'completed' else '此前'
+        link = ('打开学习任务', result['href']) if result.get('href') else None
+        return data_card(result['title'], [item('独立完成', '需换题复查')], link,
+                         f'{timing}已讲过本题解法中的步骤。')
     if name == 'manage_learning_tasks' and result.get('href'):
         return data_card(result['title'], [item('学习任务', '已准备，等待你实际作答')],
             ('打开学习任务', result['href']))
@@ -47,12 +52,13 @@ def build_tool_card(name, result):
         for row in rows[:10]:
             question = {k: row[k] for k in ('id', 'q_type', 'kp_name', 'options') if k in row}
             question['text'] = row.get('text', row.get('question_preview', ''))
-            if name in {'lookup_question', 'get_user_wrong_questions'}:
+            if name in {'lookup_question', 'get_user_wrong_questions'} and 'practice_status' not in row:
                 question['answer'] = row.get('correct_answer', row.get('answer', ''))
             questions.append(question)
         titles = {'lookup_question': '题目与参考答案', 'get_user_wrong_questions': '我的错题',
                   'search_similar_questions': '同类题预览'}
-        return {'type': 'question_preview', 'payload': {'title': titles[name], 'questions': questions}}
+        title = '练习题面' if name == 'lookup_question' and result.get('practice_status') else titles[name]
+        return {'type': 'question_preview', 'payload': {'title': title, 'questions': questions}}
     if name == 'get_learning_sessions':
         return data_card('实际学习记录', [item(f"{s['started_at'][:16]} · {'听课' if s['kind'] == 'video' else '做题'}",
             f"{round(s['active_seconds'] / 60, 1)} 分钟") for s in result.get('sessions', [])[:10]],

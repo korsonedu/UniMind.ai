@@ -5,6 +5,10 @@ from .learning_experiments import EXERCISE_REQUEST, VISUAL_DEMO_REQUEST
 
 
 GROUPS = {
+    'workbench': ('项目资料', '检索和阅读本轮选中的项目资料。',
+                  ('search_workbench_sources', 'read_workbench_source_chunks')),
+    'recall': ('继续学习与回顾', '找回学习记忆，并按来源读取旧问答、讲稿、作答、错题或复习记录。',
+               ('recall_learning', 'read_learning_source')),
     'project': ('目标学习与跟进', '读取当前项目；规划阶段、查公开资源、记录实际学习反馈、调整与主动跟进。', (
         'read_learning_project', 'plan_learning_project', 'record_learning_progress',
         'set_learning_followup', 'find_learning_resources', 'manage_learning_resources', 'manage_learning_strategies')),
@@ -73,6 +77,12 @@ def grouped_tools(allowed, message, recent_messages=None, project=False):
         initial = 'tasks'
     if 'build_learning_experiment' in definitions and not exercise_request and VISUAL_DEMO_REQUEST.search(message):
         initial = 'interactive' if '题' in message else 'authoring'
+    if 'recall' in groups and any(word in message.lower() for word in (
+        '上次学', '上次讲', '之前学', '之前讲', '接着学', '接着上次', '学习记忆', 'continue studying', 'last session',
+    )):
+        initial = 'recall'
+    if 'workbench' in groups and not project and initial not in ('interactive', 'authoring', 'recall'):
+        initial = 'workbench'
     initial = initial if initial in groups else ''
     selected = list(groups[initial]['tools']) if initial else []
     if groups:

@@ -47,6 +47,38 @@ class BackofficeTests(TestCase):
         response = self.client.post(path, body, content_type='application/json', **signed)
         return response, signed
 
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr', UNIMIND_DSH_ENABLED=False)
+    def test_legacy_question_task_resumes_from_the_workbench_under_its_owner(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from quizzes.models import ContentPipelineTask
+        from quizzes.tasks import run_adversarial_pipeline_task
+
+        point = KnowledgePoint.objects.create(name='合成旧任务考点')
+        payload = {'kp_ids': [point.pk], 'questions_per_kp': 2, 'difficulty': 'easy', 'types': ['subjective:short']}
+        source = ContentPipelineTask.objects.create(created_by=self.admins[0], title='合成旧出题任务',
+            task_type='ai_generate', status='running', payload=payload)
+        data = {'id': source.pk}
+        self.assertFalse(self.call('pipeline.detail', data)[0].data['can_resume'])
+        ContentPipelineTask.objects.filter(pk=source.pk).update(updated_at=timezone.now() - timedelta(hours=1))
+        self.assertTrue(self.call('pipeline.detail', data)[0].data['can_resume'])
+        self.assertFalse(self.call('pipeline.detail', data, actor=1)[0].data['can_resume'])
+
+        def retry(actor=0):
+            return self.call('pipeline.retry', {**data, 'request_id': str(uuid.uuid4())}, actor=actor)[0]
+
+        with mock.patch.object(run_adversarial_pipeline_task, 'delay') as queue, self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(retry(actor=1).status_code, 400)
+            for _ in range(2):
+                resumed = retry()
+                self.assertEqual((resumed.status_code, resumed.data['id']), (200, source.pk))
+        queue.assert_called_once_with(task_id=source.pk, **payload)
+        self.assertFalse(self.call('pipeline.detail', data)[0].data['can_resume'])
+        source.refresh_from_db()
+        self.assertEqual(source.payload, {**payload, 'requires_ulr': True})
+        self.assertEqual(ContentPipelineTask.objects.count(), 1)
+        self.assertEqual(SecurityAuditLog.objects.filter(event_type='admin_action').count(), 1)
+
     def test_course_publication_smoke(self):
         CourseStudentStatus.objects.create(user=self.student, is_course_student=True)
         client = APIClient()

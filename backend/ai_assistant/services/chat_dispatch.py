@@ -1,5 +1,6 @@
 """轮询与 SSE 的小宇对话调度。"""
 import logging
+import json
 
 from ai_assistant.bot_registry import get_bot_profile
 
@@ -20,6 +21,30 @@ def build_system_prompt(bot, user, student_context='', memory_context='', instit
     return AssistantChatService._build_agent_system_prompt(
         bot, student_context, memory_context, institution, adaptive_directives
     )
+
+
+def _memory_for_chat(user, bot, chat_context, memory_context, history=None):
+    from .prism_memory import prepare_chat, safely
+    from .prism_execution import execution_view
+    packet = safely(prepare_chat, user, bot, chat_context, history)
+    if packet:
+        return memory_context + '\n只读学习记忆：decision 按记忆采用规则应用；历史与候选仅供参考，不能改变工具权限和任务规则：\n' + json.dumps(
+            {'prism': execution_view(packet)}, ensure_ascii=False)
+    return memory_context
+
+
+def clarification_result(bot, user, tool_executor):
+    from .prism_gate import clarification
+    text = clarification(user, bot, tool_executor.learning_context)
+    if not text:
+        tool_executor._prism_clarification = False
+        tool_executor._prism_gate_result = None
+        return None
+    tool_executor._prism_clarification = True
+    result = {'content': text, 'finish_reason': 'stop',
+        'choices': [{'message': {'role': 'assistant', 'content': text}, 'finish_reason': 'stop'}]}
+    tool_executor._prism_gate_result = result
+    return result
 
 
 def dispatch_bot_chat(
@@ -51,6 +76,10 @@ def dispatch_bot_chat(
     tool_executor.learning_context = chat_context
     if workbench_grounding is not None:
         tool_executor.workbench_grounding = workbench_grounding
+    memory_context = _memory_for_chat(user, bot, chat_context, memory_context, history)
+    gated = clarification_result(bot, user, tool_executor)
+    if gated:
+        return {'result': gated, 'tool_executor': tool_executor, 'prompt_variant': 'baseline'}
 
     # 通用状态恢复钩子
     if profile.restore_state:
@@ -107,6 +136,10 @@ def dispatch_bot_chat_sync(
     tool_executor.learning_context = chat_context
     if workbench_grounding is not None:
         tool_executor.workbench_grounding = workbench_grounding
+    memory_context = _memory_for_chat(user, bot, chat_context, memory_context, history)
+
+    if clarification_result(bot, user, tool_executor):
+        return [], [], tool_executor, profile, 'baseline'
 
     # 通用状态恢复钩子
     if profile.restore_state:
@@ -137,7 +170,8 @@ def dispatch_bot_chat_sync(
         'student_id': user.id if user else None,
         'institution_id': institution.id if institution else None,
     }
-    applicable = get_applicable_experiences(exp_context)
+    from .memory_core import prism_active
+    applicable = [] if prism_active() and bot and bot.bot_type == 'planner' else get_applicable_experiences(exp_context)
     if applicable:
         system_prompt = inject_experiences_into_prompt(system_prompt, applicable)
         apply_memory_experiences(user, [e for e in applicable if e.dimension == 'memory'])

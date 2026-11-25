@@ -65,6 +65,9 @@ class AssistantChatService:
             from django.conf import settings
             from pathlib import Path
             base += (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu/project_learning.txt').read_text()
+            from .prism_memory import mode, ANSWER_POLICY
+            if mode() == 'active':
+                base += ANSWER_POLICY
 
         adaptive_section = f"\n\n{adaptive_directives}" if adaptive_directives else ''
         variant_section = f"\n\n{variant_suffix}" if variant_suffix else ''

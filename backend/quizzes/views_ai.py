@@ -1,4 +1,5 @@
 import logging
+from django.db import transaction
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
@@ -122,6 +123,7 @@ class PipelineReviewActionView(APIView):
     required_feature = 'ai.generate'
     quota_resource = 'ai_question'
 
+    @transaction.atomic
     def post(self, request, pk):
         action = str(request.data.get('action', '')).strip().lower()
         if action not in {'approve', 'reject'}:
@@ -129,19 +131,19 @@ class PipelineReviewActionView(APIView):
 
         from users.permissions import is_platform_admin
         from django.db.models import Q
+        review_tasks = ContentPipelineTask.objects.select_for_update(of=('self',)).filter(status='review')
         if is_platform_admin(request.user):
-            task = get_object_or_404(ContentPipelineTask, pk=pk, status='review')
+            task = get_object_or_404(review_tasks, pk=pk)
         else:
             inst = getattr(request.user, 'institution', None)
             if inst:
                 task = get_object_or_404(
-                    ContentPipelineTask,
+                    review_tasks,
                     Q(created_by__institution=inst) | Q(created_by__institution__isnull=True),
-                    pk=pk, status='review',
+                    pk=pk,
                 )
             else:
-                task = get_object_or_404(ContentPipelineTask, pk=pk, status='review',
-                    created_by__institution__isnull=True)
+                task = get_object_or_404(review_tasks, pk=pk, created_by__institution__isnull=True)
         if action == 'approve':
             questions = list((task.result or {}).get('questions', []))
             if not questions:
@@ -161,7 +163,8 @@ class PipelineReviewActionView(APIView):
             # 支持逐题选择：前端可传 question_indices 指定要入库的题目序号
             selected_indices = request.data.get('question_indices')
             if isinstance(selected_indices, list) and selected_indices:
-                selected = [questions[i] for i in selected_indices if 0 <= i < len(questions)]
+                indices = dict.fromkeys(i for i in selected_indices if type(i) is int and 0 <= i < len(questions))
+                selected = [questions[i] for i in indices]
             else:
                 selected = questions
 

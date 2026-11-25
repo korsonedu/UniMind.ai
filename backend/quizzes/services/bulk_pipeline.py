@@ -22,9 +22,11 @@ from typing import Any, Dict, List, Optional, Tuple
 from collections import defaultdict
 from dataclasses import dataclass, field
 
+from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 
+from ai_assistant.services.ulr_structured import teaching_enabled
 from ai_engine.config import get_model_for_task
 from quizzes.models import ContentPipelineTask, KnowledgePoint, Question
 from quizzes.services.adversarial_pipeline import (
@@ -95,6 +97,7 @@ def run_bulk_pipeline(
             "institution_only": institution_only,
             "bulk_mode": True,
             "stages": [],
+            **({'requires_ulr': True} if teaching_enabled('pipeline.author') else {}),
         },
         progress=0,
         created_by=created_by,
@@ -102,18 +105,8 @@ def run_bulk_pipeline(
         started_at=timezone.now(),
     )
 
-    # Celery 异步执行
-    from quizzes.tasks import run_bulk_pipeline_task
-    run_bulk_pipeline_task.delay(
-        task_id=task.id,
-        subject=subject,
-        total_target=total_target,
-        difficulty_dist=difficulty_dist,
-        type_dist=type_dist,
-        kp_code=kp_code,
-        institution_id=institution.id if institution else None,
-        institution_only=institution_only,
-    )
+    from quizzes.tasks import enqueue_question_pipeline, question_pipeline_delivery
+    enqueue_question_pipeline(task, question_pipeline_delivery(task))
     return task.id
 
 
@@ -132,6 +125,11 @@ def _execute_bulk_pipeline(
     """执行批量出题管线。"""
     stage_log: List[Dict] = []
     pending_questions = []
+    defer_publication = not review_only and teaching_enabled('pipeline.author')
+    batches = []
+    ulr_review = review_only and strict_scope and teaching_enabled('pipeline.author')
+    if ulr_review:
+        from backoffice.teaching import validate_kps
 
     # ── Phase 1: 选择目标知识点 ──
     _update_task(task, 2, f"正在为「{subject}」选择目标知识点…", stage_log, "select_kps")
@@ -160,7 +158,15 @@ def _execute_bulk_pipeline(
     total_kps = len(quota_map)
     processed = 0
 
+    def record_saved(code, passed, saved):
+        result.total_saved += saved
+        result.total_audited += saved
+        result.skipped_duplicates += len(passed) - saved
+        result.per_kp[code] = result.per_kp.get(code, 0) + saved
+
     for kp, quotas in quota_map.items():
+        if ulr_review:
+            validate_kps([kp.pk])
         processed += 1
         progress = 8 + int(87 * processed / total_kps)
         _update_task(task, progress, f"正在处理 {kp.name}（{processed}/{total_kps}）…", stage_log, "generating")
@@ -174,6 +180,10 @@ def _execute_bulk_pipeline(
 
             # Stage A: Author 生成
             drafts = _author_generate([kp], q_per_kp=count, difficulty=difficulty, types=types)
+            if ulr_review or defer_publication:
+                if not drafts:
+                    raise ValueError('批量命题未返回该考点的候选题，请重试。')
+                drafts = drafts[:count]
             result.total_generated += len(drafts)
 
             if not drafts:
@@ -209,55 +219,59 @@ def _execute_bulk_pipeline(
                     )
                 passed.append(draft)
 
-            result.total_audited += len(passed)
-
-            # Stage C: 入库
+            if defer_publication:
+                batches.append((kp.code, passed))
+                continue
             if review_only:
                 pending_questions.extend(passed)
             saved = len(passed) if review_only else _save_questions(passed, institution=institution)
-            result.total_saved += saved
-            result.total_audited -= (len(passed) - saved)  # 去重跳过的不计入通过
-            result.skipped_duplicates += (len(passed) - saved)
-
-            result.per_kp[kp.code] = result.per_kp.get(kp.code, 0) + saved
+            record_saved(kp.code, passed, saved)
 
     # ── Phase 4: 写入结果 ──
     from ai_assistant.services.dsh_scope import check_teaching_task
     check_teaching_task()
-    stage_log.append({
-        "stage": "bulk_done",
-        "total_generated": result.total_generated,
-        "total_audited": result.total_audited,
-        "total_saved": 0 if review_only else result.total_saved,
-        "pending_review": len(pending_questions),
-        "answer_errors": result.answer_errors,
-        "difficulty_mismatches": result.difficulty_mismatches,
-        "skipped_duplicates": result.skipped_duplicates,
-        "per_kp": result.per_kp,
-        "timestamp": str(timezone.now()),
-    })
-
-    task.result = {
-        "questions": pending_questions,
-        "questions_saved": 0 if review_only else result.total_saved,
-        "pending_review": len(pending_questions),
-        "stages": stage_log,
-        "summary": {
-            "subject": subject,
-            "target": total_target,
-            "generated": result.total_generated,
-            "saved": 0 if review_only else result.total_saved,
+    if ulr_review:
+        validate_kps([kp.pk for kp in quota_map])
+    with transaction.atomic():
+        for code, passed in batches:
+            record_saved(code, passed, _save_questions(passed, institution=institution, strict=True))
+        stage_log.append({
+            "stage": "bulk_done",
+            "total_generated": result.total_generated,
+            "total_audited": result.total_audited,
+            "total_saved": 0 if review_only else result.total_saved,
             "pending_review": len(pending_questions),
-            "pass_rate": round(result.total_saved / max(result.total_generated, 1), 3),
             "answer_errors": result.answer_errors,
             "difficulty_mismatches": result.difficulty_mismatches,
             "skipped_duplicates": result.skipped_duplicates,
-        },
-    }
-    task.status = "review" if review_only else "completed"
-    task.progress = 100
-    task.finished_at = timezone.now()
-    task.save()
+            "per_kp": result.per_kp,
+            "timestamp": str(timezone.now()),
+        })
+
+        task.result = {
+            "questions": pending_questions,
+            "questions_saved": 0 if review_only else result.total_saved,
+            "pending_review": len(pending_questions),
+            "stages": stage_log,
+            "summary": {
+                "subject": subject,
+                "target": total_target,
+                "generated": result.total_generated,
+                "saved": 0 if review_only else result.total_saved,
+                "pending_review": len(pending_questions),
+                "pass_rate": round(result.total_saved / max(result.total_generated, 1), 3),
+                "answer_errors": result.answer_errors,
+                "difficulty_mismatches": result.difficulty_mismatches,
+                "skipped_duplicates": result.skipped_duplicates,
+            },
+        }
+        task.status = "review" if review_only else "completed"
+        if ulr_review and not pending_questions:
+            task.status = 'failed'
+            task.error_message = '本批次没有通过审计的题目，请调整要求后重试。'
+        task.progress = 100
+        task.finished_at = timezone.now()
+        task.save()
 
     logger.info(
         "Bulk pipeline done: subject=%s target=%d generated=%d saved=%d pass_rate=%.1f%%",
@@ -399,7 +413,7 @@ def _resolve_types(type_dist: Dict[str, float], count: int) -> List[str]:
 
 # ── 入库 ──────────────────────────────────────────────────────────
 
-def _save_questions(questions: List[Dict], institution=None) -> int:
+def _save_questions(questions: List[Dict], institution=None, *, strict=False) -> int:
     """将审核通过的题目保存到数据库。
 
     跳过与已有题目文本高度相似的（简单去重：完全相同文本）。
@@ -444,6 +458,8 @@ def _save_questions(questions: List[Dict], institution=None) -> int:
             )
             saved += 1
         except Exception as exc:
+            if strict:
+                raise
             logger.warning("Failed to save question for kp=%s: %s", q.get("kp_code", "?"), exc)
 
     return saved

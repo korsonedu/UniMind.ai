@@ -1,38 +1,174 @@
 import logging
+from datetime import timedelta
+from hashlib import blake2b
 
 from celery import shared_task
+from django.db import connection, transaction
+from django.utils import timezone
 
 from quizzes.ai_workflow import run_exam_grading
+from quizzes.services.exam_grading_state import GRADING_HARD_LIMIT
 
 logger = logging.getLogger(__name__)
+QUESTION_PIPELINE_HARD_LIMIT = 660
+QUESTION_PIPELINE_RECOVERY_DELAY = timedelta(seconds=QUESTION_PIPELINE_HARD_LIMIT + 60)
+QUESTION_PIPELINE_QUEUE_ERROR = '任务暂未入队，请用原任务重试。'
 
 
-@shared_task(name='quizzes.run_exam_grading_task', soft_time_limit=120, time_limit=180)
-def run_exam_grading_task(user_id: int, exam_id: int, questions_data):
-    run_exam_grading(user_id, exam_id, questions_data)
+@shared_task(name='quizzes.run_exam_grading_task', soft_time_limit=120, time_limit=GRADING_HARD_LIMIT)
+def run_exam_grading_task(user_id: int, exam_id: int, questions_data=None):
+    # Existing broker messages can still carry answers. Persisted results own grading input.
+    run_exam_grading(user_id, exam_id)
 
 
 
-@shared_task(name='quizzes.run_adversarial_pipeline_task', soft_time_limit=600, time_limit=660)
-def run_adversarial_pipeline_task(task_id: int, kp_ids: list, questions_per_kp: int, difficulty: str = "normal", types: list = None):
-    from quizzes.models import ContentPipelineTask, KnowledgePoint
+def question_pipeline_delivery(task):
+    payload = task.payload
+    if task.task_type != 'ai_generate' or not isinstance(payload, dict) or payload.get('kind'):
+        return None
+    if payload.get('bulk_mode') is True:
+        if not {'subject', 'total_target'} <= payload.keys():
+            return None
+        fields = ('subject', 'total_target', 'difficulty_dist', 'type_dist', 'kp_code', 'institution_only')
+        arguments = {field: payload[field] for field in fields if field in payload}
+        return run_bulk_pipeline_task, {**arguments, 'task_id': task.pk, 'institution_id': task.institution_id}
+    if {'kp_ids', 'questions_per_kp'} <= payload.keys():
+        fields = ('kp_ids', 'questions_per_kp', 'difficulty', 'types')
+        arguments = {field: payload[field] for field in fields if field in payload}
+        return run_adversarial_pipeline_task, {**arguments, 'task_id': task.pk}
+    return None
+
+
+def enqueue_question_pipeline(task, delivery):
+    from quizzes.models import ContentPipelineTask
+
+    worker, arguments = delivery
+    queued_at = task.updated_at
+
+    def publish():
+        try:
+            worker.delay(**arguments)
+        except Exception:
+            logger.exception('Question pipeline queue unavailable: task_id=%s', task.pk)
+            ContentPipelineTask.objects.filter(pk=task.pk, status='running', updated_at=queued_at).update(
+                error_message=QUESTION_PIPELINE_QUEUE_ERROR)
+
+    transaction.on_commit(publish)
+
+
+def _question_pipeline_lock_key(task_id):
+    digest = blake2b(str(task_id).encode(), digest_size=8, person=b'question-pipe').digest()
+    return int.from_bytes(digest, 'big', signed=True)
+
+
+def lock_question_pipeline(task_id):
+    if connection.vendor != 'postgresql':
+        return True
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_try_advisory_xact_lock(%s)', [_question_pipeline_lock_key(task_id)])
+        return cursor.fetchone()[0]
+
+
+def question_pipeline_recovery_due(task):
+    return task.status in ('pending', 'failed') or (task.status == 'running' and (
+        task.error_message == QUESTION_PIPELINE_QUEUE_ERROR
+        or task.updated_at <= timezone.now() - QUESTION_PIPELINE_RECOVERY_DELAY))
+
+
+def question_pipeline_may_have_partial_result(task):
+    if task.payload.get('bulk_mode') is not True or task.payload.get('requires_ulr') is True:
+        return False
+    stage = task.payload.get('current_stage')
+    # The legacy worker recorded these stages before it could publish any questions.
+    if stage in ('select_kps', 'kps_selected', 'quotas_assigned') and task.progress <= 8 and not task.result:
+        return False
+    return bool(task.progress or stage or task.result)
+
+
+def resume_question_pipeline(task, delivery):
+    from ai_assistant.services.ulr_config import ulr_enabled
+
+    if not question_pipeline_recovery_due(task):
+        return False
+    if question_pipeline_may_have_partial_result(task):
+        raise ValueError('旧批量出题可能已经入库，请先核对原任务结果。')
+    if not lock_question_pipeline(task.pk):
+        return False
+    if ulr_enabled():
+        task.payload['requires_ulr'] = True
+    task.status = 'running'
+    task.error_message = ''
+    task.finished_at = None
+    task.save(update_fields=['status', 'payload', 'error_message', 'finished_at', 'updated_at'])
+    enqueue_question_pipeline(task, delivery)
+    return True
+
+
+def _run_queued_question_pipeline(task_id, worker_name, execute, *, redelivered):
+    from ai_assistant.services.ulr_config import ulr_enabled
+    from ai_assistant.services.ulr_structured import question_pipeline_runtime
+    from ai_engine.observability import observe_background
+    from quizzes.models import ContentPipelineTask
+
+    postgres = connection.vendor == 'postgresql'
+    if postgres:
+        key = _question_pipeline_lock_key(task_id)
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT pg_try_advisory_lock(%s)', [key])
+            if not cursor.fetchone()[0]:
+                if not redelivered:
+                    return
+                cursor.execute('SELECT pg_advisory_lock(%s)', [key])
+    try:
+        task = ContentPipelineTask.objects.select_related('institution').filter(pk=task_id, status='running').first()
+        if task is None:
+            return
+        delivery = question_pipeline_delivery(task)
+        if delivery is None or delivery[0].name != worker_name:
+            logger.warning('Question pipeline task %s does not match the worker %s', task_id, worker_name)
+            return
+        native = task.payload.get('requires_ulr') is True or ulr_enabled()
+        if native and question_pipeline_may_have_partial_result(task):
+            logger.warning('Legacy bulk task %s has progress and needs review before ULR takeover', task_id)
+            return
+        if native and task.payload.get('requires_ulr') is not True:
+            task.payload['requires_ulr'] = True
+            task.save(update_fields=['payload', 'updated_at'])
+        _, arguments = delivery
+        arguments.pop('task_id')
+        arguments.pop('institution_id', None)
+        try:
+            with question_pipeline_runtime(native), observe_background('ulr' if native else 'legacy', f'teaching:{task_id}'):
+                execute(task, **arguments)
+        except Exception as exc:
+            logger.exception('Question pipeline task failed: task_id=%s', task_id)
+            task.status = 'failed'
+            task.error_message = str(exc)[:500]
+            task.finished_at = timezone.now()
+            task.save(update_fields=['status', 'error_message', 'finished_at', 'updated_at'])
+    finally:
+        if postgres:
+            with connection.cursor() as cursor:
+                cursor.execute('SELECT pg_advisory_unlock(%s)', [key])
+
+
+# Keep accepting the original Celery arguments for messages already queued.
+@shared_task(bind=True, name='quizzes.run_adversarial_pipeline_task', soft_time_limit=600, time_limit=QUESTION_PIPELINE_HARD_LIMIT)
+def run_adversarial_pipeline_task(self, task_id: int, kp_ids: list, questions_per_kp: int, difficulty: str = "normal", types: list = None):
+    from quizzes.models import KnowledgePoint
     from quizzes.services.adversarial_pipeline import _execute_pipeline
 
-    task = ContentPipelineTask.objects.select_related('institution').get(id=task_id)
-    kps = list(KnowledgePoint.objects.filter(id__in=kp_ids))
-    try:
+    def execute(task, kp_ids, questions_per_kp, difficulty='normal', types=None):
+        kps = list(KnowledgePoint.objects.filter(id__in=kp_ids))
         _execute_pipeline(task, kps, questions_per_kp, difficulty=difficulty, types=types, institution=task.institution)
-    except Exception as e:
-        logger.exception("Adversarial pipeline task failed: task_id=%s", task_id)
-        task.status = 'failed'
-        task.error_message = str(e)[:500]
-        from django.utils import timezone
-        task.finished_at = timezone.now()
-        task.save(update_fields=['status', 'error_message', 'finished_at', 'updated_at'])
+
+    return _run_queued_question_pipeline(task_id, self.name, execute,
+        redelivered=(self.request.delivery_info or {}).get('redelivered'))
 
 
-@shared_task(name='quizzes.run_bulk_pipeline_task', soft_time_limit=600, time_limit=660)
+@shared_task(bind=True, name='quizzes.run_bulk_pipeline_task', soft_time_limit=600, time_limit=QUESTION_PIPELINE_HARD_LIMIT)
 def run_bulk_pipeline_task(
+    self,
     task_id: int,
     subject: str,
     total_target: int = 500,
@@ -42,13 +178,9 @@ def run_bulk_pipeline_task(
     institution_id: int = None,
     institution_only: bool = False,
 ):
-    from quizzes.models import ContentPipelineTask
     from quizzes.services.bulk_pipeline import _execute_bulk_pipeline
-    from users.models import Institution
 
-    task = ContentPipelineTask.objects.get(id=task_id)
-    institution = Institution.objects.get(id=institution_id) if institution_id else None
-    try:
+    def execute(task, subject, total_target, difficulty_dist=None, type_dist=None, kp_code=None, institution_only=False):
         _execute_bulk_pipeline(
             task=task,
             subject=subject,
@@ -56,16 +188,12 @@ def run_bulk_pipeline_task(
             difficulty_dist=difficulty_dist or {},
             type_dist=type_dist or {},
             kp_code=kp_code,
-            institution=institution,
+            institution=task.institution,
             institution_only=institution_only,
         )
-    except Exception as e:
-        logger.exception("Bulk pipeline task failed: task_id=%s", task_id)
-        task.status = 'failed'
-        task.error_message = str(e)[:500]
-        from django.utils import timezone
-        task.finished_at = timezone.now()
-        task.save(update_fields=['status', 'error_message', 'finished_at', 'updated_at'])
+
+    return _run_queued_question_pipeline(task_id, self.name, execute,
+        redelivered=(self.request.delivery_info or {}).get('redelivered'))
 
 
 # ═══════════════════════════════════════════
@@ -75,7 +203,6 @@ def run_bulk_pipeline_task(
 import logging
 from datetime import timedelta
 from collections import defaultdict
-from django.utils import timezone
 
 MEMORIX_DYNAMIC_EDGE_PREFIX = "memorix:edge"
 MIN_PAIR_SAMPLES = 10          # 最少样本量

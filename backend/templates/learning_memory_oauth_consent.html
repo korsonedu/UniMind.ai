@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>授权学习记忆 · UniMind.ai</title>
+  </head>
+  <body>
+    <main>
+      <h1>授权学习记忆</h1>
+      <p>{{ client.name }} 请求访问一个空间中的学习记忆。</p>
+      <ul>{% for scope in scopes %}<li>{{ scope }}</li>{% endfor %}</ul>
+      <form method="post" action="{% url 'learning-memory-oauth-authorize' %}">
+        {% csrf_token %}
+        {% for name, value in params.items %}
+          <input type="hidden" name="{{ name }}" value="{{ value }}">
+        {% endfor %}
+        {% if spaces %}
+          {% if spaces|length == 1 %}
+            {% for learner_id, name in spaces %}
+              <p>{{ name }}</p><input type="hidden" name="learner_id" value="{{ learner_id }}">
+            {% endfor %}
+          {% else %}
+            <label for="learning-space">授权空间</label>
+            <select id="learning-space" name="learner_id" required>
+              <option value="">请选择</option>
+              {% for learner_id, name in spaces %}<option value="{{ learner_id }}">{{ name }}</option>{% endfor %}
+            </select>
+          {% endif %}
+          <button name="decision" value="allow">允许访问</button>
+        {% else %}
+          <p>当前没有可授权的学习空间。</p>
+        {% endif %}
+        <button name="decision" value="deny" formnovalidate>拒绝</button>
+      </form>
+    </main>
+  </body>
+</html>

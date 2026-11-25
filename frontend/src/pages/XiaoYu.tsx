@@ -59,6 +59,7 @@ function XiaoYuProject() {
 function XiaoYuWorkbench({ projectId }: { projectId: number }) {
   const { chat } = useXiaoYuChat();
   const workspace = useLearningWorkspace({ studio: true });
+  const getLearningPayload = workspace.getExtraPayload;
   const stageCount = workspace.project?.plan.stages?.length ?? 0;
   const query = useWorkbenchSources(projectId);
   const client = useQueryClient();
@@ -74,13 +75,13 @@ function XiaoYuWorkbench({ projectId }: { projectId: number }) {
     setAnchor(target);
     setLeftOpen(true);
     setMobileTab('sources');
-  }, []);
+  }, [setAnchor, setLeftOpen, setMobileTab]);
   const citationContext = useMemo(() => ({ onSelect, conversationId: chat.conversationId }), [onSelect, chat.conversationId]);
   const getSources = useCallback(() => client.getQueryData<ProjectSourceList>(queryKeys.workbench.sources(projectId)), [client, projectId]);
   const getExtraPayload = useCallback(() => ({
     workbench_source_ids: selectedReadySources(getSources()?.sources ?? []).map(source => source.id),
-    ...workspace.getExtraPayload(),
-  }), [getSources, workspace.getExtraPayload]);
+    ...getLearningPayload(),
+  }), [getSources, getLearningPayload]);
   const beforeSend = useCallback(async () => {
     if (!getSources()) throw new Error(t('请先加载项目资料，再发送消息。'));
   }, [getSources]);

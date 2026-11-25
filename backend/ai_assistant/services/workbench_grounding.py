@@ -84,6 +84,23 @@ def workbench_prompt(filename):
     return (Path(settings.BASE_DIR) / 'prompts' / 'ai_assistant' / 'workbench' / filename).read_text(encoding='utf-8')
 
 
+def current_workbench_source_versions(user, project_id, source_ids, *, lock=False):
+    if not project_id or not source_ids or not is_personal_space(user):
+        return {}
+    sources = ProjectSource.objects.filter(
+        pk__in=source_ids, project_id=project_id, project__user=user, user=user, status=ProjectSource.Status.READY,
+    )
+    if lock:
+        sources = sources.order_by('pk').select_for_update(of=('self',))
+    return {str(pk): updated_at.isoformat() for pk, updated_at in sources.values_list('pk', 'updated_at')}
+
+
+def require_workbench_source_versions(user, project_id, expected_project, versions, *, lock=False):
+    if (project_id != expected_project or not is_personal_space(user)
+            or current_workbench_source_versions(user, project_id, versions, lock=lock) != versions):
+        raise ValidationError('当前项目资料已变化，请重新选择资料后提问。')
+
+
 def _tokens(value):
     for token in WORD.findall(unicodedata.normalize('NFKC', value).casefold()):
         if HAN.fullmatch(token[0]):
@@ -170,6 +187,10 @@ class WorkbenchGrounding:
             key: pk for pk, alias in self.aliases.items() for key in (alias, str(pk))
         }
         self.citation_registry = {}
+
+    @property
+    def source_versions(self):
+        return {str(pk): source.updated_at.isoformat() for pk, source in self.sources.items()}
 
     @cached_property
     def chunks_by_source(self):

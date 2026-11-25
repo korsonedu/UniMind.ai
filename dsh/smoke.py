@@ -251,18 +251,22 @@ def model_fixture(status=200):
             if callable(getattr(self.server, 'tool_response', None)):
                 tools = self.server.tool_response(body)
             if tools is None:
-                blocks = [({'type': 'text', 'text': ''}, {'type': 'text_delta',
-                    'text': '本地课程问答验证：已收到本次提问的视频时间戳及附近的校对讲稿。可以点击下方讲稿引用回看。这是模拟回复，用于检查问答连接，讲解质量需要真实模型验证。' if course_question else '本地协议模拟已完成工具往返；下方卡片来自隔离 Django 数据库的合成数据，不代表真实模型的判断。'})]
-                finish = 'end_turn'
+                default_text = ('本地课程问答验证：已收到本次提问的视频时间戳及附近的校对讲稿。可以点击下方讲稿引用回看。这是模拟回复，用于检查问答连接，讲解质量需要真实模型验证。'
+                    if course_question else '本地协议模拟已完成工具往返；下方卡片来自隔离 Django 数据库的合成数据，不代表真实模型的判断。')
+                text_response = getattr(self.server, 'text_response', None)
+                reply = (text_response(body) if text_response else None) or default_text
+                reply, finish = reply if isinstance(reply, tuple) else (reply, 'end_turn')
+                blocks = [({'type': 'text', 'text': ''}, {'type': 'text_delta', 'text': reply})]
             else:
                 blocks = [({'type': 'tool_use', 'id': f'm0-call-{len(requests)}-{index}', 'name': name, 'input': {}},
-                    {'type': 'input_json_delta', 'partial_json': json.dumps(arguments)})
+                    {'type': 'input_json_delta', 'partial_json': arguments if isinstance(arguments, str) else json.dumps(arguments)})
                     for index, (name, arguments) in enumerate(tools)]
                 finish = 'tool_use'
             events = [
                 {'type': 'message_start', 'message': {'id': 'm0-response', 'type': 'message',
                  'role': 'assistant', 'content': [], 'model': 'deepseek-flash', 'stop_reason': None,
-                 'stop_sequence': None, 'usage': {'input_tokens': 20, 'output_tokens': 0}}},
+                 'stop_sequence': None, 'usage': {'input_tokens': 20, 'output_tokens': 0,
+                                                  **getattr(self.server, 'cache_usage', {})}}},
             ]
             for index, (block, delta) in enumerate(blocks):
                 events.append({'type': 'content_block_start', 'index': index, 'content_block': block})

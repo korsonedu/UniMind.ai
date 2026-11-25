@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from users.permissions import IsMember
 from .models import ConversationProject, Conversation
@@ -19,7 +20,14 @@ class ProjectLearningView(APIView):
             if Conversation.objects.filter(conversation_id=conversation_id).exclude(user=request.user, project=project).exists():
                 from django.http import Http404
                 raise Http404
-        return Response(learning_data(project, language=request_language(request)))
+        data = learning_data(project, language=request_language(request))
+        if settings.UNIMIND_LEARNING_MEMORY_CONNECTORS:
+            from .models import LearningKnowledgeVersion
+            from .services.learning_recall import last_viewed_node
+            version = LearningKnowledgeVersion.objects.filter(
+                pk=(data['plan'].get('knowledge_path') or {}).get('version_id'), knowledge_map__user=request.user).first()
+            data.update(memory_connectors=True, last_viewed_node=last_viewed_node(project, version))
+        return Response(data)
 
     def patch(self, request, pk):
         project = get_object_or_404(ConversationProject, pk=pk, user=request.user)
@@ -71,6 +79,12 @@ class ProjectLearningKnowledgeView(APIView):
     def post(self, request, pk):
         from .services.learning_knowledge import knowledge_operation
         project = get_object_or_404(ConversationProject, pk=pk, user=request.user)
+        if request.data.get('action') == 'remember_view' and settings.UNIMIND_LEARNING_MEMORY_CONNECTORS:
+            from .services.learning_recall import remember_view
+            version_id = serializers.IntegerField(min_value=1).run_validation(request.data.get('version_id'))
+            node_id = serializers.CharField(max_length=60).run_validation(request.data.get('node_id'))
+            remember_view(project, version_id, node_id)
+            return Response(status=204)
         if request.data.get('action') not in ('save', 'prepare', 'from_build'):
             raise serializers.ValidationError('实际检查请在学习对话中完成。')
         return Response(knowledge_operation(project, request.data))

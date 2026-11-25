@@ -7,6 +7,7 @@ from django.db import connections
 from ai_service import AIService
 from .models import AIChatMessage, Bot
 from .services.tenant_memory import TenantMemoryManager
+from .services.memory_core import active_facts, prism_active, semantic_writes_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +30,8 @@ def reflect_user_learning(self):
 
     Generates structured insights stored as semantic memories via mem0.
     """
-    if not USE_MEM0:
-        logger.info("reflect_user_learning: USE_MEM0=false, skipping")
+    if not USE_MEM0 or not semantic_writes_allowed():
+        logger.info("reflect_user_learning: legacy semantic writes disabled, skipping")
         return
 
     from django.utils import timezone
@@ -154,7 +155,7 @@ def _analyze_user(user, cutoff, now):
 
 def _store_insights(user, insights, source="meta_cognition"):
     """Store insights as semantic memories via mem0."""
-    if not user.institution_id:
+    if not user.institution_id or not semantic_writes_allowed():
         return
 
     manager = TenantMemoryManager(institution_id=user.institution_id)
@@ -187,8 +188,8 @@ def reflect_teacher_patterns(self):
     - Quality trends (ARC pipeline pass rate)
     - Generation frequency and active hours
     """
-    if not USE_MEM0:
-        logger.info("reflect_teacher_patterns: USE_MEM0=false, skipping")
+    if not USE_MEM0 or not semantic_writes_allowed():
+        logger.info("reflect_teacher_patterns: legacy semantic writes disabled, skipping")
         return
 
     from django.utils import timezone
@@ -391,7 +392,7 @@ def cleanup_stale_memories(self):
         is_active=True,
         use_count=0,
         updated_at__lt=now - timedelta(days=30),
-    )
+    ).exclude(source='manual')
     count1 = qs1.update(is_active=False)
     deleted_count += count1
 
@@ -400,7 +401,7 @@ def cleanup_stale_memories(self):
         is_active=True,
         confidence__lt=0.3,
         updated_at__lt=now - timedelta(days=60),
-    )
+    ).exclude(source='manual')
     count2 = qs2.update(is_active=False)
     deleted_count += count2
 
@@ -516,13 +517,58 @@ def record_trajectory_async(
     time_limit=60,
     acks_late=True,
 )
-def generate_conversation_title(conversation_id: str, user_id: int, bot_id: int):
-    """生成会话标题；DSH 开关与回退逻辑集中在 title_generator。"""
+def generate_conversation_title(conversation_id: str, user_id: int, bot_id: int, *, expected_title='',
+                                answer_message_id=None, pending_job_id=None):
+    """Generate a title only while the conversation still has its initial title."""
     try:
-        from .services.title_generator import sync_generate_title
-        sync_generate_title(conversation_id, user_id, bot_id)
+        from .services.title_generator import generate_pending_title, sync_generate_title
+        from .services.ulr_config import standalone_ulr
+        if pending_job_id is not None:
+            generate_pending_title(pending_job_id, conversation_id, user_id, bot_id,
+                                   expected_title=expected_title, answer_message_id=answer_message_id)
+            return
+        # ULR submissions already set an initial title. Keep the source checks even on a legacy-configured worker.
+        if expected_title or answer_message_id is not None or standalone_ulr():
+            sync_generate_title(conversation_id, user_id, bot_id, expected_title=expected_title, ulr=True,
+                                answer_message_id=answer_message_id)
+        else:
+            sync_generate_title(conversation_id, user_id, bot_id)
     finally:
         connections.close_all()
+
+
+@shared_task(bind=True, acks_late=True, reject_on_worker_lost=True, soft_time_limit=60, time_limit=90)
+def extract_memory_turn(self, question_id, answer_id, *, pending_job_id=None):
+    from .services.ulr_memory import extract_answer_memory, extract_pending_memory
+    try:
+        if pending_job_id is not None:
+            return extract_pending_memory(pending_job_id, question_id, answer_id)
+        return extract_answer_memory(question_id, answer_id,
+                                     redelivered=bool((self.request.delivery_info or {}).get('redelivered')))
+    finally:
+        connections.close_all()
+
+
+@shared_task(soft_time_limit=30, time_limit=45)
+def dispatch_pending_memory_extractions():
+    from django.utils import timezone
+    from .models import PendingMemoryExtraction
+    from .services.ulr_memory import publish_memory_extraction
+
+    ids = list(PendingMemoryExtraction.objects.filter(dispatch_after__lte=timezone.now())
+               .order_by('dispatch_after', 'pk').values_list('pk', flat=True)[:50])
+    return sum(publish_memory_extraction(job_id) for job_id in ids)
+
+
+@shared_task(soft_time_limit=30, time_limit=45)
+def dispatch_pending_conversation_titles():
+    from django.utils import timezone
+    from .models import PendingConversationTitle
+    from .services.title_generator import publish_conversation_title
+
+    ids = list(PendingConversationTitle.objects.filter(dispatch_after__lte=timezone.now())
+               .order_by('dispatch_after', 'pk').values_list('pk', flat=True)[:50])
+    return sum(publish_conversation_title(job_id) for job_id in ids)
 
 
 @shared_task(
@@ -545,6 +591,11 @@ def precompute_user_profile(user_id: int):
     cache_key = f"user_profile:{user_id}"
     
     try:
+        from .services.ulr_config import standalone_ulr
+        if standalone_ulr():
+            from .services.ulr_profile import profile_for_user
+            profile_for_user(user_id)
+            return
         from users.models import User
         user = User.objects.get(id=user_id)
         
@@ -552,16 +603,13 @@ def precompute_user_profile(user_id: int):
         memories = []
         
         # 结构化记忆
-        from .models import AgentMemory
-        agent_memories = AgentMemory.objects.filter(
-            user=user, is_active=True
-        ).order_by('-confidence')[:20]
+        agent_memories = active_facts(user).order_by('-confidence')[:20]
         for m in agent_memories:
             memories.append({'key': m.key, 'value': m.value})
         
         # 语义记忆（如果启用）
         USE_MEM0 = os.getenv('USE_MEM0', 'false').lower() == 'true'
-        if USE_MEM0 and user.institution_id:
+        if USE_MEM0 and user.institution_id and not prism_active():
             try:
                 from .services.tenant_memory import TenantMemoryManager
                 manager = TenantMemoryManager(institution_id=user.institution_id)

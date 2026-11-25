@@ -1,4 +1,5 @@
 import { InstitutionServices } from '@/components/settings/InstitutionServices';
+import { LearningMemoryConnections } from '@/components/LearningMemoryConnections';
 import { LanguageSelect } from '@/components/LanguageSelect';
 import { t, useLocale } from '@/i18n';
 import { SelectField, SelectOption } from '@/components/ui/select';
@@ -13,11 +14,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { getLearningReminderSettings, updateLearningReminderSetting } from '@/lib/learningReminders';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore, flushNativeToken } from '@/store/useAuthStore';
+import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { useSystemStore, DEFAULT_EXPERIENCE, type ExperiencePreferences } from '@/store/useSystemStore';
-import { ArrowCounterClockwise, FloppyDisk, CreditCard, ArrowRight, MagnifyingGlass, UserCircle, Palette, Notebook, Database, DownloadSimple, SlidersHorizontal, Bell, Keyboard, HardDrives, ArrowLeft, X, ChatCircle, GraduationCap, Buildings } from '@phosphor-icons/react';
+import { ArrowCounterClockwise, FloppyDisk, CreditCard, ArrowRight, MagnifyingGlass, UserCircle, Palette, Notebook, Database, DownloadSimple, SlidersHorizontal, Bell, Keyboard, HardDrives, ArrowLeft, X, ChatCircle, GraduationCap, Buildings, PlugsConnected, WarningCircle } from '@phosphor-icons/react';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import api from '@/lib/api';
 import { getServerOrigin, isNativePlatform, SERVER_ORIGIN_CHANGED_EVENT } from '@/lib/serverConfig';
@@ -39,6 +43,7 @@ const SECTIONS = [
   { id: 'storage', label: '存储', icon: HardDrives, keywords: '下载 离线 缓存 同步 存储', desktopOnly: true },
   { id: 'data', label: '数据管理', icon: Database, keywords: '导出 下载 注销 删除 隐私 协议 离线 缓存 同步' },
   { id: 'about', label: '关于 UniMind.ai', icon: ChatCircle, keywords: '产品 客户端 版本 构建 关于 更新' },
+  { id: 'agent-connections', label: '外部 Agent', icon: PlugsConnected, keywords: '高级 连接 授权 学习记忆 MCP Codex WorkBuddy' },
 ] as const;
 const AVATAR_STYLES: Record<string, string> = {
   avataaars: '简约角色', bottts: '机器人', 'pixel-art': '像素艺术', adventurer: '冒险家',
@@ -49,6 +54,7 @@ export const Settings: React.FC = () => {
   const locale = useLocale();
   const { theme, setTheme, setPageHeader, readingSize, density, reduceMotion, sendShortcut, toolDetails, practiceCount, practicePreference, videoSpeed, videoSubtitles, setExperience } = useSystemStore();
   const user = useAuthStore(state => state.user);
+  const canConnectAgents = useInstitutionStore(state => state.features.includes('learning.memory.connectors'));
   const desktopState = useDesktopStore(state => state.state);
   const updateUser = useAuthStore(state => state.updateUser);
   const setAuth = useAuthStore(state => state.setAuth);
@@ -56,7 +62,8 @@ export const Settings: React.FC = () => {
   const [serverOrigin, setServerOriginState] = useState(getServerOrigin);
   const [params, setParams] = useSearchParams();
   const requestedSection = params.get('section') || 'general';
-  const section = ['profile', 'security'].includes(requestedSection) ? 'account' : ['chat', 'desktop'].includes(requestedSection) ? 'general' : requestedSection;
+  const section = ['profile', 'security'].includes(requestedSection) ? 'account' : ['chat', 'desktop'].includes(requestedSection) ? 'general'
+    : requestedSection === 'advanced' ? 'agent-connections' : requestedSection;
   const setSection = (value: string) => setParams(previous => { const next = new URLSearchParams(previous); next.set('section', value); return next; }, { replace: true });
   const [editing, setEditing] = useState<'profile' | 'email' | 'password' | null>(null);
   const [reminders, setReminders] = useState(getLearningReminderSettings);
@@ -71,7 +78,9 @@ export const Settings: React.FC = () => {
   const [deletePassword, setDeletePassword] = useState('');
   const contentRef = useRef<HTMLElement>(null);
   const deleteTriggerRef = useRef<HTMLButtonElement>(null);
-  const filtered = SECTIONS.filter(item => !('desktopOnly' in item) || !!window.unimindDesktop).filter(item => `${t(item.label)} ${t(item.keywords)} ${item.keywords}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const filtered = SECTIONS.filter(item => item.id !== 'agent-connections' || canConnectAgents)
+    .filter(item => !('desktopOnly' in item) || !!window.unimindDesktop)
+    .filter(item => `${t(item.label)} ${t(item.keywords)} ${item.keywords}`.toLowerCase().includes(query.trim().toLowerCase()));
   const current = filtered.find(item => item.id === section) || filtered[0];
   const previewUrl = `https://api.dicebear.com/7.x/${avatar.style}/svg?seed=${encodeURIComponent(avatar.seed)}`;
 
@@ -160,14 +169,41 @@ export const Settings: React.FC = () => {
       <Link to="/xiaoyu" className="um-settings-back"><ArrowLeft size={16} aria-hidden="true" />{t("返回小宇")}</Link>
       <h1>{t("设置")}</h1>
       <div className="um-settings-search"><MagnifyingGlass size={17} aria-hidden="true" /><input aria-label={t("搜索设置")} placeholder={t("搜索设置")} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setQuery(''); }} />{query && <button type="button" aria-label={t("清除搜索")} onClick={() => setQuery('')}><X size={15} /></button>}</div>
-      <p className="um-settings-nav-label">{t("个人")}</p>
-      <nav aria-label={t("设置分类")}>{filtered.map(item => <button key={item.id} type="button" aria-current={current?.id === item.id ? 'page' : undefined} aria-controls="settings-content" onClick={() => setSection(item.id)}><item.icon size={18} aria-hidden="true" />{t(item.label)}</button>)}</nav>
+      {(['个人', '高级'] as const).map(category => {
+        const items = filtered.filter(item => (item.id === 'agent-connections') === (category === '高级'));
+        return items.length > 0 && <div key={category}>
+          <p className="um-settings-nav-label">{t(category)}</p>
+          <nav aria-label={t(category)}>{items.map(item => <button key={item.id} type="button" aria-current={current?.id === item.id ? 'page' : undefined} aria-controls="settings-content" onClick={() => setSection(item.id)}><item.icon size={18} aria-hidden="true" />{t(item.label)}</button>)}</nav>
+        </div>;
+      })}
     </aside>
     <main ref={contentRef} className="um-settings-content" id="settings-content" aria-labelledby="settings-section-title">
       <div className="um-settings-reading">
-        <header className="um-settings-heading"><h2 id="settings-section-title">{t(current?.label || t("搜索设置"))}</h2></header>
+        <header className="um-settings-heading flex items-center gap-2">
+          <h2 id="settings-section-title">{t(current?.label || t("搜索设置"))}</h2>
+          {current?.id === 'agent-connections' &&
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" aria-label={t('查看 MCP 接入步骤')}
+                  className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2">
+                  <WarningCircle size={15} aria-hidden="true" />
+                </button>
+              </TooltipTrigger>
+              <TooltipPortal>
+                <TooltipContent side="bottom" align="start" className="max-w-72 py-2.5 leading-relaxed">
+                  <ol className="list-decimal space-y-1 pl-4">
+                    <li>{t('从本页「MCP 地址」一栏复制地址。')}</li>
+                    <li>{t('填写连接名称并创建凭证，复制仅显示一次的 Bearer 凭证。')}</li>
+                    <li>{t('在目标 Agent 的 MCP 设置中新建 Streamable HTTP 连接，填入地址和 Bearer 凭证。')}</li>
+                  </ol>
+                  <p className="mt-2">{t('默认可读取当前学习空间的路径、听课进度、小宇问答和任务结果。笔记单独开启。')}</p>
+                </TooltipContent>
+              </TooltipPortal>
+            </Tooltip>}
+        </header>
         {!current && <div className="um-settings-empty"><button type="button" onClick={() => setQuery('')}>{t("清除搜索")}</button></div>}
         {current?.id === 'institution' && <InstitutionServices />}
+        {current?.id === 'agent-connections' && <LearningMemoryConnections />}
         {current?.id === 'notifications' && <>
           <h3 className="um-settings-group-title">{t("练习提醒")}</h3>
           <section className="um-settings-group">

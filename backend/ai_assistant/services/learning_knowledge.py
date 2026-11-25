@@ -13,7 +13,7 @@ from ai_assistant.models import (AIChatMessage, Conversation, LearningKnowledgeM
     LearningResourceVersion, ProjectLearningEvent)
 from .learning_library import _state
 from .learning_resources import store_resource
-from .project_learning import LearningConflict
+from .project_learning import LearningConflict, unconfirmed_progress_ids
 from .bayesian_evidence import ALGORITHM_VERSION, belief
 
 
@@ -153,15 +153,21 @@ def _fingerprint(text):
     return hashlib.sha256(''.join(text.split()).casefold().encode()).hexdigest()
 
 
+def probe_question_in_reply(question, text):
+    return ''.join(question.split()) in ''.join(text.split())
+
+
 def presented(probe, answer):
     """Only a completed, matching assistant turn that actually contains this task."""
     replies = AIChatMessage.objects.filter(user=answer.user, bot=answer.bot, conversation_id=answer.conversation_id,
         role='assistant', timestamp__gt=probe.message.timestamp, timestamp__lt=answer.timestamp,
         metadata__learning_turn__message_id=probe.message_id, metadata__learning_turn__completed=True)
-    question = ''.join(probe.content['question'].split())
+    if probe.content.get('reply_bound'):
+        replies = replies.filter(metadata__ulr_probe__probe_id=probe.pk)
     for reply in replies:
         completed_at = reply.metadata.get('learning_turn', {}).get('completed_at')
-        if completed_at and datetime.fromisoformat(completed_at) < answer.timestamp and question in ''.join(reply.content.split()):
+        if (completed_at and datetime.fromisoformat(completed_at) < answer.timestamp
+                and probe_question_in_reply(probe.content['question'], reply.content)):
             return True
     return False
 
@@ -180,7 +186,8 @@ def validate_check(project, state, message, raw, stage, assistance):
     if check['quote'] not in message.content:
         raise ValidationError('表现摘录必须来自当前用户的真实回答。')
     # One answer/probe and exact repeated answers cannot inflate accumulated evidence.
-    prior = ProjectLearningEvent.objects.filter(project=project, kind='progress', content__knowledge_check__isnull=False)
+    prior = ProjectLearningEvent.objects.filter(project=project, kind='progress', content__knowledge_check__isnull=False).exclude(
+        pk__in=unconfirmed_progress_ids(project.user_id, project.pk))
     if prior.filter(content__knowledge_check__probe_id=probe.pk).exists() or prior.filter(message=message).exists():
         raise ValidationError('这个任务或这条回答已有检查记录，请安排新的独立任务。')
     answer_hash = _fingerprint(message.content)
@@ -198,6 +205,7 @@ def verified_knowledge_events(project, version_id):
         content__knowledge_check__version_id=version_id).select_related('message').order_by('created_at', 'pk'))
     probes_by_id = {probe.pk: probe for probe in ProjectLearningEvent.objects.filter(project=project, kind='probe',
         pk__in=[event.content['knowledge_check']['probe_id'] for event in checks], message__isnull=False).select_related('message')}
+    unconfirmed = unconfirmed_progress_ids(project.user_id, project.pk)
     excluded_count, other_algorithm = 0, 0
     valid = []
     for event in checks:
@@ -206,14 +214,14 @@ def verified_knowledge_events(project, version_id):
             other_algorithm += 1
             continue
         probe = probes_by_id.get(check['probe_id'])
-        if not event.message or not probe or check['quote'] not in event.message.content or not presented(probe, event.message):
+        if event.pk in unconfirmed or not event.message or not probe or check['quote'] not in event.message.content or not presented(probe, event.message):
             excluded_count += 1
             continue
         valid.append((event, probe))
     return {'events': valid, 'total': len(checks), 'excluded_provenance': excluded_count, 'other_algorithm': other_algorithm}
 
 
-def knowledge_state(project, state, *, compact=False):
+def knowledge_state(project, state, *, compact=False, current_message=None, estimates=None, diagnostic_excluded=None):
     path = state.plan.get('knowledge_path')
     if not path:
         return {'algorithm': ALGORITHM_VERSION, 'path': None, 'nodes': [], 'recommendations': [], 'probes': []}
@@ -228,15 +236,32 @@ def knowledge_state(project, state, *, compact=False):
         evidence.append({'event_id': event.pk, 'message_id': event.message_id, 'source': event.message.content[:2000], 'conversation_id': str(event.message.conversation_id),
             'at': event.created_at.isoformat(), **check})
     from .learning_task_evidence import formal_observations
-    formal, task_provenance = formal_observations(project, version.pk)
+    from django.conf import settings
+    if getattr(settings, 'UNIMIND_SDTM_TASK_MEMORY_MODE', 'off') == 'active':
+        from .learning_continuity import formal_observations as continuous_observations
+        formal, task_provenance, _ = continuous_observations(project, version.pk)
+    else:
+        formal, task_provenance = formal_observations(project, version.pk)
+    from . import learning_diagnostics
+    excluded = set()
+    if learning_diagnostics.active():
+        excluded = diagnostic_excluded
+        if excluded is None:
+            excluded = learning_diagnostics.excluded_tasks(learning_diagnostics.read_sources(
+                project, {row['task_id'] for row in formal}))
     for row in formal:
-        observations.setdefault((row['node_id'], row['mode']), []).append(row)
+        if row['task_id'] not in excluded:
+            observations.setdefault((row['node_id'], row['mode']), []).append(row)
         evidence.append(row)
     evidence.sort(key=lambda row: (row['at'], row['event_id']))
     for rows in observations.values():
         rows.sort(key=lambda row: row['at'])
     now = timezone.now()
-    states = [{**node, 'beliefs': {mode: belief(observations.get((node['id'], mode), []), now) for mode in ('apply', 'transfer')}} for node in nodes]
+    def estimate(node_id, mode):
+        current = estimates.get(f'{node_id}:{mode}') if estimates is not None else None
+        return current if current is not None else belief(observations.get((node_id, mode), []), now)
+
+    states = [{**node, 'beliefs': {mode: estimate(node['id'], mode) for mode in ('apply', 'transfer')}} for node in nodes]
     by_id = {node['id']: node for node in states}
     # Conservative routing heuristic, not a mastery gate or a calibrated probability threshold.
     def ready(node):
@@ -277,8 +302,17 @@ def knowledge_state(project, state, *, compact=False):
                       ('；证据较早，安排重新检查' if estimate['stale_days'] and estimate['stale_days'] > 30 else '')})
     recommendations.sort(key=lambda row: (-row['score'], row['node_id']))
     used = {row['probe_id'] for row in evidence if 'probe_id' in row}
-    probes = [{'id': event.pk, **event.content} for event in ProjectLearningEvent.objects.filter(project=project,
-        kind='probe', message__isnull=False, content__version_id=version.pk).exclude(pk__in=used).order_by('-id')[:3]]
+    pending = ProjectLearningEvent.objects.filter(project=project, kind='probe', message__isnull=False,
+        content__version_id=version.pk).exclude(pk__in=used).select_related('message').order_by('-id')
+    if current_message:
+        pending = pending.filter(message__user_id=current_message.user_id, message__bot_id=current_message.bot_id,
+                                 message__conversation_id=current_message.conversation_id)
+    probes = []
+    for event in pending[:3]:
+        probe = {'id': event.pk, **{key: value for key, value in event.content.items() if key != 'rubric'}}
+        if current_message and presented(event, current_message):
+            probe['rubric'] = event.content['rubric']
+        probes.append(probe)
     result = {'algorithm': ALGORITHM_VERSION, 'version_id': version.pk, 'map_id': version.knowledge_map_id,
               'revision': version.revision, 'title': version.snapshot['title'], 'path': path, 'nodes': states,
               'builder': version.snapshot.get('builder'),
@@ -294,7 +328,7 @@ def knowledge_state(project, state, *, compact=False):
 
 
 @transaction.atomic
-def knowledge_operation(project, arguments, *, message=None):
+def knowledge_operation(project, arguments, *, message=None, prepare_change=False, project_ticket=None):
     serializer = KnowledgeInput(data=arguments)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
@@ -315,7 +349,7 @@ def knowledge_operation(project, arguments, *, message=None):
     state = _state(project, message)
     if action == 'from_build':
         from .knowledge_build_path import prepare_build
-        return prepare_build(project, data, state)
+        return prepare_build(project, data, state, message=message, prepare_change=prepare_change, project_ticket=project_ticket)
     if action == 'save':
         if not data.get('title') or not data.get('nodes'):
             raise ValidationError('请提供知识地图名称和带来源的知识单元。')
@@ -373,12 +407,25 @@ def knowledge_operation(project, arguments, *, message=None):
             raise ValidationError('请先登记任务、常规或候选迁移类型与具体判断标准。')
         content = {key: data[key] for key in ('node_id', 'mode', 'question', 'rubric')}
         content.update(version_id=path['version_id'], question_hash=_fingerprint(data['question']))
+        ticket = {'revision': state.revision, 'version_id': path['version_id']}
+        if project_ticket is not None and ticket != project_ticket:
+            raise LearningConflict('检查题的学习安排已变化，请重新出题。')
         old = ProjectLearningEvent.objects.filter(project=project, kind='probe', content__version_id=path['version_id'],
             content__node_id=data['node_id'], content__question_hash=content['question_hash']).first()
-        if old:
-            if old.message_id == message.pk:
-                return {'probe_id': old.pk, **old.content}
+        if old and old.message_id != message.pk:
             raise ValidationError('这道任务已登记过，请换一个实际任务，避免同题反复累计。')
+        if old and (prepare_change or project_ticket is not None) and any(old.content.get(key) != value for key, value in content.items()):
+            raise LearningConflict('原检查题的内容或标准已变化，请换一道题。')
+        if prepare_change:
+            return {'phase': 'prepared', 'question': content['question'], '_ulr_project_ticket': ticket,
+                    'notice': '请原样向用户呈现 question，运行时随答复保存。判断标准留待后续作答后使用。'}
+        if old:
+            if project_ticket is not None and not old.content.get('reply_bound'):
+                old.content['reply_bound'] = True
+                old.save(update_fields=['content'])
+            return {'probe_id': old.pk, **old.content}
+        if project_ticket is not None:
+            content['reply_bound'] = True
         event = ProjectLearningEvent.objects.create(project=project, message=message, kind='probe', content=content)
         return {'probe_id': event.pk, **content, 'notice': '必须在本轮回复中原样呈现 question，成功回复后等待下一轮真实作答。'}
     raise ValidationError('不支持的知识操作。')

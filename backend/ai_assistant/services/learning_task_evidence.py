@@ -5,28 +5,33 @@ from users.feature_access import has_learning_feature
 from quizzes.models import ExamQuestionResult
 from quizzes.services.question_normalizer import normalize_objective_answer, normalize_options
 from ai_assistant.models import ProjectLearningEvent
+from django.contrib.auth import get_user_model
 from .bayesian_evidence import ALGORITHM_VERSION
-from .learning_tasks import _hash, task_result_snapshot, task_label_source, task_question_hash, task_prompt_hash
+from .learning_tasks import _hash, _task_result_content, task_label_source, task_question_hash, task_prompt_hash
 
 
 def verified_task_events(project, version_id):
-    events = ProjectLearningEvent.objects.filter(project=project, kind='assessment',
-        content__version_id=version_id).order_by('created_at', 'pk')
+    events = list(ProjectLearningEvent.objects.filter(project=project, kind='assessment',
+        content__version_id=version_id).order_by('created_at', 'pk'))
     valid, excluded, repeated = [], 0, 0
     seen = set()
-    if not has_learning_feature(project.user, 'quiz.exam'):
-        return {'events': [], 'excluded_provenance': events.count(), 'repeated_questions': 0}
+    user = get_user_model().objects.filter(pk=project.user_id, is_active=True).first()
+    if not has_learning_feature(user, 'quiz.exam'):
+        return {'events': [], 'excluded_provenance': len(events), 'repeated_questions': 0}
+    results = {result.pk: result for result in ExamQuestionResult.objects.select_related(
+        'exam__learning_task__project', 'question__knowledge_point').filter(
+            pk__in=[event.content.get('result_id') for event in events], exam__user_id=project.user_id, status='graded',
+            exam__learning_task__project=project, exam__learning_task__project__user__is_active=True,
+            exam__learning_task__knowledge_version_id=version_id)}
     for event in events:
         check = event.content
-        result = ExamQuestionResult.objects.select_related('exam__learning_task__project', 'question__knowledge_point').filter(
-            pk=check.get('result_id'), exam__user_id=project.user_id, status='graded',
-            exam__learning_task__project=project, exam__learning_task__knowledge_version_id=version_id).first()
+        result = results.get(check.get('result_id'))
         if not result:
             excluded += 1
             continue
         task = result.exam.learning_task
         try:
-            snapshot = task_result_snapshot(task, result)
+            snapshot = _task_result_content(task, result)
             label_source = task_label_source(task, result)
         except (PermissionDenied, ValidationError):
             excluded += 1

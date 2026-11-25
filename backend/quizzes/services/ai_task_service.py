@@ -5,6 +5,7 @@ from pathlib import Path
 from django.conf import settings
 from typing import Any, Dict, List, Optional
 
+from ai_assistant.services.ulr_config import ulr_enabled
 from ai_engine.tools import (
     GRADING_RESULT_SCHEMA,
     OBJECTIVE_ANALYSIS_SCHEMA,
@@ -58,7 +59,7 @@ class QuizAITaskService:
         return grading_points or ai.default_grading_points(normalized_subjective_type)
 
     @classmethod
-    def _analyze_objective(cls, ai, question_text, options, correct_answer, user_answer, is_correct, language='zh-CN'):
+    def _analyze_objective(cls, ai, question_text, options, correct_answer, user_answer, is_correct, language='zh-CN', *, ulr=False):
         """客观题 AI 深度解析：为什么对、为什么错、易错点。"""
         options_text = cls._format_options(options)
         template = ai.get_template('quizzes', 'objective_analysis_prompt.txt') or ''
@@ -85,6 +86,7 @@ class QuizAITaskService:
             temperature=0.4,
             max_tokens=2000,
             operation='quizzes.objective_analysis',
+            **({'ulr': True} if ulr else {}),
         )
 
         if not isinstance(parsed, dict):
@@ -160,6 +162,8 @@ class QuizAITaskService:
         options: Optional[Any] = None,
         subjective_type: str = '主观题',
         language: str = 'zh-CN',
+        *,
+        ulr: bool = False,
     ) -> Dict[str, Any]:
         max_score = float(max_score or 0)
 
@@ -174,7 +178,7 @@ class QuizAITaskService:
                 options=options,
                 correct_answer=correct_answer,
                 user_answer=user_answer,
-                is_correct=is_correct, language=language,
+                is_correct=is_correct, language=language, ulr=ulr,
             )
 
             return {
@@ -198,16 +202,20 @@ class QuizAITaskService:
 
         if language == 'en':
             prompt += "\n\n" + (Path(settings.BASE_DIR) / 'prompts/quizzes/grading_language.txt').read_text()
-        parsed = ai.structured_output(
-            system_prompt="",
-            user_prompt=prompt,
-            schema=GRADING_RESULT_SCHEMA,
-            tool_name="submit_grading_result",
-            tool_description="提交判分结果",
-            temperature=0.2,
-            max_tokens=2500,
-            operation='quizzes.grade_question',
-        )
+        if ulr or ulr_enabled():
+            from ai_assistant.services.ulr_grading import grade_submission
+            parsed = grade_submission(prompt, max_score)
+        else:
+            parsed = ai.structured_output(
+                system_prompt="",
+                user_prompt=prompt,
+                schema=GRADING_RESULT_SCHEMA,
+                tool_name="submit_grading_result",
+                tool_description="提交判分结果",
+                temperature=0.2,
+                max_tokens=2500,
+                operation='quizzes.grade_question',
+            )
 
         if not isinstance(parsed, dict):
             logger.warning("Grading structured_output returned None for operation=quizzes.grade_question")

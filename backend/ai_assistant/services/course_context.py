@@ -146,7 +146,7 @@ def prepare_course_context(request, bot, conversation_id):
     if not segments:
         raise ValidationError('当前时间附近没有讲稿，请选择有字幕的位置提问。')
     context = {'course_id': course.pk, 'course_title': course.title,
-            'video_seconds': position, 'revision': transcript.revision,
+            'video_seconds': position, 'transcript_id': transcript.pk, 'revision': transcript.revision,
             'selected_start_seconds': selected_start, 'selected_end_seconds': selected_end,
             'start_seconds': segments[0]['start_time'], 'end_seconds': segments[-1]['end_time'],
             'segments': segments}
@@ -200,6 +200,34 @@ def course_context_text(request, context):
         raise NotFound('课程不存在或不可访问。')
     template, _, _ = _course_prompt_parts()
     text_context = dict(context)
+    text_context.pop('transcript_id', None)
     if 'visual' in context:
         text_context['visual'] = _visual_description(context['visual'])
     return template.format(context=json.dumps(text_context, ensure_ascii=False))
+
+
+def transcript_source(context):
+    return context['course_id'], context.get('transcript_id', 0), context.get('revision')
+
+
+def current_transcript_sources(sources, *, lock=False):
+    if not sources:
+        return set()
+    transcripts = VideoTranscript.objects.filter(course_id__in={source[0] for source in sources},
+                                                 asr_status='completed')
+    if lock:
+        transcripts = transcripts.order_by('course_id').select_for_update()
+    versions = {course: (pk, revision) for course, pk, revision in transcripts.values_list('course_id', 'pk', 'revision')}
+    # Older player messages recorded the version without the transcript ID.
+    return {(course, pk, revision) for course, pk, revision in sources if course in versions
+            and pk in (0, versions[course][0]) and revision == versions[course][1]}
+
+
+def require_current_transcript_sources(sources, *, lock=False):
+    if current_transcript_sources(sources, lock=lock) != sources:
+        raise ValidationError('当前课程讲稿已更新，请重新发起提问。')
+
+
+def require_course_transcript(context, *, lock=False):
+    if context is not None:
+        require_current_transcript_sources({transcript_source(context)}, lock=lock)

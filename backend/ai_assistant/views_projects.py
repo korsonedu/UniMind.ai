@@ -77,6 +77,11 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
             'learning__last_conversation',
         ).annotate(source_count=Count('workbench_sources'))
 
+    def perform_destroy(self, instance):
+        from .services.dsh_runtime import quota_write_lock
+        with quota_write_lock():
+            super().perform_destroy(instance)
+
 
 class ConversationUpdateSerializer(serializers.ModelSerializer):
     title = serializers.CharField(max_length=120, required=False)
@@ -142,8 +147,8 @@ def add_project_context(user, conversation_id, history):
     ).select_related('project').first()
     if not conversation:
         return history
-    from .services.project_learning import project_context
-    return [{'role': 'user', 'content': project_context(user, conversation_id)}] + history
+    from .services.project_learning import project_context, model_project_context
+    return [{'role': 'user', 'content': model_project_context(project_context(user, conversation_id))}] + history
 
 
 def learning_activity_metadata(request, conversation_id):

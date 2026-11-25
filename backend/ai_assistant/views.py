@@ -3,6 +3,7 @@ import os
 import threading
 import logging
 import time
+from contextlib import closing
 from asgiref.sync import sync_to_async
 from django.utils.decorators import method_decorator
 from django.conf import settings
@@ -13,7 +14,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from users.workspaces.identity import selected_institution
-from .models import AIChatMessage, AgentMemory, Bot, Conversation
+from .models import AIChatMessage, AgentMemory, Bot, Conversation, ProjectSource, chat_receipt_deleted, mark_runtime_requests_deleted
 from .services.external_audio_asr import ExternalAudioSnippetInput, transcribe_external_snippet
 from .services.external_video_context import (
     external_video_context_text,
@@ -21,13 +22,14 @@ from .services.external_video_context import (
     prepare_external_video_context,
 )
 from .services.language import request_language
+from .services.ulr_config import ulr_enabled
 from .services.workbench_grounding import (
     WorkbenchGrounding, active_sources, include_workbench_tools, is_personal_space,
     parse_source_ids, workbench_citation_metadata,
 )
 from .serializers import AIChatMessageSerializer, AgentMemorySerializer, BotSerializer, ConversationSerializer
 from .utils import get_student_academic_context
-from .views_projects import add_project_context, save_new_conversation_project, learning_activity_metadata
+from .views_projects import ProjectAssignmentSerializer, add_project_context, save_new_conversation_project, learning_activity_metadata
 from notes.context import prepare_note_context, conversation_uses_notes
 from notes.awareness import note_message_metadata
 from django.db import transaction
@@ -72,17 +74,29 @@ def _workbench_source_ids(request, bot):
     return None
 
 
-def _is_workbench_conversation(request, bot, conversation_id):
+def _requires_workbench_runtime(request, bot, conversation_id, source_ids):
     if not _workbench_user(request.user, bot):
         return False
+    if source_ids:
+        return True
     conversation = Conversation.objects.filter(user=request.user, conversation_id=conversation_id).select_related(
         'project',
     ).first()
     if conversation:
-        return conversation.project_id is not None and conversation.project.user_id == request.user.pk
-    return bool(request.data.get('project_id')) and not AIChatMessage.objects.filter(
-        user=request.user, conversation_id=conversation_id,
-    ).exists()
+        project = conversation.project
+    else:
+        if not request.data.get('project_id') or AIChatMessage.objects.filter(
+            user=request.user, conversation_id=conversation_id,
+        ).exists():
+            return False
+        assignment = ProjectAssignmentSerializer(data={'project_id': request.data['project_id']}, context={'request': request})
+        assignment.is_valid(raise_exception=True)
+        project = assignment.validated_data['project_id']
+    return project is not None and project.user_id == request.user.pk and (
+        source_ids is not None or project.workbench_sources.filter(
+            user=request.user, is_selected=True, status=ProjectSource.Status.READY,
+        ).exists()
+    )
 
 
 def _save_chat_project(request, bot, conversation_id, source_ids):
@@ -91,18 +105,21 @@ def _save_chat_project(request, bot, conversation_id, source_ids):
         return None
     with transaction.atomic():
         conversation = save_new_conversation_project(request, bot, conversation_id)
-        project = conversation.project
-        if project is not None and project.user_id == request.user.pk:
-            return WorkbenchGrounding(project, active_sources(project, source_ids))
-        if source_ids:
-            raise serializers.ValidationError({'workbench_source_ids': '请在当前资料所属的项目会话中选择资料。'})
+        return _chat_workbench_grounding(conversation, source_ids)
+
+
+def _chat_workbench_grounding(conversation, source_ids):
+    project = conversation.project
+    if project is not None and project.user_id == conversation.user_id:
+        return WorkbenchGrounding(project, active_sources(project, source_ids))
+    if source_ids:
+        raise serializers.ValidationError({'workbench_source_ids': '请在当前资料所属的项目会话中选择资料。'})
     return None
 
 
-def _reserve_chat_request(user, data, bot):
+def _chat_request_fingerprint(user, data, bot):
     import hashlib
     import json
-    from users.learning import reserve_ai_call
     request_content = {
         'message': data.get('message', '').strip(), 'bot_id': bot.pk,
         'conversation_id': str(data.get('conversation_id') or ''),
@@ -125,11 +142,25 @@ def _reserve_chat_request(user, data, bot):
         request_content['learning_activity'] = data['learning_activity']
     if 'workbench_source_ids' in data and _workbench_user(user, bot):
         request_content['workbench_source_ids'] = data['workbench_source_ids']
-    fingerprint = hashlib.sha256(json.dumps(request_content, sort_keys=True).encode()).hexdigest()
-    return reserve_ai_call(user, data.get('request_id'), fingerprint=fingerprint)
+    return hashlib.sha256(json.dumps(request_content, sort_keys=True).encode()).hexdigest()
+
+
+def _reserve_chat_request(user, data, bot, *, conversation_id=None):
+    from users.learning import reserve_ai_call
+    reservation = reserve_ai_call(user, data.get('request_id'), fingerprint=_chat_request_fingerprint(user, data, bot),
+                                  conversation_id=conversation_id)
+    if not reservation.acquired:
+        if chat_receipt_deleted(reservation):
+            reservation.response = {'deleted': True}
+        elif reservation.status == 'succeeded':
+            from .services.ulr_history import require_receipt_sources
+            require_receipt_sources(user, reservation.response)
+    return reservation
 
 
 def _duplicate_chat_response(reservation, *, stream=False):
+    if reservation.response.get('deleted'):
+        return Response({'error': '该会话已删除。'}, status=410)
     if reservation.status == 'pending':
         return Response({'error': '这条提问仍在处理中，请查看当前会话。',
                          'request_id': str(reservation.request_id)}, status=409)
@@ -183,7 +214,8 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
     student_context, memory_context, adaptive_directives = '', '', ''
     if _can_use_learning_context(user):
         student_context = get_student_academic_context(user)
-        memory_context, adaptive_directives = build_memory_context(user, user_message, bot_type=bot.bot_type)
+        memory_context, adaptive_directives = build_memory_context(user, user_message, bot_type=bot.bot_type if bot else 'planner',
+            chat_context={'conversation_id': str(conversation_id), 'message_id': current_user_message_id, 'bot_id': bot.pk if bot else None})
 
     from ai_assistant.services.chat_dispatch import dispatch_bot_chat
 
@@ -231,6 +263,8 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                 msg_metadata.update(workbench_citation_metadata(ai_content, tool_executor))
                 if external_video_context:
                     msg_metadata['external_video_context'] = external_video_context
+                if getattr(tool_executor, '_prism_clarification', False):
+                    msg_metadata['prism_clarification'] = True
                 if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
                     msg_metadata['generated_questions'] = tool_executor._last_generated
                 if hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
@@ -260,6 +294,10 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                 confirm_ai_call(reservation, {'done': True, 'full_content': ai_content,
                                              'message_id': pending_msg_id, 'conversation_id': str(conversation_id),
                                              'metadata': pending_msg.metadata if pending_msg else {}})
+            if pending_msg:
+                from .services.memory_core import record_completed_reply
+                from .services.prism_memory import safely
+                safely(record_completed_reply, pending_msg)
         else:
             if pending_msg:
                 pending_msg.metadata.pop("learning_turn", None)
@@ -282,7 +320,8 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
             )
             full_history = history_msgs + [{'role': 'user', 'content': user_message}]
             if _can_use_learning_context(user) and not conversation_uses_notes(user, conversation_id):
-                extract_memories_async(user, full_history, str(conversation_id))
+                extract_memories_async(user, full_history, str(conversation_id),
+                                       source_message_id=current_user_message_id, answer_message_id=pending_msg_id)
                 extract_memories_with_mem0(user, full_history)
         except Exception:
             logger.warning("Memory extraction failed (polling)", exc_info=True)
@@ -294,20 +333,21 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                 {'role': 'user', 'content': user_message},
                 {'role': 'assistant', 'content': ai_content if 'ai_content' in dir() else ''},
             ]
-            record_trajectory(
-                user_id=user.id,
-                bot_id=bot.id if bot else 0,
-                conversation_id=str(conversation_id) if conversation_id else '',
-                messages=all_msgs,
-                tool_calls=getattr(tool_executor, 'tool_call_log', []),
-                tool_outputs=getattr(tool_executor, 'tool_output_log', []),
-                prompt_variant=poll_variant_name,
-            )
+            if not getattr(tool_executor, '_prism_clarification', False):
+                record_trajectory(
+                    user_id=user.id,
+                    bot_id=bot.id if bot else 0,
+                    conversation_id=str(conversation_id) if conversation_id else '',
+                    messages=all_msgs,
+                    tool_calls=getattr(tool_executor, 'tool_call_log', []),
+                    tool_outputs=getattr(tool_executor, 'tool_output_log', []),
+                    prompt_variant=poll_variant_name,
+                )
         except Exception:
             logger.warning("Trajectory recording failed (polling)", exc_info=True)
 
         # 新会话首次对话时，异步生成标题
-        if conversation_id:
+        if conversation_id and not getattr(tool_executor, '_prism_clarification', False):
             try:
                 chat_count = AIChatMessage.objects.filter(
                     conversation_id=conversation_id, role='user'
@@ -353,7 +393,19 @@ class AIChatView(APIView):
         if not bot:
             return Response({'error': 'Bot not found'}, status=404)
         source_ids = _workbench_source_ids(request, bot)
+        from .services.course_context import prepare_course_context
+        from .services.dsh_xiaoyu import dsh_handoff_enabled, polling_response
         external_video_context = prepare_external_video_context(request, bot, conversation_id)
+        ulr = ulr_enabled()
+        if ulr or (dsh_handoff_enabled(request.user, bot, conversation_id)
+                   and not _requires_workbench_runtime(request, bot, conversation_id, source_ids)):
+            message = user_message.strip()
+            if not message:
+                return Response({'error': 'Message is required'}, status=400)
+            course_context = (prepare_course_context(request, bot, conversation_id)
+                              if external_video_context is None else None)
+            return polling_response(request, bot, conversation_id, message, course_context=course_context,
+                                    external_video_context=external_video_context, ulr=ulr)
         sync_bot_prompt(bot)
 
         reservation = _reserve_chat_request(request.user, request.data, bot)
@@ -496,15 +548,20 @@ class AIChatResetView(APIView):
         qs = AIChatMessage.objects.filter(user=request.user)
         if bot_id:
             qs = qs.filter(bot_id=bot_id)
-        if settings.UNIMIND_DSH_XIAOYU_ENABLED or qs.filter(metadata__engine='dsh').exists():
+        if (settings.UNIMIND_DSH_XIAOYU_ENABLED or ulr_enabled()
+                or qs.filter(metadata__engine__in=('dsh', 'ulr', 'dsh_import')).exists()):
             from .services.dsh_xiaoyu import delete_state
-            from .services.dsh_runtime import site_request_lock
-            with site_request_lock(request.user), transaction.atomic():
+            from .services.dsh_runtime import quota_write_lock, site_request_lock
+            conversations = Conversation.objects.filter(user=request.user, **({'bot_id': bot_id} if bot_id else {}))
+            with site_request_lock(request.user), quota_write_lock(), transaction.atomic():
+                list(conversations.select_for_update().order_by('pk').values_list('pk', flat=True))
                 delete_state(request.user, qs)
                 qs.delete()
-                Conversation.objects.filter(user=request.user, **({'bot_id': bot_id} if bot_id else {})).delete()
+                conversations.delete()
             return Response({'status': 'cleared'})
-        qs.delete()
+        with transaction.atomic():
+            mark_runtime_requests_deleted(qs, request.user.pk)
+            qs.delete()
         return Response({'status': 'cleared'})
 
 
@@ -517,18 +574,22 @@ class AIChatDeleteConversationView(APIView):
         if not conversation_id:
             return Response({'error': 'conversation_id is required'}, status=400)
         qs = AIChatMessage.objects.filter(user=request.user, conversation_id=conversation_id)
-        if settings.UNIMIND_DSH_XIAOYU_ENABLED or qs.filter(metadata__engine='dsh').exists():
+        if (settings.UNIMIND_DSH_XIAOYU_ENABLED or ulr_enabled()
+                or qs.filter(metadata__engine__in=('dsh', 'ulr', 'dsh_import')).exists()):
             from .services.dsh_xiaoyu import delete_state
-            from .services.dsh_runtime import site_request_lock
-            with site_request_lock(request.user, conversation_id), transaction.atomic():
+            from .services.dsh_runtime import quota_write_lock, site_request_lock
+            from .models import cancel_conversation_requests
+            conversations = Conversation.objects.filter(user=request.user, conversation_id=conversation_id)
+            with site_request_lock(request.user, conversation_id), quota_write_lock(), transaction.atomic():
+                if not conversations.select_for_update().exists():
+                    cancel_conversation_requests(request.user.pk, conversation_id, conversations.db)
                 delete_state(request.user, qs)
                 deleted, _ = qs.delete()
-                Conversation.objects.filter(user=request.user, conversation_id=conversation_id).delete()
+                conversations.delete()
             return Response({'status': 'deleted', 'count': deleted})
         with transaction.atomic():
-            deleted, _ = AIChatMessage.objects.filter(
-                user=request.user, conversation_id=conversation_id
-            ).delete()
+            mark_runtime_requests_deleted(qs, request.user.pk)
+            deleted, _ = qs.delete()
             Conversation.objects.filter(user=request.user, conversation_id=conversation_id).delete()
         return Response({'status': 'deleted', 'count': deleted})
 
@@ -569,13 +630,14 @@ class AIChatStreamView(APIView):
         course_context = (prepare_course_context(request, bot, conversation_id)
                           if external_video_context is None else None)
 
-        # Workbench turns need the native per-turn source registry and tool executor.
-        if settings.UNIMIND_DSH_XIAOYU_ENABLED and not (
-            source_ids or _is_workbench_conversation(request, bot, conversation_id)
-        ):
+        ulr = ulr_enabled()
+        # Legacy DSH does not carry the per-turn workbench source registry.
+        if ulr or (settings.UNIMIND_DSH_XIAOYU_ENABLED
+                   and not (course_context and course_context.get('workbench_project'))
+                   and not _requires_workbench_runtime(request, bot, conversation_id, source_ids)):
             from .services.dsh_xiaoyu import response
             return response(request, bot, conversation_id, user_message, course_context=course_context,
-                            external_video_context=external_video_context)
+                            external_video_context=external_video_context, ulr=ulr)
 
         from .services.learning_experiments import available_to, attach_to_chat
         experiment_prototype = available_to(request.user)
@@ -645,7 +707,8 @@ class AIChatStreamView(APIView):
             student_context, memory_context, adaptive_directives = '', '', ''
             if _can_use_learning_context(request.user):
                 student_context = get_student_academic_context(request.user)
-                memory_context, adaptive_directives = build_memory_context(request.user, user_message, bot_type=bot.bot_type)
+                memory_context, adaptive_directives = build_memory_context(request.user, user_message, bot_type=bot.bot_type,
+                    chat_context={'conversation_id': str(conversation_id), 'message_id': user_msg.pk, 'bot_id': bot.pk})
 
             from ai_assistant.services.chat_dispatch import dispatch_bot_chat_sync
 
@@ -661,6 +724,8 @@ class AIChatStreamView(APIView):
                 adaptive_directives=adaptive_directives,
                 workbench_grounding=workbench_grounding,
             )
+            if getattr(tool_executor, '_prism_clarification', False):
+                return history_msgs, messages, [], tool_executor, profile, variant_name
 
             # 意图路由（与轮询路径一致）
             if profile.use_intent_router and user_message:
@@ -753,6 +818,10 @@ class AIChatStreamView(APIView):
 
                 def _run_agent():
                     try:
+                        gated = getattr(tool_executor, '_prism_gate_result', None)
+                        if gated:
+                            _result_container[0] = gated
+                            return
                         with _AI_CHAT_SEMAPHORE:
                             _result_container[0] = AIEngine.call_ai_with_streaming_tools(
                                 messages=messages,
@@ -839,6 +908,8 @@ class AIChatStreamView(APIView):
                 metadata = {'note_sources': note_sources} if note_sources else {}
                 if ai_content:
                     metadata.update(workbench_citation_metadata(ai_content, tool_executor))
+                if getattr(tool_executor, '_prism_clarification', False):
+                    metadata['prism_clarification'] = True
                 if course_context:
                     metadata['course_context'] = course_context
                 if external_video_context:
@@ -858,7 +929,6 @@ class AIChatStreamView(APIView):
                     metadata['visual'] = visuals[-1]  # Last visual for backward compat
                     if len(visuals) > 1:
                         metadata['all_visuals'] = visuals
-
                 if not is_error and _complete_ai_result(result, ai_content, metadata):
                     from .services.project_learning import completed_learning_turn
                     metadata['learning_turn'] = completed_learning_turn(user_msg.pk)
@@ -895,9 +965,10 @@ class AIChatStreamView(APIView):
                 conv_title = None
                 try:
                     from ai_assistant.services.title_generator import sync_generate_title
-                    conv_title = await sync_to_async(sync_generate_title)(
-                        str(conversation_id), request.user.id, bot.id
-                    )
+                    if not metadata.get('prism_clarification'):
+                        conv_title = await sync_to_async(sync_generate_title)(
+                            str(conversation_id), request.user.id, bot.id
+                        )
                 except Exception:
                     logger.warning("Title generation failed before done", exc_info=True)
 
@@ -918,6 +989,9 @@ class AIChatStreamView(APIView):
                 if not is_error and _complete_ai_result(result, ai_content, metadata):
                     from users.learning import confirm_ai_call
                     await sync_to_async(confirm_ai_call)(reservation, done_payload)
+                    from .services.memory_core import record_completed_reply
+                    from .services.prism_memory import safely
+                    await sync_to_async(safely)(record_completed_reply, pending_msg)
                 yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
                 log_metrics('completed')
 
@@ -938,7 +1012,8 @@ class AIChatStreamView(APIView):
                     full_history = history_msgs + [{'role': 'user', 'content': user_message}]
                     if (await sync_to_async(_can_use_learning_context)(request.user)
                             and not await sync_to_async(conversation_uses_notes)(request.user, conversation_id)):
-                        await sync_to_async(extract_memories_async)(request.user, full_history, str(conversation_id))
+                        await sync_to_async(extract_memories_async)(request.user, full_history, str(conversation_id),
+                            source_message_id=user_msg.pk, answer_message_id=pending_msg.pk)
                         await sync_to_async(extract_memories_with_mem0)(request.user, full_history)
                 except Exception:
                     logger.warning("Memory extraction failed (SSE)", exc_info=True)
@@ -950,15 +1025,16 @@ class AIChatStreamView(APIView):
                         {'role': 'user', 'content': user_message},
                         {'role': 'assistant', 'content': ai_content},
                     ]
-                    record_trajectory(
-                        user_id=request.user.id,
-                        bot_id=bot.id,
-                        conversation_id=str(conversation_id),
-                        messages=all_msgs,
-                        tool_calls=getattr(tool_executor, 'tool_call_log', []),
-                        tool_outputs=getattr(tool_executor, 'tool_output_log', []),
-                        prompt_variant=sse_variant_name,
-                    )
+                    if not getattr(tool_executor, '_prism_clarification', False):
+                        record_trajectory(
+                            user_id=request.user.id,
+                            bot_id=bot.id,
+                            conversation_id=str(conversation_id),
+                            messages=all_msgs,
+                            tool_calls=getattr(tool_executor, 'tool_call_log', []),
+                            tool_outputs=getattr(tool_executor, 'tool_output_log', []),
+                            prompt_variant=sse_variant_name,
+                        )
                 except Exception:
                     logger.warning("Trajectory recording failed (SSE)", exc_info=True)
 
@@ -1011,9 +1087,9 @@ class SemanticMemoryListView(APIView):
 
         try:
             from ai_assistant.services.tenant_memory import TenantMemoryManager
-            manager = TenantMemoryManager(institution_id=institution.pk)
             limit = min(int(request.query_params.get('limit', 100)), 200)
-            memories = manager.get_all(user_id=user.id)[:limit]
+            with closing(TenantMemoryManager(institution_id=institution.pk)) as manager:
+                memories = manager.get_all(user_id=user.id, limit=limit)
             return Response({"memories": memories})
         except Exception:
             logger.exception("Failed to list semantic memories")
@@ -1032,16 +1108,12 @@ class SemanticMemoryDeleteView(APIView):
 
         try:
             from ai_assistant.services.tenant_memory import TenantMemoryManager
-            manager = TenantMemoryManager(institution_id=institution.pk)
-            if memory_id:
-                # Verify ownership: only delete if memory belongs to this user
-                user_memories = manager.get_all(user_id=user.id)
-                user_memory_ids = {m.get('id') for m in user_memories if m.get('id')}
-                if memory_id not in user_memory_ids:
-                    return Response({"error": "记忆不存在"}, status=404)
-                manager.delete(memory_id=memory_id)
-            else:
-                manager.delete_all(user_id=user.id)
+            with closing(TenantMemoryManager(institution_id=institution.pk)) as manager:
+                if memory_id:
+                    if not manager.delete(memory_id, user_id=user.id):
+                        return Response({"error": "记忆不存在"}, status=404)
+                else:
+                    manager.delete_all(user_id=user.id)
             return Response({"status": "ok"})
         except Exception:
             logger.exception("Failed to delete semantic memory")

@@ -3,6 +3,7 @@ import hashlib
 import json
 from urllib.parse import urlsplit
 from django.conf import settings
+from django.db.models import Q
 from rest_framework import serializers
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
@@ -12,8 +13,10 @@ from rest_framework.views import APIView
 from ai_engine.config import get_model_for_task
 from users.permissions import IsMember
 from .dsh_authentication import DshTaskAuthentication
+from .models import AIChatMessage
 from .services.dsh_service import build_context, execute_tool
 from .services.dsh_runtime import DshUnavailable, run_site_action, quota_write_lock, site_request_lock
+from .services.ulr_config import ulr_enabled
 from users.learning import reserve_ai_call, confirm_ai_call, release_ai_call
 from users.models import AIUsageReservation
 
@@ -47,8 +50,11 @@ class DshContextView(APIView):
         context = build_context(request.user, **data.validated_data, chat_context=claims.get('chat_context'))
         if isinstance(request.auth, dict) and request.auth.get('chat_context'):
             from .services.dsh_xiaoyu import task_context, task_course_visual
-            context['system_prompt'] += task_context(request.user, request.auth['chat_context'], data.validated_data['message'])
-            visual = task_course_visual(request.user, request.auth['chat_context'], data.validated_data['message'])
+            chat_context = request.auth['chat_context']
+            context['system_prompt'] += task_context(request.user, chat_context, data.validated_data['message'])
+            if chat_context.get('history_digest'):
+                context['reauthorize_history'] = True
+            visual = task_course_visual(request.user, chat_context, data.validated_data['message'])
             if visual:
                 context['course_visual_content'] = visual
                 context['course_visual_message'] = data.validated_data['message']
@@ -83,9 +89,12 @@ class SessionInput(serializers.Serializer):
 class DshSiteView(APIView):
     permission_classes = [IsMember]
 
+    def enabled(self):
+        return settings.UNIMIND_DSH_ENABLED and settings.UNIMIND_DSH_SITE_ENABLED
+
     def initial(self, request, *args, **kwargs):
         super().initial(request, *args, **kwargs)
-        if not (getattr(settings, 'UNIMIND_DSH_ENABLED', False) and getattr(settings, 'UNIMIND_DSH_SITE_ENABLED', False)):
+        if not self.enabled():
             raise NotFound()
 
 
@@ -104,8 +113,21 @@ class DshStatusView(DshSiteView):
                          'mode': mode, 'model_configured': configured})
 
 
+def deleted_session_records(user):
+    return AIUsageReservation.objects.filter(user=user, response__engine='dsh', response__deleted=True)
+
+
 def complete_chat(user, body, on_event=None):
     with site_request_lock(user):
+        if session_id := body['session_id']:
+            if deleted_session_records(user).filter(response__session_id=session_id).exists():
+                raise NotFound()
+            from .services.dsh_xiaoyu import DSH_HANDOFF_ENGINES
+            history = AIChatMessage.objects.filter(user=user, role='assistant')
+            linked = history.filter(Q(metadata__dsh_session_id=session_id) |
+                                    Q(metadata__dsh_imported_session_id=session_id)).values('conversation_id')
+            if history.filter(conversation_id__in=linked, metadata__engine__in=DSH_HANDOFF_ENGINES).exists():
+                raise NotFound()
         fingerprint = hashlib.sha256(json.dumps({'engine': 'dsh', 'message': body['message'],
                                                  'session_id': body['session_id']}, sort_keys=True).encode()).hexdigest()
         with quota_write_lock():
@@ -160,7 +182,12 @@ class DshChatStreamView(DshSiteView):
 class DshSessionListView(DshSiteView):
     def get(self, request):
         with site_request_lock(request.user):
-            return Response({**run_site_action(request.user, 'list'), 'student_id': request.user.pk})
+            result = run_site_action(request.user, 'list')
+            sessions = result['sessions']
+            deleted = set(deleted_session_records(request.user).filter(
+                response__session_id__in=[session['id'] for session in sessions]).values_list('response__session_id', flat=True))
+            return Response({**result, 'sessions': [session for session in sessions if session['id'] not in deleted],
+                             'student_id': request.user.pk})
 
 
 class DshSessionView(DshSiteView):
@@ -173,6 +200,8 @@ class DshSessionView(DshSiteView):
         if action != 'new' and not session_id:
             raise ValidationError({'session_id': '需要会话标识。'})
         with site_request_lock(request.user):
+            if action == 'read' and deleted_session_records(request.user).filter(response__session_id=session_id).exists():
+                raise NotFound()
             deleted = 0
             if action == 'delete':
                 with quota_write_lock():
@@ -188,13 +217,18 @@ class DshSessionView(DshSiteView):
             return Response(result)
 
 
-class DshConfirmView(DshSiteView):
+class StudentActionView(DshSiteView):
+    def enabled(self):
+        return ulr_enabled() or super().enabled()
+
+
+class DshConfirmView(StudentActionView):
     def post(self, request):
         from .services.dsh_actions import confirm
         return Response(confirm(request.user, request.data))
 
 
-class DshSubmissionView(DshSiteView):
+class DshSubmissionView(StudentActionView):
     def get(self, request, request_id):
         from django.shortcuts import get_object_or_404
         from .models import DshSubmission

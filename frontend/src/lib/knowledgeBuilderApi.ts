@@ -81,6 +81,11 @@ export async function createKnowledgeBuild(payload: { subject: string; archetype
   return data;
 }
 
+export async function resumeKnowledgeBuild(buildId: string): Promise<BuildSummary> {
+  const { data } = await api.post<BuildSummary>(`/knowledge-builder/${encodeURIComponent(buildId)}/resume/`);
+  return data;
+}
+
 export async function inquireKnowledgeRequirements(payload: IntakeRequestPayload): Promise<IntakeResponsePayload> {
   const { data } = await api.post<IntakeResponsePayload>('/knowledge-builder/intake/', payload);
   return data;

@@ -16,7 +16,7 @@ from ai_assistant.services.workbench_grounding import (
     RETRIEVAL_LIMIT, WORKBENCH_TOOL_NAMES, WorkbenchGrounding, active_sources, extract_workbench_citations,
 )
 from ai_engine.service import AIEngine
-from courses.models import Course
+from courses.models import Course, TranscriptSegment, VideoTranscript
 from users.models import AIUsageReservation, Institution, User, WeeklyAIQuotaConfig
 from users.models_workspace import Workspace, WorkspaceLearner, WorkspaceMembership
 
@@ -218,6 +218,64 @@ def test_explicit_source_selection_is_part_of_request_identity(auth_client, bot,
         conflict = auth_client.post('/api/ai/chat/', {**payload, 'workbench_source_ids': selection}, format='json')
         assert conflict.status_code == 400 and 'request_id' in conflict.data
     assert AIChatMessage.objects.filter(conversation_id=payload['conversation_id']).count() == 2
+
+
+@pytest.mark.parametrize('stream', [False, True])
+def test_ulr_grounding_preserves_selection_tools_and_receipt(
+    auth_client, bot, project, materials, settings, tmp_path, monkeypatch, stream,
+):
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    settings.UNIMIND_DSH_STATE_DIR = str(tmp_path)
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    monkeypatch.setattr('ai_assistant.services.dsh_xiaoyu.schedule_conversation_title', Mock())
+    selected, excluded, video = materials
+    companion = video.source.companion_course
+    companion.video_file = 'workbench_sources/companion.mp4'
+    companion.save(update_fields=['video_file'])
+    video.source.file = companion.video_file.name
+    video.source.save(update_fields=['file'])
+    transcript = VideoTranscript.objects.create(course=companion, asr_status='completed')
+    TranscriptSegment.objects.create(transcript=transcript, index=0, start_time=120, end_time=150, text='私有伴学讲稿')
+    payload = chat_payload(bot, project, workbench_source_ids=[str(selected.source_id)],
+                           course_context={'course_id': companion.pk, 'video_seconds': 125})
+
+    def answer(messages, tools, **kwargs):
+        assert selected.content in messages[0]['content']
+        assert excluded.content not in messages[0]['content']
+        assert '私有伴学讲稿' in messages[0]['content']
+        assert WORKBENCH_TOOL_NAMES <= {tool['function']['name'] for tool in tools}
+        if messages[-1]['role'] != 'tool':
+            return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+                'id': 'read-source', 'type': 'function', 'function': {
+                    'name': 'read_workbench_source_chunks', 'arguments': json.dumps({'source_id': 'S1'}),
+                },
+            }]}}]}
+        assert json.loads(messages[-1]['content'])['chunks'][0]['content'] == selected.content
+        return {'choices': [{'finish_reason': 'stop', 'message': {'content': '原始存款产生派生存款[S1#C0]。'}}]}
+
+    model = Mock(side_effect=answer)
+    monkeypatch.setattr(AIEngine, 'call_provider', model)
+    recovery_url = f"/api/ai/chat-requests/{payload['request_id']}/"
+    if stream:
+        response = auth_client.post('/api/ai/chat/stream/', payload, format='json')
+        assert response.status_code == 200
+        done = asyncio.run(stream_events(response))[-1]
+    else:
+        monkeypatch.setattr('ai_assistant.utils._THREAD_POOL.submit', lambda fn: fn())
+        response = auth_client.post('/api/ai/chat/', payload, format='json')
+        assert response.data['status'] == 'pending'
+        done = auth_client.get(recovery_url).data['response']
+
+    assert done['engine'] == 'ulr'
+    assert done['metadata']['course_context']['video_seconds'] == 125
+    citation, = done['metadata']['workbench_citations']
+    assert citation['chunk_id'] == selected.pk
+    assert auth_client.get(recovery_url).data['response'] == done
+    altered = {**payload, 'workbench_source_ids': [str(excluded.source_id)]}
+    assert auth_client.post('/api/ai/chat/', altered, format='json').status_code == 400
+    selected.source.delete()
+    assert auth_client.get(recovery_url).data['status'] == 'failed'
+    assert model.call_count == 2
 
 
 def test_large_corpus_search_and_tool_only_citation(auth_client, bot, project, monkeypatch):

@@ -1,5 +1,10 @@
 import os
-from django.core.management.base import BaseCommand
+import re
+from pathlib import Path
+from tempfile import NamedTemporaryFile
+
+from django.core.management.base import BaseCommand, CommandError
+from ai_assistant.services.ulr_config import standalone_ulr
 from ai_engine.ai_service import AIService
 
 
@@ -52,6 +57,41 @@ SUBJECT_CONTEXTS = {
     'USMLE': 'USMLE (United States Medical Licensing Examination) — Step 1 (basic sciences), Step 2 CK (clinical knowledge), Step 3 (clinical management), covering foundational and clinical medical sciences.',
 }
 
+LEVELS = ('SUB', 'CH', 'SEC', 'KP')
+BRANCH_LIMITS = ((4, 8), (3, 8), (2, 6), (3, 10))
+NODE_LINE = re.compile(r'(#{1,3}|-)\s+\[([A-Z]+-[0-9]{2,3})\]\s+(.+)')
+
+
+def validate_tree(markdown):
+    def check_branch(depth, siblings):
+        minimum, maximum = BRANCH_LIMITS[depth]
+        if not minimum <= len(siblings) <= maximum:
+            raise CommandError(f'{LEVELS[depth]} 同级节点须有 {minimum} 至 {maximum} 个。')
+
+    branches = [set()]
+    for number, line in enumerate(markdown.splitlines(), 1):
+        if not (line := line.strip()):
+            continue
+        match = NODE_LINE.fullmatch(line)
+        if not match:
+            raise CommandError(f'知识树第 {number} 行格式无效。')
+        marker, code, name = match.groups()
+        depth = 3 if marker == '-' else len(marker) - 1
+        clean_name = re.sub(r'[（\(].*?[）\)]', '', name).strip()
+        if (depth >= len(branches) or not code.startswith(LEVELS[depth] + '-')
+                or not 1 <= len(clean_name) <= 100 or '\x00' in name):
+            raise CommandError(f'知识树第 {number} 行层级、编号或名称无效。')
+        while len(branches) > depth + 1:
+            check_branch(len(branches) - 1, branches.pop())
+        siblings = branches[depth]
+        if code in siblings or (depth == 3 and code != f'KP-{len(siblings) + 1:02d}'):
+            raise CommandError(f'知识树第 {number} 行编号重复或顺序无效。')
+        siblings.add(code)
+        if depth < 3:
+            branches.append(set())
+    for depth, siblings in enumerate(branches):
+        check_branch(depth, siblings)
+
 
 class Command(BaseCommand):
     help = '使用 AI 批量生成学科知识树 Markdown 文件'
@@ -74,21 +114,34 @@ class Command(BaseCommand):
 
         context = SUBJECT_CONTEXTS.get(subject, f'{subject} 的核心知识体系。')
         prompt = PROMPT_TEMPLATE.format(subject=subject, subject_context=context)
+        native = standalone_ulr()
+        filename = f'{subject}.md'
+        if native and (not subject.strip() or Path(filename).name != filename or '\x00' in filename):
+            raise CommandError('学科名称须可用作单个文件名。')
 
         self.stdout.write(f'正在为「{subject}」生成知识树...')
 
+        request = dict(
+            system_prompt='你是一位资深教育课程设计师，精通知识体系构建。请严格按照指定格式生成内容，不添加任何额外说明。',
+            user_prompt=prompt, temperature=0.3, max_tokens=16384, operation='generate_knowledge_tree',
+        )
         try:
-            result = AIService.simple_chat_text(
-                system_prompt='你是一位资深教育课程设计师，精通知识体系构建。请严格按照指定格式生成内容，不添加任何额外说明。',
-                user_prompt=prompt,
-                temperature=0.3,
-                max_tokens=16384,
-                operation='generate_knowledge_tree',
-            )
+            if native:
+                response = AIService.simple_chat(**request, raise_on_error=True)
+                choices = (response or {}).get('choices') or []
+                result = AIService.extract_content(response) if choices and choices[0].get('finish_reason') == 'stop' else None
+            else:
+                result = AIService.simple_chat_text(**request)
         except Exception as e:
+            if native:
+                raise CommandError('知识树生成未完成，已有文件已保留。') from e
             self.stdout.write(self.style.ERROR(f'AI 调用失败: {e}'))
             return
 
+        if native:
+            if not isinstance(result, str) or not result.strip():
+                raise CommandError('模型未返回完整知识树。')
+            validate_tree(result)
         if not result:
             self.stdout.write(self.style.ERROR('AI 返回为空，请重试。'))
             return
@@ -100,10 +153,18 @@ class Command(BaseCommand):
             return
 
         os.makedirs(output_dir, exist_ok=True)
-        filename = f'{subject}.md'
         filepath = os.path.join(output_dir, filename)
 
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(result)
+        if native:
+            staged = NamedTemporaryFile(mode='w', encoding='utf-8', dir=output_dir, delete=False)
+            try:
+                with staged:
+                    staged.write(result)
+                os.replace(staged.name, filepath)
+            finally:
+                Path(staged.name).unlink(missing_ok=True)
+        else:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(result)
 
         self.stdout.write(self.style.SUCCESS(f'知识树已保存到: {filepath}'))

@@ -58,6 +58,7 @@ class ConversationSerializer(serializers.ModelSerializer):
 
 class AIChatMessageSerializer(serializers.ModelSerializer):
     conversation_title = serializers.SerializerMethodField()
+    metadata = serializers.SerializerMethodField()
     conversation_project = serializers.IntegerField(source='_conversation_project', read_only=True, allow_null=True)
     conversation_pinned = serializers.BooleanField(source='_conversation_pinned', read_only=True, default=False)
 
@@ -69,8 +70,40 @@ class AIChatMessageSerializer(serializers.ModelSerializer):
         title = getattr(obj, '_conversation_title', None)
         return title or ''
 
+    def get_metadata(self, obj):
+        metadata = obj.metadata
+        return {key: value for key, value in metadata.items()
+                if key not in {'learning_snapshot', 'ulr_context_sources'}} if isinstance(metadata, dict) else metadata
+
 
 class AgentMemorySerializer(serializers.ModelSerializer):
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        from .services.fact_evidence import active, current
+        if active():
+            views = self.context.setdefault('fact_control_views', {})
+            if instance.user_id not in views:
+                snapshot = current(instance.user, include_inactive=True)
+                views[instance.user_id] = ({row['id']: row for row in snapshot['items']},
+                    {row['id']: row['status'] for row in snapshot['unavailable']})
+            known, unavailable = views[instance.user_id]
+            row = known.get(instance.pk)
+            data['memory_state'] = 'known' if row else unavailable.get(instance.pk, 'excluded')
+            if row:
+                data.update(value=row['value'], confidence=row['confidence'], source=row['source'],
+                    updated_at=self.fields['updated_at'].to_representation(row['updated_at']))
+            else:
+                data.update(value='', confidence=0.0)
+        return data
+
+    def create(self, validated_data):
+        from .services.memory_core import save_manual_fact
+        return save_manual_fact(validated_data)
+
+    def update(self, instance, validated_data):
+        from .services.memory_core import save_manual_fact
+        return save_manual_fact(validated_data, instance)
+
     class Meta:
         model = AgentMemory
         fields = (

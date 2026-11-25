@@ -84,7 +84,8 @@ def run_session_turn(message, model_config, session_id, on_event=None):
         return current
     with task_gateway(context, model_config['url'], model_config['key'], model_config['mode'], audit_path,
                       **({'on_event': on_event} if on_event else {}),
-                      **({'refresh_context': refresh_context} if 'session_registry' in context else {})) as gateway:
+                      **({'refresh_context': refresh_context}
+                         if 'session_registry' in context or context.get('reauthorize_history') else {})) as gateway:
         with DeepSeekHarness(
             dsh_home=str(home), cwd=str(home), patches=(str(ROOT / 'profile.patch.yml'),),
             provider='deepseek-official', model=context['model_policy']['model'],
