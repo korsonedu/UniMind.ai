@@ -522,6 +522,7 @@ class Command(BaseCommand):
             from courses.models import CourseOutline
             from knowledge_builder.models import KnowledgeTreeBuild
             from quizzes.models import ContentPipelineTask, QuizExam
+            from quizzes.tasks import question_pipeline_may_have_partial_result
 
             now = timezone.now()
             active = AIUsageReservation.objects.filter(status='pending').filter(
@@ -537,12 +538,14 @@ class Command(BaseCommand):
                 counts['active_unpinned_teaching_tasks'] = len(active_teaching)
                 report['active_teaching_task_ids'] = active_teaching
             # Legacy bulk jobs can publish questions before a later batch fails.
-            question_pipelines = list(ContentPipelineTask.objects.filter(
+            old_pipelines = ContentPipelineTask.objects.filter(
                 task_type='ai_generate', payload__kind__isnull=True,
-            ).filter(Q(payload__bulk_mode=True) | Q(payload__has_keys=['kp_ids', 'questions_per_kp']))
-                .filter(Q(status='running') | Q(status='failed', payload__bulk_mode=True, payload__current_stage='generating'))
-                .filter(Q(payload__requires_ulr__isnull=True) | ~Q(payload__requires_ulr=True))
-                .order_by('pk').values_list('pk', flat=True))
+            ).filter(Q(payload__bulk_mode=True) | Q(payload__has_keys=['kp_ids', 'questions_per_kp'])) \
+                .filter(Q(status='running') | Q(status='failed', payload__bulk_mode=True)) \
+                .filter(Q(payload__requires_ulr__isnull=True) | ~Q(payload__requires_ulr=True)) \
+                .only('pk', 'status', 'payload', 'progress', 'result').order_by('pk')
+            question_pipelines = [task.pk for task in old_pipelines.iterator()
+                                  if task.status == 'running' or question_pipeline_may_have_partial_result(task)]
             if question_pipelines:
                 counts['unsettled_legacy_question_pipelines'] = len(question_pipelines)
                 report['unsettled_question_pipeline_ids'] = question_pipelines

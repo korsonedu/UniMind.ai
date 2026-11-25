@@ -176,10 +176,11 @@ def submit_from_web():
         bulk_point = KnowledgePoint.objects.create(name='合成批量考点', code='BULK-QUEUE', subject='合成批量学科')
         bulk_admin = APIClient(HTTP_HOST='127.0.0.1', HTTP_X_FORWARDED_PROTO='https')
         bulk_admin.force_authenticate(user=User.objects.get(pk=good_id))
-        bulk = bulk_admin.post('/api/quizzes/admin/bulk-pipeline/', {
-            'subject': bulk_point.subject, 'kp_code': bulk_point.code, 'total_target': 1,
-            'difficulty_dist': {'normal': 1}, 'type_dist': {'objective': 1},
-        }, format='json')
+        with override_settings(UNIMIND_LEARNING_RUNTIME='legacy'):
+            bulk = bulk_admin.post('/api/quizzes/admin/bulk-pipeline/', {
+                'subject': bulk_point.subject, 'kp_code': bulk_point.code, 'total_target': 1,
+                'difficulty_dist': {'normal': 1}, 'type_dist': {'objective': 1},
+            }, format='json')
         assert bulk.status_code == 201, bulk.data
         bulk_id = bulk.data['task_id']
         ready_path.with_suffix('.bulk').write_text(str(bulk_id))
@@ -497,7 +498,10 @@ def test_standalone_web_and_celery_share_runtime(user, settings, tmp_path):
             else:
                 pytest.fail('Expected the bulk task in the local queue.')
             ContentPipelineTask.objects.filter(pk=task_id, status='pending').update(updated_at=timezone.now() - timedelta(minutes=6))
-            ContentPipelineTask.objects.filter(pk=bulk_id, status='running').update(updated_at=timezone.now() - timedelta(hours=1))
+            old_bulk = ContentPipelineTask.objects.get(pk=bulk_id, status='running')
+            assert not old_bulk.payload.get('requires_ulr')
+            ContentPipelineTask.objects.filter(pk=bulk_id).update(status='failed', progress=2,
+                payload={**old_bulk.payload, 'current_stage': 'select_kps'}, finished_at=timezone.now())
             ready.with_suffix('.removed').touch()
             wait_for(lambda: ready.with_suffix('.requeued').exists() or web.poll() is not None)
             assert ready.with_suffix('.requeued').exists(), (tmp_path / 'web.log').read_text()

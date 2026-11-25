@@ -439,10 +439,10 @@ def retry(request, data):
     source = task_object(request, data, lock=True)
     if source.payload.get('legacy_review_reference'):
         raise serializers.ValidationError('该旧批量出题已经结案。')
-    if (source.status == 'failed' and question_pipeline_delivery(source)
-            and source.payload.get('current_stage') == 'generating' and question_pipeline_may_have_partial_result(source)):
+    failed_bulk = source.status == 'failed' and source.payload.get('bulk_mode') is True
+    if failed_bulk and question_pipeline_may_have_partial_result(source):
         raise serializers.ValidationError('旧批量出题可能已经入库，请先核对原任务结果。')
-    if (source.status in ('pending', 'running', 'completed', 'review')
+    if ((failed_bulk or source.status in ('pending', 'running', 'completed', 'review'))
             and (delivery := owned_question_pipeline(source, request.user.pk))):
         try:
             queued = resume_question_pipeline(source, delivery)

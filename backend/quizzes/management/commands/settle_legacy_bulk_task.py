@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from ai_assistant.services.ulr_config import standalone_ulr
 from quizzes.models import ContentPipelineTask
-from quizzes.tasks import lock_question_pipeline
+from quizzes.tasks import lock_question_pipeline, question_pipeline_may_have_partial_result
 
 
 class Command(BaseCommand):
@@ -27,9 +27,9 @@ class Command(BaseCommand):
         with transaction.atomic():
             task = ContentPipelineTask.objects.select_for_update().filter(
                 pk=options['task_id'], task_type='ai_generate', payload__bulk_mode=True,
-                payload__kind__isnull=True, payload__current_stage='generating',
+                payload__kind__isnull=True,
             ).first()
-            if task is None or task.payload.get('requires_ulr') is True:
+            if task is None or not question_pipeline_may_have_partial_result(task):
                 raise CommandError('该任务不属于待核对的旧批量出题。')
             if task.status == 'cancelled' and task.payload.get('legacy_review_reference') == reference:
                 closed = False

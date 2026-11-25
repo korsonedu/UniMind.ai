@@ -76,8 +76,13 @@ def question_pipeline_recovery_due(task):
 
 
 def question_pipeline_may_have_partial_result(task):
-    return (task.payload.get('bulk_mode') is True and task.payload.get('requires_ulr') is not True
-            and bool(task.progress or task.payload.get('current_stage')))
+    if task.payload.get('bulk_mode') is not True or task.payload.get('requires_ulr') is True:
+        return False
+    stage = task.payload.get('current_stage')
+    # The legacy worker recorded these stages before it could publish any questions.
+    if stage in ('select_kps', 'kps_selected', 'quotas_assigned') and task.progress <= 8 and not task.result:
+        return False
+    return bool(task.progress or stage or task.result)
 
 
 def resume_question_pipeline(task, delivery):

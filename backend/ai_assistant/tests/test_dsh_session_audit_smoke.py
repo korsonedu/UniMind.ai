@@ -203,7 +203,7 @@ def test_dsh_migration_gate_holds_failed_legacy_bulk_after_partial_publication(a
     payload = {'bulk_mode': True, 'subject': subject, 'total_target': 20,
                'difficulty_dist': {'normal': 1}, 'type_dist': {'objective': 1}}
     task = ContentPipelineTask.objects.create(**fields, status='running', payload=payload)
-    ContentPipelineTask.objects.create(**fields, status='failed', progress=2,
+    early = ContentPipelineTask.objects.create(**fields, status='failed', progress=2,
         payload={**payload, 'current_stage': 'select_kps'})
 
     def generate(points, **kwargs):
@@ -248,6 +248,40 @@ def test_dsh_migration_gate_holds_failed_legacy_bulk_after_partial_publication(a
             author.assert_not_called()
         assert list(Question.objects.values_list('pk', flat=True)) == question_ids
         assert ContentPipelineTask.objects.count() == 2
+
+    workbench = ContentPipelineTask.objects.create(**fields, status='failed', progress=8,
+        payload={**payload, 'current_stage': 'quotas_assigned'})
+    with patch.object(run_bulk_pipeline_task, 'delay') as queue, patch('backoffice.tasks.run_teaching_task.delay') as other_queue:
+        url = f'/api/quizzes/admin/pipeline-tasks/{early.pk}/retry/'
+        response = admin_client.post(url)
+        assert response.status_code == 202 and response.data['id'] == early.pk, response.data
+        assert admin_client.post(url).status_code == 200
+        for _ in range(2):
+            with transaction.atomic():
+                resumed = teaching.retry(SimpleNamespace(user=admin_user), {'id': workbench.pk, 'request_id': str(uuid4())})
+            assert resumed['id'] == workbench.pk
+        assert [job.kwargs['task_id'] for job in queue.call_args_list] == [early.pk, workbench.pk]
+        other_queue.assert_not_called()
+    assert ContentPipelineTask.objects.count() == 3
+
+    unknown = ContentPipelineTask.objects.create(**fields, status='failed', progress=12, payload=payload)
+    report = StringIO()
+    with pytest.raises(CommandError, match='未完成的迁移项'):
+        call_command('audit_dsh_sessions', state_dir=str(tmp_path), api_url='http://127.0.0.1:8000', require_migrated=True,
+                     stdout=report)
+    expected = [unknown.pk] if connection.vendor == 'postgresql' else [task.pk, unknown.pk]
+    assert json.loads(report.getvalue())['unsettled_question_pipeline_ids'] == expected
+    with patch.object(run_bulk_pipeline_task, 'delay') as queue:
+        assert admin_client.post(f'/api/quizzes/admin/pipeline-tasks/{unknown.pk}/retry/').status_code == 409
+        queue.assert_not_called()
+    if connection.vendor == 'postgresql':
+        call_command('settle_legacy_bulk_task', unknown.pk, legacy_workers_stopped=True,
+                     review_reference='synthetic-unknown-review', stdout=StringIO())
+        call_command('audit_dsh_sessions', state_dir=str(tmp_path), api_url='http://127.0.0.1:8000', require_migrated=True,
+                     stdout=StringIO())
+    print(json.dumps({'legacy_bulk_takeover': {'safe_admin_task_id': early.pk, 'safe_workbench_task_id': workbench.pk,
+        'safe_deliveries': 2, 'unknown_stage_blocked': True,
+        'unknown_stage_reviewed': connection.vendor == 'postgresql'}}))
 
 
 @pytest.mark.django_db(transaction=True)
