@@ -413,6 +413,19 @@ def request_config_issue(before, after):
     return None
 
 
+def summarize_metrics(measured, pair_count, baseline):
+    metrics = {}
+    for metric in METRICS:
+        values = measured[metric]
+        metrics[metric] = {'paired_count': len(values), 'missing_pairs': pair_count - len(values),
+                           'ulr_minus_baseline_median': median(after - before for before, after in values) if values else None}
+        if metric in ('first_visible_ms', 'completion_ms') and values:
+            tail = ceil(0.95 * len(values)) - 1
+            baseline_times, ulr_times = zip(*values, strict=True)
+            metrics[metric]['p95_ms'] = {baseline: sorted(baseline_times)[tail], 'ulr': sorted(ulr_times)[tail]}
+    return metrics
+
+
 def report(manifest, review):
     if review['packet_id'] != manifest['packet_id']:
         raise ValueError('评阅文件与对应的私有映射不匹配。')
@@ -444,7 +457,8 @@ def report(manifest, review):
 
     results = {}
     for scenario, pairs in groups.items():
-        measured = defaultdict(list)
+        measured, passing_measured = defaultdict(list), defaultdict(list)
+        passing_pairs = 0
         criteria = defaultdict(lambda: defaultdict(int))
         completed = dict.fromkeys((baseline, 'ulr'), 0)
         all_passed = completed.copy()
@@ -493,6 +507,11 @@ def report(manifest, review):
                     request_config_issues.append({**location, 'reason': issue})
                     continue
             compared_pairs += 1
+            quality_passed = (all(arm['completed'] and all(arm['checks'].values()) for arm in arms.values())
+                              and not (missing_tools or missing_delivery or wrong_delivery)
+                              and all(quality['first_pass'] or quality.get('repaired')
+                                      for quality in (old_tools, new_tools) if quality is not None))
+            passing_pairs += quality_passed
             if 'execution_position' in old and 'execution_position' in new:
                 first = baseline if old['execution_position'] < new['execution_position'] else 'ulr'
                 execution_order[first] += 1
@@ -519,15 +538,8 @@ def report(manifest, review):
                 before, after = (arms[runtime]['metrics'][metric] for runtime in (baseline, 'ulr'))
                 if before is not None and after is not None:
                     measured[metric].append((before, after))
-        metrics = {}
-        for metric in METRICS:
-            values = measured[metric]
-            metrics[metric] = {'paired_count': len(values), 'missing_pairs': compared_pairs - len(values),
-                               'ulr_minus_baseline_median': median(after - before for before, after in values) if values else None}
-            if metric in ('first_visible_ms', 'completion_ms') and values:
-                tail = ceil(0.95 * len(values)) - 1
-                baseline_times, ulr_times = zip(*values, strict=True)
-                metrics[metric]['p95_ms'] = {baseline: sorted(baseline_times)[tail], 'ulr': sorted(ulr_times)[tail]}
+                    if quality_passed:
+                        passing_measured[metric].append((before, after))
         results[scenario] = {'pair_count': len(pairs), 'model_verified_pairs': model_verified_pairs,
                              **({'local_instruction_pairs': local_instruction_pairs} if local_instruction_pairs else {}),
                              'compared_pairs': compared_pairs, 'unverified_model_pairs': unverified_model_pairs,
@@ -535,7 +547,10 @@ def report(manifest, review):
                              'request_config_issues': request_config_issues, 'quality_issues': quality_issues,
                              'evidence_gaps': evidence_gaps,
                              'completed': completed, 'all_criteria_passed': all_passed,
-                             'criterion_pass_counts': criteria, 'metrics': metrics, 'tool_quality': tool_results,
+                             'criterion_pass_counts': criteria, 'metrics': summarize_metrics(measured, compared_pairs, baseline),
+                             'quality_passed_efficiency': {'pair_count': passing_pairs,
+                                                           'metrics': summarize_metrics(passing_measured, passing_pairs, baseline)},
+                             'tool_quality': tool_results,
                              **({'delivery_selection': delivery_results} if delivery_results else {}), 'pairs': pairs}
     return {'evidence': manifest['evidence'], 'baseline': baseline, 'scenarios': results,
             **({'cost_rate_source': manifest['cost_rates']['source']} if 'cost_rates' in manifest else {})}

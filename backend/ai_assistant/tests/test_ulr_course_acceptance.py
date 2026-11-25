@@ -1,5 +1,6 @@
 """Capture learning tasks through the XiaoYu product routes with isolated data."""
 from contextlib import ExitStack, contextmanager
+from copy import deepcopy
 from functools import partial
 from hashlib import sha256
 from itertools import permutations
@@ -430,6 +431,23 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
                 for scores in pair['scores'].values():
                     scores.update(dict.fromkeys(scores, True))
                 arm = next(arm for arm in manifest['pairs'][pair['pair_id']]['mapping'].values() if arm['runtime'] == 'ulr')
+                failed_pair = deepcopy(manifest['pairs'][pair['pair_id']])
+                failed_pair['trial'] += 1
+                failed_arm = next(row for row in failed_pair['mapping'].values() if row['runtime'] == 'ulr')
+                failed_arm['completed'] = False
+                failed_arm['metrics']['model_requests'] = 0
+                failed_review = {**deepcopy(pair), 'pair_id': 'failure'}
+                manifest['pairs']['failure'] = failed_pair
+                review['pairs'].append(failed_review)
+                scenario, = tool['report'](manifest, review)['scenarios'].values()
+                efficiency = scenario['quality_passed_efficiency']
+                assert scenario['metrics']['model_requests']['ulr_minus_baseline_median'] == -2.5
+                assert efficiency['pair_count'] == 1
+                assert efficiency['metrics']['model_requests'] == {
+                    'paired_count': 1, 'missing_pairs': 0, 'ulr_minus_baseline_median': -2}
+                assert efficiency['metrics']['cost_microusd']['missing_pairs'] == 1
+                del manifest['pairs']['failure']
+                review['pairs'].pop()
                 arm['tool_quality'] = None
                 arm['delivery_selection']['attempts'][-1]['compiled'] = 'answer'
                 scenario, = tool['report'](manifest, review)['scenarios'].values()
@@ -439,6 +457,7 @@ def capture_acceptance(case_name, official, auth_client, user, settings, request
                 issue, = scenario['quality_issues']
                 assert issue['delivery_mode_mismatch'] == {'expected': 'card', 'compiled': 'answer'}
                 assert all(issue[key] == value for key, value in location.items())
+                assert scenario['quality_passed_efficiency']['pair_count'] == 0
         baseline = by_runtime['dsh']
         if len(baseline['tool_outcomes']) > 1:
             reversed_path = {**baseline, 'tool_outcomes': list(reversed(baseline['tool_outcomes']))}
