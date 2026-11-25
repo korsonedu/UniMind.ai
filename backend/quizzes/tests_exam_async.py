@@ -91,6 +91,55 @@ def test_ulr_exam_waits_for_the_question_edit_before_settlement(auth_client, use
     experience.assert_not_called()
 
 
+@pytest.mark.django_db(transaction=True)
+def test_ulr_checks_the_original_bank_task_submission_before_grading(auth_client, user, settings):
+    from ai_assistant.models import ConversationProject, ProjectLearning
+    from ai_assistant.services.learning_tasks import create_task
+
+    settings.UNIMIND_LEARNING_RUNTIME = 'legacy'
+    settings.UNIMIND_ULR_PROTOTYPE = False
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    question = Question.objects.create(text='说明折现风险。', q_type='subjective', subjective_type='short',
+                                       grading_points='说明现金流风险。')
+    project = ConversationProject.objects.create(user=user, name='合成评阅接管')
+    ProjectLearning.objects.create(project=project, status='active', plan={'stages': [{'id': 'start'}]})
+    task = create_task(project, {'title': '原题库任务', 'stage_id': 'start', 'instructions': '独立作答',
+                                 'question_ids': [question.pk]})
+    answer = '现金流风险影响折现。'
+    with patch('quizzes.views_exam.dispatch_exam_grading'):
+        submitted = auth_client.post('/api/quizzes/submit-exam/', {'learning_task_id': str(task.pk),
+            'submission_id': str(task.pk), 'answers': [{'question_id': question.pk, 'answer': answer}]}, format='json')
+    assert submitted.status_code == 202, submitted.data
+    exam = QuizExam.objects.get(pk=submitted.data['exam_id'])
+    assert not exam.requires_ulr
+    item = exam.results.get()
+    original = item.question_snapshot
+    exam.results.update(question_snapshot={**original, 'grading_points': '与原任务不一致的评分依据。'})
+
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    with patch('quizzes.ai_workflow._grade_answer', side_effect=grade_ok) as model, \
+            patch('quizzes.ai_workflow._queue_experience_verification'):
+        run_exam_grading(user.pk, exam.pk)
+        model.assert_not_called()
+        item.refresh_from_db()
+        assert (item.status, item.score, item.user_answer) == ('failed', 0, answer)
+        assert not project.learning_events.filter(kind='assessment').exists()
+        exam.results.update(question_snapshot=original)
+        with patch('quizzes.views_exam.dispatch_exam_grading') as dispatch:
+            recovered = auth_client.post(f'/api/quizzes/exams/{exam.pk}/retry/', {}, format='json')
+        assert recovered.status_code == 202, recovered.data
+        assert dispatch.call_args.args == (user.pk, exam.pk)
+        run_exam_grading(*dispatch.call_args.args)
+        run_exam_grading(*dispatch.call_args.args)
+        model.assert_called_once()
+    exam.refresh_from_db()
+    item.refresh_from_db()
+    assert exam.status == 'completed' and exam.total_score == question.get_max_score()
+    assert item.user_answer == answer and item.question_snapshot == original
+    assert project.learning_events.filter(kind='assessment').count() == 1
+
+
 def grade_ok(question, answer, *, language='zh-CN'):
     assert language == 'zh-CN'
     max_score = question.get_max_score()

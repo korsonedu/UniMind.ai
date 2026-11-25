@@ -335,7 +335,7 @@ def _grade_claimed_exam(user, exam, *, force_ulr):
         _finalize_exam(user_id, exam_id)
         return
     from ai_assistant.models import ProjectLearningTask
-    from ai_assistant.services.learning_tasks import validate_task_question, sync_exam_task_result, task_result_snapshot, personal_question
+    from ai_assistant.services.learning_tasks import personal_question, sync_exam_task_result, task_result_snapshot
     learning_task = ProjectLearningTask.objects.select_related('project__user').filter(exam_id=exam_id).first()
     personal_task = bool(learning_task and learning_task.definition)
     try:
@@ -371,7 +371,8 @@ def _grade_claimed_exam(user, exam, *, force_ulr):
                 if not question:
                     raise ValidationError('题目不存在或不在当前内容范围')
                 if learning_task:
-                    validate_task_question(learning_task, question)
+                    item.question = question
+                    task_result_snapshot(learning_task, item)
                 elif versioned or exam.requires_ulr:
                     grading_version = validate_grading_question(question, snapshot, scope)
             if (learning_task or practice_card) and question.q_type == 'objective':
