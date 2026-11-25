@@ -11,6 +11,7 @@ from ai_engine.observability import log_ai_operation
 from ai_engine.service import AICallError, AIEngine
 from ai_engine.tool_run import ToolReferenceError, ToolRunCoordinator
 from users.feature_access import has_learning_feature
+from . import teaching_sidecar
 from .dsh_cards import data_card, item
 from .dsh_service import build_context, context_memory, execute_tool, permitted_tools, prototype_executor
 from .course_context import require_course_transcript, require_current_transcript_sources, transcript_source
@@ -99,6 +100,10 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
     deadline = started_at + 60
     current = task_message(user, chat_context, message)
     task = selected_task(user, chat_context, current)
+    if task:
+        # Selected tasks bypass the project prompt, including its provenance freeze.
+        teaching_sidecar.observe(teaching_sidecar.freeze_turn, task.project, current,
+            {'task_id': str(task.pk), 'learning_activity': current.metadata.get('learning_activity')})
     english = message_language(current) == 'en'
     if task and task.purpose == 'recheck' and not task.exam_id:
         content = ('Submit your own answer first and record any help you received. We can review the solution after submission.'
@@ -252,6 +257,8 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
 
         result = run_program(arguments, allowed_names, execute_read, name=name, message=message,
                              current_course_id=current_course_id, exact_course_title=local_program == PROGRAM_NAME)
+        teaching_sidecar.observe(teaching_sidecar.record_tool_result, user, chat_context, name, arguments, result,
+                                 channel='ulr_program')
         return json.dumps(result, ensure_ascii=False)
 
     def bind_task_strategy(arguments):
@@ -697,7 +704,7 @@ def commit_project_change(user, chat_context, project_change, cards, *, source):
     if not planning_for_chat(user, chat_context):
         raise ULRTurnUnavailable('当前项目已关闭规划，请重新提问。')
     result = execute_tool(user, name, arguments, memory_version, source=source, chat_context=chat_context,
-                          project_ticket=project_change.project_ticket)
+                          project_ticket=project_change.project_ticket, observation_channel='ulr_project_commit')
     if result.get('error'):
         raise ULRTurnUnavailable('项目安排已变化，请按当前项目状态重试。')
     if name == TASK_TOOL:
@@ -716,7 +723,8 @@ def commit_project_change(user, chat_context, project_change, cards, *, source):
         for action, arguments in project_change.strategies.items():
             args = {key: value for key, value in arguments.items() if key != 'event_ref'} | {'event_id': event_id}
             strategy = execute_tool(user, STRATEGY_TOOL, args, memory_version, source=source, chat_context=chat_context,
-                                    project_ticket={'progress_event_id': event_id})
+                                    project_ticket={'progress_event_id': event_id},
+                                    observation_channel='ulr_project_commit')
             if strategy.get('error'):
                 raise ULRTurnUnavailable('策略的证据或试用记录已变化，请按当前学习状态重试。')
             strategies[action] = strategy

@@ -30,7 +30,8 @@ class ChatRequestStatusView(APIView):
                 else:
                     payload.update(status='completed', response=reservation.response)
             elif reservation.status == 'released' and reservation.response.get('is_error'):
-                payload.update(status='failed', response=reservation.response)
+                payload.update(status='failed', response={
+                    key: value for key, value in reservation.response.items() if key != 'rsi_sidecar'})
             elif reservation.status == 'pending' and reservation.updated_at >= timezone.now() - ttl:
                 payload['status'] = 'pending'
         response = Response(payload)

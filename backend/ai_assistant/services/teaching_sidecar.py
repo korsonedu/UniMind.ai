@@ -21,19 +21,32 @@ SCHEMA = 'rsi-sidecar-6ab-v1'
 SOURCES = {
     'G': ['prompts/ai_assistant/bots/xiaoyu/project_learning.txt',
           'prompts/ai_assistant/bots/xiaoyu/dsh_system_prompt.txt',
-          'ai_assistant/services/project_learning.py', 'ai_assistant/services/dsh_service.py'],
-    'S': ['ai_assistant/services/learning_library.py', 'ai_assistant/services/bayesian_evidence.py'],
+          'ai_assistant/services/project_learning.py', 'ai_assistant/services/dsh_service.py',
+          'ai_assistant/services/ulr_runtime.py', 'ai_assistant/services/ulr_tool_program.py',
+          'ai_assistant/services/ulr_capabilities.py', 'ai_assistant/services/public_methods.py'],
+    'S': ['ai_assistant/services/learning_library.py', 'ai_assistant/services/bayesian_evidence.py',
+          'ai_assistant/services/ulr_teaching.py', 'ai_assistant/services/public_methods.py',
+          'ai_assistant/services/method_adoption.py'],
     'E': ['prompts/quizzes/grading_prompt.txt', 'ai_assistant/services/learning_guidance.py',
           'ai_assistant/services/learning_task_evidence.py', 'ai_assistant/services/learning_tasks.py',
           'quizzes/services/ai_task_service.py', 'quizzes/services/question_generator.py',
-          'ai_assistant/services/dsh_tasks.py', 'ai_assistant/services/dsh_generation.py'],
-    'M': ['ai_assistant/services/teaching_sidecar.py'],
+          'ai_assistant/services/dsh_tasks.py', 'ai_assistant/services/dsh_generation.py',
+          'ai_assistant/services/ulr_grading.py', 'ai_assistant/services/ulr_structured.py',
+          'ai_assistant/services/learning_diagnostics.py'],
+    'M': ['ai_assistant/services/teaching_sidecar.py', 'ai_assistant/services/teaching_shadow.py'],
 }
+SDTM_SOURCES = [
+    'ai_assistant/services/task_memory_store.py', 'ai_assistant/services/task_memory_projection.py',
+    'ai_assistant/services/learning_continuity.py', 'ai_assistant/services/fact_evidence.py',
+    'ai_assistant/services/prism_kernel.py', 'ai_assistant/services/prism_memory.py',
+    'ai_assistant/services/prism_feedback.py', 'ai_assistant/services/memory_core.py',
+    'ai_assistant/services/prism_outcomes.py',
+]
 
 
-def canonical_hash(value):
+def canonical_hash(value, *, default=None):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False,
-                                    separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+                                    separators=(',', ':'), allow_nan=False, default=default).encode()).hexdigest()
 
 
 def observe(callback, *args, **kwargs):
@@ -42,7 +55,8 @@ def observe(callback, *args, **kwargs):
         with transaction.atomic():
             return callback(*args, **kwargs)
     except Exception as exc:
-        logger.warning('rsi_observation_error action=%s error_type=%s', callback.__name__, type(exc).__name__)
+        logger.warning('rsi_observation_error action=%s error_type=%s',
+                       getattr(callback, '__name__', type(callback).__name__), type(exc).__name__)
         return None
 
 
@@ -66,36 +80,48 @@ def register_mechanism(kind, content, *, owner=None, parent=None):
 
 def current_bundle():
     from ai_engine.config import get_model_for_task
+    from .ulr_config import ulr_enabled
+
     models = {key: get_model_for_task(operation)['model'] for key, operation in
               [('chat', 'assistant.chat.planner'), ('grade', 'quizzes.grade')]}
+    prism_mode = settings.UNIMIND_PRISM_MODE
+    task_memory_mode = settings.UNIMIND_SDTM_TASK_MEMORY_MODE
+    routes = {key: bool(getattr(settings, key, False)) for key in
+              ('UNIMIND_DSH_GENERATION_ENABLED', 'UNIMIND_DSH_GRADING_ENABLED', 'UNIMIND_DSH_XIAOYU_ENABLED')}
+    routes.update(ulr_enabled=ulr_enabled(), ulr_recheck_strategy=settings.UNIMIND_ULR_RECHECK_STRATEGY,
+                  prism_mode=prism_mode, sdtm_task_memory_mode=task_memory_mode,
+                  sdtm_structured_diagnostics=settings.UNIMIND_SDTM_STRUCTURED_DIAGNOSTICS)
+    root = Path(settings.BASE_DIR)
+    model_config_hash = hashlib.sha256((root / 'ai_engine/config.py').read_bytes()).hexdigest()
     bundle = {}
     for kind, paths in SOURCES.items():
-        prism_mode = getattr(settings, 'UNIMIND_PRISM_MODE', 'off')
-        if kind == 'M' and prism_mode != 'off':
-            paths = [*paths, 'ai_assistant/services/prism_kernel.py', 'ai_assistant/services/prism_memory.py',
-                     'ai_assistant/services/prism_feedback.py', 'ai_assistant/services/memory_core.py',
-                     'ai_assistant/services/prism_outcomes.py']
-        content = {'schema': SCHEMA, 'role': 'reserved_not_running' if kind == 'M' else 'existing_runtime_descriptor',
+        role = 'existing_runtime_descriptor'
+        if kind == 'M':
+            mode = 'active' if 'active' in (prism_mode, task_memory_mode) else (
+                prism_mode if prism_mode != 'off' else task_memory_mode)
+            role = 'observational_sidecar' if mode == 'off' else f'sdtm_{mode}'
+            if mode != 'off':
+                paths = [*paths, *SDTM_SOURCES]
+        content = {'schema': SCHEMA, 'role': role,
                    'selection': 'model_directed_nonrandom' if kind == 'S' else None,
-                   'sources': {path: hashlib.sha256((Path(settings.BASE_DIR) / path).read_bytes()).hexdigest()
-                               for path in paths},
-                   'models': models, 'provider_weights_pinned': False, 'candidate_activation': False}
+                   'sources': {path: hashlib.sha256((root / path).read_bytes()).hexdigest() for path in paths},
+                   'models': models, 'provider_weights_pinned': False, 'candidate_activation': False,
+                   'routes': routes, 'model_config_hash': model_config_hash}
         if kind == 'M' and prism_mode != 'off':
-            content.update(role=f'sdtm_{prism_mode}', prism_mode=prism_mode, reference_activation='reviewed_only')
-        content['routes'] = {key: bool(getattr(settings, key, False)) for key in
-            ('UNIMIND_DSH_GENERATION_ENABLED', 'UNIMIND_DSH_GRADING_ENABLED', 'UNIMIND_DSH_XIAOYU_ENABLED')}
-        content['model_config_hash'] = hashlib.sha256((Path(settings.BASE_DIR) / 'ai_engine/config.py').read_bytes()).hexdigest()
+            content.update(prism_mode=prism_mode, reference_activation='reviewed_only')
         row = _store_mechanism(kind, content, None, None)
         bundle[kind] = {'id': row.pk, 'digest': row.digest}
     return bundle
 
 
+@transaction.atomic
 def freeze_turn(project, message, snapshot):
     if message.user_id != project.user_id or message.role != 'user' or not Conversation.objects.filter(
             user_id=project.user_id, project=project, conversation_id=message.conversation_id).exists():
         raise PermissionDenied('当前教学提问不属于本人项目。')
-    if message.metadata.get('rsi_sidecar'):
-        return message.metadata['rsi_sidecar']
+    metadata = AIChatMessage.objects.select_for_update().values_list('metadata', flat=True).get(pk=message.pk)
+    if frozen := metadata.get('rsi_sidecar'):
+        return frozen
     if AIChatMessage.objects.filter(user_id=message.user_id, bot_id=message.bot_id,
             conversation_id=message.conversation_id, role='assistant',
             metadata__learning_turn__message_id=message.pk).exists():
@@ -103,7 +129,7 @@ def freeze_turn(project, message, snapshot):
     frozen = {'schema': SCHEMA, 'mode': 'observational', 'project_id': project.pk,
               'bundle': current_bundle(), 'context_hash': canonical_hash(snapshot),
               'frozen_at': timezone.now().isoformat()}
-    message.metadata['rsi_sidecar'] = frozen
+    message.metadata = {**metadata, 'rsi_sidecar': frozen}
     message.save(update_fields=['metadata'])
     return frozen
 
@@ -168,7 +194,7 @@ def record_strategy_use(use, *, created):
     use.save(update_fields=['method_version', 'decision', 'exposure'])
 
 
-def record_tool_result(user, context, name, arguments, result):
+def record_tool_result(user, context, name, arguments, result, channel=None):
     if not context:
         return
     message = AIChatMessage.objects.select_for_update().filter(pk=context.get('message_id'), user=user,
@@ -176,9 +202,14 @@ def record_tool_result(user, context, name, arguments, result):
     if not message or not message.metadata.get('rsi_sidecar'):
         return
     project_id = message.metadata['rsi_sidecar']['project_id']
-    if not Conversation.objects.filter(user=user, project_id=project_id, conversation_id=message.conversation_id).exists():
+    if not Conversation.objects.filter(user=user, project_id=project_id, project__user=user,
+                                       conversation_id=message.conversation_id).exists():
         return
-    entry = {'tool': name, 'arguments_hash': canonical_hash(arguments), 'result_hash': canonical_hash(result)}
+    # Project commits can carry datetimes before the shared tool executor serializes them.
+    entry = {'tool': name, 'arguments_hash': canonical_hash(arguments),
+             'result_hash': canonical_hash(result, default=str)}
+    if channel is not None:
+        entry['channel'] = channel
     entries = message.metadata.get('rsi_observations', [])
     if entry not in entries:
         entries.append(entry)
@@ -200,7 +231,10 @@ def record_turn_completion(reply):
         if use.decision and use.exposure.get('status') == 'assigned':
             use.exposure = {'status': 'reply_completed', 'adherence': 'unverified',
                 'reply_id': reply.pk, 'reply_hash': canonical_hash(reply.content),
-                'completed_at': turn.get('completed_at'), 'saved_at': reply.timestamp.isoformat()}
+                'completed_at': turn.get('completed_at'), 'saved_at': reply.timestamp.isoformat(),
+                'engine': reply.metadata.get('engine')}
+            if action := (reply.metadata.get('ulr_teaching') or {}).get('action'):
+                use.exposure['ulr_teaching_action'] = action
             use.save(update_fields=['exposure'])
 
 
