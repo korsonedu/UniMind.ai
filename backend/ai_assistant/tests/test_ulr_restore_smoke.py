@@ -1,4 +1,5 @@
 """Restore a synthetic DSH snapshot with the native PostgreSQL clients."""
+from contextlib import closing
 import gzip
 import hashlib
 from io import StringIO
@@ -153,8 +154,18 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
     alternate_state = tmp_path / 'other-dsh-state'
     alternate_state.mkdir()
     config.write_text(f'DB_NAME={failed_target}\nUNIMIND_DSH_STATE_DIR={shlex.quote(str(alternate_state))}\n')
-    saved = subprocess.run(['bash', str(scripts / 'backup_db.sh')], env=env,
-                           capture_output=True, text=True, timeout=60)
+    backup_command = ['bash', str(scripts / 'backup_db.sh')]
+    clock = tmp_path / 'bin' / 'date'
+    clock.parent.mkdir()
+    clock.write_text('#!/bin/sh\nif [ "$*" = +%Y%m%d_%H%M%S ]; then echo 20261125_090000; else exec /bin/date "$@"; fi\n')
+    clock.chmod(0o700)
+    backup_env = {**env, 'PATH': f'{clock.parent}:{env["PATH"]}'}
+    failed_backup = subprocess.run(backup_command,
+        env={**backup_env, 'UNIMIND_DSH_STATE_DIR': str(tmp_path / 'missing-state')},
+        capture_output=True, text=True, timeout=60)
+    assert failed_backup.returncode != 0
+    assert not list((tmp_path / 'backups').iterdir())
+    saved = subprocess.run(backup_command, env=backup_env, capture_output=True, text=True, timeout=60)
     assert saved.returncode == 0, saved.stderr
     backup, = (tmp_path / 'backups').glob('*.sql.gz')
     assert backup.name.startswith(f"{env['DB_NAME']}_")
@@ -164,6 +175,21 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
     archive = backup.with_name(f'files_{timestamp}.tar.gz')
     archive_hash = hashlib.sha256(archive.read_bytes()).hexdigest()
     assert archive.with_suffix('.gz.sha256').read_text().split()[0] == archive_hash
+    with subprocess.Popen(backup_command, env=backup_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as first, \
+            subprocess.Popen(backup_command, env=backup_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as second:
+        for process in (first, second):
+            _, error = process.communicate(timeout=60)
+            assert process.returncode == 0, error.decode()
+    backups = sorted(backup.parent.glob(f"{env['DB_NAME']}_20261125_090000_*.sql.gz"))
+    assert len(backups) == 3 and backup in backups
+    for item in backups:
+        item_timestamp = item.name.removeprefix(f"{env['DB_NAME']}_").removesuffix('.sql.gz')
+        for path in (item, item.with_name(f'files_{item_timestamp}.tar.gz')):
+            assert hashlib.sha256(path.read_bytes()).hexdigest() == path.with_suffix('.gz.sha256').read_text().split()[0]
+    assert hashlib.sha256(backup.read_bytes()).hexdigest() == checksum
+    assert hashlib.sha256(archive.read_bytes()).hexdigest() == archive_hash
+    print(json.dumps({'paired_backup_publication': {'failed_archive_published_files': 0, 'same_second_pairs': len(backups),
+                                                    'original_pair_unchanged': True}}))
     inventory = StringIO()
     call_command('audit_dsh_sessions', state_dir=str(state), api_url=api_url, state_fingerprint=True,
                  database_backup=str(backup), stdout=inventory)
@@ -260,12 +286,32 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
 
         broken = tmp_path / 'broken.sql.gz'
         broken.write_bytes(gzip.compress(b'CREATE TABLE restore_probe(id integer);\nSELECT 1/0;\n', mtime=0))
-        failed = subprocess.run(['bash', str(script), str(broken)], input='YES\n', text=True,
-                                env={**env, 'DB_NAME': failed_target}, capture_output=True, timeout=30)
-        assert failed.returncode != 0 and 'division by zero' in failed.stderr
-        assert sql_probe(failed_target, 'SELECT value FROM old_record') == '19'
+        failed_env = {**env, 'DB_NAME': failed_target}
+        alive_sql = 'SELECT pg_backend_pid(), value FROM old_record'
+        with closing(connection.Database.connect(**{**connection.get_connection_params(), 'dbname': failed_target})) as live:
+            with live.cursor() as cursor:
+                cursor.execute(alive_sql)
+                original = cursor.fetchone()
+                failed = subprocess.run(['bash', str(script), str(broken)], input='YES\n', text=True,
+                                        env=failed_env, capture_output=True, timeout=30)
+                assert failed.returncode != 0 and 'division by zero' in failed.stderr
+                cursor.execute(alive_sql)
+                assert cursor.fetchone() == original
+
+                changed = tmp_path / 'changed.sql.gz'
+                changed.write_bytes(gzip.compress(b'CREATE TABLE restore_probe(id integer);\n', mtime=0))
+                with subprocess.Popen(['bash', str(script), str(changed)], env=failed_env, text=True,
+                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+                    assert any('将替换当前数据库' in line for line in process.stdout)
+                    changed.write_bytes(gzip.compress(b'CREATE TABLE restore_probe(id bigint);\n', mtime=0))
+                    _, error = process.communicate('YES\n', timeout=30)
+                    assert process.returncode != 0 and '指纹与确认时的备份不一致' in error
+                cursor.execute(alive_sql)
+                assert cursor.fetchone() == original and original[1] == 19
         assert sql_probe(failed_target, "SELECT to_regclass('restore_probe') IS NULL AND "
                                         "current_setting('unimind.restore_sha256', true) IS NULL") == 't'
+        print(json.dumps({'failed_restore_preflight': {'bad_sql_aborted': True, 'changed_stream_aborted': True,
+                                                        'original_connection_preserved': True}}))
     finally:
         with connection.cursor() as cursor:
             for database in (target, failed_target):
