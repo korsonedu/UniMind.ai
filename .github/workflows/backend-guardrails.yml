@@ -168,7 +168,8 @@ jobs:
           docker compose build --build-arg "UNIMIND_BUILD_REVISION=$GITHUB_SHA" web celery celery-beat
           docker compose up --wait --wait-timeout 90 db redis
           docker compose run --rm --no-deps web python manage.py migrate --noinput
-          docker compose up --wait --wait-timeout 90 web celery celery-beat
+          docker compose up -d celery celery-beat
+          docker compose up --wait --wait-timeout 90 web
 
       - name: Verify the packaged ULR services
         run: |
