@@ -503,7 +503,7 @@ def change_learning(project, data, *, message=None, model=False, language='zh-CN
         if existing := ProjectLearningEvent.objects.filter(request_key=request_key).first():
             if prepare_change and action == 'progress':
                 return progress_prepared(existing.content.get('assistance', 'unknown'), existing.content.get('knowledge_check'), committed=True)
-            result = model_learning_data(project, project.user, language=language)
+            result = learning_data(project, language=language)
             if action == 'progress':
                 result['progress_event_id'] = existing.pk
             return result
@@ -653,8 +653,7 @@ def change_learning(project, data, *, message=None, model=False, language='zh-CN
     state.revision += 1
     state.save()
     record = ProjectLearningEvent.objects.create(project=project, message=message, kind=action, content=event, request_key=request_key)
-    data = (model_learning_data(project, project.user, language=language)
-            if model and action != 'complete' else learning_data(project, language=language))
+    data = learning_data(project, language=language)
     if model and 'proposed_plan' in event:
         # The caller just wrote the proposal and can bind it to the answer being committed.
         data.update(pending_plan=state.pending_plan, plan_event_id=record.pk)
@@ -703,8 +702,6 @@ def tool_operation(executor, name, arguments, *, prepare_change=False, project_t
             task_id = serializers.UUIDField().run_validation(arguments.get('task_id'))
             task = get_object_or_404(available_project_tasks(project).select_related('project', 'exam'), pk=task_id)
             data = task_data(task)
-            if data['is_current'] and data['status'] == 'ready':
-                data['href'] = f'/xiaoyu?project={project.pk}&learning_task={task.pk}'
             if task.exam_id and data['status'] != 'unavailable':
                 data['results'] = [item for item in exam_result_payload(task.exam)['results'] if item['status'] == 'graded']
             from .fact_evidence import active
@@ -720,6 +717,7 @@ def tool_operation(executor, name, arguments, *, prepare_change=False, project_t
                         data['diagnostic_support'] = learning_diagnostics.interpret(sources)[str(task.pk)]
                 if data['is_current'] and data['status'] == 'ready':
                     from .task_memory_store import preview
+                    data['href'] = f'/xiaoyu?project={project.pk}&learning_task={task.pk}'
                     data['public_methods'] = preview(project, project.user, task_id=task.pk)['packet']['public_methods']
             return data
         if arguments.get('action') != 'create':

@@ -121,8 +121,9 @@ def session_registry(executor):
 
 
 def context_memory(user, chat_context=None):
+    from .fact_evidence import active
     from .memory_core import question_facts
-    return question_facts(user, chat_context)
+    return question_facts(user, chat_context) if active() else memory_snapshot(user)
 
 
 def build_context(user, message, recent_messages=None, chat_context=None, *, ulr=False):

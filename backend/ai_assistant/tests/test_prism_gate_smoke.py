@@ -14,8 +14,9 @@ from ai_assistant.services.prism_kernel import induce
 @pytest.fixture
 def conflict(user, settings, monkeypatch):
     settings.UNIMIND_PRISM_MODE = 'active'
+    settings.UNIMIND_LEARNING_RUNTIME = 'legacy'
     monkeypatch.setattr('ai_assistant.views._can_use_learning_context', lambda user: True)
-    bot = Bot.objects.create(name='小宇', bot_type='planner')
+    bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇', 'bot_type': 'planner'})
     conversation = Conversation.objects.create(user=user, bot=bot, conversation_id=uuid4())
     q = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=conversation.conversation_id,
         role='user', content='这次用图解来讲代数。')
@@ -119,7 +120,7 @@ def test_native_gate_persists_and_replays_without_runtime_or_learning(conflict, 
             patch('ai_assistant.utils._THREAD_POOL.submit') as submit:
         result=complete_turn(request,bot,cid,body['message'],events.append)
         assert result['metadata']['prism_clarification'] and result['metadata']['dsh_cards']==[]
-        assert result['session_id'] is None and 'dsh_session_id' not in result['metadata']
+        assert result.get('session_id') is None and 'dsh_session_id' not in result['metadata']
         assert result==complete_turn(request,bot,cid,body['message'],events.append)
         submit.assert_not_called()
     assert [event['type'] for event in events]==['user_message']
