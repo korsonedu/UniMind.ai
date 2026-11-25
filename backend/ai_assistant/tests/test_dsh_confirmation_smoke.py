@@ -2,13 +2,16 @@
 import json
 from datetime import date
 from unittest.mock import patch
+from uuid import uuid4
+
+from asgiref.sync import async_to_sync
 import pytest
 from rest_framework.test import APIClient
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from ai_assistant.services.dsh_service import build_context, execute_tool
 from quizzes.models import Question, KnowledgePoint, UserKnowledgeState, UserQuestionStatus
 from faq_system.models import Question as FAQQuestion
-from users.models import CourseStudentStatus, Institution
+from users.models import CourseStudentStatus, Institution, WeeklyAIQuotaConfig
 
 
 def enable(settings, user, tmp_path):
@@ -92,3 +95,120 @@ def test_expired_or_deleted_source_cannot_write_and_task_token_cannot_confirm(au
     reservation.response = {'engine': 'dsh'}; reservation.save()
     assert auth_client.post(url, body, format='json').status_code == 200
     assert DshSubmission.objects.count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_legacy_diagnostic_confirmation_locks_source_until_commit(auth_client, user, settings, tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from django.db import OperationalError, connection, connections, transaction
+
+    from ai_assistant.models import AIChatMessage, Bot, Conversation, DshSubmission
+    from ai_assistant.services.dsh_actions import grade_diagnostic_answers, prepare_diagnostic
+    from users.models import AIUsageReservation
+
+    if connection.vendor != 'postgresql':
+        pytest.skip('Requires PostgreSQL reservation row locks.')
+    enable(settings, user, tmp_path)
+    bot = Bot.objects.create(is_xiaoyu=True, name='小宇', bot_type='planner')
+    conversation = Conversation.objects.create(user=user, bot=bot, conversation_id=uuid4())
+    question = Question.objects.create(text='迁移中的诊断题', q_type='objective', options=['甲', '乙'], correct_answer='B')
+    answer = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=conversation.conversation_id,
+        role='assistant', content='请完成诊断。', metadata={'engine': 'dsh', 'dsh_session_id': uuid4().hex})
+    source = AIUsageReservation.objects.create(user=user, request_id=uuid4(), attempt_id=uuid4(),
+        week=date(2026, 10, 26), status='succeeded', response={'engine': 'dsh', 'session_id': answer.metadata['dsh_session_id']})
+    card = prepare_diagnostic(user, source.pk)['visual']['payload']
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    settings.UNIMIND_DSH_ENABLED = settings.UNIMIND_DSH_SITE_ENABLED = False
+    settings.UNIMIND_DSH_STATE_DIR = 'invalid-legacy-directory'
+    ready, release = Event(), Event()
+    body = {'token': card['token'], 'confirmed': True, 'answers': [{'question': {'id': question.pk}, 'answer': 'B'}]}
+
+    def grade(*args, **kwargs):
+        ready.set()
+        assert release.wait(8)
+        return grade_diagnostic_answers(*args, **kwargs)
+
+    def confirm():
+        client = APIClient()
+        client.force_authenticate(user=user)
+        try:
+            return client.post('/api/ai/learning-actions/confirm/', body, format='json')
+        finally:
+            connections.close_all()
+
+    with patch('ai_assistant.services.dsh_actions.grade_diagnostic_answers', side_effect=grade), ThreadPoolExecutor() as pool:
+        future = pool.submit(confirm)
+        try:
+            assert ready.wait(5), future.result(timeout=1).status_code
+            with pytest.raises(OperationalError), transaction.atomic():
+                AIUsageReservation.objects.select_for_update(nowait=True).get(pk=source.pk)
+        finally:
+            release.set()
+        result = future.result(timeout=5)
+    assert result.status_code == 200 and result.data['total_score'] == 1
+    assert auth_client.post('/api/ai/delete-conversation/', {'conversation_id': conversation.conversation_id},
+                            format='json').status_code == 200
+    source.refresh_from_db()
+    assert source.response['deleted'] and DshSubmission.objects.count() == 1
+    assert auth_client.get(f"/api/ai/dsh/actions/{card['request_id']}/").data == result.data
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ulr_diagnostic_completes_and_recovers_without_dsh(auth_client, user, settings, tmp_path):
+    from ai_assistant.models import Bot, DshSubmission
+
+    enable(settings, user, tmp_path)
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 200})
+    settings.DEBUG = settings.UNIMIND_ULR_PROTOTYPE = False
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    settings.UNIMIND_DSH_ENABLED = settings.UNIMIND_DSH_SITE_ENABLED = settings.UNIMIND_DSH_XIAOYU_ENABLED = False
+    bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
+    kp = KnowledgePoint.objects.create(name='合成诊断考点')
+    question = Question.objects.create(knowledge_point=kp, text='合成诊断题', q_type='objective',
+        options=['甲', '乙'], correct_answer='B')
+
+    def model(messages, **kwargs):
+        if messages[-1]['role'] == 'tool':
+            result = json.loads(messages[-1]['content'])
+            assert result['question_count'] == 1 and 'correct_answer' not in result
+            return {'choices': [{'finish_reason': 'stop', 'message': {'content': '请在卡片内完成作答。'}}]}
+        assert 'run_diagnostic' in {tool['function']['name'] for tool in kwargs['tools']}
+        return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+            'id': 'diagnostic', 'type': 'function', 'function': {'name': 'run_diagnostic', 'arguments': '{"mode":"generate"}'},
+        }]}}]}
+
+    async def consume(response):
+        return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')][-1]
+
+    def draft(conversation_id):
+        response = auth_client.post('/api/ai/chat/stream/', {'bot_id': bot.pk, 'conversation_id': conversation_id,
+            'request_id': str(uuid4()), 'message': '请准备首次诊断。'}, format='json')
+        result = async_to_sync(consume)(response)
+        assert result.get('engine') == 'ulr', result
+        card, = result['metadata']['dsh_cards']
+        assert card['type'] == 'diagnostic_quiz' and 'correct_answer' not in json.dumps(card)
+        return card['payload']
+
+    url = '/api/ai/learning-actions/confirm/'
+    answers = [{'question': {'id': question.pk}, 'answer': 'B'}]
+    with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider, \
+         patch('ai_assistant.services.dsh_xiaoyu.schedule_conversation_title'), \
+         patch('ai_assistant.services.dsh_xiaoyu.extract_memories_async'), \
+         patch('ai_assistant.services.dsh_xiaoyu.run_site_action', side_effect=AssertionError('ULR called DSH')):
+        conversation_id = str(uuid4())
+        deleted = draft(conversation_id)
+        assert auth_client.post('/api/ai/delete-conversation/', {'conversation_id': conversation_id}, format='json').status_code == 200
+        assert auth_client.post(url, {'token': deleted['token'], 'answers': answers, 'confirmed': True}, format='json').status_code == 409
+        card = draft(str(uuid4()))
+        body = {'token': card['token'], 'answers': answers}
+        assert auth_client.post(url, body, format='json').status_code == 400
+        assert not DshSubmission.objects.exists()
+        body['confirmed'] = True
+        confirmed = auth_client.post(url, body, format='json')
+        assert confirmed.status_code == 200 and confirmed.data['total_score'] == 1
+        assert auth_client.post(url, body, format='json').data == confirmed.data
+        assert auth_client.get(f"/api/ai/learning-actions/{card['request_id']}/").data == confirmed.data
+        assert auth_client.get(f"/api/ai/dsh/actions/{card['request_id']}/").data == confirmed.data
+    assert DshSubmission.objects.count() == 1 and provider.call_count == 4

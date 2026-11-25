@@ -118,13 +118,15 @@ def test_dsh_gets_signed_course_snapshot_and_preserves_sources_on_replay(user, l
                 'session': {'id': 'a' * 32, 'messages': [{'role': 'assistant', 'cards': []}]}}
     with patch('ai_assistant.services.dsh_xiaoyu.run_site_action', side_effect=runtime) as run:
         result = complete_turn(request, bot, cid, request.data['message'], lambda event: None, course_context=context)
+        assert complete_turn(request, bot, cid, request.data['message'], lambda event: None, course_context=context) == result
         transcript.revision = 4
         transcript.save(update_fields=['revision'])
         transcript.segments.update(text='NEW_REVISION')
         refreshed = prepare_course_context(request, bot, cid)
         assert refreshed['revision'] == 4
-        replay = complete_turn(request, bot, cid, request.data['message'], lambda event: None, course_context=refreshed)
-        assert replay == result and run.call_count == 1
+        with pytest.raises(ValidationError, match='讲稿已更新'):
+            complete_turn(request, bot, cid, request.data['message'], lambda event: None, course_context=refreshed)
+        assert run.call_count == 1
     assert result['metadata']['course_context']['video_seconds'] == 120
     assert result['metadata']['course_context']['revision'] == 3
     assert AIChatMessage.objects.filter(user=user, conversation_id=cid).count() == 2

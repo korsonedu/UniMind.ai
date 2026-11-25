@@ -1,0 +1,18 @@
+{
+  "case_id": "memory-examples-before-formulas",
+  "case": {
+    "scenario": "长期记忆",
+    "prompt": "我一贯喜欢先看具体例子，再看公式推导。今天先看一眼报表。",
+    "reference": "前一句是明确的长期讲解偏好，后一句只适用于今天。小宇回答「好，先给你一个例子。」",
+    "criteria": {
+      "faithful_preference": "保存的偏好保留先看例子、再看公式的完整关系，未改写为拒绝公式。",
+      "provenance": "记忆附学生原话，未把临时要求或小宇的回答存为长期偏好。",
+      "withdrawal": "删除后续聊上下文不再包含该记忆，重投同一问答也不会恢复它。"
+    },
+    "fixture": {
+      "evidence": "我一贯喜欢先看具体例子，再看公式推导。",
+      "answer": "好，先给你一个例子。",
+      "followup": "请解释一下现金流折现。"
+    }
+  }
+}

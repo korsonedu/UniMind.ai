@@ -7,6 +7,7 @@ import signal
 import shutil
 import subprocess
 from contextlib import contextmanager
+from tempfile import TemporaryDirectory
 from urllib.parse import urlsplit
 from uuid import uuid4
 from threading import Thread
@@ -16,7 +17,9 @@ from django.db import connection, OperationalError
 from rest_framework.exceptions import APIException
 
 from ai_engine.config import get_model_for_task
+from ai_engine.observability import log_ai_operation, model_token_counts
 from ..dsh_authentication import make_task_token
+from .ulr_config import standalone_ulr
 
 
 class DshUnavailable(APIException):
@@ -24,12 +27,22 @@ class DshUnavailable(APIException):
     default_detail = 'DSH 服务暂不可用，请稍后重试。'
 
 
+def chat_lock_directory():
+    if not standalone_ulr() and settings.UNIMIND_DSH_STATE_DIR:
+        return settings.UNIMIND_DSH_STATE_DIR
+    return str(settings.BASE_DIR / 'logs' / 'chat-locks')
+
+
 @contextmanager
 def site_request_lock(user, scope=None):
     """Keep generation, quota commit and deletion ordered for this student or conversation."""
+    if standalone_ulr() and connection.vendor == 'postgresql':
+        # PostgreSQL reservations and conversation row locks coordinate across application hosts.
+        yield
+        return
     try:
         import fcntl
-        state_dir = getattr(settings, 'UNIMIND_DSH_STATE_DIR', '')
+        state_dir = chat_lock_directory()
         if not state_dir or not Path(state_dir).is_absolute():
             raise DshUnavailable('尚未配置服务端 DSH 状态目录。')
         Path(state_dir).mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -55,13 +68,13 @@ def site_request_lock(user, scope=None):
 
 @contextmanager
 def quota_write_lock():
-    """SQLite has no row locks: serialize this bridge's short ledger writes only."""
+    """Serialize SQLite ledger access while a bridge write is in progress."""
     try:
         if connection.vendor != 'sqlite':
             yield
             return
         import fcntl
-        state_dir = getattr(settings, 'UNIMIND_DSH_STATE_DIR', '')
+        state_dir = chat_lock_directory()
         if not state_dir or not Path(state_dir).is_absolute():
             raise DshUnavailable('尚未配置服务端 DSH 状态目录。')
         root = Path(state_dir)
@@ -71,6 +84,20 @@ def quota_write_lock():
             yield
     except (OSError, OperationalError, ImportError):
         raise DshUnavailable('数据服务繁忙或运行环境不可用，请稍后重试。') from None
+
+
+def log_model_observation(record, reservation=None, *, gateway_id=None):
+    completed = record['status'] == 'completed'
+    counts = model_token_counts(record.get('usage'), anthropic=True) if record['usage_complete'] else {}
+    log_ai_operation(operation=record['operation'], success=completed, duration_ms=record['elapsed_ms'],
+        error_category='none' if completed else record['status'], metadata={
+            'runtime': 'dsh', 'gateway_id': gateway_id,
+            **({'request_id': reservation.request_id, 'attempt_id': reservation.attempt_id} if reservation else {}),
+            'model': record['model'], 'offered_tools': ','.join(record['offered_tools']), 'model_request': record['request'],
+            'reported_model': record.get('reported_model'), 'max_output_tokens': record['max_output_tokens'],
+            'submitted_tools': ','.join(record['submitted_tools']) if 'submitted_tools' in record else None,
+            **counts,
+        })
 
 
 def run_site_action(user, action, *, message='', session_id=None, reservation=None, on_event=None, chat_context=None):
@@ -108,7 +135,12 @@ def run_site_action(user, action, *, message='', session_id=None, reservation=No
     event_write = None
     event_reader = None
     event_thread = None
+    handoff_dir = None
     try:
+        if action == 'chat' and (chat_context or {}).get('history_digest'):
+            # Product history owns recovery during handoff. The SDK scratch transcript is private and disposable.
+            handoff_dir = TemporaryDirectory(prefix='handoff-', dir=state_dir)
+            payload['state_dir'] = state_dir = handoff_dir.name
         if create_session:
             owner = hashlib.sha256(json.dumps([api_url, user.pk]).encode()).hexdigest()
             directory = Path(state_dir) / owner
@@ -125,8 +157,11 @@ def run_site_action(user, action, *, message='', session_id=None, reservation=No
                     for line in event_reader:
                         if len(line) <= 65536:
                             event = json.loads(line)
-                            if isinstance(event, dict) and event.get('type') in ('step', 'text_delta', 'tool_status'):
-                                on_event(event)
+                            if isinstance(event, dict):
+                                if event.get('type') == 'model_observation' and reservation is not None:
+                                    log_model_observation(event['record'], reservation)
+                                elif event.get('type') in ('step', 'text_delta', 'tool_status'):
+                                    on_event(event)
                 except (ValueError, OSError):
                     pass
             event_thread = Thread(target=receive_events, daemon=True)
@@ -166,7 +201,9 @@ def run_site_action(user, action, *, message='', session_id=None, reservation=No
             event_thread.join(timeout=2)
         if event_reader:
             event_reader.close()
-        if reserved is not None and not completed and reserved.exists():
+        if handoff_dir is not None:
+            handoff_dir.cleanup()
+        elif reserved is not None and not completed and reserved.exists():
             try:
                 shutil.rmtree(reserved)
             except OSError:

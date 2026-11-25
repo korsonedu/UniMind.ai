@@ -9,6 +9,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from ai_assistant.services.ulr_config import standalone_ulr
 from ai_engine.ai_service import AIService
 from ai_engine.tools import OUTLINE_ITEMS_SCHEMA, QUESTION_LIST_SCHEMA
 from courses.asr import ASRProviderRegistry
@@ -126,13 +127,13 @@ class AICourseService:
         from courses.services.task_dispatcher import dispatch_outline_generation
         dispatch_outline_generation(course_id)
 
-    def _schedule_question_generation(self, course_id: int) -> None:
+    def _schedule_question_generation(self, course_id: int, transcript_version: tuple[int, int]) -> None:
         import threading
         def _run():
             try:
                 from courses.models import Course
                 course = Course.objects.get(pk=course_id)
-                self.generate_questions_from_transcript(course)
+                self.generate_questions_from_transcript(course, transcript_version=transcript_version)
             except Exception:
                 logger.exception("Question generation failed for course %s", course_id)
         thread = threading.Thread(target=_run, daemon=True)
@@ -155,24 +156,30 @@ class AICourseService:
             lines.append(f"[{m:02d}:{s:02d}] {seg.text}")
         return "\n".join(lines)
 
-    def generate_outline(self, course_id: int) -> List[Dict[str, Any]]:
-        course = Course.objects.get(pk=course_id)
-        transcript = getattr(course, 'transcript', None)
-        if not transcript or transcript.asr_status != 'completed' or not transcript.full_text.strip():
-            raise ValueError("转录不可用或尚未完成")
+    @staticmethod
+    def _current_transcript(transcript):
+        return VideoTranscript.objects.filter(pk=transcript.pk, revision=transcript.revision, asr_status='completed')
 
-        outline, _ = CourseOutline.objects.get_or_create(course=course)
-        claimed_at = timezone.now()
-        claimed = CourseOutline.objects.filter(pk=outline.pk).filter(
-            ~Q(status='generating') | Q(updated_at__lt=claimed_at - timedelta(seconds=600)),
-        ).update(status='generating', updated_at=claimed_at)
-        if not claimed:
-            return []
+    def generate_outline(self, course_id: int) -> List[Dict[str, Any]]:
+        native = standalone_ulr()
+        with transaction.atomic():
+            course = Course.objects.select_for_update().get(pk=course_id)
+            transcript = VideoTranscript.objects.select_for_update().filter(course=course, asr_status='completed').first()
+            if not transcript or not transcript.full_text.strip():
+                raise ValueError("转录不可用或尚未完成")
+            outline, _ = CourseOutline.objects.get_or_create(course=course)
+            if outline.status == 'generating' and outline.generating_with_ulr and not native:
+                return []
+            claimed_at = timezone.now()
+            claimed = CourseOutline.objects.filter(pk=outline.pk).filter(
+                ~Q(status='generating') | Q(updated_at__lt=claimed_at - CourseOutline.GENERATION_LEASE),
+            ).update(status='generating', updated_at=claimed_at, generating_with_ulr=native)
+            if not claimed:
+                return []
+            transcript_with_timestamps = self._format_transcript_with_timestamps(transcript)
         ownership = {'pk': outline.pk, 'status': 'generating', 'updated_at': claimed_at}
 
         try:
-            # 构建带时间戳的分段文本，让 AI 能拿到真实的时序信息
-            transcript_with_timestamps = self._format_transcript_with_timestamps(transcript)
             items = self._request_outline_items(transcript_with_timestamps)
             if not items:
                 raise ValueError("大纲生成结果为空，等待重试")
@@ -198,13 +205,25 @@ class AICourseService:
                 replacement.full_clean(exclude=['outline'], validate_unique=False, validate_constraints=False)
                 replacements.append(replacement)
             with transaction.atomic():
-                if not CourseOutline.objects.select_for_update().filter(**ownership).exists():
+                if not Course.objects.select_for_update().filter(pk=course_id).exists():
+                    return []
+                transcript_current = self._current_transcript(transcript).select_for_update().exists()
+                current_outline = CourseOutline.objects.select_for_update().filter(**ownership)
+                if not current_outline.exists():
+                    return []
+                if not transcript_current:
+                    current_outline.update(status='pending', updated_at=timezone.now())
                     return []
                 outline.items.all().delete()
                 OutlineItem.objects.bulk_create(replacements)
                 outline.status = 'completed'
                 outline.save(update_fields=['status', 'updated_at'])
-                transaction.on_commit(lambda: self._schedule_question_generation(course_id), robust=True)
+                if native:
+                    from .course_question_jobs import schedule_course_questions
+                    schedule_course_questions(transcript)
+                else:
+                    transcript_version = (transcript.pk, transcript.revision)
+                    transaction.on_commit(lambda: self._schedule_question_generation(course_id, transcript_version), robust=True)
 
             return items
         except Exception as e:
@@ -258,9 +277,18 @@ class AICourseService:
         num_obj: int = 3,
         num_short: int = 1,
         num_essay: int = 1,
+        *,
+        transcript_version: Optional[tuple[int, int]] = None,
+        pending_job=None,
     ) -> List[Dict[str, Any]]:
-        transcript = getattr(course, 'transcript', None)
+        transcripts = VideoTranscript.objects.filter(course=course, asr_status='completed')
+        if transcript_version is not None:
+            transcript_id, revision = transcript_version
+            transcripts = transcripts.filter(pk=transcript_id, revision=revision)
+        transcript = transcripts.first()
         if not transcript or not transcript.full_text:
+            if transcript_version is not None:
+                return []
             raise ValueError("转录不可用")
 
         # 构建知识点上下文
@@ -325,11 +353,16 @@ class AICourseService:
             )
             return []
 
-        for q_data in questions:
-            CourseVideoQuestion.objects.create(
-                course=course,
-                question_data=q_data,
-            )
+        if not questions:
+            return []
+        with transaction.atomic():
+            if (not Course.objects.select_for_update().filter(pk=course.pk).exists()
+                    or not self._current_transcript(transcript).select_for_update().exists()):
+                return []
+            if pending_job is not None and not pending_job.update(completed_at=timezone.now(), running_until=None):
+                return []
+            for q_data in questions:
+                CourseVideoQuestion.objects.create(course=course, question_data=q_data)
 
         return questions
 

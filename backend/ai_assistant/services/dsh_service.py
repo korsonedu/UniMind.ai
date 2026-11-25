@@ -44,27 +44,39 @@ def memory_snapshot(user):
     return {'version': hashlib.sha256(text.encode()).hexdigest(), 'items': rows}
 
 
-def student_catalog(user):
+def student_catalog(user, *, ulr=False):
     definitions = get_planner_tools()
     for tool in definitions:
+        if ulr and tool['function']['name'] == 'get_recent_practice_result':
+            function = tool['function']
+            parameters = function['parameters']
+            function['parameters'] = {**parameters, 'properties': {**parameters['properties'],
+                'review': {'type': 'boolean', 'description': '复盘时设为 true，只读已保存的逐题评阅。只查分数时省略。'}}}
+            function['description'] += '复盘原作答时传 review=true，按已保存的题目、作答和评阅说明，支持切换前完成的练习。'
         if tool['function']['name'] == 'run_diagnostic':
             tool['function']['description'] = '准备首次诊断作答卡片，学生自行作答并确认提交后才评分。已完成首次诊断的学生进入原诊断页重新评估。本工具不接受或提交答案。'
             tool['function']['parameters'] = {'type': 'object', 'properties': {'mode': {'type': 'string', 'enum': ['generate']}}, 'required': ['mode'], 'additionalProperties': False}
         if tool['function']['name'] == 'get_practice_questions':
-            parameters = tool['function']['parameters']
-            parameters['properties']['purpose'] = {'type': 'string', 'enum': ['practice', 'explanation'],
-                'description': '讲解取题选 explanation，只读取题目，不展示作答卡片；练习选 practice（默认）。'}
+            function = tool['function']
+            schema = function['parameters']
+            parameters = {**schema, 'properties': {**schema['properties'], 'purpose': {
+                'type': 'string', 'enum': ['practice', 'explanation'],
+                'description': '讲解取题选 explanation，只读取题目，不展示作答卡片；练习选 practice（默认）。'}}}
+            if ulr:
+                parameters['if'] = {'required': ['q_type'], 'properties': {'q_type': {'const': 'objective'}}}
+                parameters['then'] = {'properties': {'subjective_type': {'not': {}}}}
+            function['parameters'] = parameters
             tool['function']['description'] = '从题库读取题目并展示可作答的练习卡片。支持 q_type/subjective_type 题型过滤；学生直接在卡片内作答和提交，提交走站内练习接口并触发后台批改。若 questions 为空或 total_found=0，直接给出一道符合要求的题，可以用一句话说明考查范围，但不要说明题目来源；先给题干，等学生作答后按评分点给分和讲解；这道题的评分只在对话内有效，不写入练习记录、错题本、掌握度或 Memorix，不伪造题目ID，不调用评分工具。本工具本身不提交答案。'
             tool['function']['description'] += '用于讲解时必须传 purpose=explanation，只读取题目，不要求学生作答，也不展示练习卡片；无匹配时直接用合成示例讲解。'
     return filter_tools('planner', None, definitions, user=user)
 
 
-def permitted_tools(user):
-    allowed = [t for t in student_catalog(user) if t['function']['name'] in M0_TOOLS]
+def permitted_tools(user, *, ulr=False):
+    allowed = [t for t in student_catalog(user, ulr=ulr) if t['function']['name'] in M0_TOOLS]
     return [*allowed, PRESENTATION_TOOL] if allowed else []
 
 
-def prototype_executor(user, chat_context):
+def prototype_executor(user, chat_context, *, artifacts=None):
     from .learning_experiments import available_to, allows_interaction, EXPERIMENT_TOOLS
     from .session_tools import SESSION_TOOLS, refresh
     if not chat_context or not available_to(user):
@@ -75,6 +87,7 @@ def prototype_executor(user, chat_context):
         return None
     executor = PlannerToolExecutor(user)
     executor.experiment_context = chat_context
+    executor.turn_artifacts = artifacts
     experiments = [tool for tool in EXPERIMENT_TOOLS
         if tool['function']['name'] != 'build_learning_experiment' or allows_interaction(current)]
     set_permitted_tools(executor, [*experiments, *SESSION_TOOLS])
@@ -88,10 +101,10 @@ def session_registry(executor):
             'versions': executor._session_tool_versions}
 
 
-def build_context(user, message, recent_messages=None, chat_context=None):
+def build_context(user, message, recent_messages=None, chat_context=None, *, ulr=False):
     from users.learning import cohort_info
     cohort = cohort_info(user)
-    catalog = student_catalog(user)
+    catalog = student_catalog(user, ulr=ulr)
     candidates = route_tools(message, catalog, recent_messages=recent_messages,
                              bot_type='planner', intent_classifier=classify_intent_keywords, use_semantic=False)
     allowed = [t for t in catalog if t['function']['name'] in M0_TOOLS]
@@ -103,7 +116,7 @@ def build_context(user, message, recent_messages=None, chat_context=None):
     # Runtime additions change the registry, not the underlying account authorization.
     authorization = [t for t in allowed if not t['function']['name'].startswith('session_')]
     from .project_learning import turn_project_context, current_project
-    learning = turn_project_context(user, chat_context)
+    learning = turn_project_context(user, chat_context, private_probe_review=ulr)
     planning = planning_for_chat(user, chat_context)
     if not planning:
         allowed = [tool for tool in allowed if tool['function']['name'] not in PROJECT_LEARNING_NAMES]
@@ -170,7 +183,9 @@ def build_context(user, message, recent_messages=None, chat_context=None):
     return context
 
 
-def execute_tool(user, name, arguments, memory_version, source=None, chat_context=None, tool_revision=None):
+def execute_tool(user, name, arguments, memory_version, source=None, chat_context=None, tool_revision=None,
+                 *, prepare_change=False, project_ticket=None, artifacts=None, practice_questions=None,
+                 exact_lookup=False):
     def observed(result):
         from .teaching_sidecar import observe, record_tool_result
         observe(record_tool_result, user, chat_context, name, arguments, result)
@@ -178,7 +193,7 @@ def execute_tool(user, name, arguments, memory_version, source=None, chat_contex
 
     prototype_names = {'build_learning_experiment', 'read_learning_experiment', 'register_session_tool', 'read_session_tool'}
     if name in prototype_names or name.startswith('session_'):
-        executor = prototype_executor(user, chat_context)
+        executor = prototype_executor(user, chat_context, artifacts=artifacts)
         if not executor or name not in executor._permitted_tool_definitions:
             raise PermissionDenied('当前对话无权使用此工具。')
         if memory_snapshot(user)['version'] != memory_version:
@@ -197,7 +212,8 @@ def execute_tool(user, name, arguments, memory_version, source=None, chat_contex
         if name in {'register_session_tool', 'read_session_tool'} and not result.get('error'):
             result['session_registry'] = session_registry(executor)
         return observed(result)
-    definition = next((t for t in permitted_tools(user) if t['function']['name'] == name), None)
+    definition = next((t for t in permitted_tools(user, ulr=practice_questions is not None)
+                       if t['function']['name'] == name), None)
     if definition is None:
         raise PermissionDenied('当前账号无权使用此 M0 工具。')
     if memory_snapshot(user)['version'] != memory_version:
@@ -213,9 +229,24 @@ def execute_tool(user, name, arguments, memory_version, source=None, chat_contex
         return observed(prepare_diagnostic(user, source))
     executor = PlannerToolExecutor(user)
     executor.learning_context = chat_context
-    set_permitted_tools(executor, [definition])
-    executor._allowed_tool_names = {name}
-    result = json.loads(executor(name, arguments))
+    executor.include_practice_sources = practice_questions is not None
+    executor.include_transcript_sources = practice_questions is not None
+    executor.exact_lookup = exact_lookup
+    if prepare_change or project_ticket is not None:
+        from .project_learning import tool_operation
+        result = tool_operation(executor, name, arguments, prepare_change=prepare_change, project_ticket=project_ticket)
+        if prepare_change:
+            return result
+    else:
+        set_permitted_tools(executor, [definition])
+        executor._allowed_tool_names = {name}
+        result = json.loads(executor(name, arguments))
+    handoff_lookup = (chat_context and chat_context.get('history_digest')
+                      and name in ('lookup_question', 'get_user_wrong_questions'))
+    if practice_questions is not None or handoff_lookup:
+        from .ulr_capabilities import practice_tool_result
+        result = practice_tool_result(user, name, result, practice_questions or set(),
+                                      review_exam=arguments.get('review') is True, include_review=not handoff_lookup)
     if not result.get('error') and not result.get('visual'):
         card = build_tool_card(name, result)
         if card:

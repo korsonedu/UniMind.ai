@@ -97,10 +97,10 @@ def test_sse_steps_preserve_call_ids_failures_and_final_content(settings):
     ]
     async def fixture(_producer):
         for frame in frames:
-            yield ('data: ' + json.dumps(frame) + '\n\n').encode()
+            yield frame
     async def read(result):
         return [json.loads(chunk[6:]) async for chunk in result.streaming_content]
-    with patch('ai_assistant.services.dsh_xiaoyu.stream_events', fixture):
+    with patch('ai_assistant.services.dsh_xiaoyu.action_events', fixture):
         events = asyncio.run(read(response(SimpleNamespace(headers={}), None, None, '合成问题')))
     steps = [e for e in events if e.get('type') == 'step']
     assert [(s['call_id'], s['status']) for s in steps] == [('ok', 'running'), ('bad', 'running'), ('ok', 'succeeded'), ('bad', 'failed')]

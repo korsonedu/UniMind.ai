@@ -2,8 +2,10 @@
 import hashlib
 import json
 import logging
+from uuid import UUID
 
 from django.db import transaction
+from django.http import Http404
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
@@ -15,9 +17,45 @@ from quizzes.models import Question, UserQuestionStatus
 from quizzes.services.practice_results import exam_result_payload, question_snapshot
 from quizzes.services.question_normalizer import normalize_objective_answer, normalize_options
 from users.feature_access import has_learning_feature
+from users.models import AIUsageReservation
+from .ulr_config import ulr_enabled
 
 logger = logging.getLogger(__name__)
 ASSISTANCE = ['independent', 'hint', 'guided', 'unknown']
+
+
+def available_project_tasks(project):
+    """A completed retry must present the specific task before it can be submitted."""
+    tasks = project.learning_tasks.all()
+    if not ulr_enabled():
+        return tasks
+    origins = {}
+    events = project.learning_events.filter(kind='task', request_key__isnull=False,
+        message__user_id=project.user_id, message__role='user', message__metadata__has_key='runtime_request_id')
+    for task_id, request_id in events.values_list('content__task_id', 'message__metadata__runtime_request_id'):
+        try:
+            origins[UUID(task_id)] = UUID(request_id)
+        except (TypeError, ValueError, AttributeError):
+            continue
+    if not origins:
+        return tasks
+    receipts = {request_id: (status, response) for request_id, status, response in
+        AIUsageReservation.objects.filter(user_id=project.user_id, request_id__in=set(origins.values()))
+        .values_list('request_id', 'status', 'response')}
+    hidden = []
+    for task_id, request_id in origins.items():
+        status, response = receipts.get(request_id, (None, {}))
+        if status != 'succeeded' or response.get('deleted'):
+            hidden.append(task_id)
+            continue
+        metadata = response.get('metadata') or {}
+        href = f'/xiaoyu?project={project.pk}&learning_task={task_id}'
+        presented = (metadata.get('ulr_task_created') or {}).get('id') == str(task_id) or any(
+            card.get('tool') == 'manage_learning_tasks' and card.get('payload', {}).get('cta', {}).get('link') == href
+            for card in metadata.get('dsh_cards', []))
+        if not presented:
+            hidden.append(task_id)
+    return tasks.exclude(pk__in=hidden, exam_id__isnull=True)
 
 
 class DefinitionInput(serializers.Serializer):
@@ -126,7 +164,7 @@ def _is_preplan_diagnostic(state, stage_id, purpose):
 
 
 @transaction.atomic
-def create_task(project, arguments):
+def create_task(project, arguments, *, prepare=False, pending_message_id=None):
     if not has_learning_feature(_current_user(project), 'quiz.exam'):
         raise PermissionDenied('当前账号尚未开放习题训练。')
     serializer = TaskInput(data=arguments)
@@ -134,10 +172,10 @@ def create_task(project, arguments):
     data = serializer.validated_data
     version = _validate_path(project, data.pop('version_id', None), data['node_id'], data['stage_id'], data['purpose'])
     source_id = data.pop('source_task_id', None)
-    source = get_object_or_404(ProjectLearningTask, pk=source_id, project=project) if source_id else None
+    source = get_object_or_404(available_project_tasks(project), pk=source_id) if source_id else None
     use_id = data.pop('strategy_use_id', None)
     from .teaching_sidecar import validate_strategy_use
-    strategy_use = validate_strategy_use(project, use_id) if use_id else None
+    strategy_use = validate_strategy_use(project, use_id, pending_message_id=pending_message_id) if use_id else None
     if source and source.knowledge_version_id != (version.pk if version else None):
         raise ValidationError('关联任务的知识版本不同，请按当前计划重新安排，不能自动混用旧证据。')
     if source and data['purpose'] == 'recheck' and source.node_id != data['node_id']:
@@ -174,11 +212,12 @@ def create_task(project, arguments):
             prompts.add(task_prompt_hash({'text': definition['prompt']}))
         if prompts.intersection(task_prompt_hash(snapshot) for snapshot in source.question_snapshot.values()):
             raise ValidationError('再次检验请准备不同的题目，不能重复原任务。')
-    task = ProjectLearningTask.objects.create(project=project, knowledge_version=version,
+    task = ProjectLearningTask(project=project, knowledge_version=version,
         source_task=source, strategy_use=strategy_use, question_snapshot=snapshots, **data)
     if definition:
         task.question_snapshot = {'0': _personal_snapshot(task)}
-        task.save(update_fields=['question_snapshot'])
+    if not prepare:
+        task.save(force_insert=True)
     return task
 
 
@@ -191,24 +230,28 @@ def personal_answers(answers):
     return [{'question_id': 0, 'answer': answer}]
 
 
-def validate_task_submission(user, task_id, submission_id, questions_data, assistance):
+def validate_task_submission(user, task_id, submission_id, questions_data, assistance, *, request):
     task = get_object_or_404(ProjectLearningTask.objects.select_for_update().select_related('project'),
                             pk=task_id, project__user=user)
+    if not task.exam_id and not available_project_tasks(task.project).filter(pk=task.pk).exists():
+        raise Http404
     if str(task.pk) != str(submission_id):
         raise ValidationError('任务与本次提交编号不一致。')
     if not task.exam_id:
         _validate_path(task.project, task.knowledge_version_id, task.node_id, task.stage_id, task.purpose)
     elif task.assistance != assistance:
         raise ValidationError('已提交任务不能更换辅助情况。')
+    if not task.definition and [int(item['question_id']) for item in questions_data] != task.question_ids:
+        raise ValidationError('请按原顺序提交任务内全部题目。')
+    if task.exam_id:
+        return task, None
     if task.definition:
         personal_answers(questions_data)
         if task.question_snapshot != {'0': _personal_snapshot(task)}:
             raise ValidationError('任务评价标准已变化，请重新安排任务。')
         return task, {0: personal_question(task.definition)}
-    if [int(item['question_id']) for item in questions_data] != task.question_ids:
-        raise ValidationError('请按原顺序提交任务内全部题目。')
     from quizzes.ai_workflow import validate_exam_answers
-    questions = validate_exam_answers(user, questions_data, lock=True)
+    questions = validate_exam_answers(user, questions_data, request=request, lock=True)
     for question in questions.values():
         validate_task_question(task, question)
     return task, questions

@@ -34,7 +34,7 @@ class NoteChatSmoke(TransactionTestCase):
         self.stack.enter_context(patch('ai_assistant.views._reserve_chat_request',
                                       return_value=SimpleNamespace(acquired=True)))
         self.stack.enter_context(patch('users.learning.release_ai_call'))
-        self.stack.enter_context(patch('users.learning.confirm_ai_call'))
+        self.confirm = self.stack.enter_context(patch('users.learning.confirm_ai_call'))
         self.stack.enter_context(patch('ai_assistant.services.memory_service.build_memory_context', return_value=('', '')))
         self.extract = self.stack.enter_context(patch('ai_assistant.services.memory_service.extract_memories_async'))
         self.stack.enter_context(patch('ai_assistant.services.memory_service.extract_memories_with_mem0'))

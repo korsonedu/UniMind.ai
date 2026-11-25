@@ -13,8 +13,9 @@ from urllib.parse import urlsplit
 from django.conf import settings
 from jsonschema import validate, ValidationError as SchemaError
 from ai_engine.config import get_model_for_task, FALLBACK_FAST
+from ai_engine.observability import runtime_observation
 from ai_engine.tools import GRADING_RESULT_SCHEMA, OBJECTIVE_ANALYSIS_SCHEMA, QUESTION_LIST_SCHEMA
-from .dsh_runtime import DshUnavailable
+from .dsh_runtime import DshUnavailable, log_model_observation
 from .dsh_scope import generation_scope, current_execution
 
 
@@ -64,9 +65,9 @@ RETRY_ONCE_OPERATIONS = {'quizzes.grade_question'}
 
 
 def wire_schema(schema):
-    """Lower nullable unions to the installed SDK's supported equivalent."""
+    """Translate unsupported SDK schema constraints without changing server validation."""
     result = deepcopy(schema)
-    bounds = {key: result.pop(key) for key in ('minimum', 'maximum') if key in result}
+    bounds = {key: result.pop(key) for key in ('minimum', 'maximum', 'minLength', 'minItems', 'maxItems') if key in result}
     if bounds:
         result['description'] = (result.get('description', '') + ' ' + json.dumps(bounds)).strip()
     if isinstance(result.get('type'), list):
@@ -143,12 +144,14 @@ def run_structured(operation, prompt, *, internal=None):
     tasks = root / '.tasks'
     environment = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'TMPDIR', 'SSL_CERT_FILE', 'SSL_CERT_DIR') if key in os.environ}
     worker = Path(settings.BASE_DIR).parent / 'dsh' / 'structured_worker.py'
+    observe = bool(runtime_observation.get())
     try:
         root.mkdir(mode=0o700, parents=True, exist_ok=True)
         tasks.mkdir(mode=0o700, exist_ok=True)
         for attempt in range(2):
             with TemporaryDirectory(prefix='structured-', dir=tasks) as home:
-                payload = {'prompt': prompt, 'context': context, 'model': model, 'home': home, 'state_dir': state_dir}
+                payload = {'prompt': prompt, 'context': context, 'model': model, 'home': home, 'state_dir': state_dir,
+                           'observe': observe}
                 with subprocess.Popen([python, str(worker)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                       stderr=subprocess.DEVNULL, env=environment, start_new_session=True) as process:
                     try:
@@ -167,6 +170,12 @@ def run_structured(operation, prompt, *, internal=None):
             response = json.loads(output)
             if not isinstance(response, dict):
                 raise ValueError()
+            if observe:
+                try:
+                    for record in response.get('observations', []):
+                        log_model_observation(record, gateway_id=Path(home).name)
+                except (KeyError, TypeError, ValueError, AttributeError):
+                    logger.warning('DSH structured observation missing fields: operation=%s', operation)
             if response.get('status') != 200:
                 if (response.get('retryable') is True and attempt == 0
                         and operation in RETRY_ONCE_OPERATIONS

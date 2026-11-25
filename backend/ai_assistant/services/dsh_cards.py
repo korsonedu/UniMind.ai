@@ -47,12 +47,13 @@ def build_tool_card(name, result):
         for row in rows[:10]:
             question = {k: row[k] for k in ('id', 'q_type', 'kp_name', 'options') if k in row}
             question['text'] = row.get('text', row.get('question_preview', ''))
-            if name in {'lookup_question', 'get_user_wrong_questions'}:
+            if name in {'lookup_question', 'get_user_wrong_questions'} and 'practice_status' not in row:
                 question['answer'] = row.get('correct_answer', row.get('answer', ''))
             questions.append(question)
         titles = {'lookup_question': '题目与参考答案', 'get_user_wrong_questions': '我的错题',
                   'search_similar_questions': '同类题预览'}
-        return {'type': 'question_preview', 'payload': {'title': titles[name], 'questions': questions}}
+        title = '练习题面' if name == 'lookup_question' and result.get('practice_status') else titles[name]
+        return {'type': 'question_preview', 'payload': {'title': title, 'questions': questions}}
     if name == 'get_learning_sessions':
         return data_card('实际学习记录', [item(f"{s['started_at'][:16]} · {'听课' if s['kind'] == 'video' else '做题'}",
             f"{round(s['active_seconds'] / 60, 1)} 分钟") for s in result.get('sessions', [])[:10]],

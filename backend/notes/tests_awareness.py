@@ -4,6 +4,7 @@ import uuid
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from django.http import Http404
@@ -14,7 +15,7 @@ from users.models import UserAccessProfile
 from .awareness import content_signature, note_message_metadata, schedule_note
 from .context import prepare_note_context
 from .models import AgentNoteBinding, Note, NoteAISettings, NoteUnderstanding
-from .tasks import understand_note, validated_result
+from .tasks import LOCKED_RUN_PREFIX, understand_note, validated_result
 
 
 @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}})
@@ -154,3 +155,40 @@ class NoteAwarenessSmoke(TestCase):
         self.assertEqual(NoteUnderstanding.objects.get(note=self.note).status, 'failed')
         with self.assertRaises(ValueError):
             validated_result('{"topics":[],"explanations":[],"questions":[],"extra":[]}', '原文')
+
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr')
+    def test_ulr_validates_task_evidence_and_drops_results_when_notes_are_revoked(self):
+        settings = self.enable()
+        evidence = '编造的原话'
+
+        def collector(messages, *, tools, **kwargs):
+            function, = [tool['function'] for tool in tools]
+            self.assertEqual(function['name'], 'submit_note_understanding')
+            self.assertEqual(function['parameters']['properties']['topics']['maxItems'], 8)
+            self.assertIn(self.note.content, messages[-1]['content'])
+            if evidence in self.note.content:
+                self.client.patch('/api/notes/ai-settings/', {'enabled': False}, format='json')
+            return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+                'function': {'name': function['name'], 'arguments': json.dumps({
+                    'topics': [{'text': '久期主题', 'evidence': evidence}], 'explanations': [], 'questions': [],
+                })},
+            }]}}]}
+
+        from celery.exceptions import Retry
+        with (
+            patch('ai_engine.service.AIEngine.call_provider', side_effect=collector) as provider,
+            patch.object(understand_note, 'retry', side_effect=Retry),
+        ):
+            if connection.vendor == 'postgresql':
+                NoteUnderstanding.objects.filter(note=self.note).update(status='processing',
+                    started_at=timezone.now(), attempts=1, run_id=LOCKED_RUN_PREFIX + uuid.uuid4().hex)
+            with self.assertRaises(Retry):
+                self.run_understanding(settings)
+            self.assertEqual(NoteUnderstanding.objects.get(note=self.note).status, 'failed')
+            evidence = '久期衡量利率敏感性'
+            self.run_understanding(settings)
+            self.assertEqual(NoteUnderstanding.objects.get(note=self.note).status, 'invalid')
+            self.assertEqual(NoteUnderstanding.objects.get(note=self.note).result, {})
+            self.run_understanding(settings)
+            self.assertEqual(provider.call_count, 2)
+        self.model.assert_not_called()

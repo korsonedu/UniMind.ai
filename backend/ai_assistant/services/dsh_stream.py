@@ -1,14 +1,15 @@
 """ASGI transport for one existing bounded site task; no second ledger or agent loop."""
 import asyncio
 import json
+from contextlib import aclosing
 from queue import Queue, Empty
 from threading import Event, Thread
 
-from django.db import close_old_connections
+from django.db import close_old_connections, connections
 from rest_framework.exceptions import APIException
 
 
-async def stream_events(action):
+async def action_events(action):
     queue = Queue()
     closed = Event()
 
@@ -22,15 +23,16 @@ async def stream_events(action):
         close_old_connections()
         try:
             result = action(publish)
-            publish({'type': 'done', 'result': result})
+            event = {'type': 'done', 'result': result}
         except APIException as exc:
             detail = exc.detail
-            publish({'type': 'error', 'status': exc.status_code,
-                     'error': str(detail.get('error', '本轮未完成。')) if isinstance(detail, dict) else str(detail)})
+            event = {'type': 'error', 'status': exc.status_code,
+                     'error': str(detail.get('error', '本轮未完成。')) if isinstance(detail, dict) else str(detail)}
         except Exception:
-            publish({'type': 'error', 'status': 503, 'error': 'DSH 服务暂不可用，请稍后恢复同一请求。'})
+            event = {'type': 'error', 'status': 503, 'error': '小宇本轮未完成，请稍后恢复同一请求。'}
         finally:
-            close_old_connections()
+            connections.close_all()
+        publish(event)
 
     Thread(target=produce, daemon=True).start()
     try:
@@ -38,10 +40,17 @@ async def stream_events(action):
             try:
                 event = await asyncio.to_thread(queue.get, True, 5)
             except Empty:
-                yield b': heartbeat\n\n'
+                yield None
                 continue
-            yield ('data: ' + json.dumps(event, ensure_ascii=False) + '\n\n').encode()
+            yield event
             if event['type'] in ('done', 'error'):
                 break
     finally:
         closed.set()  # The dispatched task still completes/settles within its original deadline.
+
+
+async def stream_events(action):
+    async with aclosing(action_events(action)) as events:
+        async for event in events:
+            yield (b': heartbeat\n\n' if event is None else
+                   ('data: ' + json.dumps(event, ensure_ascii=False) + '\n\n').encode())

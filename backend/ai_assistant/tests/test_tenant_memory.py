@@ -156,29 +156,39 @@ class TestTenantMemoryManager:
         from ai_assistant.services.tenant_memory import TenantMemoryManager
 
         manager = TenantMemoryManager(institution_id=1)
-        results = manager.get_all(user_id=100)
+        results = manager.get_all(user_id=100, limit=200)
         assert len(results) == 2
+        mock_mem.get_all.assert_called_once_with(filters={'user_id': '100'}, top_k=200)
 
     @patch("ai_assistant.services.tenant_memory.Memory")
     @patch("ai_assistant.services.tenant_memory._get_mem0_config", return_value={})
     def test_delete_removes_single_memory(self, mock_config_fn, mock_memory_cls):
-        """delete() delegates to mem0 delete."""
+        """delete() requires ownership and confirms the result."""
         mock_mem = MagicMock()
         mock_memory_cls.from_config.return_value = mock_mem
         from ai_assistant.services.tenant_memory import TenantMemoryManager
 
         manager = TenantMemoryManager(institution_id=1)
-        manager.delete(memory_id="m1")
-        mock_mem.delete.assert_called_once_with("m1")
+        identifier = '00000000-0000-0000-0000-000000000001'
+        mock_mem.get.side_effect = [{'user_id': '200'}, {'user_id': '100'}, None]
+        assert not manager.delete(identifier, user_id=100)
+        mock_mem.delete.assert_not_called()
+        assert manager.delete(identifier, user_id=100)
+        mock_mem.delete.assert_called_once_with(identifier)
 
     @patch("ai_assistant.services.tenant_memory.Memory")
     @patch("ai_assistant.services.tenant_memory._get_mem0_config", return_value={})
     def test_delete_all_clears_user_memories(self, mock_config_fn, mock_memory_cls):
-        """delete_all() delegates to mem0 delete_all for the user."""
+        """delete_all() drains every batch for the user."""
+        from types import SimpleNamespace
         mock_mem = MagicMock()
         mock_memory_cls.from_config.return_value = mock_mem
         from ai_assistant.services.tenant_memory import TenantMemoryManager
 
         manager = TenantMemoryManager(institution_id=1)
+        mock_mem.vector_store.list.side_effect = [[[SimpleNamespace(id='m1')]], [[SimpleNamespace(id='m2')]], [[]]]
+        mock_mem.get.return_value = None
         manager.delete_all(user_id=100)
-        mock_mem.delete_all.assert_called_once_with(user_id="100")
+        assert [call.args[0] for call in mock_mem.delete.call_args_list] == ['m1', 'm2']
+        assert all(call.kwargs == {'filters': {'user_id': '100'}, 'top_k': 100}
+                   for call in mock_mem.vector_store.list.call_args_list)

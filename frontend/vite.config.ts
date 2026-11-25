@@ -8,6 +8,9 @@ import path from 'path'
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
 
 function getBuild(): string {
+  const revision = process.env.UNIMIND_BUILD_REVISION?.trim()
+  if (revision) return revision.slice(0, 7)
+
   try {
     const commit = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
     const dirty = execSync('git diff HEAD --name-only', { encoding: 'utf8' }).trim()

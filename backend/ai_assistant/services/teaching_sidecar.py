@@ -129,12 +129,15 @@ def record_strategy_use(use, *, created):
     if not created or use.decision:
         return
     use = LearningStrategyUse.objects.select_related('strategy__source_event', 'message', 'project').get(pk=use.pk)
-    validate_strategy_use(use.project, use.pk)
+    validate_strategy_use(use.project, use.pk, pending_message_id=use.message_id)
     version = ensure_method_version(use.strategy)
     frozen = use.message.metadata.get('rsi_sidecar')
     eligible = []
-    for strategy in LearningStrategy.objects.filter(user_id=use.project.user_id, is_retired=False,
-            source_event__message__isnull=False).select_related('source_event__message').order_by('pk'):
+    from .project_learning import unconfirmed_progress_ids
+    candidates = (LearningStrategy.objects.filter(user_id=use.project.user_id, is_retired=False,
+            source_event__message__isnull=False).exclude(source_event_id__in=unconfirmed_progress_ids(use.project.user_id))
+            .select_related('source_event__message').order_by('pk'))
+    for strategy in candidates:
         candidate = ensure_method_version(strategy)
         eligible.append({'strategy_id': strategy.pk, 'version_id': candidate.pk, 'digest': candidate.digest})
     use.method_version = version
@@ -176,7 +179,9 @@ def record_turn_completion(reply):
         bot_id=reply.bot_id, conversation_id=reply.conversation_id, role='user').first()
     if not trigger:
         return
-    for use in LearningStrategyUse.objects.filter(message=trigger, project__user_id=reply.user_id):
+    from .learning_library import unconfirmed_strategy_use_ids
+    uses = LearningStrategyUse.objects.filter(message=trigger, project__user_id=reply.user_id)
+    for use in uses.exclude(pk__in=unconfirmed_strategy_use_ids(reply.user_id, uses)):
         if use.decision and use.exposure.get('status') == 'assigned':
             use.exposure = {'status': 'reply_completed', 'adherence': 'unverified',
                 'reply_id': reply.pk, 'reply_hash': canonical_hash(reply.content),
@@ -184,10 +189,15 @@ def record_turn_completion(reply):
             use.save(update_fields=['exposure'])
 
 
-def validate_strategy_use(project, use_id):
-    use = LearningStrategyUse.objects.select_related('strategy__source_event__message', 'message').filter(
+def validate_strategy_use(project, use_id, *, pending_message_id=None):
+    from .learning_library import unconfirmed_strategy_use_ids
+    from .project_learning import unconfirmed_progress_ids
+    uses = LearningStrategyUse.objects.select_related('strategy__source_event__message', 'message').filter(
         pk=use_id, project=project, strategy__user_id=project.user_id, strategy__is_retired=False,
-        strategy__source_event__message__user_id=project.user_id, message__user_id=project.user_id).first()
+        strategy__source_event__message__user_id=project.user_id, message__user_id=project.user_id).exclude(
+            strategy__source_event_id__in=unconfirmed_progress_ids(project.user_id))
+    unconfirmed = unconfirmed_strategy_use_ids(project.user_id, uses.exclude(message_id=pending_message_id))
+    use = uses.exclude(pk__in=unconfirmed).first()
     if not use or not Conversation.objects.filter(user_id=project.user_id,
             conversation_id=use.message.conversation_id, project=project).exists():
         raise ValidationError('教学方法使用记录已失效或不属于当前项目。')
@@ -226,8 +236,10 @@ def record_task_outcome(task, result, event):
     repeated = any((result.question_id is not None and row['question_id'] == result.question_id)
         or (row['question_snapshot'].get('text') and task_prompt_hash(row['question_snapshot']) == task_prompt_hash(question))
         for row in prior)
-    overlaps = LearningStrategyUse.objects.filter(project=task.project, created_at__gte=use.created_at,
-        created_at__lte=result.exam.created_at).exclude(pk=use.pk).exists()
+    from .learning_library import unconfirmed_strategy_use_ids
+    trials = LearningStrategyUse.objects.filter(project=task.project, created_at__gte=use.created_at,
+        created_at__lte=result.exam.created_at).exclude(pk=use.pk)
+    overlaps = trials.exclude(pk__in=unconfirmed_strategy_use_ids(task.project.user_id, trials)).exists()
     reasons = []
     if not timing:
         reasons.append('no_completed_prior_teaching')

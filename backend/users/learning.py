@@ -3,9 +3,9 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import APIException, PermissionDenied
 
 from .models import (LearningGrant, CourseStudentStatus, WeeklyAIQuotaConfig,
                      AIAddonGrant, WeeklyAIUsage, AIUsageReservation)
@@ -16,6 +16,15 @@ LEARNING_FEATURES = [
     'memorix.review', 'ai.assistant', 'course.video',
     'video.outline', 'pdf.mock',
 ]
+
+
+class ChatConversationBusy(APIException):
+    status_code = 409
+    default_detail = '当前会话已有一条提问正在处理，请稍后重试。'
+
+
+CHAT_RESERVATION_TTL = timedelta(minutes=5)
+AI_RESERVATION_TTL = timedelta(hours=1)
 
 
 def active_grants(user):
@@ -112,11 +121,13 @@ def _release_stale_reservations(user):
     user = account_user(user)
     # A killed process cannot execute its finally block. Keep abandoned requests
     # from consuming base or purchased capacity indefinitely.
-    cutoff = timezone.now() - timedelta(hours=1)
+    now = timezone.now()
+    expired = Q(updated_at__lt=now - AI_RESERVATION_TTL) | Q(
+        conversation_id__isnull=False, updated_at__lt=now - CHAT_RESERVATION_TTL)
     with transaction.atomic():
         get_user_model().objects.select_for_update().get(pk=user.pk)
-        AIUsageReservation.objects.filter(user_id__in=account_learner_ids(user), status='pending', updated_at__lt=cutoff).update(
-            status='released', response={}, updated_at=timezone.now())
+        AIUsageReservation.objects.filter(expired, user_id__in=account_learner_ids(user), status='pending').update(
+            status='released', response={}, updated_at=now)
 
 
 def usage_info(user):
@@ -141,7 +152,7 @@ def usage_info(user):
 
 
 @transaction.atomic
-def reserve_ai_call(user, request_id=None, *, fingerprint=''):
+def reserve_ai_call(user, request_id=None, *, fingerprint='', conversation_id=None):
     from uuid import UUID, uuid4
     from rest_framework.exceptions import ValidationError
     from .permissions import is_platform_admin
@@ -153,12 +164,15 @@ def reserve_ai_call(user, request_id=None, *, fingerprint=''):
         raise ValidationError({'request_id': '请求标识必须为 UUID。'})
     get_user_model().objects.select_for_update().get(pk=account.pk)
     _release_stale_reservations(account)
-    existing = AIUsageReservation.objects.filter(user=user, request_id=request_id).first()
+    existing = AIUsageReservation.objects.select_for_update().filter(user=user, request_id=request_id).first()
     if existing and existing.fingerprint != fingerprint:
         raise ValidationError({'request_id': '该请求标识已用于另一条提问。'})
-    if existing and existing.status != 'released':
+    if existing and (existing.status != 'released' or existing.response.get('deleted')):
         existing.acquired = False
         return existing
+    if conversation_id is not None and AIUsageReservation.objects.filter(
+            user=user, conversation_id=conversation_id, status='pending').exists():
+        raise ChatConversationBusy()
     week, _ = week_bounds()
     limit = ai_limit(user)
     unlimited = is_platform_admin(account)
@@ -175,7 +189,7 @@ def reserve_ai_call(user, request_id=None, *, fingerprint=''):
             raise PermissionDenied(message)
     from users.workspaces.access import membership_for, workspace_active, active_course_ids
     member = membership_for(user)
-    values = {'attempt_id': uuid4(), 'week': week, 'status': 'pending', 'addon': addon,
+    values = {'attempt_id': uuid4(), 'week': week, 'status': 'pending', 'addon': addon, 'conversation_id': conversation_id,
               'unlimited': unlimited, 'response': {}, 'fingerprint': fingerprint, 'workspace_id': member.workspace_id if workspace_active(member) else None}
     if existing:
         for key, value in values.items():
@@ -194,7 +208,7 @@ def finish_ai_call(reservation, *, success, response=None):
     account = account_user(reservation.user)
     get_user_model().objects.select_for_update().get(pk=account.pk)
     _release_stale_reservations(reservation.user)
-    current = AIUsageReservation.objects.get(pk=reservation.pk)
+    current = AIUsageReservation.objects.select_for_update().get(pk=reservation.pk)
     if current.attempt_id != reservation.attempt_id or current.status != 'pending':
         return current
     if success:

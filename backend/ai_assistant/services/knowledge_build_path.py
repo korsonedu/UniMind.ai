@@ -18,7 +18,7 @@ def available_builds(user):
     return _visible_builds(user).filter(status='COMPLETED').prefetch_related('blocks').order_by('-completed_at')
 
 
-def prepare_build(project, data, state):
+def prepare_build(project, data, state, *, message=None, prepare_change=False, project_ticket=None):
     from .learning_knowledge import closure, knowledge_operation
     from .project_learning import change_learning, LearningConflict
 
@@ -81,6 +81,17 @@ def prepare_build(project, data, state):
     origin = {'build_id': str(build.pk), 'completed_at': build.completed_at.isoformat() if build.completed_at else None,
               'block_ids': sorted(block.pk for group in included for block in members[group])}
     digest = hashlib.sha256(json.dumps([origin, nodes], sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    targets = sorted({f'kb_{root(pk)}' for pk in selected})
+    depth = data.get('depth', 'apply')
+    goal = state.plan.get('goal') or project.instructions[:2000] or f'学习{build.subject}'
+    ticket = {'revision': state.revision, 'fingerprint': digest, 'subject': build.subject,
+              'goal': goal, 'targets': targets, 'depth': depth}
+    if project_ticket is not None and project_ticket != ticket:
+        raise LearningConflict('图谱内容或学习目标已变化，请重新准备学习路径。')
+    if prepare_change:
+        return {'phase': 'prepared', 'title': build.subject,
+                'targets': [node['title'] for node in nodes if node['id'] in targets], '_ulr_project_ticket': ticket,
+                'notice': '路径通过准备校验，将随本轮完整答复保存。请引导用户在学习路径中确认。'}
     old = LearningKnowledgeVersion.objects.filter(knowledge_map__user=project.user, snapshot__builder__fingerprint=digest).first()
     if old:
         version = old
@@ -99,9 +110,8 @@ def prepare_build(project, data, state):
         mapping = LearningKnowledgeMap.objects.create(user=project.user, title=build.subject[:200])
         version = LearningKnowledgeVersion.objects.create(knowledge_map=mapping, revision=1,
             snapshot={'title': mapping.title, 'nodes': nodes, 'builder': {**origin, 'fingerprint': digest}, 'notice': NOTICE})
-    targets = sorted({f'kb_{root(pk)}' for pk in selected})
     prepared = knowledge_operation(project, {'action': 'prepare', 'version_id': version.pk,
-                                            'targets': targets, 'depth': data.get('depth', 'apply')})
+                                            'targets': targets, 'depth': depth})
     nodes = closure(version.snapshot, targets)
     # Keep the existing bounded stage interface; adjacent units can share one stage.
     chunk = math.ceil(len(nodes) / 20)
@@ -113,10 +123,12 @@ def prepare_build(project, data, state):
             'task': '结合已有表现了解起点，准备具体学习任务；完成后根据原作答决定继续、练习或回补。',
             'knowledge_nodes': [node['id'] for node in units],
             'prerequisites': [stages[-1]['id']] if stages else [], 'sources': list(prepared['sources'].values())})
-    plan = {'goal': state.plan.get('goal') or project.instructions[:2000] or f'学习{build.subject}',
+    plan = {'goal': goal,
             'deadline': state.plan.get('deadline'), 'weekly_minutes': state.plan.get('weekly_minutes', 0),
             'stages': stages, 'knowledge_path': prepared['knowledge_path']}
+    source = message if project_ticket is not None else None
     result = change_learning(project, {'action': 'plan', 'revision': state.revision, 'plan': plan,
-        'require_confirmation': True, 'reason': '根据所选图谱目标与前置关系准备学习路径，确认后开始。'})
+        'require_confirmation': True, 'reason': '根据所选图谱目标与前置关系准备学习路径，确认后开始。'},
+        message=source, model=source is not None)
     result['href'] = f'/xiaoyu?project={project.pk}&learning_view=proposal'
     return result

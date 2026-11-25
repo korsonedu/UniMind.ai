@@ -66,10 +66,36 @@ def _tool_call_chunk(name, arguments, call_id):
     }
 
 
+def test_tool_observation_records_submissions_without_arguments(monkeypatch, caplog):
+    from types import SimpleNamespace
+    from ai_engine.observability import runtime_observation
+
+    calls = [_tool_call_chunk('lookup', {'subject': 'PRIVATE_ARGUMENT'}, 'first'),
+             _tool_call_chunk('PRIVATE_UNOFFERED_NAME', {}, 'second')]
+    payload = {'choices': [{'message': {'tool_calls': calls}}], 'model': 'test-model'}
+    response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: payload, status_code=200)
+    monkeypatch.setattr('ai_engine.service._session.post', lambda *a, **k: response)
+    monkeypatch.setattr('ai_engine.service.get_model_for_task', lambda _: {
+        'api_key': 'test-key', 'base_url': 'https://example.invalid/chat', 'model': 'test-model', 'thinking': False})
+    monkeypatch.setattr('ai_engine.circuit_breaker.AICircuitBreaker.check', lambda *a, **k: None)
+    monkeypatch.setattr('ai_engine.circuit_breaker.AICircuitBreaker.record_success', lambda *a, **k: None)
+    token = runtime_observation.set({'runtime': 'ulr'})
+    try:
+        with caplog.at_level('INFO', logger='ai_engine.observability'):
+            assert AIEngine.call_provider([{'role': 'user', 'content': 'fixture'}], tools=[_tool_definition()]) == payload
+    finally:
+        runtime_observation.reset(token)
+    assert 'lookup,<unoffered>' in caplog.text
+    assert 'PRIVATE_ARGUMENT' not in caplog.text and 'PRIVATE_UNOFFERED_NAME' not in caplog.text
+
+
 @pytest.mark.parametrize("streaming", [True, False])
 @pytest.mark.parametrize("failed", [True, False])
 def test_each_reply_receives_current_execution_evidence(monkeypatch, streaming, failed):
+    from ai_engine.observability import observe_background, runtime_observation
+
     requests = []
+    tool_observations = []
     tool_call = _tool_call_chunk("render_visual", {"subject": "词汇"}, "choice-call")
     responses = iter([
         {"choices": [{"message": {"role": "assistant", "content": None, "tool_calls": [tool_call]}}]},
@@ -100,6 +126,7 @@ def test_each_reply_receives_current_execution_evidence(monkeypatch, streaming, 
     monkeypatch.setattr("ai_engine.circuit_breaker.AICircuitBreaker.record_success", lambda *a, **k: None)
 
     def execute(name, arguments):
+        tool_observations.append(runtime_observation.get())
         if failed:
             return json.dumps({"error": "rendering failed"})
         return json.dumps({"visual": {"type": "action_cards", "payload": {
@@ -107,11 +134,14 @@ def test_each_reply_receives_current_execution_evidence(monkeypatch, streaming, 
         }}})
 
     method = AIEngine.call_ai_with_streaming_tools if streaming else AIEngine.call_ai_with_tools
-    method(
-        messages=[{"role": "assistant", "content": "已保存，请点击下方卡片。"},
-                  {"role": "user", "content": "重新给我选项"}],
-        tools=[_tool_definition("render_visual")], tool_executor=execute, max_tool_rounds=2,
-    )
+    with observe_background('ulr', 'teaching:17'):
+        observation = runtime_observation.get()
+        method(
+            messages=[{"role": "assistant", "content": "已保存，请点击下方卡片。"},
+                      {"role": "user", "content": "重新给我选项"}],
+            tools=[_tool_definition("render_visual")], tool_executor=execute, max_tool_rounds=2,
+        )
+    assert tool_observations == [observation] and not runtime_observation.get()
 
     def evidence(messages):
         context = messages[-1]

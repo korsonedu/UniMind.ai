@@ -41,7 +41,7 @@ cp .env.example .env
 ```bash
 DJANGO_ENV=production
 SECRET_KEY=<生成 64 位随机字符串>
-ALLOWED_HOSTS=your-domain.com
+ALLOWED_HOSTS=your-domain.com,localhost
 LLM_API_KEY=sk-xxx
 
 DB_ENGINE=django.db.backends.postgresql
@@ -126,6 +126,12 @@ services:
 
 volumes:
   pgdata:
+```
+
+从发布提交构建镜像时，传入当前提交号。镜像标签保存完整提交号，前端设置页显示缩写。
+
+```bash
+docker compose build --build-arg "UNIMIND_BUILD_REVISION=$(git rev-parse HEAD)"
 ```
 
 **Systemd（备选）：**

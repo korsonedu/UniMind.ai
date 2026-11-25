@@ -7,7 +7,9 @@ from datetime import timedelta
 from django.conf import settings
 from django.utils import timezone
 from django.db.models import F
+from ai_engine.observability import observe_background
 from ..models import AgentMemory, MemoryExtractionLog
+from .ulr_config import standalone_ulr
 
 USE_MEM0 = os.getenv('USE_MEM0', 'false').lower() == 'true'
 
@@ -48,11 +50,17 @@ def get_memories_for_injection(user, limit=10):
     return "## 用户记忆\n以下是关于该用户的已知信息，请在回答中参考：\n" + "\n".join(lines)
 
 
-def extract_memories_async(user, conversation_history, conversation_id=None):
-    """后台线程：从对话中提取记忆。"""
+def extract_memories_async(user, conversation_history, conversation_id=None, *, ulr=False,
+                           source_message_id=None, answer_message_id=None):
+    """Schedule background extraction for the completed turn."""
     from ai_assistant.utils import _THREAD_POOL
-    if getattr(settings, 'UNIMIND_DSH_MEMORY_ENABLED', False) or getattr(settings, 'UNIMIND_DSH_GENERATION_ENABLED', False):
-        _THREAD_POOL.submit(_extract_memories_via_dsh, user.id, conversation_history, conversation_id)
+    if ulr or standalone_ulr():
+        if source_message_id and answer_message_id:
+            from .ulr_memory import schedule_memory_extraction
+            schedule_memory_extraction(source_message_id, answer_message_id)
+    elif getattr(settings, 'UNIMIND_DSH_MEMORY_ENABLED', False) or getattr(settings, 'UNIMIND_DSH_GENERATION_ENABLED', False):
+        _THREAD_POOL.submit(_extract_memories_via_dsh, user.id, conversation_history, conversation_id,
+                            source_message_id=source_message_id, answer_message_id=answer_message_id)
     else:
         _THREAD_POOL.submit(_extract_memories_worker, user.id, conversation_history)
 
@@ -145,7 +153,7 @@ def _build_dsh_extraction_prompt(conversation_history):
     )
 
 
-def _merge_memory_candidates(user, candidates, user_message, conversation_id):
+def _merge_memory_candidates(user, candidates, user_message, conversation_id, *, ulr=False):
     """Only merge candidates backed by the current user message; manual or disabled entries win."""
     normalized_user = ' '.join(str(user_message or '').split())
     saved = 0
@@ -160,6 +168,8 @@ def _merge_memory_candidates(user, candidates, user_message, conversation_id):
         evidence = ' '.join(str(mem.get('evidence') or '').split())
         if not key or not value or not evidence or evidence not in normalized_user:
             continue
+        if ulr:
+            value = evidence
         try:
             confidence = float(mem.get('confidence') or 0)
         except (TypeError, ValueError):
@@ -175,20 +185,21 @@ def _merge_memory_candidates(user, candidates, user_message, conversation_id):
                 existing.value = value
                 existing.confidence = confidence
                 existing.evidence = evidence
-                existing.source = 'dsh'
+                existing.source = 'auto' if ulr else 'dsh'
                 existing.source_conversation_id = conversation_id
                 existing.save(update_fields=['value', 'confidence', 'evidence', 'source', 'source_conversation_id', 'updated_at'])
                 saved += 1
         else:
             AgentMemory.objects.create(user=user, memory_type=memory_type, key=key, value=value,
-                source='dsh', evidence=evidence, source_conversation_id=conversation_id, confidence=confidence)
+                source='auto' if ulr else 'dsh', evidence=evidence, source_conversation_id=conversation_id, confidence=confidence)
             saved += 1
     return saved
 
 
-def _extract_memories_via_dsh(user_id, conversation_history, conversation_id):
-    """Extract reviewed candidates through the server harness; one turn is processed once."""
-    from django.db import connections
+def _extract_memories_via_dsh(user_id, conversation_history, conversation_id, *, source_message_id=None, answer_message_id=None):
+    """Extract source-backed candidates and persist each turn's result once."""
+    from django.db import connections, transaction
+    from ..models import Conversation, AIChatMessage
     try:
         from users.models import User
         from ai_assistant.services.dsh_tasks import run_structured
@@ -198,19 +209,21 @@ def _extract_memories_via_dsh(user_id, conversation_history, conversation_id):
         if not user or not user_message or not conversation_id:
             return
         conversation_key = str(conversation_id)
+        source_messages = AIChatMessage.objects.filter(user=user, conversation_id=conversation_key,
+            role='user', content=user_message)
         message_hash = _memory_message_hash(user_message)
         if MemoryExtractionLog.objects.filter(user=user, conversation_id=conversation_key, message_hash=message_hash).exists():
             return
-        result = run_structured('assistant.memory_extract', _build_dsh_extraction_prompt(conversation_history))
+        prompt = _build_dsh_extraction_prompt(conversation_history)
+        with observe_background('legacy', f'memory:{conversation_key}',
+                                source_message_id=source_message_id, answer_message_id=answer_message_id):
+            result = run_structured('assistant.memory_extract', prompt)
         candidates = result.get('memories') if isinstance(result, dict) else []
         if not isinstance(candidates, list):
             candidates = []
-        from django.db import transaction
-        from ..models import Conversation, AIChatMessage
         with transaction.atomic():
             conversation = Conversation.objects.select_for_update().filter(user=user, conversation_id=conversation_key).first()
-            if not conversation or not AIChatMessage.objects.filter(user=user, conversation_id=conversation_key,
-                    role='user', content=user_message).exists():
+            if not conversation or not source_messages.exists():
                 return  # Deleting the source while the model runs must also discard late candidates.
             log, created = MemoryExtractionLog.objects.get_or_create(user=user, conversation_id=conversation_key,
                 message_hash=message_hash, defaults={'candidate_count': len(candidates)})
@@ -219,9 +232,9 @@ def _extract_memories_via_dsh(user_id, conversation_history, conversation_id):
             saved = _merge_memory_candidates(user, candidates, user_message, conversation_key)
             log.saved_count = saved
             log.save(update_fields=['saved_count'])
-        logger.info("Extracted %d DSH memories for user %s", saved, user_id)
+        logger.info("Extracted %d server memories for user %s", saved, user_id)
     except Exception:
-        logger.exception("DSH memory extraction error for user %s", user_id)
+        logger.exception("Server memory extraction error for user %s", user_id)
     finally:
         connections.close_all()
 
@@ -262,7 +275,8 @@ def _parse_extraction_result(content):
 
 def extract_memories_with_mem0(user, conversation_history):
     """Use mem0 to extract and store memories from conversation."""
-    if getattr(settings, 'UNIMIND_DSH_MEMORY_ENABLED', False) or getattr(settings, 'UNIMIND_DSH_GENERATION_ENABLED', False):
+    if (standalone_ulr() or getattr(settings, 'UNIMIND_DSH_MEMORY_ENABLED', False)
+            or getattr(settings, 'UNIMIND_DSH_GENERATION_ENABLED', False)):
         return
     if not USE_MEM0:
         return
@@ -315,9 +329,11 @@ def build_memory_context(user, user_message: str = '', bot_type: str = 'planner'
 
         if USE_MEM0 and user.institution_id:
             from ai_assistant.services.prompt_adapter import get_adaptive_directives_llm
-            from ai_assistant.services.tenant_memory import TenantMemoryManager
-            mgr = TenantMemoryManager(institution_id=user.institution_id)
-            raw_memories = mgr.get_all(user_id=user.id)[:20]
+            raw_memories = []
+            if not standalone_ulr():
+                from ai_assistant.services.tenant_memory import TenantMemoryManager
+                mgr = TenantMemoryManager(institution_id=user.institution_id)
+                raw_memories = mgr.get_all(user_id=user.id)[:20]
             adaptive_directives = get_adaptive_directives_llm(raw_memories, bot_type=bot_type, user_id=user.id)
     except Exception:
         logger.exception("Failed to build memory context for user %s", user.id)

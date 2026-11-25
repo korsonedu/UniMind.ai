@@ -242,6 +242,7 @@ class GatewaySmoke(unittest.TestCase):
 
     def test_task_admission_and_usage(self):
         upstream, calls = model_fixture()
+        upstream.tool_response = lambda _: [('get_learning_stats', {}), ('SYNTHETIC_UNOFFERED_NAME', {})]
         context = {'model_policy': {'operation': 'assistant.chat.planner', 'tier': 'fast',
                    'model': 'deepseek-v4-flash', 'max_requests': 1, 'max_tokens': 128, 'max_request_bytes': 4096},
                    'tools': [{'function': {'name': 'get_learning_stats'}}]}
@@ -251,7 +252,8 @@ class GatewaySmoke(unittest.TestCase):
                 with task_gateway(context, f'http://127.0.0.1:{upstream.server_port}/v1/messages',
                                   'SYNTHETIC_UPSTREAM_SECRET', 'local-protocol-smoke', audit) as gateway:
                     body = {'model': 'deepseek-v4-flash', 'stream': True, 'max_tokens': 128,
-                            'messages': [{'role': 'user', 'content': 'SYNTHETIC_PRIVATE_PROMPT'}]}
+                            'messages': [{'role': 'user', 'content': 'SYNTHETIC_PRIVATE_PROMPT'}],
+                            'tools': [{'name': 'get_learning_stats'}]}
 
                     def send(data, credential=gateway['credential']):
                         request = Request(gateway['url'] + '/messages', json.dumps(data).encode(),
@@ -274,9 +276,11 @@ class GatewaySmoke(unittest.TestCase):
                     self.assertEqual(len(calls), 1)
                     self.assertEqual(gateway['requests'][0]['usage'], {'input_tokens': 20, 'output_tokens': 10})
                     self.assertTrue(gateway['requests'][0]['usage_complete'])
+                    self.assertEqual(gateway['requests'][0]['submitted_tools'], ['get_learning_stats', '<unoffered>'])
                 text = audit.read_text()
                 self.assertNotIn('SYNTHETIC_UPSTREAM_SECRET', text)
                 self.assertNotIn('SYNTHETIC_PRIVATE_PROMPT', text)
+                self.assertNotIn('SYNTHETIC_UNOFFERED_NAME', text)
                 self.assertEqual(json.loads(text)['requests'][0]['status'], 'completed')
         finally:
             upstream.shutdown()

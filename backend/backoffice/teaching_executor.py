@@ -44,6 +44,8 @@ class TeachingExecutor(ExamGeneratorToolExecutor):
         ids = teaching.validate_kps(args.get('kp_ids'))
         preview = {'kind': 'arc', 'kp_ids': ids, 'count': max(1, int(args.get('questions_per_kp', 3)))*len(ids),
             'difficulty': args.get('difficulty', 'normal'), 'types': args.get('types') or []}
+        if teaching.ulr_enabled():
+            preview.update(teaching.arc_parameters(preview))
         from uuid import uuid4
         preview['request_id'] = str(uuid4())
         self.confirmations.append({'type': 'arc', 'payload': preview})
@@ -69,7 +71,7 @@ class TeachingExecutor(ExamGeneratorToolExecutor):
         return result
 
     def _handle_send_notification(self, args):
-        preview = teaching.notification_preview(self.request, args)
+        preview = teaching.notification_draft(args)
         self.confirmations.append({'type': 'notification', 'payload': preview})
         return {'requires_confirmation': True, 'preview': preview, 'sent': False}
 

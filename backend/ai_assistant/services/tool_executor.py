@@ -68,6 +68,8 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'get_exam_history': lambda a: "查询考试历史",
         'search_courses': lambda a: f"搜索课程「{a.get('query', '')}」",
         'search_asr': lambda a: f"搜索视频字幕「{a.get('query', '')}」",
+        'run_course_tools': lambda a: '查找课程并定位讲稿',
+        'locate_current_course_transcript': lambda a: '定位当前课程的讲稿',
         'search_articles': lambda a: f"搜索文章「{a.get('query', '')}」",
         'search_knowledge': lambda a: f"搜索知识点「{a.get('query', '')}」",
         'get_practice_questions': lambda a: f"抽取{a.get('kp_name', '')}相关练习题" if a.get('kp_name') else "抽取练习题",
@@ -201,6 +203,8 @@ def set_permitted_tools(tool_executor, tools) -> None:
 
 class BaseToolExecutor:
     """基础工具执行器。将 tool_name 映射到实际数据库查询，捕获 user 和 institution 上下文。"""
+
+    exact_lookup = False
 
     # 工具名别名：LLM 跨 bot 误调用时自动纠正
     TOOL_ALIASES: Dict[str, str] = {
@@ -356,7 +360,8 @@ class BaseToolExecutor:
         from rest_framework.exceptions import NotFound, ValidationError
         from .learning_experiments import execute, ExperimentConflict
         try:
-            result = execute(self.user, name, args, getattr(self, 'experiment_context', None))
+            result = execute(self.user, name, args, getattr(self, 'experiment_context', None),
+                             artifacts=getattr(self, 'turn_artifacts', None))
         except (NotFound, ValidationError, ExperimentConflict) as error:
             return {'error': str(error.detail)}
         if result.get('visual'):
@@ -421,7 +426,8 @@ class BaseToolExecutor:
         from ai_assistant.services.memory_system import MemorySystem
         query = (args.get('query') or '').strip()
         subject = (args.get('subject') or '').strip()
-        result = MemorySystem.query_knowledge_tree(query, subject, self.user, self.institution)
+        result = MemorySystem.query_knowledge_tree(query, subject, self.user, self.institution,
+                                                   exact_name=self.exact_lookup)
 
         # 经验路由器 Phase 3：kp_chain 二次注入
         # 搜索到 KP 后，检查是否有针对这些 KP 的 kp_chain 经验
@@ -520,6 +526,8 @@ class BaseToolExecutor:
 class PlannerToolExecutor(BaseToolExecutor):
     """扩展基础工具执行器，增加规划相关工具。继承全部基础工具。"""
 
+    include_practice_sources = False
+
     def __init__(self, user, institution=None):
         super().__init__(user, institution)
 
@@ -615,6 +623,8 @@ class PlannerToolExecutor(BaseToolExecutor):
             institution=self.institution,
             q_type=q_type,
             subjective_type=subjective_type,
+            knowledge_point_id=args.get('knowledge_point_id'),
+            include_sources=self.include_practice_sources and args.get('purpose') != 'explanation',
         )
         if args.get('purpose') == 'explanation':
             result.pop('practice_url', None)
@@ -706,11 +716,10 @@ class PlannerToolExecutor(BaseToolExecutor):
         if not query:
             return {"courses": [], "message": "请提供搜索关键词"}
 
-        qs = Course.objects.filter(
-            models.Q(title__icontains=query) |
-            models.Q(description__icontains=query) |
-            models.Q(knowledge_point__name__icontains=query)
-        ).select_related('knowledge_point', 'album_obj')
+        match = (models.Q(title=query) if self.exact_lookup else
+                 models.Q(title__icontains=query) | models.Q(description__icontains=query) |
+                 models.Q(knowledge_point__name__icontains=query))
+        qs = Course.objects.filter(match).select_related('knowledge_point', 'album_obj')
 
         from types import SimpleNamespace
         from courses.access import visible_courses
@@ -768,7 +777,7 @@ class PlannerToolExecutor(BaseToolExecutor):
             secs = int(seconds % 60)
             return f"{mins}:{secs:02d}"
 
-        return {
+        result = {
             "segments": [
                 {
                     "course_id": s.transcript.course_id,
@@ -783,6 +792,10 @@ class PlannerToolExecutor(BaseToolExecutor):
             ],
             "total_found": qs.count(),
         }
+        if getattr(self, 'include_transcript_sources', False):
+            result['_ulr_transcripts'] = sorted({(s.transcript.course_id, s.transcript_id, s.transcript.revision)
+                                                 for s in segments})
+        return result
 
     def _handle_search_articles(self, args: Dict) -> Dict:
         """搜索文章库，推荐扩展阅读。"""

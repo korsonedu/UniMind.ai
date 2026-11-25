@@ -2,10 +2,12 @@
 from copy import deepcopy
 import json
 from unittest.mock import patch
+from uuid import uuid4
 
+from asgiref.sync import async_to_sync
 import pytest
 
-from ai_assistant.models import AIChatMessage, Bot
+from ai_assistant.models import AIChatMessage, Bot, Conversation
 from ai_assistant.services.learning_experiments import attach_to_chat
 from ai_assistant.services.tool_executor import PlannerToolExecutor, set_permitted_tools
 
@@ -84,6 +86,69 @@ def test_dsh_registry_revision_and_scope(tool_chat, settings):
         with pytest.raises(APIException):
             execute_tool(user, 'register_session_tool', REGISTRATION, version, chat_context=claims)
         worker.assert_not_called()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ulr_discards_a_calculation_if_the_tool_changes_before_reply(tool_chat, auth_client, settings):
+    from users.models import WeeklyAIQuotaConfig, WeeklyAIUsage
+
+    user, bot, anchor = tool_chat
+    Bot.objects.filter(pk=bot.pk).update(is_xiaoyu=True)
+    settings.UNIMIND_ULR_PROTOTYPE = True
+    settings.UNIMIND_DSH_ENABLED = settings.UNIMIND_DSH_SITE_ENABLED = False
+    Conversation.objects.create(user=user, bot=bot, conversation_id=anchor.conversation_id)
+    anchor.metadata = {'session_tools': {'session_product': {**REGISTRATION, 'revision': 1}}}
+    anchor.save(update_fields=['metadata'])
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'experience_calls': 20, 'course_calls': 200})
+
+    def provider(messages, **kwargs):
+        if messages[-1]['role'] == 'tool':
+            assert json.loads(messages[-1]['content'])['result']['product'] == 42
+            changed = {**REGISTRATION, 'revision': 2}
+            AIChatMessage.objects.filter(pk=anchor.pk).update(metadata={'session_tools': {'session_product': changed}})
+            kwargs['on_text']('STALE_CALCULATION')
+            return {'choices': [{'finish_reason': 'stop', 'message': {'content': 'STALE_CALCULATION'}}]}
+        assert 'session_product' in {tool['function']['name'] for tool in kwargs['tools']}
+        return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+            'id': 'calculate', 'type': 'function', 'function': {'name': 'session_product', 'arguments': '{"a":6,"b":7}'},
+        }]}}]}
+
+    async def consume(response):
+        return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')]
+
+    request_id = uuid4()
+    with patch('ai_engine.service.AIEngine.call_provider', side_effect=provider) as call, \
+         patch('ai_assistant.services.session_tools.run_code', return_value={'ok': True, 'results': [{'product': 42}]}):
+        response = auth_client.post('/api/ai/chat/stream/', {'bot_id': bot.pk, 'conversation_id': str(anchor.conversation_id),
+            'request_id': str(request_id), 'message': '继续调用session_product计算6乘7。'}, format='json')
+        events = async_to_sync(consume)(response)
+    assert call.call_count == 2
+    assert events[-1].get('is_error') and 'STALE_CALCULATION' not in json.dumps(events)
+    assert auth_client.get(f'/api/ai/chat-requests/{request_id}/').data['status'] == 'failed'
+    assert not AIChatMessage.objects.filter(conversation_id=anchor.conversation_id, role='assistant').exists()
+    assert not WeeklyAIUsage.objects.filter(user=user, ai_calls__gt=0).exists()
+
+
+@pytest.mark.django_db
+def test_ulr_artifact_commit_preserves_newer_browser_state(tool_chat):
+    from ai_assistant.services.learning_experiments import ExperimentConflict, anchor_for
+    from ai_assistant.services.ulr_artifacts import TurnArtifacts
+
+    user, _, anchor = tool_chat
+    experiment = {'revision': 1, 'state_version': 0, 'state': {'value': 1}}
+    anchor.metadata = {'learning_experiments': {'e': experiment}}
+    anchor.save(update_fields=['metadata'])
+    pending = TurnArtifacts()
+    pending.stage(anchor, 'learning_experiments', {'e': {**experiment, 'revision': 2}})
+    pending.stage(anchor, 'session_tools', {'session_product': {**REGISTRATION, 'revision': 1}})
+    assert anchor_for(user, anchor.conversation_id, artifacts=pending).metadata['learning_experiments']['e']['revision'] == 2
+
+    latest = {**experiment, 'state_version': 1, 'state': {'value': 2}}
+    AIChatMessage.objects.filter(pk=anchor.pk).update(metadata={'learning_experiments': {'e': latest}})
+    with pytest.raises(ExperimentConflict):
+        pending.commit(user, anchor.conversation_id)
+    anchor.refresh_from_db()
+    assert anchor.metadata == {'learning_experiments': {'e': latest}}
 
 
 @pytest.mark.django_db

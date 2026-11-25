@@ -248,8 +248,8 @@ cp .env.example .env
 
 ```bash
 cd /opt/unimind/backend
-python3.12 -m venv .venv
-source .venv/bin/activate
+python3.12 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 
 # 数据库迁移
@@ -291,7 +291,7 @@ User=unimind
 Group=unimind
 WorkingDirectory=/opt/unimind/backend
 EnvironmentFile=/opt/unimind/backend/.env
-ExecStart=/opt/unimind/backend/.venv/bin/daphne \
+ExecStart=/opt/unimind/backend/venv/bin/daphne \
     -b 127.0.0.1 \
     -p 8001 \
     --websocket_connect_timeout 30 \
@@ -319,7 +319,7 @@ User=unimind
 Group=unimind
 WorkingDirectory=/opt/unimind/backend
 EnvironmentFile=/opt/unimind/backend/.env
-ExecStart=/opt/unimind/backend/.venv/bin/celery \
+ExecStart=/opt/unimind/backend/venv/bin/celery \
     -A school_system worker \
     -l info \
     --concurrency=4 \
@@ -335,30 +335,11 @@ WantedBy=multi-user.target
 
 **Celery Beat**
 
-```ini
-# /etc/systemd/system/unimind-celery-beat.service
-[Unit]
-Description=UniMind Celery Beat Scheduler
-After=network.target redis.service postgresql.service
-Wants=redis.service postgresql.service
-
-[Service]
-User=unimind
-Group=unimind
-WorkingDirectory=/opt/unimind/backend
-EnvironmentFile=/opt/unimind/backend/.env
-ExecStart=/opt/unimind/backend/.venv/bin/celery \
-    -A school_system beat \
-    -l info \
-    --scheduler django_celery_beat.schedulers:DatabaseScheduler
-Restart=always
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
+```bash
+sudo install -m 0644 /opt/unimind/deploy/unimind-celery-beat.service /etc/systemd/system/unimind-celery-beat.service
 ```
+
+网页、工作进程和定时进程读取同一个 `/opt/unimind/backend/.env`。本版本在生产模式下默认运行 ULR。获准切换并完成迁移检查后，移除原环境中的 `UNIMIND_LEARNING_RUNTIME=legacy` 并统一重启这三个进程。回退时使用具备 DSH 依赖的部署环境，并为三个进程显式配置 `UNIMIND_LEARNING_RUNTIME=legacy`。Celery Beat 使用随 Celery 安装的持久调度器。
 
 启动所有服务：
 
@@ -543,7 +524,7 @@ VITE_API_URL=https://your-domain.com npx vite build
 DJANGO_ENV=production                           # development | production
 DEBUG=false                                      # 生产环境必须为 false
 SECRET_KEY=<generate-with: python -c "import secrets; print(secrets.token_urlsafe(64))">
-ALLOWED_HOSTS=your-domain.com,www.your-domain.com
+ALLOWED_HOSTS=your-domain.com,www.your-domain.com,localhost
 
 # AI 引擎
 LLM_API_KEY=sk-xxx                              # LLM API key
@@ -806,13 +787,14 @@ cd backend
 venv/bin/pip install -r requirements.txt   # 有新增/更新依赖时
 venv/bin/python manage.py migrate          # 有新增 migration 时
 venv/bin/python manage.py collectstatic --noinput
-sudo systemctl restart unimind.service unimind-celery.service
+sudo systemctl restart unimind.service unimind-celery.service unimind-celery-beat.service
 
 # 前端（前端代码有变更时）
 cd ../frontend && npm ci && npm run build
 ```
 
 没有改依赖可跳过 `pip install`，没有 migration 可跳过 `migrate`，没改前端可跳过前端构建。
+定时服务定义有变更时，先按上文重新安装服务文件并执行 `sudo systemctl daemon-reload`，再重启服务。
 
 ---
 
