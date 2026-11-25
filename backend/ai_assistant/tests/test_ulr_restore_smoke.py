@@ -135,6 +135,7 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
         title='合成旧教研任务', status='running', payload={'kind': 'chat'})
 
     env = {'PATH': os.environ['PATH'], 'TMPDIR': str(tmp_path), 'DJANGO_ENV': 'test',
+           'UNIMIND_DSH_STATE_DIR': str(state),
            'UNIMIND_DSH_ENABLED': 'false', 'UNIMIND_LEARNING_RUNTIME': 'ulr',
            **child_database_environment(connection, tmp_path / 'unused.sqlite3')}
     pg_options = ['-h', env['DB_HOST'], '-p', env['DB_PORT'], '-U', env['DB_USER']]
@@ -147,11 +148,16 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
     config.parent.mkdir()
     for name in ('media', 'logs'):
         (config.parent / name).mkdir()
-    config.write_text(f'UNIMIND_DSH_STATE_DIR={shlex.quote(str(state))}\n')
+    target = f'ulr_restore_{uuid4().hex}'
+    failed_target = f'{target}_failed'
+    alternate_state = tmp_path / 'other-dsh-state'
+    alternate_state.mkdir()
+    config.write_text(f'DB_NAME={failed_target}\nUNIMIND_DSH_STATE_DIR={shlex.quote(str(alternate_state))}\n')
     saved = subprocess.run(['bash', str(scripts / 'backup_db.sh')], env=env,
                            capture_output=True, text=True, timeout=60)
     assert saved.returncode == 0, saved.stderr
     backup, = (tmp_path / 'backups').glob('*.sql.gz')
+    assert backup.name.startswith(f"{env['DB_NAME']}_")
     checksum = hashlib.sha256(backup.read_bytes()).hexdigest()
     assert backup.with_suffix('.gz.sha256').read_text().split()[0] == checksum
     timestamp = backup.name.removeprefix(f"{env['DB_NAME']}_").removesuffix('.sql.gz')
@@ -167,15 +173,12 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
     restored_files = tmp_path / 'restored-files'
     state_prefix = state.as_posix().lstrip('/')
     with tarfile.open(archive, 'r:gz') as bundle:
+        assert not any(entry.name.startswith(alternate_state.as_posix().lstrip('/')) for entry in bundle.getmembers())
         state_entries = [entry for entry in bundle if entry.name.startswith(f'{state_prefix}/')]
         bundle.extractall(restored_files, members=state_entries, filter='data')
     restored_state = restored_files / state_prefix
     assert restored_state.is_dir()
     script = scripts / 'restore_db.sh'
-    target = f'ulr_restore_{uuid4().hex}'
-    failed_target = f'{target}_failed'
-    # Simulate a checkout configured for a different database on the same disposable cluster.
-    config.write_text(f'DB_NAME={failed_target}\n')
     restored_env = {**env, 'DB_NAME': target}
     command = [sys.executable, str(Path(settings.BASE_DIR) / 'manage.py'), 'audit_dsh_sessions',
                '--state-dir', str(restored_state), '--api-url', api_url]
@@ -238,6 +241,8 @@ def test_native_restore_and_retirement_gate(user, settings, tmp_path):
         report = json.loads(verified.stdout)
         assert report['snapshot_pair_verified'] and report['database_restore_verified'] and report['migrated']
         assert report['paired_migration_verified']
+        print(json.dumps({'snapshot_source_selection': {'explicit_database': True, 'explicit_state_directory': True,
+                                                       'alternate_state_archived': False}}))
         assert report['site_matched'] == report['already_imported'] == 1
         assert report['target_runtime'] == 'ulr'
         print(json.dumps({'verified_paired_migration': report}, ensure_ascii=False))

@@ -15,12 +15,21 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BACKUP_DIR="${PROJECT_DIR}/backups"
 RETENTION_DAYS=30
 
-# 从 .env 读取数据库配置
+# .env 提供默认值，调用方指定的数据库与 DSH 状态目录优先。
 if [ -f "${PROJECT_DIR}/backend/.env" ]; then
+    backup_overrides=()
+    for key in DB_NAME DB_HOST DB_PORT DB_USER DB_PASSWORD UNIMIND_DSH_STATE_DIR; do
+        if [[ ${!key+x} ]]; then
+            backup_overrides+=("${key}=${!key}")
+        fi
+    done
     set -a
     # shellcheck disable=SC1091
     source "${PROJECT_DIR}/backend/.env"
     set +a
+    if [ "${#backup_overrides[@]}" -gt 0 ]; then
+        export "${backup_overrides[@]}"
+    fi
 fi
 
 DB_NAME="${DB_NAME:-unimind}"
