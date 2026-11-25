@@ -60,10 +60,9 @@ def _can_use_learning_context(user):
     return has_learning_feature(user, 'full.report')
 
 
-def _reserve_chat_request(user, data, bot, *, conversation_id=None):
+def _chat_request_fingerprint(data, bot):
     import hashlib
     import json
-    from users.learning import reserve_ai_call
     request_content = {
         'message': data.get('message', '').strip(), 'bot_id': bot.pk,
         'conversation_id': str(data.get('conversation_id') or ''),
@@ -84,8 +83,13 @@ def _reserve_chat_request(user, data, bot, *, conversation_id=None):
         request_content['external_video_context'] = external_context
     if 'learning_activity' in data:
         request_content['learning_activity'] = data['learning_activity']
-    fingerprint = hashlib.sha256(json.dumps(request_content, sort_keys=True).encode()).hexdigest()
-    reservation = reserve_ai_call(user, data.get('request_id'), fingerprint=fingerprint, conversation_id=conversation_id)
+    return hashlib.sha256(json.dumps(request_content, sort_keys=True).encode()).hexdigest()
+
+
+def _reserve_chat_request(user, data, bot, *, conversation_id=None):
+    from users.learning import reserve_ai_call
+    reservation = reserve_ai_call(user, data.get('request_id'), fingerprint=_chat_request_fingerprint(data, bot),
+                                  conversation_id=conversation_id)
     if not reservation.acquired:
         if chat_receipt_deleted(reservation):
             reservation.response = {'deleted': True}

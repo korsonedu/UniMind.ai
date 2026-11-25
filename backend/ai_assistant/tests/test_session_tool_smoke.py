@@ -93,6 +93,7 @@ def test_ulr_discards_a_calculation_if_the_tool_changes_before_reply(tool_chat, 
     from users.models import WeeklyAIQuotaConfig, WeeklyAIUsage
 
     user, bot, anchor = tool_chat
+    Bot.objects.filter(pk=bot.pk).update(is_xiaoyu=True)
     settings.UNIMIND_ULR_PROTOTYPE = True
     settings.UNIMIND_DSH_ENABLED = settings.UNIMIND_DSH_SITE_ENABLED = False
     Conversation.objects.create(user=user, bot=bot, conversation_id=anchor.conversation_id)

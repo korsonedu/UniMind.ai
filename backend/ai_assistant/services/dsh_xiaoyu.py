@@ -3,18 +3,18 @@ import json
 import logging
 from hashlib import sha256
 from concurrent.futures import Future
-from contextlib import aclosing
+from contextlib import ExitStack, aclosing
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 from django.conf import settings
-from django.db import close_old_connections, connections, transaction
+from django.db import close_old_connections, connection, connections, transaction
 from django.http import StreamingHttpResponse
 from django.utils import timezone
 from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from ai_assistant.models import AIChatMessage, Conversation, mark_runtime_requests_deleted
+from ai_assistant.models import AIChatMessage, Conversation, chat_receipt_deleted, mark_runtime_requests_deleted
 from ai_assistant.services.language import request_language
 from ai_assistant.services.title_generator import schedule_conversation_title, sync_generate_title
 from ai_assistant.services.memory_service import extract_memories_async
@@ -141,10 +141,25 @@ def task_context(user, claims, message):
 
 
 def complete_turn(request, bot, conversation_id, message, emit, *, course_context=None, external_video_context=None, ulr=False):
-    from ai_assistant.views import _reserve_chat_request
+    from ai_assistant.views import _chat_request_fingerprint, _reserve_chat_request
     user = request.user
+    if ulr and standalone_ulr() and connection.vendor == 'sqlite' and request.data.get('request_id'):
+        try:
+            request_id = UUID(str(request.data['request_id']))
+        except ValueError:
+            raise ValidationError({'request_id': '请求标识必须为 UUID。'}) from None
+        receipt = AIUsageReservation.objects.filter(user=user, request_id=request_id, status='succeeded').first()
+        if receipt is not None:
+            if receipt.fingerprint != _chat_request_fingerprint(request.data, bot):
+                raise ValidationError({'request_id': '该请求标识已用于另一条提问。'})
+            if chat_receipt_deleted(receipt):
+                raise ConversationDeleted()
+            from .ulr_history import require_receipt_sources
+            require_receipt_sources(user, receipt.response)
+            return receipt.response
     conversations = Conversation.objects.filter(user=user, conversation_id=conversation_id)
-    with site_request_lock(user, conversation_id):
+    with ExitStack() as turn_lock:
+        turn_lock.enter_context(site_request_lock(user, conversation_id))
         with quota_write_lock(), transaction.atomic():
             reservation = _reserve_chat_request(user, request.data, bot, conversation_id=conversation_id)
         if not reservation.acquired:
@@ -315,6 +330,8 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                         and can_use_learning_context(user) and not conversation_uses_notes(user, conversation_id)):
                     extract_memories_async(user, [{'role': 'user', 'content': message}], str(conversation_id),
                                            ulr=True, source_message_id=current.pk, answer_message_id=answer.pk)
+            if native_only:
+                turn_lock.close()
             # Auxiliary failures never turn a committed answer into a second paid retry.
             from .teaching_sidecar import observe, record_turn_completion
             observe(record_turn_completion, answer)

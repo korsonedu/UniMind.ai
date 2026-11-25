@@ -278,5 +278,6 @@ def test_stream_terminal_does_not_wait_for_slow_consumer():
         await disconnected.aclose()
         continue_task.set()
         assert await asyncio.to_thread(cleaned.wait, 1), 'disconnected task must still finish cleanup'
-    with patch('ai_assistant.services.dsh_stream.close_old_connections', side_effect=cleanup):
+    with patch('ai_assistant.services.dsh_stream.close_old_connections', side_effect=cleanup), \
+            patch('ai_assistant.services.dsh_stream.connections.close_all', side_effect=cleanup):
         async_to_sync(consume)()
