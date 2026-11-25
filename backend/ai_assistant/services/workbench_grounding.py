@@ -55,7 +55,7 @@ def parse_source_ids(raw):
     raise ValidationError({'workbench_source_ids': '请选择有效的资料 UUID 列表。'})
 
 
-def active_sources(project, source_ids=None):
+def active_sources(project, source_ids=None, *, error_field='workbench_source_ids'):
     """Use the explicit selection when supplied, including an empty list."""
     sources = ProjectSource.objects.filter(
         project=project, user_id=project.user_id, status=ProjectSource.Status.READY,
@@ -74,7 +74,7 @@ def active_sources(project, source_ids=None):
         video_part=KeyTextTransform('part', 'metadata'),
     ).order_by('created_at', 'pk'))
     if source_ids is not None and len(sources) != len(source_ids):
-        raise ValidationError({'workbench_source_ids': '资料必须属于当前项目且已就绪。'})
+        raise ValidationError({error_field: '资料必须属于当前项目且已就绪。'})
     return sources
 
 
@@ -277,6 +277,32 @@ class WorkbenchGrounding:
         chunks = self.chunks_by_source[self.source_ids[source_id]] if source_id else self.chunks
         matches = self._rank(query, chunks)
         return {'chunks': [self._excerpt(chunk, query, 600) for chunk in matches]}
+
+    def studio_excerpts(self, focus):
+        """Give each selected source space, sampling throughout longer sources."""
+        groups = [[chunk for chunk in group if chunk.content.strip()] for group in self.chunks_by_source.values()]
+        if not all(groups):
+            raise ValidationError({'source_ids': '所选资料中有资料缺少可用正文。'})
+        chunks = [chunk for group in groups for chunk in group]
+        if sum(len(chunk.content) for chunk in chunks) <= FULL_TEXT_LIMIT:
+            return [self._excerpt(chunk) for chunk in chunks]
+
+        focus_matches = self._rank(focus, chunks) if focus else []
+        budget = max(1, FULL_TEXT_LIMIT // len(groups))
+        excerpts = []
+        for group in groups:
+            if sum(len(chunk.content) for chunk in group) <= budget:
+                excerpts.extend(self._excerpt(chunk) for chunk in group)
+                continue
+            count = min(len(group), 8, max(1, budget // 600))
+            sample = [chunk for chunk in focus_matches if chunk.source_id == group[0].source_id][:max(1, count // 2)]
+            covered = {chunk.pk for chunk in sample}
+            remaining = [chunk for chunk in group if chunk.pk not in covered]
+            span = count - len(sample)
+            sample.extend(remaining[i * (len(remaining) - 1) // max(1, span - 1)] for i in range(span))
+            excerpts.extend(self._excerpt(chunk, focus, budget // count)
+                            for chunk in sorted(sample, key=lambda chunk: chunk.chunk_index))
+        return excerpts
 
     def read_workbench_source_chunks(self, source_id, start_chunk=0, limit=6, *, locator=None):
         if not isinstance(source_id, str) or source_id not in self.source_ids:

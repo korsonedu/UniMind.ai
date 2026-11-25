@@ -22,8 +22,9 @@ from .views_learning_experiments import LearningExperimentView
 from .views_learning import ProjectLearningView, ProjectLearningLibraryView, ProjectLearningKnowledgeView
 from .views_learning_tasks import ProjectLearningTaskListView, ProjectLearningTaskDetailView
 from .views_workbench import (
-    ProjectSourceBatchSelectView, ProjectSourceDetailView, ProjectSourceFileView,
-    ProjectSourceImportView, ProjectSourceListView, ProjectSourceUploadView, ProjectWorkbenchOverviewView,
+    ProjectNoteListView, ProjectSourceBatchSelectView, ProjectSourceDetailView, ProjectSourceFileView,
+    ProjectSourceImportView, ProjectSourceListView, ProjectSourceUploadView, ProjectStudioDetailView,
+    ProjectStudioListView, ProjectStudioSaveNoteView, ProjectStudioSubmitQuizView, ProjectWorkbenchOverviewView,
 )
 
 urlpatterns = [
@@ -53,6 +54,11 @@ urlpatterns = [
     path('projects/', ProjectListCreateView.as_view(), name='conversation-project-list'),
     path('projects/<int:pk>/', ProjectDetailView.as_view(), name='conversation-project-detail'),
     path('projects/<int:pk>/workbench-overview/', ProjectWorkbenchOverviewView.as_view(), name='project-workbench-overview'),
+    path('projects/<int:pk>/studio/', ProjectStudioListView.as_view(), name='project-studio-list'),
+    path('projects/<int:pk>/studio/<uuid:artifact_id>/', ProjectStudioDetailView.as_view(), name='project-studio-detail'),
+    path('projects/<int:pk>/studio/<uuid:artifact_id>/save-note/', ProjectStudioSaveNoteView.as_view(), name='project-studio-save-note'),
+    path('projects/<int:pk>/studio/<uuid:artifact_id>/submit-quiz/', ProjectStudioSubmitQuizView.as_view(), name='project-studio-submit-quiz'),
+    path('projects/<int:pk>/notes/', ProjectNoteListView.as_view(), name='project-note-list'),
     path('projects/<int:pk>/sources/', ProjectSourceListView.as_view(), name='project-source-list'),
     path('projects/<int:pk>/sources/upload/', ProjectSourceUploadView.as_view(), name='project-source-upload'),
     path('projects/<int:pk>/sources/import/', ProjectSourceImportView.as_view(), name='project-source-import'),

@@ -29,6 +29,9 @@ class ConversationProject(models.Model):
     name = models.CharField(max_length=60)
     instructions = models.TextField(max_length=4000, blank=True, default='')
     workbench_overview = models.JSONField(default=dict, blank=True)
+    workbench_notebook = models.OneToOneField(
+        'notes.Notebook', null=True, blank=True, on_delete=models.SET_NULL, related_name='workbench_project',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -159,6 +162,45 @@ class ProjectSourceChunk(models.Model):
             models.UniqueConstraint(fields=['source', 'chunk_index'], name='uniq_project_source_chunk_index'),
         ]
         indexes = [models.Index(fields=['source', 'anchor_type'])]
+
+
+class ProjectStudioArtifact(models.Model):
+    class Kind(models.TextChoices):
+        STUDY_GUIDE = 'study_guide', '资料导读'
+        BRIEFING = 'briefing', '精华简报'
+        FLASHCARDS = 'flashcards', '记忆闪卡'
+        FAQ = 'faq', '核心问答'
+        QUIZ = 'quiz', '靶向自测'
+
+    class Status(models.TextChoices):
+        GENERATING = 'generating', '生成中'
+        READY = 'ready', '已完成'
+        FAILED = 'failed', '失败'
+
+    class Mastery(models.TextChoices):
+        UNSEEN = 'unseen', '未复习'
+        LEARNING = 'learning', '复习中'
+        MASTERED = 'mastered', '已掌握'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE, related_name='studio_artifacts')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='studio_artifacts')
+    kind = models.CharField(max_length=24, choices=Kind.choices)
+    title = models.CharField(max_length=240)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.GENERATING)
+    error_message = models.TextField(blank=True, default='')
+    source_ids = models.JSONField(default=list, blank=True)
+    content_markdown = models.TextField(blank=True, default='')
+    structured_payload = models.JSONField(default=dict, blank=True)
+    citations = models.JSONField(default=list, blank=True)
+    linked_note = models.ForeignKey(
+        'notes.Note', null=True, blank=True, on_delete=models.SET_NULL, related_name='studio_artifacts',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
 
 class Conversation(models.Model):

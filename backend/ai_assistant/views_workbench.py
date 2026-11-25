@@ -6,40 +6,177 @@ from django.db.models.functions import Now
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from rest_framework import status
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from courses.access import visible_courses
+from notes.awareness import after_note_save
+from notes.links import index_links
+from notes.models import Note, Notebook
 from users.feature_access import has_learning_feature
 from users.permissions import IsMember
 from users.workspaces.identity import learner_identity
 
-from .models import WORKBENCH_SOURCE_PREFIX, ConversationProject, ProjectSource
+from .models import WORKBENCH_SOURCE_PREFIX, ConversationProject, ProjectSource, ProjectStudioArtifact
 from .serializers_workbench import (
-    UPLOAD_FORMATS, ProjectSourceBatchSelectSerializer, ProjectSourceDetailSerializer,
+    UPLOAD_FORMATS, ProjectNoteSerializer, ProjectSourceBatchSelectSerializer, ProjectSourceDetailSerializer,
     ProjectSourceImportSerializer, ProjectSourcePatchSerializer, ProjectSourceSummarySerializer,
-    ProjectSourceUploadSerializer,
+    ProjectSourceUploadSerializer, ProjectStudioArtifactSerializer, StudioCreateSerializer,
+    StudioPatchSerializer, StudioQuizSubmitSerializer,
 )
 from .services.workbench_ingest import dispatch_project_source_processing
-from .services.workbench_grounding import active_sources
+from .services.workbench_grounding import active_sources, is_personal_space
 from .services.workbench_overview import extractive_overview, source_signature, synthesize_overview
+from .services.workbench_studio import artifact_note_markdown, generate_studio_artifact, grade_studio_quiz
 
 
-class ProjectSourceView(APIView):
+class ProjectWorkbenchView(APIView):
     permission_classes = [IsMember]
 
     def get_project(self, pk, *, for_update=False):
         projects = ConversationProject.objects.select_for_update() if for_update else ConversationProject.objects.all()
         return get_object_or_404(projects, pk=pk, user=self.request.user)
 
-    def sources(self, pk):
-        return self.get_project(pk).workbench_sources.filter(user=self.request.user)
-
     def require_personal_space(self):
         if learner_identity(self.request.user) is not None:
             raise PermissionDenied('请在本人个人空间中处理项目来源。')
+
+
+class ProjectSourceView(ProjectWorkbenchView):
+    def sources(self, pk):
+        return self.get_project(pk).workbench_sources.filter(user=self.request.user)
+
+
+class ProjectStudioView(ProjectWorkbenchView):
+    def get_project(self, pk, *, for_update=False):
+        if not is_personal_space(self.request.user):
+            raise Http404
+        return super().get_project(pk, for_update=for_update)
+
+    def get_artifact(self, project, artifact_id, *, for_update=False, ready=False):
+        artifacts = project.studio_artifacts.filter(user_id=project.user_id)
+        if for_update:
+            artifacts = artifacts.select_for_update()
+        artifact = get_object_or_404(artifacts, pk=artifact_id)
+        if ready and artifact.status != ProjectStudioArtifact.Status.READY:
+            raise ValidationError('请使用已完成的工作室产物。')
+        return artifact
+
+
+def _project_notes(project):
+    linked = Q(studio_artifacts__project=project, studio_artifacts__user_id=project.user_id)
+    if project.workbench_notebook_id:
+        linked |= Q(notebook_id=project.workbench_notebook_id, notebook__user_id=project.user_id)
+    return Note.objects.filter(linked, user_id=project.user_id, deleted_at__isnull=True).distinct()
+
+
+def _create_project_note(project, **data):
+    if project.workbench_notebook_id:
+        notebook = get_object_or_404(Notebook, pk=project.workbench_notebook_id, user_id=project.user_id)
+    else:
+        notebook = Notebook.objects.create(user_id=project.user_id, name=project.name)
+        project.workbench_notebook = notebook
+        project.save(update_fields=['workbench_notebook'])
+    note = Note.objects.create(user_id=project.user_id, notebook=notebook, **data)
+    index_links(note)
+    after_note_save(note)
+    return note
+
+
+class ProjectStudioListView(ProjectStudioView):
+    def get(self, request, pk):
+        project = self.get_project(pk)
+        return Response({
+            'project_id': pk,
+            'artifacts': ProjectStudioArtifactSerializer(
+                project.studio_artifacts.filter(user=request.user), many=True,
+            ).data,
+            'notes': ProjectNoteSerializer(_project_notes(project), many=True).data,
+        })
+
+    def post(self, request, pk):
+        project = self.get_project(pk)
+        serializer = StudioCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        artifact = generate_studio_artifact(project, **serializer.validated_data)
+        return Response(ProjectStudioArtifactSerializer(artifact).data, status=status.HTTP_201_CREATED)
+
+
+class ProjectStudioDetailView(ProjectStudioView):
+    def get(self, request, pk, artifact_id):
+        artifact = self.get_artifact(self.get_project(pk), artifact_id)
+        return Response(ProjectStudioArtifactSerializer(artifact).data)
+
+    @transaction.atomic
+    def patch(self, request, pk, artifact_id):
+        artifact = self.get_artifact(self.get_project(pk), artifact_id, for_update=True)
+        serializer = StudioPatchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        updates = ['updated_at']
+        if 'flashcard_mastery' in data:
+            if artifact.kind != ProjectStudioArtifact.Kind.FLASHCARDS or artifact.status != ProjectStudioArtifact.Status.READY:
+                raise ValidationError({'flashcard_mastery': '只能更新已完成的闪卡组。'})
+            mastery = data['flashcard_mastery']
+            cards = {card['id']: card for card in artifact.structured_payload['cards']}
+            if mastery.keys() - cards.keys():
+                raise ValidationError({'flashcard_mastery': '部分闪卡不属于此闪卡组。'})
+            for card_id, value in mastery.items():
+                cards[card_id]['mastery'] = value
+            updates.append('structured_payload')
+        if 'title' in data:
+            artifact.title = data['title']
+            updates.append('title')
+        artifact.save(update_fields=updates)
+        return Response(ProjectStudioArtifactSerializer(artifact).data)
+
+    def delete(self, request, pk, artifact_id):
+        self.get_artifact(self.get_project(pk), artifact_id).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ProjectStudioSaveNoteView(ProjectStudioView):
+    @transaction.atomic
+    def post(self, request, pk, artifact_id):
+        project = self.get_project(pk, for_update=True)
+        artifact = self.get_artifact(project, artifact_id, for_update=True, ready=True)
+        if artifact.kind == ProjectStudioArtifact.Kind.QUIZ:
+            raise ValidationError('自测暂不支持保存为笔记。')
+        if artifact.linked_note_id:
+            note = get_object_or_404(Note, pk=artifact.linked_note_id, user=request.user)
+            if note.deleted_at:
+                raise ValidationError('请先在笔记回收站中恢复这份笔记。')
+            return Response(ProjectNoteSerializer(note).data)
+        note = _create_project_note(project, title=artifact.title, content=artifact_note_markdown(artifact))
+        artifact.linked_note = note
+        artifact.save(update_fields=['linked_note', 'updated_at'])
+        return Response(ProjectNoteSerializer(note).data, status=status.HTTP_201_CREATED)
+
+
+class ProjectStudioSubmitQuizView(ProjectStudioView):
+    def post(self, request, pk, artifact_id):
+        artifact = self.get_artifact(self.get_project(pk), artifact_id, ready=True)
+        if artifact.kind != ProjectStudioArtifact.Kind.QUIZ:
+            raise ValidationError('请选择自测产物。')
+        serializer = StudioQuizSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(grade_studio_quiz(artifact, serializer.validated_data['answers']))
+
+
+class ProjectNoteListView(ProjectStudioView):
+    def get(self, request, pk):
+        project = self.get_project(pk)
+        return Response({'project_id': pk, 'notes': ProjectNoteSerializer(_project_notes(project), many=True).data})
+
+    @transaction.atomic
+    def post(self, request, pk):
+        project = self.get_project(pk, for_update=True)
+        serializer = ProjectNoteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        note = _create_project_note(project, **serializer.validated_data)
+        return Response(ProjectNoteSerializer(note).data, status=status.HTTP_201_CREATED)
 
 
 class ProjectSourceListView(ProjectSourceView):
@@ -54,7 +191,7 @@ class ProjectSourceListView(ProjectSourceView):
         })
 
 
-class ProjectWorkbenchOverviewView(ProjectSourceView):
+class ProjectWorkbenchOverviewView(ProjectWorkbenchView):
     def get(self, request, pk):
         return self.overview(pk, synthesize=False)
 

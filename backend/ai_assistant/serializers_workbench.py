@@ -5,9 +5,94 @@ from urllib.parse import urlsplit
 from django.urls import reverse
 from rest_framework import serializers
 
-from .models import ProjectSource, ProjectSourceChunk
+from notes.models import Note
+
+from .models import ProjectSource, ProjectSourceChunk, ProjectStudioArtifact
 from .services.workbench_media import external_video_key
 from .services.workbench_parsers import WorkbenchParseError
+
+
+class ProjectStudioArtifactSerializer(serializers.ModelSerializer):
+    structured_payload = serializers.SerializerMethodField()
+    citations = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjectStudioArtifact
+        fields = (
+            'id', 'project_id', 'kind', 'title', 'status', 'error_message', 'source_ids', 'content_markdown',
+            'structured_payload', 'citations', 'linked_note', 'created_at', 'updated_at',
+        )
+        read_only_fields = fields
+
+    def get_structured_payload(self, artifact):
+        payload = artifact.structured_payload
+        if artifact.kind != ProjectStudioArtifact.Kind.QUIZ or artifact.status != ProjectStudioArtifact.Status.READY:
+            return payload
+        questions = [
+            {key: question[key] for key in ('id', 'type', 'prompt', 'options', 'cite_key') if key in question}
+            for question in payload['questions']
+        ]
+        public = {'questions': questions}
+        if 'latest_attempt' in payload:
+            public['latest_attempt'] = payload['latest_attempt']
+        return public
+
+    def get_citations(self, artifact):
+        if artifact.kind == ProjectStudioArtifact.Kind.QUIZ:
+            return [{key: value for key, value in row.items() if key != 'quote'} for row in artifact.citations]
+        return artifact.citations
+
+
+class StudioCreateSerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(choices=ProjectStudioArtifact.Kind.choices)
+    source_ids = serializers.ListField(child=serializers.UUIDField(), required=False, allow_empty=False)
+    custom_focus = serializers.CharField(max_length=1500, allow_blank=True, required=False)
+    include_subjective = serializers.BooleanField(required=False)
+
+    def validate_source_ids(self, values):
+        return tuple(dict.fromkeys(values))
+
+    def validate(self, attrs):
+        if 'include_subjective' in attrs and attrs['kind'] != ProjectStudioArtifact.Kind.QUIZ:
+            raise serializers.ValidationError({'include_subjective': '只有自测支持此选项。'})
+        return attrs
+
+
+class StudioPatchSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=240, required=False)
+    flashcard_mastery = serializers.DictField(
+        child=serializers.ChoiceField(choices=ProjectStudioArtifact.Mastery.choices),
+        allow_empty=False, required=False,
+    )
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError('请提供标题或闪卡掌握状态。')
+        return attrs
+
+
+class StudioQuizAnswerSerializer(serializers.Serializer):
+    question_id = serializers.CharField(max_length=20)
+    answer = serializers.JSONField()
+
+
+class StudioQuizSubmitSerializer(serializers.Serializer):
+    answers = StudioQuizAnswerSerializer(many=True, max_length=6)
+
+    def validate_answers(self, values):
+        answers = {item['question_id']: item['answer'] for item in values}
+        if len(answers) != len(values):
+            raise serializers.ValidationError('每道题只能提交一次答案。')
+        return answers
+
+
+class ProjectNoteSerializer(serializers.ModelSerializer):
+    content = serializers.CharField(trim_whitespace=False, allow_blank=True, required=False)
+
+    class Meta:
+        model = Note
+        fields = ('id', 'title', 'content', 'notebook_id', 'version', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'notebook_id', 'version', 'created_at', 'updated_at')
 
 
 UPLOAD_FORMATS = {
