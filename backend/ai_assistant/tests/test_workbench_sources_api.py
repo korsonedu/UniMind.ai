@@ -45,6 +45,92 @@ def import_source(client, sources_url, **payload):
     return client.post(f'{sources_url}import/', payload, format='json')
 
 
+def test_extension_token_and_preflight_create_project_and_import_full_lecture(user, settings):
+    settings.CORS_ALLOW_ALL_ORIGINS = False
+    settings.CORS_ALLOWED_ORIGINS = []
+    client = APIClient(enforce_csrf_checks=True)
+    origin = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop'
+    project_url = reverse('conversation-project-list')
+
+    def preflight(path):
+        response = client.options(path, HTTP_ORIGIN=origin, HTTP_ACCESS_CONTROL_REQUEST_METHOD='POST',
+                                  HTTP_ACCESS_CONTROL_REQUEST_HEADERS='authorization,content-type')
+        assert response.status_code == 200
+        assert response['Access-Control-Allow-Origin'] == origin
+        assert 'POST' in response['Access-Control-Allow-Methods'].split(', ')
+        assert {'authorization', 'content-type'} <= set(
+            response['Access-Control-Allow-Headers'].split(', '),
+        )
+
+    def token_post(path, payload, expected_status):
+        response = client.post(path, payload, format='json', HTTP_ORIGIN=origin)
+        assert response.status_code == expected_status, response.data
+        assert response['Access-Control-Allow-Origin'] == origin
+        return response.data
+
+    preflight(project_url)
+    token_post(project_url, {'name': '扩展项目'}, 401)
+    client.credentials(HTTP_AUTHORIZATION=f'Token {LoginSession.issue(user).key}')
+    project = token_post(project_url, {'name': '扩展项目'}, 201)
+    assert not client.cookies
+    path = reverse('project-source-import', args=[project['id']])
+    preflight(path)
+
+    segments = [
+        {'start_time': index * 3, 'end_time': (index + 1) * 3, 'text': f'第 {index + 1} 行字幕。'}
+        for index in range(1200)
+    ]
+    lecture = {
+        'kind': 'external_video', 'platform': 'bilibili', 'external_id': 'BVclip', 'part': 2,
+        'title': '一小时课程', 'url': 'https://www.bilibili.com/video/BVclip?p=2',
+        'duration_seconds': 3600, 'segments': segments,
+    }
+    saved = token_post(path, lecture, 201)
+    assert saved['status'] == 'ready'
+    assert saved['duration_seconds'] == 3600
+    assert saved['external_key'] == 'bilibili:BVclip:p2'
+    detail = client.get(reverse('project-source-detail', args=[project['id'], saved['id']]), HTTP_ORIGIN=origin)
+    assert detail.status_code == 200
+    assert detail['Access-Control-Allow-Origin'] == origin
+    assert [cue for chunk in detail.data['chunks'] for cue in chunk['metadata']['segments']] == segments
+    assert detail.data['chunks'][-1]['end_seconds'] == 3600
+    assert token_post(path, lecture, 200)['id'] == saved['id']
+
+    page = {
+        'kind': 'text', 'title': '术语表', 'source_url': 'https://example.org/glossary',
+        'content': '# 折现\n\n旧版本的正文。',
+    }
+    first = token_post(path, page, 201)
+    assert first['status'] == 'ready'
+    updated = token_post(path, {**page, 'content': '# 折现\n\n更新后的来源正文。'}, 200)
+    assert updated['id'] == first['id']
+    assert updated['source_url'] == page['source_url']
+    detail = client.get(reverse('project-source-detail', args=[project['id'], first['id']]))
+    assert (detail.data['chunks'][0]['heading'], detail.data['chunks'][0]['content']) == (
+        '折现', '折现\n\n更新后的来源正文。',
+    )
+    assert client.get(reverse('project-source-list', args=[project['id']])).data['total_count'] == 2
+
+
+def test_web_url_fallback_and_browser_clip_share_one_source(workbench, monkeypatch):
+    client, _, url = workbench
+    link = 'https://example.org/article'
+    fetch = Mock(return_value=(link, '<title>网页标题</title><p>服务器读到的正文。</p>'))
+    monkeypatch.setattr(learning_resources, 'public_text', fetch)
+    fallback = import_source(client, url, kind='web_url', url=link)
+    assert fallback.data['status'] == 'ready', fallback.data
+    clip = import_source(client, url, kind='text', source_url=link, title='浏览器标题', content='浏览器读到的正文。')
+    assert clip.status_code == 200, clip.data
+    assert clip.data['id'] == fallback.data['id']
+    assert clip.data['source_type'] == 'text'
+    repeated = import_source(client, url, kind='web_url', url=link)
+    assert repeated.status_code == 200
+    assert repeated.data['id'] == clip.data['id']
+    assert repeated.data['source_type'] == 'text'
+    assert client.get(f"{url}{clip.data['id']}/").data['chunks'][0]['content'] == '浏览器读到的正文。'
+    fetch.assert_called_once()
+
+
 def test_multipart_documents_return_ready_and_ordered_chunks(workbench, settings):
     client, project, url = workbench
     settings.CELERY_TASK_ALWAYS_EAGER = False

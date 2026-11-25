@@ -20,12 +20,13 @@ export default defineConfig({
     name: 'UniMind 随堂学',
     description: '在视频旁提问、做随堂练习，并把小宇的回答存为笔记。',
     minimum_chrome_version: '116',
-    permissions: ['sidePanel', 'storage', 'cookies', 'activeTab', 'tabs', 'declarativeNetRequest', 'tabCapture', 'offscreen'],
+    permissions: ['sidePanel', 'storage', 'cookies', 'activeTab', 'tabs', 'scripting', 'declarativeNetRequest', 'tabCapture', 'offscreen'],
     host_permissions: [
       'https://unimind-ai.com/*',
       'https://*.unimind-ai.com/*',
       'http://localhost/*',
       'http://127.0.0.1/*',
+      // Existing cross-origin video screenshot fallback (captureVisibleTab), including from the in-player entry.
       '<all_urls>',
     ],
     declarative_net_request: {

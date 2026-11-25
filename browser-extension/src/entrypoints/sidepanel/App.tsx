@@ -11,7 +11,7 @@ import { QuickActionsBar } from '../../components/QuickActionsBar';
 import { APPEARANCE_STORAGE_KEY, SettingsDrawer } from '../../components/SettingsDrawer';
 import {
   sendRuntimeMessage, sendTabMessage, UNIMIND_CAPTURE_CONTEXT_FOR_ASK,
-  UNIMIND_GET_ACTIVE_VIDEO, UNIMIND_VIDEO_STATE_CHANGED, type BridgeMessage,
+  UNIMIND_CAPTURE_SOURCE_FOR_WORKBENCH, UNIMIND_GET_ACTIVE_VIDEO, UNIMIND_VIDEO_STATE_CHANGED, type BridgeMessage,
 } from '../../shared/bridge';
 import type { ActiveVideoDescriptor, CaptureContextResult, ExternalVideoContextPayload } from '../../shared/types';
 
@@ -492,6 +492,7 @@ function LearningPanel({ session, onSettings }: { session: ExtensionSession; onS
       <h2>{video ? video.title : '通用小宇随身问答'}</h2>
       {!video && <p className="context-hint">打开 B 站或 YouTube 视频即可自动开启随堂画面与讲稿感知</p>}
       <ProjectSelector key={conversation?.id ?? routeKey} api={api} value={conversation?.projectId ?? null}
+        clipPage={{ video: Boolean(video), capture: () => sendRuntimeMessage(UNIMIND_CAPTURE_SOURCE_FOR_WORKBENCH, { windowId: activeWindow.current }) }}
         onChange={projectId => {
           if (conversationRef.current?.id === conversation?.id) return selectProject(projectId);
         }} disabled={!conversation || restoring} />

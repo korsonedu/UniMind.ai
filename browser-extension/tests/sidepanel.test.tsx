@@ -105,7 +105,14 @@ it('按视频恢复最近会话和练习，改绑项目，并让新会话首轮�
     tabs: { query: async () => [{ id: 21, windowId: 1 }], sendMessage: async () => video, onActivated: event, onUpdated: event },
     runtime: {
       onMessage: event,
-      sendMessage: async (request: { type: string }) => request.type === 'UNIMIND_CAPTURE_CONTEXT_FOR_ASK' ? capture : { token: 'fixture-token' },
+      sendMessage: async (request: { type: string }) => {
+        if (request.type === 'UNIMIND_CAPTURE_CONTEXT_FOR_ASK') return capture;
+        if (request.type === 'UNIMIND_CAPTURE_SOURCE_FOR_WORKBENCH') return { source: {
+          kind: 'external_video', platform: 'bilibili', external_id: video.external_id, part: video.part,
+          title: video.title, url: video.url, duration_seconds: 3600, segments: capture.context?.segments,
+        } };
+        return { token: 'fixture-token' };
+      },
     },
     storage: {
       onChanged: event,
@@ -120,6 +127,7 @@ it('按视频恢复最近会话和练习，改绑项目，并让新会话首轮�
     switch (url.pathname) {
       case '/api/ai/bots/': return json([{ id: 7, bot_type: 'planner' }]);
       case '/api/ai/projects/': return json([{ id: 1, name: '金额换算' }, { id: 2, name: '折现专题' }]);
+      case '/api/ai/projects/2/sources/import/': return json({ status: 'ready', unit_count: 1 }, 201);
       case '/api/ai/conversations/': return json([{ conversation_id: restoredId, project_id: 1 }]);
       case `/api/ai/conversations/${restoredId}/`: return json({ project_id: 2 });
       case '/api/ai/history/': return json([{
@@ -148,6 +156,11 @@ it('按视频恢复最近会话和练习，改绑项目，并让新会话首轮�
   fireEvent.change(projectSelect(), { target: { value: '2' } });
   await waitFor(() => expect(projectSelect().value).toBe('2'));
   expect(requests.find(action => action.method === 'PATCH')?.payload).toEqual({ project_id: 2 });
+  fireEvent.click(screen.getByRole('button', { name: '收入工作台 · 视频讲稿' }));
+  await screen.findByText('已收入「折现专题」工作台（共 1 段内容）');
+  expect(requests.find(({ url }) => url.pathname.endsWith('/sources/import/'))?.payload).toMatchObject({
+    kind: 'external_video', platform: 'bilibili', part: 2, duration_seconds: 3600, segments: capture.context?.segments,
+  });
 
   fireEvent.click(screen.getByRole('button', { name: '新对话' }));
   await screen.findByRole('option', { name: '折现专题' });
@@ -159,4 +172,64 @@ it('按视频恢复最近会话和练习，改绑项目，并让新会话首轮�
   const payload = requests.find(({ url }) => url.pathname === '/api/ai/chat/stream/')?.payload;
   expect(payload).toMatchObject({ bot_id: 7, project_id: 2, message: '为什么？', external_video_context: capture.context });
   expect(payload).not.toMatchObject({ conversation_id: restoredId });
+});
+
+it('从网页侧栏新建项目、剪藏正文并更新同一来源，导入失败时显示原因', async () => {
+  const source = { kind: 'text', title: '折现文档', source_url: 'https://example.org/discount', content: '## 折现\n\n现值怎么算？' };
+  const sendMessage = vi.fn(async ({ type }: { type: string }) =>
+    type === 'UNIMIND_CAPTURE_SOURCE_FOR_WORKBENCH' ? { source } : { token: 'fixture-token' });
+  const browserValues: Record<string, unknown> = {
+    'unimind:settings': { serverOrigin: origin },
+    [`unimind:auth:${origin}`]: { token: 'fixture-token', tokenSource: 'inline', user: { id: 42 } },
+  };
+  vi.stubGlobal('chrome', {
+    tabs: { query: async () => [{ id: 21, windowId: 1 }], sendMessage: async () => null, onActivated: event, onUpdated: event },
+    runtime: { onMessage: event, sendMessage },
+    storage: { onChanged: event, local: {
+      get: async (key: string) => ({ [key]: browserValues[key] }),
+      set: async (data: object) => { Object.assign(browserValues, data); },
+    } },
+  });
+  const writes: { path: string; body: unknown }[] = [];
+  const importStatuses = [201, 200, 403];
+  vi.stubGlobal('fetch', vi.fn(async (input: string, request: RequestInit) => {
+    const path = new URL(input).pathname;
+    const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
+    if (request.method === 'POST') {
+      expect(new Headers(request.headers).get('Authorization')).toBe('Token fixture-token');
+      expect(request.credentials).toBe('omit');
+      writes.push({ path, body: JSON.parse(String(request.body)) });
+    }
+    if (path === '/api/ai/bots/') return json([{ id: 7, bot_type: 'planner' }]);
+    if (path === '/api/ai/projects/' && request.method === 'POST') return json({ id: 14, name: '折现专题' }, 201);
+    if (path === '/api/ai/projects/14/sources/import/') {
+      const status = importStatuses.shift();
+      return json(status === 403 ? { detail: '请在本人个人空间中处理项目来源。' } : { status: 'ready', unit_count: 2 }, status);
+    }
+    return json([]);
+  }));
+  render(<App />);
+  await screen.findByRole('textbox', { name: '向小宇提问' });
+  const clip = () => screen.getByRole('button', { name: '收入工作台 · 当前网页' });
+  await waitFor(() => expect((clip() as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(clip());
+  expect(screen.getByText('请先选择项目，或新建项目。')).toBeTruthy();
+  expect(writes).toEqual([]);
+  const name = screen.getByRole('textbox', { name: '新项目名称' });
+  fireEvent.change(name, { target: { value: '折现专题' } });
+  fireEvent.click(screen.getByRole('button', { name: '创建' }));
+  await waitFor(() => expect((clip() as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(clip());
+  await screen.findByText('已收入「折现专题」工作台（共 2 段内容）');
+  expect(screen.getByRole('link', { name: '打开工作台' }).getAttribute('href')).toBe(`${origin}/xiaoyu?project=14`);
+  expect(sendMessage).toHaveBeenCalledWith({ type: 'UNIMIND_CAPTURE_SOURCE_FOR_WORKBENCH', payload: { windowId: 1 } });
+  expect(writes).toEqual([
+    { path: '/api/ai/projects/', body: { name: '折现专题' } },
+    { path: '/api/ai/projects/14/sources/import/', body: source },
+  ]);
+  fireEvent.click(clip());
+  await screen.findByText('已更新工作台中的资料（共 2 段内容）');
+  fireEvent.click(clip());
+  await screen.findByText('请在本人个人空间中处理项目来源。');
+  expect(screen.queryByRole('link', { name: '打开工作台' })).toBeNull();
 });

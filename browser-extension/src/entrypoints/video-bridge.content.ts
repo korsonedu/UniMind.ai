@@ -5,13 +5,14 @@ import {
   readPageMediaUpdate, requestPageMedia, sliceTranscriptWindow, type PageMediaData,
 } from '../collectors/transcriptWindow';
 import { parseYouTubeVideoUrl } from '../collectors/youtube';
+import { fullWorkbenchTranscript, readPlayerSubtitles } from '../collectors/workbenchVideo';
 import {
   sendRuntimeMessage, UNIMIND_COLLECT_PAGE_SNAPSHOT, UNIMIND_GET_ACTIVE_VIDEO,
-  UNIMIND_OPEN_SIDEPANEL, UNIMIND_SEEK_VIDEO, UNIMIND_VIDEO_STATE_CHANGED,
+  UNIMIND_COLLECT_WORKBENCH_VIDEO, UNIMIND_OPEN_SIDEPANEL, UNIMIND_SEEK_VIDEO, UNIMIND_VIDEO_STATE_CHANGED,
   type BridgeMessage, type MessageResponses,
 } from '../shared/bridge';
 import type {
-  ActiveVideoDescriptor, DashAudioTrackMeta, PageCollectSnapshot, VideoRectInfo, VisualFrameSnapshot,
+  ActiveVideoDescriptor, DashAudioTrackMeta, PageCollectSnapshot, VideoRectInfo, VisualFrameSnapshot, WorkbenchVideoSnapshot,
 } from '../shared/types';
 
 const FRAME_INTERVAL_MS = 2000;
@@ -172,7 +173,7 @@ export default defineContentScript({
       if (update.requestId) pendingMedia.get(update.requestId)?.(media);
     }
 
-    function collectPageMedia(videoKey: string): Promise<PageMediaData | null> {
+    function collectPageMedia(videoKey: string, timeoutMs = PAGE_MEDIA_TIMEOUT_MS): Promise<PageMediaData | null> {
       if (pageMedia?.segments.length) return Promise.resolve(pageMedia);
       const requestId = String(++requestSequence);
       return new Promise(resolve => {
@@ -181,10 +182,25 @@ export default defineContentScript({
           pendingMedia.delete(requestId);
           resolve(media);
         };
-        const timeout = window.setTimeout(() => finish(null), PAGE_MEDIA_TIMEOUT_MS);
+        const timeout = window.setTimeout(() => finish(null), timeoutMs);
         pendingMedia.set(requestId, finish);
         requestPageMedia(videoKey, requestId);
       });
+    }
+
+    async function collectWorkbenchVideo(): Promise<WorkbenchVideoSnapshot | null> {
+      const descriptor = syncActiveVideo();
+      if (!descriptor) return null;
+      const version = navigationVersion;
+      // Platform collectors may need to fetch both the track list and subtitle body.
+      const collected = await collectPageMedia(descriptor.video_key, 30_000);
+      const latest = syncActiveVideo();
+      if (latest?.video_key !== descriptor.video_key || navigationVersion !== version) return null;
+      const subtitles = fullWorkbenchTranscript((collected ?? pageMedia)?.segments ?? []);
+      return {
+        descriptor: latest,
+        segments: subtitles.length ? subtitles : fullWorkbenchTranscript(readPlayerSubtitles(activeVideo)),
+      };
     }
 
     function sampleFrame() {
@@ -247,6 +263,9 @@ export default defineContentScript({
             return;
           case UNIMIND_COLLECT_PAGE_SNAPSHOT:
             void collectSnapshot(message.payload).then(respond, () => respond(null));
+            return true;
+          case UNIMIND_COLLECT_WORKBENCH_VIDEO:
+            void collectWorkbenchVideo().then(respond, () => respond(null));
             return true;
         }
       };

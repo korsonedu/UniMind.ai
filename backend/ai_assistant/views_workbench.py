@@ -271,26 +271,14 @@ class ProjectSourceImportView(ProjectSourceView):
             course = get_object_or_404(visible_courses(request), pk=data['course_id'])
 
         with transaction.atomic():
-            # Web URLs and course IDs have no unique constraint on ProjectSource.
+            # URL imports and course IDs have no unique constraint on ProjectSource.
             project = self.get_project(pk, for_update=True)
             sources = project.workbench_sources.filter(user=request.user)
             pending = {'status': ProjectSource.Status.PENDING, 'error_message': ''}
-            if kind == ProjectSource.Type.WEB_URL:
-                url = data['url']
-                source = sources.select_for_update().filter(source_type=kind).filter(
-                    Q(metadata__url=url) | Q(metadata__url__isnull=True, source_url=url),
-                ).order_by('created_at', 'pk').first()
-                created = source is None
-                if created:
-                    source = ProjectSource(project=project, user=request.user, source_type=kind, title=url[:240])
-                source.metadata = {**source.metadata, 'url': url}
-                if 'title' in data:
-                    source.title = data['title']
-                    source.metadata['title'] = source.title
-                source.source_url = url
-                source.status = ProjectSource.Status.PENDING
-                source.error_message = ''
-                source.save()
+            if kind == ProjectSource.Type.WEB_URL or (kind == ProjectSource.Type.TEXT and data.get('source_url')):
+                source, created = self.save_web_source(project, sources, data)
+                if kind == ProjectSource.Type.WEB_URL and source.source_type == ProjectSource.Type.TEXT:
+                    return Response(ProjectSourceSummarySerializer(source).data)
             elif kind == ProjectSource.Type.COURSE:
                 source, created = sources.update_or_create(
                     project=project, user=request.user, source_type=kind, course=course,
@@ -319,6 +307,39 @@ class ProjectSourceImportView(ProjectSourceView):
             ProjectSourceSummarySerializer(source).data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+    def save_web_source(self, project, sources, data):
+        kind = data['kind']
+        url = data['url'] if kind == ProjectSource.Type.WEB_URL else data['source_url']
+        ordered = sources.select_for_update().order_by('created_at', 'pk')
+        source = ordered.filter(source_type=ProjectSource.Type.TEXT, source_url=url).filter(
+            Q(file='') | Q(file__isnull=True),
+        ).first()
+        if source and kind == ProjectSource.Type.WEB_URL and source.status != ProjectSource.Status.FAILED:
+            return source, False
+        if source is None:
+            source = ordered.filter(source_type=ProjectSource.Type.WEB_URL).filter(
+                Q(metadata__url=url) | Q(source_url=url),
+            ).first()
+
+        created = source is None
+        if created:
+            source = ProjectSource(project=project, user=self.request.user, title=url[:240])
+        if kind == ProjectSource.Type.TEXT:
+            source.metadata = {'text': data['content']}
+            source.title = data['title']
+        else:
+            metadata = source.metadata if source.source_type == kind else {}
+            source.metadata = {**metadata, 'url': url}
+            if 'title' in data:
+                source.title = data['title']
+                source.metadata['title'] = source.title
+        source.source_type = kind
+        source.source_url = url
+        source.status = ProjectSource.Status.PENDING
+        source.error_message = ''
+        source.save()
+        return source, created
 
 
 class ProjectSourceDetailView(ProjectSourceView):
