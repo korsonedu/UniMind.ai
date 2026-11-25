@@ -136,22 +136,24 @@ def ingest_station_course(source):
     return MediaIngest(chunks, updates)
 
 
-def ingest_external_video(source):
-    data = source.metadata
-    platform = data.get('platform', '')
-    external_id = data.get('external_id', '')
+def external_video_key(platform, external_id, part=1):
     if (not isinstance(platform, str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,23}', platform)
             or not isinstance(external_id, str) or not re.fullmatch(r'[A-Za-z0-9_.-]+', external_id)):
         raise WorkbenchParseError('外部视频缺少有效的平台或视频编号。')
 
     key = f'{platform}:{external_id}'
     if platform == 'bilibili':
-        part = data.get('part', 1)
         if isinstance(part, bool) or not re.fullmatch(r'[1-9][0-9]{0,8}', str(part)):
             raise WorkbenchParseError('B 站视频分 P 编号必须是正整数。')
         key += f':p{part}'
     if len(key) > 200:
         raise WorkbenchParseError('外部视频编号过长。')
+    return key
+
+
+def ingest_external_video(source):
+    data = source.metadata
+    key = external_video_key(data.get('platform', ''), data.get('external_id', ''), data.get('part', 1))
 
     url = data.get('url') or source.source_url
     try:

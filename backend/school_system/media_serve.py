@@ -15,7 +15,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import signing
 from django.http import HttpResponse, HttpResponseNotAllowed, StreamingHttpResponse, HttpResponseRedirect
-from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
+from rest_framework.exceptions import AuthenticationFailed, NotFound, PermissionDenied
 
 from core.authentication import CookieTokenAuthentication
 
@@ -103,6 +103,11 @@ def issue_media_ticket(user, raw_path: str) -> tuple[str, str] | None:
     media_path = normalize_media_path(raw_path)
     if not media_path:
         return None
+    from ai_assistant.models import WORKBENCH_SOURCE_PREFIX
+    if media_path.startswith(WORKBENCH_SOURCE_PREFIX):
+        from courses.access import private_companion_courses
+        if not private_companion_courses(user).filter(video_file=media_path).exists():
+            raise NotFound('视频不存在。')
     from users.workspaces.identity import account_user
     account = account_user(user)
     payload = {

@@ -63,7 +63,7 @@ def _parse_source(source, asr_provider):
             raise WorkbenchParseError('请先上传要解析的文档。')
         return parse_text_content(content), updates, None
     if kind == ProjectSource.Type.WEB_URL:
-        chunks, url, title = parse_web_url(source.source_url)
+        chunks, url, title = parse_web_url(source.metadata.get('url') or source.source_url)
         return chunks, {'source_url': url, 'title': title}, None
     if kind == ProjectSource.Type.COURSE:
         result = ingest_station_course(source)
@@ -92,6 +92,11 @@ def _publish(source, chunks, updates, media):
         status=ProjectSource.Status.READY,
         error_message='',
     )
+    if source.source_type in (ProjectSource.Type.WEB_URL, ProjectSource.Type.EXTERNAL_VIDEO):
+        # Read the title from the locked row so edits during parsing take effect.
+        title = source.metadata.get('title')
+        if isinstance(title, str) and title:
+            updates['title'] = title[:240]
 
     entries = []
     for index, chunk in enumerate(chunks):

@@ -121,11 +121,12 @@ def delete_project_source_file(sender, instance, using, **kwargs):
 
         if companion_id:
             Course.objects.using(using).filter(
-                pk=companion_id, is_workbench_companion=True, author_id=user_id,
-                companion_workbench_sources__isnull=True,
+                pk=companion_id, is_workbench_companion=True, is_published=False, author_id=user_id,
+                companion_workbench_sources__isnull=True, workbench_sources__isnull=True,
             ).delete()
         if (name and name.startswith(f'{WORKBENCH_SOURCE_PREFIX}{user_id}/')
-                and not sender.objects.using(using).filter(file=name).exists()):
+                and not sender.objects.using(using).filter(file=name).exists()
+                and not Course.objects.using(using).filter(pk=companion_id, video_file=name).exists()):
             sender._meta.get_field('file').storage.delete(name)
 
     transaction.on_commit(cleanup, using=using, robust=True)

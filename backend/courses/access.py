@@ -54,6 +54,16 @@ def private_companion_courses(user, project_id=None):
     return Course.objects.filter(is_workbench_companion=True, is_published=False, author=user).filter(Exists(sources))
 
 
+def project_station_courses(request, project_id, course_id):
+    from ai_assistant.models import ProjectSource
+    if not ProjectSource.objects.filter(
+        project_id=project_id, project__user=request.user, user=request.user,
+        source_type=ProjectSource.Type.COURSE, course_id=course_id,
+    ).exists():
+        return Course.objects.none()
+    return visible_courses(request).filter(pk=course_id)
+
+
 class CanReadCourse(IsMember):
     def has_permission(self, request, view):
         return super().has_permission(request, view) or (

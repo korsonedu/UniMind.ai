@@ -21,6 +21,10 @@ from .views_learning_experiments import LearningExperimentView
 
 from .views_learning import ProjectLearningView, ProjectLearningLibraryView, ProjectLearningKnowledgeView
 from .views_learning_tasks import ProjectLearningTaskListView, ProjectLearningTaskDetailView
+from .views_workbench import (
+    ProjectSourceBatchSelectView, ProjectSourceDetailView, ProjectSourceFileView,
+    ProjectSourceImportView, ProjectSourceListView, ProjectSourceUploadView,
+)
 
 urlpatterns = [
     path('projects/<int:pk>/learning/tasks/', ProjectLearningTaskListView.as_view(), name='project-learning-tasks'),
@@ -48,6 +52,12 @@ urlpatterns = [
     path('conversations/<uuid:conversation_id>/', ConversationDetailView.as_view(), name='conversation-detail'),
     path('projects/', ProjectListCreateView.as_view(), name='conversation-project-list'),
     path('projects/<int:pk>/', ProjectDetailView.as_view(), name='conversation-project-detail'),
+    path('projects/<int:pk>/sources/', ProjectSourceListView.as_view(), name='project-source-list'),
+    path('projects/<int:pk>/sources/upload/', ProjectSourceUploadView.as_view(), name='project-source-upload'),
+    path('projects/<int:pk>/sources/import/', ProjectSourceImportView.as_view(), name='project-source-import'),
+    path('projects/<int:pk>/sources/batch-select/', ProjectSourceBatchSelectView.as_view(), name='project-source-batch-select'),
+    path('projects/<int:pk>/sources/<uuid:source_id>/', ProjectSourceDetailView.as_view(), name='project-source-detail'),
+    path('projects/<int:pk>/sources/<uuid:source_id>/file/', ProjectSourceFileView.as_view(), name='project-source-file'),
     path('reset/', AIChatResetView.as_view(), name='ai-chat-reset'),
     path('delete-conversation/', AIChatDeleteConversationView.as_view(), name='ai-chat-delete-conversation'),
     path('memories/', AgentMemoryListCreateView.as_view(), name='agent-memory-list'),

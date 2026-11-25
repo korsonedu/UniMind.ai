@@ -17,14 +17,18 @@ from rest_framework.permissions import IsAuthenticated
 from users.permissions import IsAdmin, HasQuota
 
 from .models import Course, Album, StartupMaterial, VideoProgress
-from .access import CanReadCourse, HasFullCourseAccess, private_companion_courses
+from .access import CanReadCourse, HasFullCourseAccess, private_companion_courses, project_station_courses
 
 from core.utils import apply_institution_filter, get_content_institution
 
 
-def _get_course_for_user(pk, user, request=None):
+def _get_course_for_user(pk, user, request=None, *, include_companion=False):
     """按机构隔离获取课程，无权限返回 None。"""
     from .access import visible_courses
+    if include_companion:
+        private = private_companion_courses(user).filter(pk=pk).first()
+        if private is not None:
+            return private
     qs = visible_courses(request)
     return qs.filter(pk=pk).first()
 
@@ -781,11 +785,18 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         if self.request.method in ('GET', 'HEAD'):
             from .access import visible_courses
+            user = self.request.user
+            course_id = self.kwargs['pk']
             project = self.request.query_params.get('workbench_project')
             if project is not None:
                 project_id = _safe_int(project)
-                return private_companion_courses(self.request.user, project_id) if project_id else Course.objects.none()
-            private = private_companion_courses(self.request.user).filter(pk=self.kwargs['pk'])
+                if not project_id:
+                    return Course.objects.none()
+                private = private_companion_courses(user, project_id).filter(pk=course_id)
+                if private.exists():
+                    return private
+                return project_station_courses(self.request, project_id, course_id)
+            private = private_companion_courses(user).filter(pk=course_id)
             if private.exists():
                 return private
             return visible_courses(self.request)
@@ -801,10 +812,10 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class CourseOutlineView(APIView):
     def get_permissions(self):
-        return [IsMember()] if self.request.method == 'GET' else [IsMember(), HasFullCourseAccess()]
+        return [CanReadCourse()] if self.request.method in ('GET', 'HEAD') else [IsMember(), HasFullCourseAccess()]
 
     def get(self, request, pk):
-        course = _get_course_for_user(pk, request.user, request)
+        course = _get_course_for_user(pk, request.user, request, include_companion=True)
         if not course:
             return Response({'error': '课程不存在'}, status=404)
 
@@ -848,9 +859,7 @@ class CourseTranscriptView(APIView):
         return [CanReadCourse()] if self.request.method in ('GET', 'HEAD') else [IsMember(), HasFullCourseAccess()]
 
     def get(self, request, pk):
-        course = private_companion_courses(request.user).filter(pk=pk).first()
-        if course is None:
-            course = _get_course_for_user(pk, request.user, request)
+        course = _get_course_for_user(pk, request.user, request, include_companion=True)
         if not course:
             return Response({'error': '课程不存在'}, status=404)
 
