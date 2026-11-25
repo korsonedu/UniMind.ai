@@ -1,6 +1,7 @@
 """Trusted public method versions and evidence-conditioned private task bindings."""
 import math
 
+from django.db.models import Q
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
@@ -27,7 +28,7 @@ class Method(serializers.Serializer):
     retired = serializers.BooleanField(default=False)
 
 
-def publish_method(spec, *, request_key):
+def publish_method(spec, *, request_key, project_id=None):
     """Trusted server publication only; no student text promotion or public API."""
     from .task_memory_store import digest
     parser = Method(data=spec)
@@ -39,6 +40,8 @@ def publish_method(spec, *, request_key):
                                    for value in data['requires'].values()):
         raise ValidationError('公共方法需要明确、有限的适用条件。')
     definition = {'family': FAMILY, **data}
+    if project_id is not None:
+        definition['project_id'] = project_id
     row, _ = TaskMemoryProgram.objects.get_or_create(request_key=digest([FAMILY, request_key]),
         defaults={'definition': definition, 'digest': digest(definition)})
     if row.definition != definition or row.digest != digest(definition):
@@ -46,16 +49,21 @@ def publish_method(spec, *, request_key):
     return row
 
 
-def catalogue():
+def catalogue(project_id=None):
     from .task_memory_store import digest
+    scope = Q(definition__project_id__isnull=True)
+    if project_id is not None:
+        scope |= Q(definition__project_id=project_id)
     latest = {}
-    for row in TaskMemoryProgram.objects.filter(definition__family=FAMILY).order_by('-pk'):
-        key = row.definition['key']
-        if key in latest:
-            continue
-        latest[key] = row
+    for row in TaskMemoryProgram.objects.filter(scope, definition__family=FAMILY).order_by('-pk'):
+        latest.setdefault((row.definition.get('project_id'), row.definition['key']), row)
+    visible = {}
+    for (scope_id, key), row in latest.items():
+        if not row.definition['retired'] and row.digest == digest(row.definition):
+            if scope_id is not None or key not in visible:
+                visible[key] = row
     return [{'id': row.pk, 'digest': row.digest, 'definition': row.definition}
-            for row in latest.values() if not row.definition['retired'] and row.digest == digest(row.definition)]
+            for row in sorted(visible.values(), key=lambda row: -row.pk)]
 
 
 def validate_catalogue(versions):

@@ -862,6 +862,41 @@ class TeachingResearchRun(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class TeachingMechanismActivation(models.Model):
+    kind = models.CharField(max_length=1, choices=[('G', '生成'), ('S', '选择'), ('E', '评价')])
+    scope = models.CharField(max_length=24, choices=[('project_canary', '项目灰度'), ('global', '全局')])
+    project = models.ForeignKey(ConversationProject, null=True, blank=True, on_delete=models.CASCADE,
+                                related_name='mechanism_activations')
+    decision_point = models.CharField(max_length=40, blank=True, default='')
+    research_run = models.ForeignKey(TeachingResearchRun, on_delete=models.PROTECT, related_name='activations')
+    mechanism = models.ForeignKey(TeachingMechanismVersion, on_delete=models.PROTECT, related_name='activations')
+    previous = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='successors')
+    published_program = models.ForeignKey(TaskMemoryProgram, null=True, blank=True, on_delete=models.SET_NULL,
+                                          related_name='rsi_activations')
+    status = models.CharField(max_length=24, choices=[('gate_passed', '通过门禁'), ('canary_active', '灰度生效'),
+                                                     ('active', '正式生效'), ('rolled_back', '已回滚'), ('rejected', '已拒绝')])
+    gate_report = models.JSONField(default=dict)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name='approved_mechanism_activations')
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rolled_back_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                       related_name='rolled_back_mechanism_activations')
+    rolled_back_at = models.DateTimeField(null=True, blank=True)
+    rollback_reason = models.CharField(max_length=500, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['kind', 'scope', 'project', 'decision_point', 'status', 'created_at'])]
+        constraints = [
+            models.UniqueConstraint(fields=['kind', 'scope', 'project', 'decision_point'],
+                condition=models.Q(project__isnull=False, status__in=('canary_active', 'active')),
+                name='rsi_active_project_slot'),
+            models.UniqueConstraint(fields=['kind', 'scope', 'decision_point'],
+                condition=models.Q(project__isnull=True, status__in=('canary_active', 'active')),
+                name='rsi_active_global_slot'),
+        ]
+
+
 class LearningMemoryGrant(models.Model):
     """A revocable workspace credential or a legacy project credential."""
 

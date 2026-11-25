@@ -1,10 +1,12 @@
 """Versioned teaching assignments over the candidates available to this turn."""
 from hashlib import sha256
+from math import fsum, isclose
 
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
 
 from ai_assistant.models import TeachingDecisionLog
+from .rsi_governance import active_s_policy
 from .teaching_sidecar import current_bundle
 
 
@@ -27,7 +29,28 @@ def _draw(key, probabilities):
         if draw < probability:
             return index
         draw -= probability
-    return len(probabilities) - 1
+    return max(index for index, probability in enumerate(probabilities) if probability > 0)
+
+
+def _target_policy(mechanism):
+    content = mechanism.content
+    return content.get('target_policy', content.get('probabilities')) if isinstance(content, dict) else None
+
+
+def _policy_weights(policy, actions):
+    if not isinstance(policy, dict) or not policy or not all(
+            isinstance(action, str) and action.strip() and action in actions
+            and type(weight) in (int, float) and 0 <= weight <= 1 for action, weight in policy.items()):
+        return None
+    total = fsum(policy.values())
+    if not isclose(total, 1.0, rel_tol=0, abs_tol=1e-9):
+        return None
+    return [policy.get(action, 0) / total for action in actions]
+
+
+def _exploration_rate(policy):
+    rate = policy['exploration_rate'] if isinstance(policy, dict) and policy.keys() == {'exploration_rate'} else None
+    return rate if type(rate) in (int, float) and 0 <= rate <= 0.5 else None
 
 
 def _decisions(project, message, point):
@@ -36,10 +59,11 @@ def _decisions(project, message, point):
 
 
 def _record(project, message, point, *, task, version, mode, selected, propensity, candidates, context,
-            frame_id, program_digest):
+            frame_id, program_digest, activation=None):
     return TeachingDecisionLog.objects.get_or_create(project=project, owner_id=project.user_id,
         message=message, decision_point=point, defaults={
-            'task': task, 'mechanism_id': lambda: current_bundle()['S']['id'], 'policy_version': version,
+            'task': task, 'mechanism_id': activation.mechanism_id if activation else lambda: current_bundle()['S']['id'],
+            'policy_version': version,
             'selection_mode': mode, 'selected_action': selected, 'propensity': propensity,
             'candidates': candidates, 'context_snapshot': context, 'sdtm_frame_id': frame_id,
             'sdtm_program_digest': program_digest, 'exposure': {'status': 'assigned'},
@@ -69,7 +93,17 @@ def select_recheck_timing(project, task, current_message, *, source_result_id, p
     mode = policy_mode(project.pk)
     rate = settings.UNIMIND_RSI_EXPLORATION_RATE
     probabilities = [None] * len(arms)
-    if mode == 'shadow' or (mode == 'active' and rate > 0):
+    version = RECHECK_VERSION
+    activation = active_s_policy(project.pk, 'recheck_timing') if mode == 'active' else None
+    weights = _policy_weights(_target_policy(activation.mechanism), arms) if activation else None
+    if weights is not None:
+        index = _draw(f'recheck:{project.pk}:{source_result_id}:activation-{activation.pk}', weights)
+        selected, propensity, probabilities = arms[index], weights[index], weights
+        if sum(weight > 0 for weight in weights) > 1:
+            selection_mode = 'stratified_random'
+        context['activation_id'] = activation.pk
+        version = f'{RECHECK_VERSION}:activation-{activation.pk}'
+    elif mode == 'shadow' or (mode == 'active' and rate > 0):
         distribution = [1 - rate if arm == baseline else rate / (len(arms) - 1) for arm in arms]
         index = _draw(f'recheck:{project.pk}:{source_result_id}:{RECHECK_VERSION}', distribution)
         if mode == 'shadow':
@@ -80,9 +114,9 @@ def select_recheck_timing(project, task, current_message, *, source_result_id, p
             selection_mode, probabilities = 'stratified_random', distribution
     candidates = [{'action': arm, 'delay_turns': RECHECK_DELAYS[arm], 'propensity': probability}
                   for arm, probability in zip(arms, probabilities)]
-    saved = _record(project, current_message, 'recheck_timing', task=task, version=RECHECK_VERSION, mode=selection_mode,
+    saved = _record(project, current_message, 'recheck_timing', task=task, version=version, mode=selection_mode,
         selected=selected, propensity=propensity, candidates=candidates, context=context,
-        frame_id=sdtm_frame_id, program_digest=sdtm_program_digest)
+        frame_id=sdtm_frame_id, program_digest=sdtm_program_digest, activation=activation if weights is not None else None)
     return saved.selected_action, saved
 
 
@@ -118,6 +152,7 @@ def rank_method_candidates(project, current_message, *, public_methods=(), priva
     saved = decisions.first() if decisions is not None else None
     context = {}
     selection_mode = 'deterministic'
+    version, activation = METHOD_VERSION, None
     if not saved and mode != 'off':
         from . import rsi_evidence
         evidence = rsi_evidence.summarize_method_evidence(rsi_evidence.project_method_evidence(project))
@@ -137,20 +172,38 @@ def rank_method_candidates(project, current_message, *, public_methods=(), priva
             selection_mode = 'shadow_only'
         else:
             entries = ranked
-            if current_message is not None and rate > 0 and len(entries) >= 2:
-                explore = rate / len(entries)
-                probabilities = [1 - rate + explore] + [explore] * (len(entries) - 1)
+            probabilities = None
+            if current_message is not None:
+                activation = active_s_policy(project.pk, 'method_ranking')
+            if activation:
+                policy = _target_policy(activation.mechanism)
+                actions = [candidate['action'] for candidate, _ in entries]
+                override = _exploration_rate(policy)
+                if len(set(actions)) == len(actions):
+                    probabilities = _policy_weights(policy, actions)
+                if probabilities is not None or override is not None:
+                    context['activation_id'] = activation.pk
+                    version = f'{METHOD_VERSION}:activation-{activation.pk}'
+                    if override is not None:
+                        rate = override
+                else:
+                    activation = None
+            if current_message is not None and (activation or (rate > 0 and len(entries) >= 2)):
+                if probabilities is None:
+                    explore = rate / len(entries)
+                    probabilities = [1 - rate + explore] + [explore] * (len(entries) - 1)
                 for (candidate, _), probability in zip(entries, probabilities):
                     candidate['propensity'] = probability
-                index = _draw(f'method_rank:{project.pk}:{current_message.pk}:{METHOD_VERSION}', probabilities)
+                index = _draw(f'method_rank:{project.pk}:{current_message.pk}:{version}', probabilities)
                 entries.insert(0, entries.pop(index))
-                selection_mode = 'bounded_exploration'
+                if sum(probability > 0 for probability in probabilities) > 1:
+                    selection_mode = 'bounded_exploration'
     if decisions is not None and not saved:
         selected = entries[0][0]
-        saved = _record(project, current_message, 'method_ranking', task=task, version=METHOD_VERSION, mode=selection_mode,
+        saved = _record(project, current_message, 'method_ranking', task=task, version=version, mode=selection_mode,
             selected=selected['action'], propensity=selected['propensity'],
             candidates=[candidate for candidate, _ in entries], context=context,
-            frame_id=sdtm_frame_id, program_digest=sdtm_program_digest)
+            frame_id=sdtm_frame_id, program_digest=sdtm_program_digest, activation=activation)
     if saved and mode == 'active':
         # A different task read can expose a different slate in the same turn.
         order = {_candidate_key(candidate): rank for rank, candidate in enumerate(saved.candidates)}

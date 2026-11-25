@@ -153,7 +153,7 @@ def _public_records(project, now):
     tasks = task_states(project, state, scope=scope)
     task_rows = {row['id']: row for row in tasks}
     diagnostic = learning_diagnostics.read_sources(project, set(task_rows), now=now) if learning_diagnostics.active(project.pk) else {}
-    history, versions = method_adoption.history_source(project, verified['events'], tasks, public_methods.catalogue(),
+    history, versions = method_adoption.history_source(project, verified['events'], tasks, public_methods.catalogue(project.pk),
         verified['verified_versions'], diagnostic_sources=diagnostic, include_provenance=True)
     definitions = {version['id']: version['definition'] for version in versions}
     decisions = {log.message_id: log for log in TeachingDecisionLog.objects.filter(project=project,

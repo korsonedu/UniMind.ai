@@ -120,7 +120,7 @@ def project_source(project, *, now=None):
         source['project']['task_scope_schema']='exact-definition-v1'
     from .public_methods import catalogue
     from .learning_knowledge import owned_version, closure
-    source['public_methods']=catalogue()
+    source['public_methods']=catalogue(project.pk)
     from .method_adoption import history_source
     from . import learning_diagnostics
     support = None
