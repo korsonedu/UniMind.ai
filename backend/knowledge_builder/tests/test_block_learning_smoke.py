@@ -360,6 +360,66 @@ class BlockLearningSmoke(APITestCase):
         self.assertEqual(ProjectLearningTask.objects.filter(project=self.project).count(), self.counter)
         self.assertEqual(self.counter, 2)
 
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr', UNIMIND_DSH_ENABLED=False)
+    def test_postgresql_cutover_settles_assessment_for_replaced_version(self):
+        if connection.vendor != 'postgresql':
+            self.skipTest('PostgreSQL session lock required.')
+        from io import StringIO
+        import json
+        from tempfile import TemporaryDirectory
+
+        from django.core.management import call_command, CommandError
+        from ai_assistant.models import Bot
+        from knowledge_builder.tasks import prepare_block_assessment
+
+        Bot.objects.create(is_xiaoyu=True, name='小宇')
+        with self.settings(UNIMIND_LEARNING_RUNTIME='legacy'):
+            event = self.enqueue_assessment()
+            with patch('knowledge_builder.block_assessments._generate_question', side_effect=SystemExit), self.assertRaises(SystemExit):
+                prepare_block_assessment(event.pk)
+        event.refresh_from_db()
+        original = event.content.copy()
+        self.assertEqual(original['status'], 'running')
+
+        self.block.short_title = '折现 · 新版'
+        self.block.save(update_fields=['short_title'])
+        knowledge_operation(self.project, {'action': 'from_build', 'build_id': str(self.build.pk),
+            'block_ids': [self.block.pk], 'revision': self.state.revision})
+        self.state.refresh_from_db()
+        change_learning(self.project, {'action': 'accept', 'revision': self.state.revision})
+        self.state.refresh_from_db()
+        self.assertNotEqual(self.state.plan['knowledge_path']['version_id'], original['version_id'])
+
+        with TemporaryDirectory() as state_dir:
+            gate = {'state_dir': state_dir, 'api_url': 'http://127.0.0.1:8000', 'require_migrated': True}
+            with self.assertRaises(CommandError):
+                call_command('audit_dsh_sessions', **gate, stdout=StringIO())
+            with patch.object(prepare_block_assessment, 'delay') as dispatch, \
+                    patch('knowledge_builder.block_assessments._generate_question') as model:
+                for _ in range(2):
+                    receipt = StringIO()
+                    call_command('resume_block_assessment', event.pk, legacy_workers_stopped=True, stdout=receipt)
+                    self.assertEqual(json.loads(receipt.getvalue()), {'event_id': event.pk, 'status': 'failed',
+                        'queued': False, 'error_code': 'superseded_learning_version'})
+                prepare_block_assessment(event.pk)
+                dispatch.assert_not_called()
+                model.assert_not_called()
+            inventory = StringIO()
+            call_command('audit_dsh_sessions', **gate, stdout=inventory)
+            self.assertTrue(json.loads(inventory.getvalue())['migrated'])
+            unknown = ProjectLearningEvent.objects.create(project=self.project, kind='block_prepare',
+                content={**original, 'version_id': self.state.plan['knowledge_path']['version_id'] + 1})
+            with self.assertRaisesRegex(CommandError, '无法核对'):
+                call_command('resume_block_assessment', unknown.pk, legacy_workers_stopped=True, stdout=StringIO())
+            unknown.refresh_from_db()
+            self.assertEqual(unknown.content['status'], 'running')
+
+        event.refresh_from_db()
+        self.assertEqual(event.content['version_id'], original['version_id'])
+        self.assertFalse(event.content['queue_retryable'])
+        self.assertFalse(ProjectLearningTask.objects.filter(project=self.project).exists())
+        self.assertIsNone(self.assessment(action='read').data['preparation'])
+
     def test_tasks_answers_recovery_and_next_recommendation(self):
         for index in range(2):
             response = self.assessment(retest=bool(index))
