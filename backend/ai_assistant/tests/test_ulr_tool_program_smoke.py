@@ -100,6 +100,24 @@ def test_practice_instruction_never_widens_a_missing_or_ambiguous_match():
     assert ambiguous['steps_executed'] == ['search_knowledge_tree'] and calls == ['search_knowledge_tree'] * 2
 
 
+def test_practice_instruction_binds_card_delivery_to_the_requested_topic():
+    def execute(name, arguments):
+        if name == 'search_knowledge_tree':
+            return {'results': [{'id': 77}]}
+        assert name == 'get_practice_questions' and arguments == {'knowledge_point_id': 77, 'limit': 1}
+        return {'questions': []}
+
+    request = '按久期保护知识点给我一道练习题。'
+    for message, find, card_only in (
+        (request, '久期保护', True),
+        (request + '再讲解这道题。', '久期保护', False),
+        (request, '另一个知识点', False),
+    ):
+        result = run_program({'find': find, 'limit': 1}, PROGRAM_OPS[PRACTICE_NAME], execute,
+                             name=PRACTICE_NAME, message=message)
+        assert bool(result.get('_ulr_card_only')) == card_only
+
+
 def test_practice_compiler_requires_an_explicit_card_and_literal_topic():
     request = '请给我2道「第２项现金流折现」知识点的练习题。只要练习卡。'
     for written, count in (('2', 2), ('２', 2), ('两', 2), (' 二 ', 2), ('三', 3), ('十', 10), ('１０', 10)):

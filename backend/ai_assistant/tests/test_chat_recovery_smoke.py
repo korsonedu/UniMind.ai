@@ -235,6 +235,7 @@ def test_practice_answer_receipts_are_protected_without_changing_the_official_su
     with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider, \
             patch('ai_assistant.services.dsh_xiaoyu.extract_memories_async'):
         created = async_to_sync(consume_receipt)(auth_client.post('/api/ai/chat/stream/', body, format='json'))
+        assert not created.get('is_error'), created
         practice, = created['metadata']['dsh_cards']
         assert practice['type'] == 'practice_quiz' and provider.call_count == 1
         for original, receipt in originals:

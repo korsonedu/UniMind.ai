@@ -14,7 +14,7 @@ NAME = 'run_course_tools'
 PRACTICE_NAME = 'run_practice_tools'
 CURRENT_COURSE_NAME = 'locate_current_course_transcript'
 # Bump when the instruction grammar or its bound operation contracts change.
-VERSION = 20
+VERSION = 21
 # Earlier versions with the same operations may still echo version and rank.
 LEGACY_VERSION = 6
 PROGRAM_OPS = {
@@ -98,6 +98,7 @@ _PRACTICE_ORDINAL = r'第[\d零〇一二两三四五六七八九十百千万亿]
 _PRACTICE_TOPIC = r'[^。！？；，、,.!?;：:\n]+'
 PRACTICE_CARD_REQUEST = re.compile(
     rf'\s*(?:请)?(?:给我{_PRACTICE_COUNT}(?P<direct>{_PRACTICE_TOPIC})知识点的|'
+    rf'按(?P<by_topic>{_PRACTICE_TOPIC})知识点给我{_PRACTICE_COUNT}|'
     rf'先查(?P<lookup>{_PRACTICE_TOPIC})知识点[,，]\s*再根据{_PRACTICE_ORDINAL}(?:出|给我){_PRACTICE_COUNT})练习题'
     rf'(?:[。.!！,，]\s*(?:让我在卡片里作答|选择{_PRACTICE_ORDINAL}(?:[,，]\s*也选择{_PRACTICE_ORDINAL})?))?'
     r'\s*[。.!！]?\s*')
@@ -267,7 +268,7 @@ def run_program(arguments, allowed_tools, execute, *, name=NAME, message='', cur
     if practice:
         card_only = PRACTICE_ONLY.search(message) is not None
         if not card_only and (request := PRACTICE_CARD_REQUEST.fullmatch(normalize('NFKC', message))):
-            topic = (request['direct'] or request['lookup']).strip()
+            topic = (request['direct'] or request['by_topic'] or request['lookup']).strip()
             query = normalize('NFKC', arguments['find']).strip()
             card_only = query in (topic, f'{topic}知识点')
     else:
