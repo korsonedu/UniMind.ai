@@ -37,7 +37,8 @@ SOURCES = {
           'ai_assistant/services/dsh_tasks.py', 'ai_assistant/services/dsh_generation.py',
           'ai_assistant/services/ulr_grading.py', 'ai_assistant/services/ulr_structured.py',
           'ai_assistant/services/learning_diagnostics.py'],
-    'M': ['ai_assistant/services/teaching_sidecar.py', 'ai_assistant/services/teaching_shadow.py'],
+    'M': ['ai_assistant/services/teaching_sidecar.py', 'ai_assistant/services/teaching_shadow.py',
+          'ai_assistant/services/rsi_dataset.py'],
 }
 SDTM_SOURCES = [
     'ai_assistant/services/task_memory_store.py', 'ai_assistant/services/task_memory_projection.py',
