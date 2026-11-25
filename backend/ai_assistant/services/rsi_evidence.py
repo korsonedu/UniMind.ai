@@ -5,9 +5,9 @@ from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from ai_assistant.models import Conversation, LearningStrategyOutcome, LearningStrategyUse, ProjectLearning
+from ai_assistant.models import Conversation, LearningStrategyOutcome, LearningStrategyUse, ProjectLearning, TeachingDecisionLog
 from users.feature_access import has_learning_feature
-from . import fact_evidence, learning_continuity, learning_diagnostics, method_adoption, public_methods
+from . import fact_evidence, learning_continuity, learning_diagnostics, method_adoption, public_methods, rsi_policy
 from .learning_library import _adopted_method, unconfirmed_strategy_use_ids
 from .learning_tasks import _hash, task_label_source, task_question_hash, task_result_snapshot, task_states
 from .prism_memory import accessible
@@ -150,6 +150,8 @@ def _public_records(project, now):
     history, versions = method_adoption.history_source(project, verified['events'], tasks, public_methods.catalogue(),
         verified['verified_versions'], diagnostic_sources=diagnostic, include_provenance=True)
     definitions = {version['id']: version['definition'] for version in versions}
+    decisions = {log.message_id: log for log in TeachingDecisionLog.objects.filter(project=project,
+        owner_id=project.user_id, decision_point='method_ranking', message_id__in=[row['question_id'] for row in history])}
     for row in history:
         task = task_rows.get(row['task_id'])
         if task is None:
@@ -162,12 +164,20 @@ def _public_records(project, now):
                 reasons = [*reasons, 'source_unavailable']
             outcomes.append(_outcome(outcome, task, reasons=reasons, graded_at=outcome['at']))
         definition = definitions.get(row['method_id'], {})
+        selection = {'selection_kind': 'model_directed_nonrandom'}
+        if available and (log := decisions.get(row['question_id'])):
+            candidate = rsi_policy.method_assignment(log, kind='public', method_id=row['method_id'],
+                method_digest=row['method_digest'], task_id=row['task_id'])
+            if candidate:
+                selection['model_visible_candidate_set'] = log.candidates
+                if candidate['action'] == log.selected_action:
+                    selection.update(selection_kind=log.selection_mode, propensity=log.propensity)
         yield _record(project, 'public_method', row['use_id'],
             {'kind': 'public', 'id': row['method_id'], 'digest': row['method_digest'], 'key': row['method_key'],
              'domain': None, 'topic': definition.get('requires', {}).get('topic'), 'version_id': row['method_id']},
             task_id=row['task_id'], question_id=row['question_id'], reply_id=row['answer_id'] if row['reply_completed'] else None,
             assigned_at=row['assigned_at'], completed_at=row['completed_at'], mechanisms=row['mechanisms'],
-            selection={'selection_kind': 'model_directed_nonrandom'}, source_available=available, outcomes=outcomes)
+            selection=selection, source_available=available, outcomes=outcomes)
 
 
 def project_method_evidence(project, *, include_private=True, include_public=True, now=None):

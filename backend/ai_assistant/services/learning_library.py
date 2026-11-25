@@ -243,11 +243,13 @@ def strategy_operation(project, arguments, *, message=None, pending_progress_id=
     evidence = evidence.exclude(pk__in=unconfirmed)
     if action == 'read_public_methods':
         from .fact_evidence import active
+        from .project_learning import rank_task_methods
         from .task_memory_store import preview
         if not active() or not data.get('task_id'):
             raise ValidationError('请在开启统一记忆时提供当前项目任务编号。')
-        packet = preview(project, project.user, task_id=data['task_id'])['packet']
-        return {'public_methods': packet['public_methods'],
+        prepared = preview(project, project.user, task_id=data['task_id'])
+        packet = prepared['packet']
+        return {'public_methods': rank_task_methods(project, message, data['task_id'], prepared),
                 'method_history': [row for row in packet['method_history'] if row['task_id'] == str(data['task_id'])]}
     if action == 'apply_public':
         from .method_adoption import apply_public

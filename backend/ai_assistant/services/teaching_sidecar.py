@@ -6,6 +6,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -13,7 +14,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from ai_assistant.models import (
     AIChatMessage, Conversation, LearningStrategy, LearningStrategyOutcome,
     LearningStrategyUse, LearningStrategyVersion, ProjectLearningEvent,
-    TaskMemoryObject, TeachingMechanismVersion,
+    TaskMemoryObject, TeachingDecisionLog, TeachingMechanismVersion,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,8 @@ SOURCES = {
           'ai_assistant/services/ulr_capabilities.py', 'ai_assistant/services/public_methods.py'],
     'S': ['ai_assistant/services/learning_library.py', 'ai_assistant/services/bayesian_evidence.py',
           'ai_assistant/services/ulr_teaching.py', 'ai_assistant/services/public_methods.py',
-          'ai_assistant/services/method_adoption.py'],
+          'ai_assistant/services/method_adoption.py', 'ai_assistant/services/rsi_policy.py',
+          'ai_assistant/services/rsi_evidence.py'],
     'E': ['prompts/quizzes/grading_prompt.txt', 'ai_assistant/services/learning_guidance.py',
           'ai_assistant/services/learning_task_evidence.py', 'ai_assistant/services/learning_tasks.py',
           'quizzes/services/ai_task_service.py', 'quizzes/services/question_generator.py',
@@ -90,7 +92,9 @@ def current_bundle():
               ('UNIMIND_DSH_GENERATION_ENABLED', 'UNIMIND_DSH_GRADING_ENABLED', 'UNIMIND_DSH_XIAOYU_ENABLED')}
     routes.update(ulr_enabled=ulr_enabled(), ulr_recheck_strategy=settings.UNIMIND_ULR_RECHECK_STRATEGY,
                   prism_mode=prism_mode, sdtm_task_memory_mode=task_memory_mode,
-                  sdtm_structured_diagnostics=settings.UNIMIND_SDTM_STRUCTURED_DIAGNOSTICS)
+                  sdtm_structured_diagnostics=settings.UNIMIND_SDTM_STRUCTURED_DIAGNOSTICS,
+                  rsi_online_policy_mode=settings.UNIMIND_RSI_ONLINE_POLICY_MODE,
+                  rsi_exploration_rate=settings.UNIMIND_RSI_EXPLORATION_RATE)
     root = Path(settings.BASE_DIR)
     model_config_hash = hashlib.sha256((root / 'ai_engine/config.py').read_bytes()).hexdigest()
     bundle = {}
@@ -182,6 +186,14 @@ def record_strategy_use(use, *, created):
                     'selected_version_id': version.pk, 'selected_digest': version.digest,
                     'prediction': None, 'prediction_status': 'not_recorded',
                     'assigned_at': use.created_at.isoformat()}
+    log = TeachingDecisionLog.objects.filter(message=use.message, project=use.project,
+        owner_id=use.project.user_id, decision_point='method_ranking').first()
+    if log:
+        from .rsi_policy import method_assignment
+        use.decision.update(model_visible_candidate_set=log.candidates, decision_log_id=log.pk)
+        candidate = method_assignment(log, kind='private', method_id=use.strategy_id, method_digest=version.digest)
+        if candidate and candidate['action'] == log.selected_action and log.propensity is not None:
+            use.decision.update(propensity=log.propensity, selection_kind=log.selection_mode)
     from .memory_core import prism_active
     if prism_active():
         from .prism_memory import context
@@ -225,6 +237,11 @@ def record_turn_completion(reply):
         bot_id=reply.bot_id, conversation_id=reply.conversation_id, role='user').first()
     if not trigger:
         return
+    TeachingDecisionLog.objects.filter(message=trigger, owner_id=reply.user_id, project__user_id=reply.user_id,
+        exposure__status='assigned').filter(Q(answer=reply) | Q(answer__isnull=True)).update(answer=reply, exposure={
+            'status': 'reply_completed', 'reply_id': reply.pk, 'reply_hash': canonical_hash(reply.content),
+            'completed_at': turn.get('completed_at'), 'saved_at': reply.timestamp.isoformat(),
+            'presentation': 'unknown', 'adherence': 'unverified'})
     from .learning_library import unconfirmed_strategy_use_ids
     uses = LearningStrategyUse.objects.filter(message=trigger, project__user_id=reply.user_id)
     for use in uses.exclude(pk__in=unconfirmed_strategy_use_ids(reply.user_id, uses)):

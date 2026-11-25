@@ -28,13 +28,13 @@ from users.models import AIUsageReservation, CourseStudentStatus, User, WeeklyAI
 @override_settings(DEBUG=False, UNIMIND_LEARNING_RUNTIME='legacy', UNIMIND_ULR_PROTOTYPE=True,
     UNIMIND_PRISM_MODE='off', UNIMIND_SDTM_TASK_MEMORY_MODE='off', UNIMIND_SDTM_STRUCTURED_DIAGNOSTICS=False,
     UNIMIND_DSH_GENERATION_ENABLED=True, UNIMIND_DSH_GRADING_ENABLED=False, UNIMIND_DSH_XIAOYU_ENABLED=True,
-    UNIMIND_ULR_RECHECK_STRATEGY='immediate')
+    UNIMIND_ULR_RECHECK_STRATEGY='immediate', UNIMIND_RSI_ONLINE_POLICY_MODE='off', UNIMIND_RSI_EXPLORATION_RATE=0.0)
 class RuntimeBundleSmoke(TestCase):
     def test_mechanisms_hash_native_sources_and_route_changes(self):
         baseline = teaching_sidecar.current_bundle()
         native = {
             'G': ('ulr_runtime', 'ulr_tool_program', 'ulr_capabilities', 'public_methods'),
-            'S': ('ulr_teaching', 'public_methods', 'method_adoption'),
+            'S': ('ulr_teaching', 'public_methods', 'method_adoption', 'rsi_policy', 'rsi_evidence'),
             'E': ('ulr_grading', 'ulr_structured', 'learning_diagnostics'),
             'M': ('teaching_sidecar', 'teaching_shadow'),
         }
@@ -44,6 +44,7 @@ class RuntimeBundleSmoke(TestCase):
             'UNIMIND_DSH_GENERATION_ENABLED': True, 'UNIMIND_DSH_GRADING_ENABLED': False,
             'UNIMIND_DSH_XIAOYU_ENABLED': True, 'ulr_enabled': False, 'ulr_recheck_strategy': 'immediate',
             'prism_mode': 'off', 'sdtm_task_memory_mode': 'off', 'sdtm_structured_diagnostics': False,
+            'rsi_online_policy_mode': 'off', 'rsi_exploration_rate': 0.0,
         }
         for kind, modules in native.items():
             content = TeachingMechanismVersion.objects.get(pk=baseline[kind]['id']).content
@@ -59,6 +60,8 @@ class RuntimeBundleSmoke(TestCase):
             ('UNIMIND_PRISM_MODE', 'prism_mode', 'shadow'),
             ('UNIMIND_SDTM_TASK_MEMORY_MODE', 'sdtm_task_memory_mode', 'active'),
             ('UNIMIND_SDTM_STRUCTURED_DIAGNOSTICS', 'sdtm_structured_diagnostics', True),
+            ('UNIMIND_RSI_ONLINE_POLICY_MODE', 'rsi_online_policy_mode', 'shadow'),
+            ('UNIMIND_RSI_EXPLORATION_RATE', 'rsi_exploration_rate', 0.4),
         ):
             with self.subTest(setting=change), override_settings(**{change: value}):
                 current = teaching_sidecar.current_bundle()

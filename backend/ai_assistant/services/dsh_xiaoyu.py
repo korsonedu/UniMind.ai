@@ -14,7 +14,9 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from ai_assistant.models import AIChatMessage, Conversation, chat_receipt_deleted, mark_runtime_requests_deleted
+from ai_assistant.models import (
+    AIChatMessage, Conversation, TeachingDecisionLog, chat_receipt_deleted, mark_runtime_requests_deleted,
+)
 from ai_assistant.services.language import request_language
 from ai_assistant.services.title_generator import schedule_conversation_title, sync_generate_title
 from ai_assistant.services.memory_service import extract_memories_async
@@ -329,6 +331,8 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                 stored_metadata = {**metadata, 'ulr_context_sources': context_sources} if context_sources is not None else metadata
                 answer = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=conversation_id,
                     role='assistant', content=content, metadata=stored_metadata)
+                if ulr:
+                    TeachingDecisionLog.objects.filter(message=current, answer__isnull=True).update(answer=answer)
                 from . import learning_diagnostics
                 if learning_diagnostics.active():
                     learning_diagnostics.capture(current, answer)
