@@ -13,7 +13,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from ai_assistant.models import (
     AIChatMessage, Conversation, LearningStrategy, LearningStrategyOutcome,
     LearningStrategyUse, LearningStrategyVersion, ProjectLearningEvent,
-    TeachingMechanismVersion,
+    TaskMemoryObject, TeachingMechanismVersion,
 )
 
 logger = logging.getLogger(__name__)
@@ -253,6 +253,28 @@ def validate_strategy_use(project, use_id, *, pending_message_id=None):
     return use
 
 
+def verified_strategy_reply(use):
+    reply = AIChatMessage.objects.filter(pk=use.exposure.get('reply_id'), user_id=use.project.user_id,
+        bot_id=use.message.bot_id, conversation_id=use.message.conversation_id, role='assistant',
+        metadata__learning_turn__message_id=use.message_id, metadata__learning_turn__completed=True).first()
+    if not reply:
+        return None, None
+    completed_at = reply.metadata['learning_turn'].get('completed_at')
+    completed = parse_datetime(completed_at or '')
+    if (completed and timezone.is_aware(completed) and use.exposure.get('completed_at') == completed_at
+            and use.exposure.get('reply_hash') == canonical_hash(reply.content)
+            and use.exposure.get('saved_at') == reply.timestamp.isoformat()):
+        return reply, completed
+    return None, None
+
+
+def overlapping_public_use(task, assigned_at, submitted_at):
+    assignments = TaskMemoryObject.objects.filter(owner_id=task.project.user_id, project=task.project,
+        kind='method_use', task=task).values_list('value__assigned_at', flat=True)
+    return any(timezone.is_aware(stamp) and assigned_at <= stamp <= submitted_at
+               for value in assignments if (stamp := parse_datetime(value or '')))
+
+
 def record_task_outcome(task, result, event):
     if not task.strategy_use_id or result.status != 'graded':
         return
@@ -268,14 +290,8 @@ def record_task_outcome(task, result, event):
         raise ValidationError('教学观察的原始证据已变化。')
     if use.method_version_id and use.method_version.digest != canonical_hash(method_snapshot(use.strategy)):
         raise ValidationError('教学方法的冻结依据已变化。')
-    reply = AIChatMessage.objects.filter(pk=use.exposure.get('reply_id'), user_id=task.project.user_id,
-        bot_id=use.message.bot_id, conversation_id=use.message.conversation_id, role='assistant',
-        metadata__learning_turn__message_id=use.message_id, metadata__learning_turn__completed=True).first()
-    completed = parse_datetime(reply.metadata['learning_turn'].get('completed_at', '')) if reply else None
-    exposure_matches = bool(reply and use.exposure.get('reply_hash') == canonical_hash(reply.content)
-        and use.exposure.get('completed_at') == reply.metadata['learning_turn'].get('completed_at')
-        and use.exposure.get('saved_at') == reply.timestamp.isoformat())
-    timing = bool(exposure_matches and completed and timezone.is_aware(completed) and result.graded_at
+    reply, completed = verified_strategy_reply(use)
+    timing = bool(reply and result.graded_at
                   and result.exam.created_at > max(completed, reply.timestamp)
                   and result.exam.created_at >= max(use.created_at, task.created_at)
                   and result.graded_at >= result.exam.created_at)
@@ -289,6 +305,11 @@ def record_task_outcome(task, result, event):
     trials = LearningStrategyUse.objects.filter(project=task.project, created_at__gte=use.created_at,
         created_at__lte=result.exam.created_at).exclude(pk=use.pk)
     overlaps = trials.exclude(pk__in=unconfirmed_strategy_use_ids(task.project.user_id, trials)).exists()
+    overlaps = overlaps or overlapping_public_use(task, use.created_at, result.exam.created_at)
+    from . import learning_diagnostics
+    task_id = str(task.pk)
+    disclosed = learning_diagnostics.active(task.project_id) and task_id in learning_diagnostics.excluded_tasks(
+        learning_diagnostics.read_sources(task.project, {task_id}))
     reasons = []
     if not timing:
         reasons.append('no_completed_prior_teaching')
@@ -300,11 +321,13 @@ def record_task_outcome(task, result, event):
         reasons.append('overlapping_methods')
     if not use.decision or use.decision.get('status') != 'observed':
         reasons.append('unobserved_assignment')
+    if disclosed:
+        reasons.append('same_instance_solution_disclosed')
     snapshot = {**expected, 'schema': SCHEMA, 'use_id': use.pk, 'result_id': result.pk,
                 'method_version_id': use.method_version_id, 'purpose': task.purpose,
                 'question_hash': expected['question_hash'], 'assistance_source': 'submission_report',
                 'prompt_hash': task_prompt_hash(question), 'novelty_verified': False,
-                'timing_verified': timing, 'repeated': repeated, 'overlapping_methods': overlaps,
+                'timing_verified': timing, 'repeated': repeated, 'overlapping_methods': overlaps, 'disclosed': disclosed,
                 'status': 'uncertain' if reasons else 'independent_reported_observation',
                 'reasons': reasons, 'causal_claim': False, 'independent_label_verified': False,
                 'exposure': use.exposure, 'graded_at': result.graded_at.isoformat() if result.graded_at else None}
