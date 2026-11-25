@@ -112,6 +112,13 @@ export interface AgentChatLayoutProps {
   /** 当 hasConversation 状态变化时回调，用于父组件同步布局 */
   onHasConversation?: (hasConversation: boolean) => void;
 
+  workbench?: {
+    wrapChat: (chat: React.ReactNode) => React.ReactNode;
+    renderEmpty: (onSend: (text: string) => void, canSend: boolean) => React.ReactNode;
+    composerContext: React.ReactNode;
+    canSend: boolean;
+  };
+
   /** Landing 页面标题下方额外内容（如数据卡片） */
   landingBanner?: React.ReactNode;
 
@@ -167,7 +174,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     inputTourClass,
     sidebar,
     onSessionsReady,
-    appearance, workspace, composerId,
+    appearance, workspace, composerId, workbench,
   } = props;
 
   const setPageHeader = useSystemStore(state => state.setPageHeader);
@@ -407,7 +414,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     </button>
   );
 
-  if (!hasConversation && appearance === 'native') {
+  if (!workbench && !hasConversation && appearance === 'native') {
     return <TooltipProvider delayDuration={300}>
       <NativeAgentShell workspace={workspace} native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || t('新对话')}>
         {contextPanel?.({ bot, conversationId })}
@@ -447,7 +454,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     </TooltipProvider>;
   }
 
-  if (!hasConversation) {
+  if (!workbench && !hasConversation) {
     return (
       <TooltipProvider delayDuration={300}>
         <div className="h-full overflow-y-scroll um-motion-surface animate-in fade-in duration-[180ms] ease-out" style={{ scrollSnapType: 'y mandatory' }}>
@@ -572,9 +579,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   // ── Chat state ──
 
   if (layout === 'inline') {
-    return (
-      <TooltipProvider delayDuration={300}>
-        <NativeAgentShell workspace={workspace} native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || t('新对话')}>
+    const canSend = !loading && !!bot && (workbench?.canSend ?? true);
+    const inlineChat = <>
           {contextPanel?.({ bot, conversationId })}
 
           <div className={cn("flex-1 min-w-0 flex flex-col bg-white", appearance === 'native' && 'um-agent-chat-body')}>
@@ -630,6 +636,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           <AgentReplyContext.Provider value={{ onReply: onActionReply, projectId, conversationId }}>
             <div ref={scrollRef} className="um-agent-scroll flex-1 overflow-y-auto min-h-0">
               <div className="max-w-3xl mx-auto p-4 space-y-4">
+                {!messages.length && workbench?.renderEmpty(text => { void doSend(text, false, { preserveDraft: true }); }, canSend)}
                 {messages.filter(m => m.role === 'user' || m.visible !== false).map((msg, i) => {
                   // render_visual → 内联 VisualCard
                   // 只用 toolStep.visual 渲染，避免与 done 消息的 metadata visual 重复渲染。
@@ -700,6 +707,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           {/* Input */}
           <div className={cn("shrink-0 px-4 pb-4 pt-2", appearance === 'native' && 'um-agent-chat-input')}>
             <div className="max-w-3xl mx-auto">
+              {workbench?.composerContext}
               <div data-tour={inputTourClass} className="rounded-2xl border border-border bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)] overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
                 {noteMentions.panel}
                 <textarea id={composerId} ref={nativeInputRef} rows={1}
@@ -707,12 +715,12 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   onChange={e => { setInput(e.target.value); noteMentions.updateQuery(e.target.value, e.target.selectionStart); }}
                   onCompositionStart={() => setIsComposition(true)}
                   onCompositionEnd={() => setIsComposition(false)}
-                  onKeyDown={e => { if (noteMentions.onKeyDown(e, isComposing)) return; if (shouldSend(e) && !isComposing && !e.nativeEvent.isComposing && !loading && input.trim() && bot) { e.preventDefault(); doSend(input); } }}
+                  onKeyDown={e => { if (noteMentions.onKeyDown(e, isComposing)) return; if (shouldSend(e) && !isComposing && !e.nativeEvent.isComposing && canSend && input.trim()) { e.preventDefault(); doSend(input); } }}
                   placeholder={chatPlaceholder}
                   aria-label={t('和{0}对话', { 0: botDisplayName })}
                   autoComplete="off"
                   className="w-full bg-transparent border-none resize-none text-sm px-4 py-2 placeholder:text-muted-foreground/55 focus:outline-none min-h-[36px]"
-                  disabled={loading}
+                  disabled={loading || workbench?.canSend === false}
                 />
                 <div className="flex items-center justify-end gap-1.5 px-2.5 py-1.5">
                   <Popover open={skillOpen} onOpenChange={setSkillOpen}>
@@ -750,7 +758,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     </Tooltip>
                   )}
                   <div className="flex-1" />
-                  <Button aria-label={t('发送消息')} onClick={() => doSend(input)} disabled={loading || !input.trim() || !bot} size="icon"
+                  <Button aria-label={t('发送消息')} onClick={() => doSend(input)} disabled={!canSend || !input.trim()} size="icon"
                     className="um-agent-send rounded-full h-9 w-9 bg-primary text-primary-foreground shadow-none um-motion-control active:scale-[0.98] transition-[color,background-color,border-color,opacity,transform,scale] duration-150 shrink-0 hover:opacity-90">
                     {loading ? <Spinner className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
                   </Button>
@@ -760,6 +768,15 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             </div>
           </div>
           </div>
+    </>;
+    return (
+      <TooltipProvider delayDuration={300}>
+        <NativeAgentShell workspace={workspace} native={appearance === 'native'} sidebar={sessionDirectory}
+          directoryInitiallyCollapsed={!!workbench}
+          onNew={workbench ? () => wrappedReset(true, projectId) : wrappedReset}
+          label={botDisplayName} action={nativeToolbarAction}
+          title={workbench ? selectedProjectName || conversationTitle || t('项目') : conversationTitle || t('新对话')}>
+          {workbench ? workbench.wrapChat(inlineChat) : inlineChat}
         </NativeAgentShell>
       </TooltipProvider>
     );

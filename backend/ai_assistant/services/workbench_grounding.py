@@ -21,7 +21,9 @@ from .project_learning_tools import obj, text, tool
 logger = logging.getLogger(__name__)
 FULL_TEXT_LIMIT = 18_000
 RETRIEVAL_LIMIT = 14
-CITATION_MARKER = re.compile(r'\[(S[1-9]\d*#C\d+)\]')
+CITATION_KEY = r'S[1-9]\d*#C\d+'
+CITATION_MARKER = re.compile(rf'\[({CITATION_KEY})\]')
+CHAT_CITATION_MARKER = re.compile(rf'\[({CITATION_KEY}(?:\s*[,，]\s*{CITATION_KEY})*)\]')
 WORD = re.compile(r'[\u3400-\u4dbf\u4e00-\u9fff]+|[a-z0-9]+')
 HAN = re.compile(r'[\u3400-\u4dbf\u4e00-\u9fff]')
 
@@ -110,9 +112,10 @@ def _companion_url(source, seconds):
 def extract_workbench_citations(content: str, citation_registry: dict) -> list:
     """Keep the order of first use and resolve only references seen by the model."""
     cited = {}
-    for key in CITATION_MARKER.findall(content or ''):
-        if key in citation_registry and key not in cited:
-            cited[key] = {**citation_registry[key], 'index': len(cited) + 1}
+    for group in CHAT_CITATION_MARKER.findall(content or ''):
+        for key in re.split(r'\s*[,，]\s*', group):
+            if key in citation_registry and key not in cited:
+                cited[key] = {**citation_registry[key], 'index': len(cited) + 1}
     return list(cited.values())
 
 
@@ -329,7 +332,7 @@ def inject_workbench_context(messages, executor, query):
     for message in messages[1:]:
         if message['role'] == 'assistant':
             # Aliases describe the current selection, so historical markers cannot be reused.
-            message['content'] = CITATION_MARKER.sub('', message['content'])
+            message['content'] = CHAT_CITATION_MARKER.sub('', message['content'])
     if context := grounding.context(query):
         messages.append({'role': 'user', 'content': context})
 

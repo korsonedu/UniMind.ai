@@ -129,7 +129,15 @@ def test_station_course_import_requires_access_and_updates_subtitles(workbench):
     course = Course.objects.create(title='站内课程', is_published=True)
     detail_url = reverse('course-detail', args=[course.pk])
     assert import_source(client, url, kind='course', course_id=course.pk).status_code == 404
+    picker = {'workbench_project': project.pk, 'search': '站内'}
+    assert client.get('/api/courses/', picker).data['items'] == []
     CourseStudentStatus.objects.create(user=project.user, is_course_student=True)
+    Course.objects.create(title='未发布的站内课程', is_published=False)
+    Course.objects.create(title='其他主题', is_published=True)
+    assert [item['id'] for item in client.get('/api/courses/', picker).data['items']] == [course.pk]
+    assert client.get('/api/courses/').data['items'] == []
+    other_project = ConversationProject.objects.create(user=User.objects.create_user(username='other-picker-owner'), name='私有项目')
+    assert client.get('/api/courses/', {**picker, 'workbench_project': other_project.pk}).status_code == 404
     transcript = VideoTranscript.objects.create(course=course, asr_status='completed')
     segment = TranscriptSegment.objects.create(
         transcript=transcript, index=0, start_time=8, end_time=14, text='站内课程字幕。',

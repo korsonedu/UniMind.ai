@@ -21,6 +21,14 @@ export const queryKeys = {
     detail: (id: number) => ['exams', 'detail', id] as const,
     history: ['exams', 'history'] as const,
   },
+  workbench: {
+    sources: (projectId: number) => ['workbench', projectId, 'sources'] as const,
+    courses: (projectId: number, search: string) => ['workbench', projectId, 'courses', search] as const,
+    source: (projectId: number, sourceId: string, status?: string, updatedAt?: string) =>
+      ['workbench', projectId, 'source', sourceId, status, updatedAt] as const,
+    overview: (projectId: number, selection: string[][], generate: boolean) =>
+      ['workbench', projectId, 'overview', selection, generate] as const,
+  },
   knowledgeBuilder: {
     list: (userId: number | undefined) => ['knowledge-builder', 'list', userId] as const,
     detail: (buildId: string) => ['knowledge-builder', 'detail', buildId] as const,

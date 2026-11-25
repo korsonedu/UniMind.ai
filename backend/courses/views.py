@@ -8,6 +8,7 @@ import uuid
 
 from django.conf import settings
 from django.core.files import File
+from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -638,7 +639,16 @@ class CourseListCreateView(generics.ListCreateAPIView):
         from users.workspaces.access import membership_for
         qs = visible_courses(self.request) if self.request.method == 'GET' else apply_institution_filter(Course.objects.select_related('module'), user, self.request)
         if self.request.method == 'GET' and not membership_for(user):
-            qs = qs.none()
+            project = self.request.query_params.get('workbench_project')
+            if project is None:
+                qs = qs.none()
+            else:
+                from ai_assistant.models import ConversationProject
+                from users.feature_access import has_learning_feature
+
+                get_object_or_404(ConversationProject, pk=_safe_int(project), user=user)
+                if not has_learning_feature(user, 'course.video'):
+                    qs = qs.none()
         if self.request.method == 'GET' and self.request.query_params.get('saved') == '1':
             from .models import WatchLater
             qs = qs.filter(pk__in=WatchLater.objects.filter(user=user).values('course_id'))

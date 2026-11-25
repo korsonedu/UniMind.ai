@@ -118,7 +118,7 @@ def test_cross_source_citations_in_history_and_done(
     settings.UNIMIND_DSH_XIAOYU_ENABLED = stream
     payload = chat_payload(bot, project)
     pdf, slide, video = materials
-    content = '教材解释了派生存款[S1#C0]，视频展示了金额变化[S3#C1][S1#C0]。课件给出准备金率关系[S2#C0]。[S9#C0]'
+    content = '教材和视频解释了派生存款与金额变化[S1#C0, S3#C1]。课件给出准备金率关系[S2#C0]。[S1#C0，S9#C0]'
 
     def answer(messages, tools, tool_executor, **kwargs):
         assert '只用本轮选中的资料' in messages[0]['content']

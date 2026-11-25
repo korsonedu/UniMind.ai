@@ -44,7 +44,9 @@ def serve_spa(request, path):
     meta_html = _build_meta_html(_DEFAULT_META)
     html = re.sub(r'^\s*<title>.*?</title>\s*$', meta_html, html, flags=re.MULTILINE)
 
-    return HttpResponse(html, content_type='text/html')
+    response = HttpResponse(html, content_type='text/html')
+    response.allow_blob_frames = True  # Inline preview of PDFs fetched through the authenticated client.
+    return response
 
 def health_check(request):
     """K8s / load balancer readiness probe."""

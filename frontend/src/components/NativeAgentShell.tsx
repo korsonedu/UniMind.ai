@@ -11,10 +11,10 @@ import { ProjectChatSidebarContext, RightSidebarLayoutContext, WorkspaceActiveCo
 
 export interface AgentWorkspace { active: boolean; header: ReactNode; activity: ReactNode; chatContext?: ReactNode; }
 
-interface Props { workspace?: AgentWorkspace; native?: boolean; sidebar?: ReactNode; onNew: () => void; children: ReactNode; title?: string; label?: string; action?: ReactNode; }
+interface Props { directoryInitiallyCollapsed?: boolean; workspace?: AgentWorkspace; native?: boolean; sidebar?: ReactNode; onNew: () => void; children: ReactNode; title?: string; label?: string; action?: ReactNode; }
 
 /** Opt-in presentation; the existing Agent runtime and workbench keep their behavior. */
-export function NativeAgentShell({ native, sidebar, onNew, children, title = t('新对话'), label = t('小宇'), action, workspace }: Props) {
+export function NativeAgentShell({ native, sidebar, onNew, children, title = t('新对话'), label = t('小宇'), action, workspace, directoryInitiallyCollapsed }: Props) {
   useLocale();
   const [open, setOpen] = useState(false);
   const workspaceActive = useContext(WorkspaceActiveContext);
@@ -27,7 +27,7 @@ export function NativeAgentShell({ native, sidebar, onNew, children, title = t('
     return () => setAvailable(false);
   }, [workspaceActive, activityOpen, setAvailable, openChat]);
   const conversation = <div className="um-agent-conversation" aria-label={t('小宇对话')} onKeyDown={event => { if (activityOpen && event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); closeChat(); } }}><WorkspaceActiveContext.Provider value={workspaceActive && (!activityOpen || chatVisible)}>{workspace?.chatContext}{children}</WorkspaceActiveContext.Provider></div>;
-  const directory = useDirectoryWidth();
+  const directory = useDirectoryWidth(undefined, directoryInitiallyCollapsed);
   const directoryHidden = directory.collapsed || rightSidebarFullscreen;
   if (!native) return <div className="h-full flex um-motion-surface animate-in fade-in duration-[180ms] ease-out">{sidebar}{children}</div>;
   return <div className="um-native-agent um-agent-workspace" data-directory-hidden={directory.collapsed} data-directory-animated={directory.animated || undefined}>
