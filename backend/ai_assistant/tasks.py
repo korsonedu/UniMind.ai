@@ -7,6 +7,7 @@ from django.db import connections
 from ai_service import AIService
 from .models import AIChatMessage, Bot
 from .services.tenant_memory import TenantMemoryManager
+from .services.memory_core import active_facts, prism_active, semantic_writes_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +30,8 @@ def reflect_user_learning(self):
 
     Generates structured insights stored as semantic memories via mem0.
     """
-    if not USE_MEM0:
-        logger.info("reflect_user_learning: USE_MEM0=false, skipping")
+    if not USE_MEM0 or not semantic_writes_allowed():
+        logger.info("reflect_user_learning: legacy semantic writes disabled, skipping")
         return
 
     from django.utils import timezone
@@ -154,7 +155,7 @@ def _analyze_user(user, cutoff, now):
 
 def _store_insights(user, insights, source="meta_cognition"):
     """Store insights as semantic memories via mem0."""
-    if not user.institution_id:
+    if not user.institution_id or not semantic_writes_allowed():
         return
 
     manager = TenantMemoryManager(institution_id=user.institution_id)
@@ -187,8 +188,8 @@ def reflect_teacher_patterns(self):
     - Quality trends (ARC pipeline pass rate)
     - Generation frequency and active hours
     """
-    if not USE_MEM0:
-        logger.info("reflect_teacher_patterns: USE_MEM0=false, skipping")
+    if not USE_MEM0 or not semantic_writes_allowed():
+        logger.info("reflect_teacher_patterns: legacy semantic writes disabled, skipping")
         return
 
     from django.utils import timezone
@@ -391,7 +392,7 @@ def cleanup_stale_memories(self):
         is_active=True,
         use_count=0,
         updated_at__lt=now - timedelta(days=30),
-    )
+    ).exclude(source='manual')
     count1 = qs1.update(is_active=False)
     deleted_count += count1
 
@@ -400,7 +401,7 @@ def cleanup_stale_memories(self):
         is_active=True,
         confidence__lt=0.3,
         updated_at__lt=now - timedelta(days=60),
-    )
+    ).exclude(source='manual')
     count2 = qs2.update(is_active=False)
     deleted_count += count2
 
@@ -602,16 +603,13 @@ def precompute_user_profile(user_id: int):
         memories = []
         
         # 结构化记忆
-        from .models import AgentMemory
-        agent_memories = AgentMemory.objects.filter(
-            user=user, is_active=True
-        ).order_by('-confidence')[:20]
+        agent_memories = active_facts(user).order_by('-confidence')[:20]
         for m in agent_memories:
             memories.append({'key': m.key, 'value': m.value})
         
         # 语义记忆（如果启用）
         USE_MEM0 = os.getenv('USE_MEM0', 'false').lower() == 'true'
-        if USE_MEM0 and user.institution_id:
+        if USE_MEM0 and user.institution_id and not prism_active():
             try:
                 from .services.tenant_memory import TenantMemoryManager
                 manager = TenantMemoryManager(institution_id=user.institution_id)

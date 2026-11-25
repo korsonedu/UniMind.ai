@@ -94,6 +94,16 @@ if _APP_ON('articles'):
     urlpatterns.append(path("api/articles/", include("articles.urls")))
 if _APP_ON('ai_assistant'):
     urlpatterns.append(path("api/ai/", include("ai_assistant.urls")))
+    from ai_assistant import views_learning_memory_oauth
+    urlpatterns.extend([
+        path(".well-known/oauth-protected-resource/api/ai/learning-memory/mcp/",
+             views_learning_memory_oauth.resource_metadata, name="learning-memory-oauth-resource"),
+        path(".well-known/oauth-authorization-server",
+             views_learning_memory_oauth.server_metadata, name="learning-memory-oauth-metadata"),
+        path("api/ai/learning-memory/oauth/authorize/",
+             views_learning_memory_oauth.authorize, name="learning-memory-oauth-authorize"),
+        path("api/ai/learning-memory/oauth/token/", views_learning_memory_oauth.token, name="learning-memory-oauth-token"),
+    ])
 if _APP_ON('notes'):
     urlpatterns.append(path("api/notes/", include("notes.urls")))
 if _APP_ON('notifications'):

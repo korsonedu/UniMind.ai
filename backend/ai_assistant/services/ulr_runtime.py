@@ -12,7 +12,7 @@ from ai_engine.service import AICallError, AIEngine
 from ai_engine.tool_run import ToolReferenceError, ToolRunCoordinator
 from users.feature_access import has_learning_feature
 from .dsh_cards import data_card, item
-from .dsh_service import build_context, execute_tool, memory_snapshot, permitted_tools, prototype_executor
+from .dsh_service import build_context, context_memory, execute_tool, permitted_tools, prototype_executor
 from .course_context import require_course_transcript, require_current_transcript_sources, transcript_source
 from .language import language_instruction, message_language
 from .learning_experiments import EXERCISE_REQUEST
@@ -140,7 +140,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
             ('Open original task' if english else '打开原任务', href), provenance))
     if task:
         prompt += language_instruction(user, chat_context)
-        memory = memory_snapshot(user)
+        memory = context_memory(user, chat_context)
         tools = course_tools(user)
         available_tools = tools
         groups, registry = {}, {}
@@ -162,7 +162,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
     current_course_id = course_context['course_id'] if course_context else None
     scoped_sources = source_context['notes'] or course_context
     buffer_reply = bool(review or scoped_sources or memory_items)
-    permission_snapshot = permitted_tools(user), planning_for_chat(user, chat_context)
+    permission_snapshot = permitted_tools(user, chat_context), planning_for_chat(user, chat_context)
     if permission_snapshot[1]:
         prompt += ('\n读完必要资料后，单独调用 plan_learning_project 准备计划，或单独用 '
                    'set_learning_followup 安排跟进、暂停、恢复或结束项目。工具返回准备回执后，简短说明并结束本轮。'
@@ -296,7 +296,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
         result = execute_tool(user, name, arguments, memory['version'], source=source, chat_context=chat_context,
                               tool_revision=registry.get('versions', {}).get(name),
                               prepare_change=prepares_project_change(name, arguments), artifacts=candidate,
-                              practice_questions=set(practice_sources))
+                              practice_questions=set(practice_sources), recall_notes=source_context['note_versions'])
         if materials := result.pop('_ulr_probe_material', None):
             check_active()
             if assessment_requests or index + 2 >= policy['max_requests']:
@@ -312,7 +312,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
         return json.dumps(result, ensure_ascii=False)
 
     def accept_tool_result(outcome, call):
-        nonlocal card_reply
+        nonlocal card_reply, buffer_reply
         nonlocal artifacts, registry, pending_tools, project_change, program_phase, active_program, practice_point, program_repair
         name = outcome.call.name
         submitted = outcome.call.arguments
@@ -367,6 +367,14 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
             return outcome.result
         result = json.loads(outcome.result)
         transcript_sources.update(map(tuple, result.pop('_ulr_transcripts', ())))
+        if name in ('recall_learning', 'read_learning_source'):
+            buffer_reply = True
+            course_ids.update(result.get('course_dependencies', ()))
+            course_ids.update(int(row['source'].split(':', 1)[1]) for row in result.get('course_progress', ()))
+            if course_id := result.get('course_id'):
+                course_ids.add(course_id)
+                if result.get('transcript_status') == 'completed':
+                    transcript_sources.add((course_id, result['transcript_id'], result['revision']))
         if attach_strategy and name == STRATEGY_TOOL:
             arguments = outcome.call.arguments
             project_change.strategies[arguments['action']] = arguments
@@ -463,8 +471,8 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
 
     def require_current_context():
         if ((memory_items and not has_learning_feature(user, 'full.report'))
-                or memory_snapshot(user)['version'] != memory['version']
-                or (permitted_tools(user), planning_for_chat(user, chat_context)) != permission_snapshot):
+                or context_memory(user, chat_context)['version'] != memory['version']
+                or (permitted_tools(user, chat_context), planning_for_chat(user, chat_context)) != permission_snapshot):
             raise ULRTurnUnavailable('当前学习权限或记忆已变化，请重新提问。')
 
     def stream_reply(text):

@@ -44,6 +44,19 @@ def slow_fixture():
 
 
 class GatewaySmoke(unittest.TestCase):
+    def test_prism_observation_admission_uses_the_fixed_task_budget(self):
+        for operation, tokens in [('assistant.prism_observe', 2400), ('assistant.prism_complete', 3200)]:
+            context = {'model_policy': {'operation': operation, 'tier': 'fast',
+                'model': 'deepseek-v4-flash', 'max_requests': 1, 'max_tokens': tokens, 'max_request_bytes': 65536},
+                'tools': [{'function': {'name': 'submit_learning_observation', 'parameters': {'type': 'object'}}}]}
+            with task_gateway(context, 'http://127.0.0.1:9/v1/messages', 'SYNTHETIC', 'local-protocol-smoke') as gateway:
+                self.assertEqual(gateway['requests'], [])
+            for overrides in ({'max_requests': 2}, {'max_tokens': tokens + 1}, {'tier': 'pro'}):
+                changed = {**context, 'model_policy': {**context['model_policy'], **overrides}}
+                with self.assertRaisesRegex(ValueError, 'Unsupported task policy'):
+                    with task_gateway(changed, 'http://127.0.0.1:9/v1/messages', 'SYNTHETIC', 'local-protocol-smoke'):
+                        pass
+
     def test_session_tools_require_current_backend_registry(self):
         upstream, calls = model_fixture()
         context = {'model_policy': {'operation': 'assistant.chat.planner.prototype', 'tier': 'fast',

@@ -155,7 +155,8 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
     student_context, memory_context, adaptive_directives = '', '', ''
     if _can_use_learning_context(user):
         student_context = get_student_academic_context(user)
-        memory_context, adaptive_directives = build_memory_context(user, user_message, bot_type=bot.bot_type)
+        memory_context, adaptive_directives = build_memory_context(user, user_message, bot_type=bot.bot_type if bot else 'planner',
+            chat_context={'conversation_id': str(conversation_id), 'message_id': current_user_message_id, 'bot_id': bot.pk if bot else None})
 
     from ai_assistant.services.chat_dispatch import dispatch_bot_chat
 
@@ -201,6 +202,8 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                 msg_metadata = {'note_sources': note_sources} if note_sources else {}
                 if external_video_context:
                     msg_metadata['external_video_context'] = external_video_context
+                if getattr(tool_executor, '_prism_clarification', False):
+                    msg_metadata['prism_clarification'] = True
                 if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
                     msg_metadata['generated_questions'] = tool_executor._last_generated
                 if hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
@@ -230,6 +233,10 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                 confirm_ai_call(reservation, {'done': True, 'full_content': ai_content,
                                              'message_id': pending_msg_id, 'conversation_id': str(conversation_id),
                                              'metadata': pending_msg.metadata if pending_msg else {}})
+            if pending_msg:
+                from .services.memory_core import record_completed_reply
+                from .services.prism_memory import safely
+                safely(record_completed_reply, pending_msg)
         else:
             if pending_msg:
                 pending_msg.metadata.pop("learning_turn", None)
@@ -265,20 +272,21 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                 {'role': 'user', 'content': user_message},
                 {'role': 'assistant', 'content': ai_content if 'ai_content' in dir() else ''},
             ]
-            record_trajectory(
-                user_id=user.id,
-                bot_id=bot.id if bot else 0,
-                conversation_id=str(conversation_id) if conversation_id else '',
-                messages=all_msgs,
-                tool_calls=getattr(tool_executor, 'tool_call_log', []),
-                tool_outputs=getattr(tool_executor, 'tool_output_log', []),
-                prompt_variant=poll_variant_name,
-            )
+            if not getattr(tool_executor, '_prism_clarification', False):
+                record_trajectory(
+                    user_id=user.id,
+                    bot_id=bot.id if bot else 0,
+                    conversation_id=str(conversation_id) if conversation_id else '',
+                    messages=all_msgs,
+                    tool_calls=getattr(tool_executor, 'tool_call_log', []),
+                    tool_outputs=getattr(tool_executor, 'tool_output_log', []),
+                    prompt_variant=poll_variant_name,
+                )
         except Exception:
             logger.warning("Trajectory recording failed (polling)", exc_info=True)
 
         # 新会话首次对话时，异步生成标题
-        if conversation_id:
+        if conversation_id and not getattr(tool_executor, '_prism_clarification', False):
             try:
                 chat_count = AIChatMessage.objects.filter(
                     conversation_id=conversation_id, role='user'
@@ -632,7 +640,8 @@ class AIChatStreamView(APIView):
             student_context, memory_context, adaptive_directives = '', '', ''
             if _can_use_learning_context(request.user):
                 student_context = get_student_academic_context(request.user)
-                memory_context, adaptive_directives = build_memory_context(request.user, user_message, bot_type=bot.bot_type)
+                memory_context, adaptive_directives = build_memory_context(request.user, user_message, bot_type=bot.bot_type,
+                    chat_context={'conversation_id': str(conversation_id), 'message_id': user_msg.pk, 'bot_id': bot.pk})
 
             from ai_assistant.services.chat_dispatch import dispatch_bot_chat_sync
 
@@ -647,6 +656,8 @@ class AIChatStreamView(APIView):
                 memory_context=memory_context,
                 adaptive_directives=adaptive_directives,
             )
+            if getattr(tool_executor, '_prism_clarification', False):
+                return history_msgs, messages, [], tool_executor, profile, variant_name
 
             # 意图路由（与轮询路径一致）
             if profile.use_intent_router and user_message:
@@ -738,6 +749,10 @@ class AIChatStreamView(APIView):
 
                 def _run_agent():
                     try:
+                        gated = getattr(tool_executor, '_prism_gate_result', None)
+                        if gated:
+                            _result_container[0] = gated
+                            return
                         with _AI_CHAT_SEMAPHORE:
                             _result_container[0] = AIEngine.call_ai_with_streaming_tools(
                                 messages=messages,
@@ -822,6 +837,8 @@ class AIChatStreamView(APIView):
                 metrics['content_chars'] = len(ai_content)
 
                 metadata = {'note_sources': note_sources} if note_sources else {}
+                if getattr(tool_executor, '_prism_clarification', False):
+                    metadata['prism_clarification'] = True
                 if course_context:
                     metadata['course_context'] = course_context
                 if external_video_context:
@@ -877,9 +894,10 @@ class AIChatStreamView(APIView):
                 conv_title = None
                 try:
                     from ai_assistant.services.title_generator import sync_generate_title
-                    conv_title = await sync_to_async(sync_generate_title)(
-                        str(conversation_id), request.user.id, bot.id
-                    )
+                    if not metadata.get('prism_clarification'):
+                        conv_title = await sync_to_async(sync_generate_title)(
+                            str(conversation_id), request.user.id, bot.id
+                        )
                 except Exception:
                     logger.warning("Title generation failed before done", exc_info=True)
 
@@ -900,6 +918,9 @@ class AIChatStreamView(APIView):
                 if not is_error and _complete_ai_result(result, ai_content, metadata):
                     from users.learning import confirm_ai_call
                     await sync_to_async(confirm_ai_call)(reservation, done_payload)
+                    from .services.memory_core import record_completed_reply
+                    from .services.prism_memory import safely
+                    await sync_to_async(safely)(record_completed_reply, pending_msg)
                 yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
                 log_metrics('completed')
 
@@ -933,15 +954,16 @@ class AIChatStreamView(APIView):
                         {'role': 'user', 'content': user_message},
                         {'role': 'assistant', 'content': ai_content},
                     ]
-                    record_trajectory(
-                        user_id=request.user.id,
-                        bot_id=bot.id,
-                        conversation_id=str(conversation_id),
-                        messages=all_msgs,
-                        tool_calls=getattr(tool_executor, 'tool_call_log', []),
-                        tool_outputs=getattr(tool_executor, 'tool_output_log', []),
-                        prompt_variant=sse_variant_name,
-                    )
+                    if not getattr(tool_executor, '_prism_clarification', False):
+                        record_trajectory(
+                            user_id=request.user.id,
+                            bot_id=bot.id,
+                            conversation_id=str(conversation_id),
+                            messages=all_msgs,
+                            tool_calls=getattr(tool_executor, 'tool_call_log', []),
+                            tool_outputs=getattr(tool_executor, 'tool_output_log', []),
+                            prompt_variant=sse_variant_name,
+                        )
                 except Exception:
                     logger.warning("Trajectory recording failed (SSE)", exc_info=True)
 

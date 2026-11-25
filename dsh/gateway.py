@@ -73,6 +73,8 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                'assistant.chat.planner.prototype': ('fast', 6, 8192),
                'assistant.title': ('fast', 1, 64),
                'assistant.memory_extract': ('fast', 1, 800),
+               'assistant.prism_observe': ('fast', 1, 2400),
+               'assistant.prism_complete': ('fast', 1, 3200),
                'quizzes.preview_parse': ('fast', 1, 3200),
                'quizzes.grade_question': ('pro', 1, 2500),
                'quizzes.objective_analysis': ('fast', 1, 2000),

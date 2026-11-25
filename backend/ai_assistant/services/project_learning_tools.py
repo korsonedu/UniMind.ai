@@ -102,6 +102,7 @@ PROJECT_LEARNING_TOOLS.append(tool('manage_learning_knowledge',
 PROJECT_LEARNING_TOOLS.append(tool('manage_learning_tasks',
     '管理当前项目通用学习任务：list读取实际进展与teaching_guidance；read读取已评分原作答与标准后复盘；create从授权题库选题，或为本人项目原创开放任务（系统满分10分，不自行声明其他总分或分项分值）。普通阶段计划可先诊断，无需先建地图；有地图须绑定当前版本节点。解释、计算、推理、案例与代码文本均可评价，但代码未运行不能称为验证通过。模型评分尚未独立复核。错误先补救，有帮助完成再换题独立检查；不代用户作答，不传入分数。',
     obj({'action': {'type': 'string', 'enum': ['list', 'read', 'create']},
+         'pending_only': {'type': 'boolean', 'description': 'list时按创建顺序读取当前知识路径全部未完成任务，不限近期条数，保留不可用待处理任务'},
          'task_id': text('read时填写任务UUID'), 'version_id': {'type': 'integer'}, 'node_id': text(),
          'stage_id': text('当前计划阶段编号。未建立计划时创建 diagnostic 填空字符串，并省略 version_id 与 node_id'), 'title': text(), 'instructions': text('讲解、非原题示例与作答要求，不能泄露任务参考解答'),
          'purpose': {'type': 'string', 'enum': ['diagnostic', 'practice', 'recheck']},
@@ -118,6 +119,28 @@ PROJECT_LEARNING_TOOLS.append(tool('manage_learning_tasks',
 
 
 PROJECT_LEARNING_NAMES = frozenset(tool['function']['name'] for tool in PROJECT_LEARNING_TOOLS)
+
+
+def project_learning_tools():
+    from .fact_evidence import active
+    if not active():
+        return PROJECT_LEARNING_TOOLS
+    tools = deepcopy(PROJECT_LEARNING_TOOLS)
+    definition = next(item['function'] for item in tools if item['function']['name'] == 'manage_learning_strategies')
+    definition['description'] += ' read_public_methods须填task_id，读取该任务当前适用的共享候选；查询不登记采用。实际讲解和原任务在答复完成后自动关联；仅需明确登记方法版本试用时用apply_public：public_method_id填候选method_id，并填写method_digest及binding.task_id。候选匹配不代表采用；后续正式作答自动关联。read_public_use只填public_use_id读取一条采用，或只填task_id查该任务全部公共采用及后测，不限近期条数；不代答，不把答复完成当教学有效。'
+    task_definition = next(item['function'] for item in tools if item['function']['name'] == 'manage_learning_tasks')
+    task_definition['description'] += ' read返回实际任务、可用入口和reply_history中的实际答复及卡片；默认只带最早和最近两条，需查中间经历时将next_before_reply_id填入before_reply_id，逐页向前读取，每页最多两条，null表示无更早页。当前可作答任务还提供public_methods中的适用候选，无需再切换工具读取相同候选，也无需为记住讲解另行调用方法登记。reply_history说明总数、选择范围与不可用数量，关联本身不证明教法遵循或效果。'
+    task_definition['parameters']['properties']['before_reply_id'] = {'type': 'integer', 'minimum': 1,
+        'description': '仅read任务经历分页时使用，填上页next_before_reply_id；省略先取最早与最近记录'}
+    task_definition['description'] += ' 不知道已完成或旧版本任务ID时，用list查询当前及历史任务索引，可填query按实际标题或要求搜索；每页最多10条，使用task_index.next_after_task_id继续下一页，null表示结束。索引保留原版本和source_task_id，复查或同名派生任务不能替代原任务。pending_only=true仍读取当前范围全部未完成任务，不使用历史索引分页。'
+    task_definition['parameters']['properties'].update(query=text('仅list历史索引的标题／要求关键词，省略查询全部'),
+        after_task_id=text('仅list历史索引分页时填写上页next_after_task_id，修改query时重新从首页查询'))
+    schema = definition['parameters']['properties']
+    schema['action']['enum'].extend(['read_public_methods', 'apply_public', 'read_public_use'])
+    schema.update(public_method_id={'type': 'integer', 'minimum': 1},
+                  method_digest=text('所采用公共候选的完整method_digest'),
+                  task_id=text('read_public_methods必填本人任务；apply_public填候选binding.task_id；read_public_use可按本人任务查全部采用，与public_use_id二选一'), public_use_id=text('此前公共采用返回的完整use_id，与task_id二选一'))
+    return tools
 
 
 def planning_for_chat(user, context):

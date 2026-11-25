@@ -22,7 +22,17 @@ from .views_learning_experiments import LearningExperimentView
 from .views_learning import ProjectLearningView, ProjectLearningLibraryView, ProjectLearningKnowledgeView
 from .views_learning_tasks import ProjectLearningTaskListView, ProjectLearningTaskDetailView
 
+from .views_learning_memory import LearningMemoryGrantsView, LearningMemoryGrantView, LearningMemoryMcpView
+from .views_learning_memory_sources import LearningMemorySourcesView, LearningMemorySourceView
+
 urlpatterns = [
+    path('learning-memory/mcp/', LearningMemoryMcpView.as_view(), name='learning-memory-mcp'),
+    path('learning-memory/grants/', LearningMemoryGrantsView.as_view(), name='workspace-learning-memory-grants'),
+    path('learning-memory/grants/<int:grant_id>/', LearningMemoryGrantView.as_view(), name='workspace-learning-memory-grant'),
+    path('projects/<int:project_id>/learning-memory/sources/', LearningMemorySourcesView.as_view(), name='learning-memory-sources'),
+    path('projects/<int:project_id>/learning-memory/sources/<int:source_link_id>/', LearningMemorySourceView.as_view(), name='learning-memory-source'),
+    path('projects/<int:project_id>/learning-memory/grants/', LearningMemoryGrantsView.as_view(), name='learning-memory-grants'),
+    path('projects/<int:project_id>/learning-memory/grants/<int:grant_id>/', LearningMemoryGrantView.as_view(), name='learning-memory-grant'),
     path('projects/<int:pk>/learning/tasks/', ProjectLearningTaskListView.as_view(), name='project-learning-tasks'),
     path('projects/<int:pk>/learning/tasks/<uuid:task_id>/', ProjectLearningTaskDetailView.as_view(), name='project-learning-task'),
     path('projects/<int:pk>/learning/knowledge/', ProjectLearningKnowledgeView.as_view(), name='project-learning-knowledge'),

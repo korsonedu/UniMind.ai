@@ -11,6 +11,8 @@ from ai_assistant.models import AgentMemory, MemoryExtractionLog, Bot, Conversat
 from ai_assistant.services.memory_service import _extract_memories_via_dsh, _merge_memory_candidates
 from ai_assistant.services.ulr_memory import extract_answer_memory
 from users.models import CourseStudentStatus, User
+from ai_assistant.services.memory_core import fact_prompt, fact_snapshot, merge_fact
+from rest_framework.test import APIClient
 
 
 class DshMemorySmoke(TestCase):
@@ -80,6 +82,82 @@ class DshMemorySmoke(TestCase):
         again = self._run([self.candidate])
         again.assert_not_called()
         self.assertFalse(AgentMemory.objects.exists())
+
+    def test_delete_during_extraction_blocks_late_write_but_allows_new_turn(self):
+        fact = AgentMemory.objects.create(user=self.user, key=self.candidate['key'], value='旧偏好', source='dsh')
+        def pending(*_args, **_kwargs):
+            fact.delete()
+            return {'memories': [self.candidate]}
+        with patch('ai_assistant.services.dsh_tasks.run_structured', side_effect=pending), patch('django.db.connections.close_all'):
+            _extract_memories_via_dsh(self.user.pk, self.history, self.conversation_id)
+        self.assertFalse(AgentMemory.objects.filter(user=self.user).exists())
+        self.assertEqual(MemoryExtractionLog.objects.get().saved_count, 0)
+        self.history[0]['content'] += '，这是我的长期习惯。'
+        AIChatMessage.objects.create(user=self.user, bot=self.conversation.bot, conversation_id=self.conversation_id,
+            role='user', content=self.history[0]['content'])
+        self._run([self.candidate])
+        self.assertEqual(AgentMemory.objects.get(user=self.user).value, self.candidate['value'])
+
+    @override_settings(UNIMIND_DSH_MEMORY_ENABLED=True)
+    def test_queued_extraction_keeps_the_revision_from_before_deletion(self):
+        from ai_assistant.services.memory_service import extract_memories_async
+        fact = AgentMemory.objects.create(user=self.user, key=self.candidate['key'], value='旧偏好', source='dsh')
+        with patch('ai_assistant.utils._THREAD_POOL.submit') as queue:
+            extract_memories_async(self.user, self.history, self.conversation_id)
+        function, *arguments = queue.call_args.args
+        fact.delete()
+        with patch('ai_assistant.services.dsh_tasks.run_structured', return_value={'memories': [self.candidate]}), \
+             patch('django.db.connections.close_all'):
+            function(*arguments)
+        self.assertFalse(AgentMemory.objects.filter(user=self.user).exists())
+
+    def test_user_edit_wins_for_all_readers_and_automatic_writers(self):
+        self._run([self.candidate])
+        memory = AgentMemory.objects.get(user=self.user)
+        client = APIClient()
+        client.force_authenticate(self.user)
+        url = f'/api/ai/memories/{memory.pk}/'
+        before = fact_snapshot(self.user)['version']
+        response = client.patch(url, {'value': '先讲公式'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        memory.refresh_from_db()
+        self.assertEqual((memory.source, memory.evidence, memory.source_conversation_id), ('manual', '', ''))
+        after = fact_snapshot(self.user)
+        self.assertNotEqual(before, after['version'])
+        self.assertEqual(after['items'][0]['value'], '先讲公式')
+        self.assertIn('先讲公式', fact_prompt(self.user))
+        self.assertEqual(fact_snapshot(self.user)['version'], after['version'])
+        for source in ('auto', 'dsh'):
+            self.assertEqual(merge_fact(self.user, memory_type='preference', key=memory.key,
+                value='自动覆盖', confidence=1.0, source=source), 0)
+        self.assertEqual(client.patch(url, {'is_active': False}, format='json').status_code, 200)
+        self.assertEqual(fact_snapshot(self.user)['items'], [])
+        self.assertEqual(fact_prompt(self.user), '')
+        self.assertEqual(client.delete(url).status_code, 204)
+        self.assertEqual(self._run([self.candidate]).call_count, 0)
+        self.assertFalse(AgentMemory.objects.filter(user=self.user).exists())
+
+    def test_core_snapshot_preserves_dsh_token_and_owner_scope(self):
+        import hashlib
+        from ai_assistant.services.dsh_service import memory_snapshot
+        self._run([self.candidate])
+        other = User.objects.create_user(username='private-facts')
+        AgentMemory.objects.create(user=other, key='private', value='不可见')
+        rows = list(AgentMemory.objects.filter(user=self.user, is_active=True).order_by(
+            '-confidence', '-updated_at', 'id').values('id', 'memory_type', 'key', 'value', 'source', 'updated_at')[:20])
+        expected = hashlib.sha256(json.dumps(rows, ensure_ascii=False, sort_keys=True, default=str).encode()).hexdigest()
+        self.assertEqual(memory_snapshot(self.user), {'version': expected, 'items': rows})
+
+    def test_automatic_cleanup_preserves_explicit_user_settings(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from ai_assistant.tasks import cleanup_stale_memories
+        manual = AgentMemory.objects.create(user=self.user, key='长期设置', value='用户设置', source='manual', confidence=0.1)
+        automatic = AgentMemory.objects.create(user=self.user, key='旧观察', value='自动提取', source='dsh', confidence=0.1)
+        AgentMemory.objects.filter(pk__in=[manual.pk, automatic.pk]).update(updated_at=timezone.now() - timedelta(days=61))
+        with patch('ai_assistant.tasks.USE_MEM0', False):
+            self.assertEqual(cleanup_stale_memories(), 1)
+        self.assertEqual([row['id'] for row in fact_snapshot(self.user)['items']], [manual.pk])
 
     def test_dsh_failure_does_not_write_log(self):
         with patch('ai_assistant.services.dsh_tasks.run_structured', side_effect=RuntimeError('offline')), \

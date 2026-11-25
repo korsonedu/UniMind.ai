@@ -3,7 +3,7 @@ import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { OfflineTrialPage } from '@/components/OfflineTrialPage';
 import { getLocale, t, useLocale } from '@/i18n';
 import { saveLanguagePreference } from '@/lib/languagePreference';
-import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { createBrowserRouter, redirectDocument, RouterProvider, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { registerSW } from 'virtual:pwa-register';
 import axios from 'axios';
@@ -11,7 +11,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 import { queryKeys } from '@/lib/queryKeys';
-import { HOME_PATH, getLoginPath } from '@/lib/routing';
+import { HOME_PATH, LEARNING_MEMORY_AUTHORIZE_PATH, getLoginPath } from '@/lib/routing';
 import { FEATURES } from './store/useInstitutionStore';
 const MainLayout = lazy(() => import('./layouts/MainLayout').then(m => ({ default: m.MainLayout })));
 import { useAuthStore } from './store/useAuthStore';
@@ -297,6 +297,7 @@ const router = createBrowserRouter([
   { path: "/promo/plus", element: <Navigate to="/pricing" replace /> },
   { path: "/memorix", element: lazyPage(MemorixPage) },
   { path: "/desktop-auth", element: lazyPage(DesktopAuthorize) },
+  { path: LEARNING_MEMORY_AUTHORIZE_PATH, loader: ({ request }) => redirectDocument(request.url) },
   { path: "/login", element: lazyPage(Login) },
   { path: "/account-callback", element: lazyPage(AccountCallback) },
   { path: "/register", element: lazyPage(Register) },

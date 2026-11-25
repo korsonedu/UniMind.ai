@@ -11,6 +11,7 @@ import type { PracticeResult } from '@/pages/xiaoyu/visuals/PracticeQuizCard';
 import type { DshCard } from './DshToolCard';
 import { projectCoursePath } from './course/projectCourseLinks';
 import { LearningKnowledgeView } from './LearningKnowledgeView';
+import { LearningMemorySources } from './LearningMemorySources';
 import { LearningLibraryPanel } from './LearningLibraryPanel';
 import { LearningTaskDetail } from './LearningTasksPanel';
 import type { LearningWorkspace } from './LearningWorkspace';
@@ -151,7 +152,7 @@ export function LearningPathCanvas({ workspace, messages, conversationId }: {
   const { project, query, taskQuery, tasks, openingProject, busy, view, show, sidebar,
     completedStages, nextStage, allDone, act, ask, openTask, prefill, refresh, setupSample } = workspace;
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [node, setNode] = useState('');
+  const [selection, setSelection] = useState<{ projectId: number; versionId: number; nodeId: string }>();
   const [highlightedStage, setHighlightedStage] = useState('');
   const [library, setLibrary] = useState(false);
   const [fallbackNow] = useState(() => Date.now());
@@ -169,8 +170,23 @@ export function LearningPathCanvas({ workspace, messages, conversationId }: {
     <p>{t('新建学习项目后，在对话里告诉小宇你想学什么。')}</p>
     <Link className="um-agent-button um-agent-button-primary" to="/xiaoyu?new=project">{t('新建学习项目')}</Link>
     {project && <button className="um-agent-button" onClick={() => show('knowledge')}>{t('查看知识关系')}</button>}
+    {project?.memory_connectors &&
+      <LearningMemorySources key={`sources:${project.project_id}`} projectId={project.project_id} />
+    }
   </div>;
 
+  const versionId = project.knowledge?.version_id;
+  const node = selection?.projectId === project.project_id && selection.versionId === versionId
+    ? selection.nodeId : project.last_viewed_node?.node_id || '';
+  const selectNode = (nodeId: string) => {
+    if (!versionId) return;
+    setSelection({ projectId: project.project_id, versionId, nodeId });
+    if (project.memory_connectors) {
+      void api.post(`/ai/projects/${project.project_id}/learning/knowledge/`, {
+        action: 'remember_view', version_id: versionId, node_id: nodeId,
+      }).catch(() => undefined);
+    }
+  };
   const stages = project.plan.stages || [];
   const pending = project.pending_plan.plan;
   const proposal = view.kind === 'proposal' && !!pending;
@@ -237,6 +253,9 @@ export function LearningPathCanvas({ workspace, messages, conversationId }: {
 
   return <section className="um-path-canvas" aria-label={t('学习路径画布')}>
     <div className="um-path-scroll" ref={scroll}>
+      {project.memory_connectors && view.kind === 'path' &&
+        <LearningMemorySources key={`sources:${project.project_id}`} projectId={project.project_id} />
+      }
       {view.kind === 'task' ? <>
         <button className="um-agent-button" onClick={() => show(view.back)}><ArrowLeft size={16} />{t('返回')}</button>
         {task ? <LearningTaskDetail active={sidebar.visible} project={project} task={task} tasks={tasks} refresh={refresh}
@@ -247,7 +266,7 @@ export function LearningPathCanvas({ workspace, messages, conversationId }: {
         {allDone && <button className="um-agent-button um-agent-button-primary" onClick={() => show('report')}>{t('查看学习成果报告')}<ArrowRight size={16} /></button>}
       </> : view.kind === 'knowledge' ? <>
         <button className="um-agent-button" onClick={() => show(pending ? 'proposal' : 'path')}><ArrowLeft size={16} />{t('返回学习路径')}</button>
-        <LearningKnowledgeView project={project} selected={node} onSelect={setNode} tasks={tasks} tasksLoading={loadingTasks} onStudy={ask} onTask={openTask} />
+        <LearningKnowledgeView project={project} selected={node} onSelect={selectNode} tasks={tasks} tasksLoading={loadingTasks} onStudy={ask} onTask={openTask} />
       </> : <>
         <header className="um-path-overview">
           <div className="um-path-heading"><span>{project.name}</span><span className="um-path-pill" data-status={project.status}>{t(statusLabel)}</span></div>
@@ -319,7 +338,7 @@ export function LearningPathCanvas({ workspace, messages, conversationId }: {
                 <section><h4>{t('阶段目标与要点')}</h4><MarkdownContent content={stage.outcome} />
                   {stage.task && <MarkdownContent content={stage.task} />}
                   {!!stage.prerequisites.length && <p className="um-path-muted">{t('先学')} {visibleStages.filter(item => stage.prerequisites.includes(item.id)).map(item => item.title).join('、')}</p>}
-                  {!proposal && !!nodes.length && <ul>{nodes.map(item => <li key={item.id}><button className="um-learning-text-button" onClick={() => { setNode(item.id); show('knowledge'); }}>
+                  {!proposal && !!nodes.length && <ul>{nodes.map(item => <li key={item.id}><button className="um-learning-text-button" onClick={() => { selectNode(item.id); show('knowledge'); }}>
                     {item.title} · {t(knowledgeLabels[item.learning_status || 'unassessed'])}</button></li>)}</ul>}
                 </section>
                 {(!!resources.length || !proposal && !!recommended.length) && <section><h4>{t('推荐课程与资料')}</h4>

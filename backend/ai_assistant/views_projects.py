@@ -135,8 +135,8 @@ def add_project_context(user, conversation_id, history):
     ).select_related('project').first()
     if not conversation:
         return history
-    from .services.project_learning import project_context
-    return [{'role': 'user', 'content': project_context(user, conversation_id)}] + history
+    from .services.project_learning import project_context, model_project_context
+    return [{'role': 'user', 'content': model_project_context(project_context(user, conversation_id))}] + history
 
 
 def learning_activity_metadata(request, conversation_id):

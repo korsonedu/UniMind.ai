@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db.models import Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -60,6 +61,8 @@ class InstitutionFeatureView(APIView):
         from courses.access import has_full_course_access
         user = request.user
         features = learning_features(user)
+        if settings.UNIMIND_LEARNING_MEMORY_CONNECTORS and 'ai.assistant' in features:
+            features.append('learning.memory.connectors')
         inst_data = None
         personal_usage = usage_info(user)
         usage = {'ai_call_total': personal_usage, 'ai_question': personal_usage,

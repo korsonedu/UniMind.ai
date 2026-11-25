@@ -70,11 +70,18 @@ def current_bundle():
               [('chat', 'assistant.chat.planner'), ('grade', 'quizzes.grade')]}
     bundle = {}
     for kind, paths in SOURCES.items():
+        prism_mode = getattr(settings, 'UNIMIND_PRISM_MODE', 'off')
+        if kind == 'M' and prism_mode != 'off':
+            paths = [*paths, 'ai_assistant/services/prism_kernel.py', 'ai_assistant/services/prism_memory.py',
+                     'ai_assistant/services/prism_feedback.py', 'ai_assistant/services/memory_core.py',
+                     'ai_assistant/services/prism_outcomes.py']
         content = {'schema': SCHEMA, 'role': 'reserved_not_running' if kind == 'M' else 'existing_runtime_descriptor',
                    'selection': 'model_directed_nonrandom' if kind == 'S' else None,
                    'sources': {path: hashlib.sha256((Path(settings.BASE_DIR) / path).read_bytes()).hexdigest()
                                for path in paths},
                    'models': models, 'provider_weights_pinned': False, 'candidate_activation': False}
+        if kind == 'M' and prism_mode != 'off':
+            content.update(role=f'sdtm_{prism_mode}', prism_mode=prism_mode, reference_activation='reviewed_only')
         content['routes'] = {key: bool(getattr(settings, key, False)) for key in
             ('UNIMIND_DSH_GENERATION_ENABLED', 'UNIMIND_DSH_GRADING_ENABLED', 'UNIMIND_DSH_XIAOYU_ENABLED')}
         content['model_config_hash'] = hashlib.sha256((Path(settings.BASE_DIR) / 'ai_engine/config.py').read_bytes()).hexdigest()
@@ -101,7 +108,7 @@ def freeze_turn(project, message, snapshot):
     return frozen
 
 
-def _method_snapshot(strategy):
+def method_snapshot(strategy):
     if not strategy.source_event.message_id or strategy.source_event.message.user_id != strategy.user_id:
         raise ValidationError('教学方法原始依据已不可用。')
     source = strategy.source_event
@@ -117,7 +124,7 @@ def _method_snapshot(strategy):
 
 def ensure_method_version(strategy):
     strategy = LearningStrategy.objects.select_related('source_event__message').get(pk=strategy.pk)
-    snapshot = _method_snapshot(strategy)
+    snapshot = method_snapshot(strategy)
     generator_id = (strategy.source_event.message.metadata.get('rsi_sidecar', {}).get('bundle', {}).get('G') or {}).get('id')
     generator = TeachingMechanismVersion.objects.filter(pk=generator_id, kind='G', owner__isnull=True).first()
     row, _ = LearningStrategyVersion.objects.get_or_create(strategy=strategy, digest=canonical_hash(snapshot),
@@ -130,7 +137,7 @@ def record_strategy_use(use, *, created):
         return
     use = LearningStrategyUse.objects.select_related('strategy__source_event', 'message', 'project').get(pk=use.pk)
     validate_strategy_use(use.project, use.pk, pending_message_id=use.message_id)
-    version = ensure_method_version(use.strategy)
+    version = use.method_version or ensure_method_version(use.strategy)
     frozen = use.message.metadata.get('rsi_sidecar')
     eligible = []
     from .project_learning import unconfirmed_progress_ids
@@ -149,6 +156,14 @@ def record_strategy_use(use, *, created):
                     'selected_version_id': version.pk, 'selected_digest': version.digest,
                     'prediction': None, 'prediction_status': 'not_recorded',
                     'assigned_at': use.created_at.isoformat()}
+    from .memory_core import prism_active
+    if prism_active():
+        from .prism_memory import context
+        packet = context(use.message)
+        if packet:
+            use.decision['prism'] = {'status': 'retrieved_not_usage_proof',
+                'methods': [{key: entry[key] for key in ('id', 'revision', 'version')} for entry in packet['methods']],
+                'memories': [{key: entry[key] for key in ('key', 'revision', 'scope')} for entry in packet['memories']]}
     use.exposure = {'status': 'assigned', 'adherence': 'unverified'}
     use.save(update_fields=['method_version', 'decision', 'exposure'])
 
@@ -217,7 +232,7 @@ def record_task_outcome(task, result, event):
                 'score': result.score, 'max_score': result.max_score, 'label_source': task_label_source(task, result)}
     if any(event.content.get(key) != value for key, value in expected.items()):
         raise ValidationError('教学观察的原始证据已变化。')
-    if use.method_version_id and use.method_version.digest != canonical_hash(_method_snapshot(use.strategy)):
+    if use.method_version_id and use.method_version.digest != canonical_hash(method_snapshot(use.strategy)):
         raise ValidationError('教学方法的冻结依据已变化。')
     reply = AIChatMessage.objects.filter(pk=use.exposure.get('reply_id'), user_id=task.project.user_id,
         bot_id=use.message.bot_id, conversation_id=use.message.conversation_id, role='assistant',

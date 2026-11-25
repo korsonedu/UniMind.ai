@@ -125,7 +125,7 @@ class PlanSerializer(serializers.Serializer):
         return stages
 
 
-def current_project(user, context):
+def current_project(user, context, *, require_project=True):
     context = context or {}
     message = AIChatMessage.objects.filter(pk=context.get('message_id'), user=user, role='user',
         conversation_id=context.get('conversation_id'), bot_id=context.get('bot_id')).first()
@@ -133,12 +133,12 @@ def current_project(user, context):
         raise PermissionDenied('缺少服务端核验的当前提问。')
     conversation = Conversation.objects.select_related('project').filter(user=user,
         conversation_id=message.conversation_id, project__user=user).first()
-    if not conversation:
+    if not conversation and require_project:
         raise ValidationError('请先在一个学习项目内开始对话。')
     snapshot = message.metadata.get('learning_snapshot')
-    if snapshot and snapshot['project_id'] != conversation.project_id:
+    if snapshot and snapshot.get('project_id') != (conversation.project_id if conversation else None):
         raise PermissionDenied('对话所属项目已变化，请重新开始本轮学习。')
-    return conversation.project, message
+    return (conversation.project if conversation else None), message
 
 
 def _focused_task(project, state, tasks):
@@ -158,10 +158,10 @@ def public_event_content(event):
     return content
 
 
-def learning_data(project, language='zh-CN', *, current_message=None):
+def learning_data(project, language='zh-CN', *, current_message=None, memory_read=None, diagnostic_excluded=None):
     state, _ = ProjectLearning.objects.get_or_create(project=project)
     from users.feature_access import has_learning_feature
-    event_rows = ProjectLearningEvent.objects.filter(project=project).exclude(kind='turn')
+    event_rows = ProjectLearningEvent.objects.filter(project=project).exclude(kind__in=('turn', 'knowledge_view', 'agent_checkpoint'))
     hidden_plans = unconfirmed_plan_ids(project)
     event_rows = event_rows.exclude(pk__in=hidden_plans)
     unconfirmed = unconfirmed_progress_ids(project.user_id, project.pk)
@@ -190,28 +190,48 @@ def learning_data(project, language='zh-CN', *, current_message=None):
     from .learning_tasks import available_project_tasks, task_data
     version_id = (state.plan.get('knowledge_path') or {}).get('version_id')
     project_tasks = available_project_tasks(project)
-    tasks = [task_data(task) for task in project_tasks.filter(Q(knowledge_version_id=version_id) | Q(purpose='diagnostic', stage_id='')).select_related('project', 'exam').order_by('created_at', 'pk')]
-    completed_tasks = [task for task in tasks if task['status'] == 'completed']
-    next_task = next((task for task in tasks if task['status'] in ('ready', 'partial', 'failed', 'processing')), None)
-    latest = max(completed_tasks, key=lambda task: str(task['summary'].get('completed_at') or ''), default=None)
-    task_progress = {'completed': len(completed_tasks), 'total': len(tasks),
-        'feedback': guidance_text('最近完成“{0}”，得分 {1}/{2}。', language, latest['title'], latest['summary']['total_score'], latest['summary']['max_score']) if latest else '',
-        'next_action': (guidance_text('先复盘错误与解析，再继续：', language) if latest and latest['summary']['total_score'] < latest['summary']['max_score'] else guidance_text('接下来：', language)) + next_task['title'] if next_task else (guidance_text('本轮任务已完成，按复习时间重新检查，并和小宇核对下一阶段。', language) if latest else ''),
-        'next_task_id': next_task['id'] if next_task else None}
-    from .learning_guidance import teaching_guidance
-    progress_at = next((event.created_at for event in events if event.kind == 'progress' and event.content.get('stage') == state.current_stage and event.content.get('mainline', True)), None)
-    focused = _focused_task(project, state, project_tasks)
-    focus_task_id = str(focused.pk) if focused else None
-    guidance = teaching_guidance(state, tasks, progress_at=progress_at, focus_task_id=focus_task_id, language=language)
-    # All learner surfaces follow the same current episode. Other tasks still keep their results.
-    task_progress.update(feedback=guidance['feedback'], next_action=guidance['next_action'], next_task_id=guidance['task_id'])
-    if not next_task and len(completed_tasks) < len(tasks):
-        task_progress['next_action'] = guidance_text('有任务内容当前不可用，请和小宇重新安排，已有成绩继续保留。', language)
-    return {
+    if memory_read is None:
+        selected = project_tasks.filter(Q(knowledge_version_id=version_id) | Q(purpose='diagnostic', stage_id=''))
+        from .fact_evidence import active
+        scope = None
+        if active():
+            from .learning_continuity import definition_scope, current_task_ids
+            scope = definition_scope(project, version_id)
+            identities = [{'id': str(row['id']), 'version_id': row['knowledge_version_id'],
+                'node_id': row['node_id'], 'stage_id': row['stage_id']} for row in
+                project.learning_tasks.values('id', 'knowledge_version_id', 'node_id', 'stage_id')]
+            selected = project_tasks.filter(Q(pk__in=current_task_ids(state.plan, identities, scope)) | Q(purpose='diagnostic', stage_id=''))
+        tasks = [task_data(task, scope=scope) for task in selected.select_related('project', 'exam').order_by('created_at', 'pk')]
+        completed_tasks = [task for task in tasks if task['status'] == 'completed']
+        next_task = next((task for task in tasks if task['status'] in ('ready', 'partial', 'failed', 'processing')), None)
+        latest = max(completed_tasks, key=lambda task: str(task['summary'].get('completed_at') or ''), default=None)
+        task_progress = {'completed': len(completed_tasks), 'total': len(tasks),
+            'feedback': guidance_text('最近完成“{0}”，得分 {1}/{2}。', language, latest['title'], latest['summary']['total_score'], latest['summary']['max_score']) if latest else '',
+            'next_action': (guidance_text('先复盘错误与解析，再继续：', language) if latest and latest['summary']['total_score'] < latest['summary']['max_score'] else guidance_text('接下来：', language)) + next_task['title'] if next_task else (guidance_text('本轮任务已完成，按复习时间重新检查，并和小宇核对下一阶段。', language) if latest else ''),
+            'next_task_id': next_task['id'] if next_task else None}
+        from .learning_guidance import teaching_guidance
+        progress_at = next((event.created_at for event in events if event.kind == 'progress' and event.content.get('stage') == state.current_stage and event.content.get('mainline', True)), None)
+        focused = _focused_task(project, state, project_tasks)
+        focus_task_id = str(focused.pk) if focused else None
+        guidance = teaching_guidance(state, tasks, progress_at=progress_at, focus_task_id=focus_task_id, language=language)
+        # All learner surfaces follow the same current episode. Other tasks still keep their results.
+        task_progress.update(feedback=guidance['feedback'], next_action=guidance['next_action'], next_task_id=guidance['task_id'])
+        if not next_task and len(completed_tasks) < len(tasks):
+            task_progress['next_action'] = guidance_text('有任务内容当前不可用，请和小宇重新安排，已有成绩继续保留。', language)
+    else:
+        tasks = []
+        task_progress = {}
+        focused = project.learning_events.filter(kind='focus', content__version_id=version_id).first()
+        focus_task_id = focused.content.get('task_id') if focused and project_tasks.filter(
+            pk=focused.content.get('task_id'), knowledge_version_id=version_id, stage_id=state.current_stage).exists() else None
+        guidance = {'next_action': state.next_action, 'feedback': state.feedback}
+    data = {
         'teaching_guidance': guidance, 'focus_task_id': focus_task_id,
         'task_progress': task_progress,
         'tasks': [{key: task[key] for key in ('id', 'title', 'version_id', 'node_id', 'stage_id', 'status', 'exam_id', 'assistance', 'purpose', 'source_task_id', 'review_due_at', 'summary')} for task in tasks],
-        'knowledge': knowledge_state(project, state, current_message=current_message),
+        'knowledge': knowledge_state(project, state, current_message=current_message,
+            estimates=memory_read['packet']['estimates'] if memory_read and memory_read.get('task_access', True) else None,
+            diagnostic_excluded=diagnostic_excluded),
         'strategy_uses': project_strategy_uses(project),
         'project_id': project.pk, 'name': project.name, 'instructions': project.instructions,
         'planning_enabled': state.planning_enabled, 'reminders_enabled': state.reminders_enabled,
@@ -231,6 +251,12 @@ def learning_data(project, language='zh-CN', *, current_message=None):
                                  'responded': bool(event.content.get('response_message_id'))} if event.kind == 'followup' else None,
                     'created_at': event.created_at} for event in events],
     }
+    if memory_read is not None:
+        if data['revision'] != memory_read['packet']['project']['revision']:
+            raise LearningConflict()
+        from .task_memory_store import apply_projection
+        data = apply_projection(data, memory_read)
+    return data
 
 
 def activity_snapshot(project, raw):
@@ -245,6 +271,10 @@ def activity_snapshot(project, raw):
         tasks = available_project_tasks(project)
         task = get_object_or_404(tasks.select_related('project', 'exam'), pk=pk)
         data = task_data(task)
+        from .fact_evidence import active
+        if active() and data['status'] != 'unavailable':
+            from .method_adoption import read_task_replies, select_task_replies
+            data['reply_history'] = select_task_replies(read_task_replies(project, task))
         result = {'kind': 'task', 'task': data, 'mainline': data['is_current'] and task.stage_id == project.learning.current_stage}
         focused = _focused_task(project, project.learning, tasks)
         if focused:
@@ -278,7 +308,7 @@ def activity_snapshot(project, raw):
                               if raw.get('node_id') in stage.get('knowledge_nodes', [])), None), 'mainline': False}
 
 
-def project_context(user, conversation_id, *, message=None, private_probe_review=False):
+def project_context(user, conversation_id, *, message=None, private_probe_review=False, memory_read=None, diagnostic_excluded=None):
     conversation = Conversation.objects.select_related('project').filter(user=user,
         conversation_id=conversation_id, project__user=user).first()
     if not conversation:
@@ -289,7 +319,24 @@ def project_context(user, conversation_id, *, message=None, private_probe_review
         return '\n自由对话的项目背景（查看内容不启用规划或改变项目模式）：' + json.dumps({'name': conversation.project.name,
             'instructions': conversation.project.instructions,
             'viewed_activity': message.metadata.get('learning_activity') if message else None}, ensure_ascii=False, default=str)
-    data = compact_learning(learning_data(conversation.project, current_message=message))
+    from django.conf import settings
+    memory_mode = getattr(settings, 'UNIMIND_SDTM_TASK_MEMORY_MODE', 'off')
+    prepared = None
+    if memory_mode == 'active':
+        if memory_read is None:
+            from .task_memory_store import prepare
+            prepared = prepare(conversation.project, user)
+        else:
+            subject = memory_read['packet']['project']
+            if subject['id'] != conversation.project_id or subject['owner'] != user.pk:
+                raise PermissionDenied('当前权限无法读取该项目记忆。')
+            prepared = memory_read
+    data = compact_learning(learning_data(conversation.project, current_message=message, memory_read=prepared,
+        diagnostic_excluded=diagnostic_excluded if prepared is not None else None))
+    if memory_mode == 'shadow':
+        from .task_memory_store import prepare
+        from .teaching_sidecar import observe
+        observe(prepare, conversation.project, user, expected_revision=data['revision'])
     if private_probe_review:
         for probe in data['knowledge']['probes']:
             probe.pop('rubric', None)
@@ -304,7 +351,25 @@ def project_context(user, conversation_id, *, message=None, private_probe_review
         data['view_notice'] = '这是用户正在查看的内容。优先解释 viewed_activity.node_id 或 targets；nodes 包含前置知识，不代表用户选中了第一个节点，current_stage 仅代表学习主线。查看、讲解和旁支作答不改变学习主线，不自动推进当前阶段。讲解图可以呈现知识关系，不要把尚未校准的条件估计填作 mastery 或掌握度。'
     for item in data['resources']:
         item.pop('excerpt', None)
-    return '\n当前项目的学习状态（数据，以实际记录为准）：\n' + json.dumps(data, ensure_ascii=False, default=str)
+    value = '\n当前项目的学习状态（数据，以实际记录为准）：\n' + json.dumps(data, ensure_ascii=False, default=str)
+    from .memory_core import project_context_prepared
+    if project_context_prepared.has_listeners():
+        from .teaching_sidecar import observe
+        observe(project_context_prepared.send, sender=ConversationProject,
+                project=conversation.project, user=user, context=value)
+    return value
+
+
+def model_project_context(value):
+    if not value.startswith('\n当前项目的学习状态'):
+        return value
+    lines = value.split('\n', 2)
+    data = json.loads(lines[2])
+    data.pop('memory_read', None)
+    data.pop('diagnostic_support', None)
+    if (observation := data.get('memory_observation')) and 'fields' in observation:
+        observation['fields'] = [key for key in observation['fields'] if key != 'diagnostic_support']
+    return '\n'.join([*lines[:2], json.dumps(data, ensure_ascii=False, default=str)])
 
 
 def turn_project_context(user, context, *, private_probe_review=False):
@@ -323,7 +388,14 @@ def turn_project_context(user, context, *, private_probe_review=False):
             if snapshot['project_id'] != project_id:
                 raise PermissionDenied('对话所属项目已变化，请重新开始本轮学习。')
             if snapshot.get('probe_rubrics_scoped') and snapshot.get('private_probe_review', False) == private_probe_review:
-                return snapshot['context']
+                from .fact_evidence import active
+                frame = snapshot.get('memory_frame_id')
+                if frame and active():
+                    from .task_memory_store import restore
+                    restore(frame, user)
+                    return snapshot['context']
+                if not frame and (not active() or not project_id):
+                    return snapshot['context']
         if project_id:
             followup = ProjectLearningEvent.objects.filter(project_id=project_id, kind='followup', created_at__lt=message.timestamp).first()
             if followup and not followup.content.get('response_message_id'):
@@ -332,6 +404,10 @@ def turn_project_context(user, context, *, private_probe_review=False):
         value = project_context(user, message.conversation_id, message=message, private_probe_review=private_probe_review) if project_id else ''
         message.metadata['learning_snapshot'] = {'project_id': project_id, 'context': value, 'probe_rubrics_scoped': True,
                                                  'private_probe_review': private_probe_review}
+        if value.startswith('\n当前项目的学习状态'):
+            data = json.loads(value.split('\n', 2)[2])
+            if data.get('memory_read'):
+                message.metadata['learning_snapshot']['memory_frame_id'] = data['memory_read']['frame_id']
         message.save(update_fields=['metadata'])
         if project_id:
             from .teaching_sidecar import freeze_turn, observe
@@ -427,7 +503,7 @@ def change_learning(project, data, *, message=None, model=False, language='zh-CN
         if existing := ProjectLearningEvent.objects.filter(request_key=request_key).first():
             if prepare_change and action == 'progress':
                 return progress_prepared(existing.content.get('assistance', 'unknown'), existing.content.get('knowledge_check'), committed=True)
-            result = learning_data(project, language=language)
+            result = model_learning_data(project, project.user, language=language)
             if action == 'progress':
                 result['progress_event_id'] = existing.pk
             return result
@@ -577,7 +653,8 @@ def change_learning(project, data, *, message=None, model=False, language='zh-CN
     state.revision += 1
     state.save()
     record = ProjectLearningEvent.objects.create(project=project, message=message, kind=action, content=event, request_key=request_key)
-    data = learning_data(project, language=language)
+    data = (model_learning_data(project, project.user, language=language)
+            if model and action != 'complete' else learning_data(project, language=language))
     if model and 'proposed_plan' in event:
         # The caller just wrote the proposal and can bind it to the answer being committed.
         data.update(pending_plan=state.pending_plan, plan_event_id=record.pk)
@@ -608,16 +685,42 @@ def tool_operation(executor, name, arguments, *, prepare_change=False, project_t
     if name == 'manage_learning_tasks':
         from .learning_tasks import available_project_tasks, create_task, task_data, task_question_hash
         if arguments.get('action') == 'list':
-            data = compact_learning(learning_data(project))
-            return {'tasks': data['tasks'], 'task_progress': data['task_progress'], 'teaching_guidance': data['teaching_guidance']}
+            data = learning_data(project) if arguments.get('pending_only') else model_learning_data(project, executor.user)
+            if arguments.get('pending_only'):
+                data['tasks'] = [task for task in data['tasks'] if task['status'] != 'completed']
+            result = {'tasks': data['tasks'], 'task_progress': data['task_progress'], 'teaching_guidance': data['teaching_guidance']}
+            if data.get('memory_read'):
+                result['memory_read'] = data['memory_read']
+            from .fact_evidence import active
+            if active() and not arguments.get('pending_only'):
+                from .learning_tasks import task_index
+                after = serializers.UUIDField().run_validation(arguments['after_task_id']) if 'after_task_id' in arguments else None
+                result.update(task_index(project, query=arguments.get('query', ''), after_task_id=after))
+            return result
         if arguments.get('action') == 'read':
             from django.shortcuts import get_object_or_404
             from quizzes.services.practice_results import exam_result_payload
             task_id = serializers.UUIDField().run_validation(arguments.get('task_id'))
             task = get_object_or_404(available_project_tasks(project).select_related('project', 'exam'), pk=task_id)
             data = task_data(task)
+            if data['is_current'] and data['status'] == 'ready':
+                data['href'] = f'/xiaoyu?project={project.pk}&learning_task={task.pk}'
             if task.exam_id and data['status'] != 'unavailable':
                 data['results'] = [item for item in exam_result_payload(task.exam)['results'] if item['status'] == 'graded']
+            from .fact_evidence import active
+            if active() and data['status'] != 'unavailable':
+                from .method_adoption import read_task_replies, record_task_context, select_task_replies
+                record_task_context(project, task, message)
+                before = serializers.IntegerField(min_value=1).run_validation(arguments['before_reply_id']) if 'before_reply_id' in arguments else None
+                data['reply_history'] = select_task_replies(read_task_replies(project, task), before)
+                from . import learning_diagnostics
+                if learning_diagnostics.active(project.pk):
+                    sources = learning_diagnostics.read_sources(project, [str(task.pk)])
+                    if sources:
+                        data['diagnostic_support'] = learning_diagnostics.interpret(sources)[str(task.pk)]
+                if data['is_current'] and data['status'] == 'ready':
+                    from .task_memory_store import preview
+                    data['public_methods'] = preview(project, project.user, task_id=task.pk)['packet']['public_methods']
             return data
         if arguments.get('action') != 'create':
             raise ValidationError('不支持的任务操作。')
@@ -647,6 +750,10 @@ def tool_operation(executor, name, arguments, *, prepare_change=False, project_t
                 ProjectLearningEvent.objects.create(project=project, message=message, kind='task',
                     request_key=key, content={'task_id': str(task.pk)})
             data = task_data(task)
+            from .fact_evidence import active
+            if active():
+                from .method_adoption import record_task_context
+                record_task_context(project, task, message)
             return {key: data[key] for key in ('id', 'title', 'status', 'version_id', 'node_id', 'stage_id')} | {
                 'href': f'/xiaoyu?project={project.pk}&learning_task={task.pk}',
                 'notice': '任务已保存。用户通过任务卡片提交后，评分流程保存原作答与评价并关联知识节点；不等于正式考试成绩。本轮安排已完成，立即停止其他工具调用并简短引导到任务卡片，不再记录旧表现或设置跟进；不重复题目或评分标准，不声称只在对话评分；不得代答或自报成绩。'}
@@ -661,7 +768,7 @@ def tool_operation(executor, name, arguments, *, prepare_change=False, project_t
         return strategy_operation(project, arguments, message=message,
                                   pending_progress_id=(project_ticket or {}).get('progress_event_id'))
     if name == 'read_learning_project':
-        return compact_learning(learning_data(project))
+        return model_learning_data(project, executor.user)
     if name == 'find_learning_resources':
         from .learning_resources import find_resources
         result = find_resources(project, arguments)
@@ -680,11 +787,23 @@ def tool_operation(executor, name, arguments, *, prepare_change=False, project_t
         **({'event_id': data['progress_event_id']} if action == 'progress' else {})}
 
 
+def model_learning_data(project, user, *, language='zh-CN'):
+    from django.conf import settings
+    prepared = None
+    if getattr(settings, 'UNIMIND_SDTM_TASK_MEMORY_MODE', 'off') == 'active':
+        from .task_memory_store import preview
+        prepared = preview(project, user)
+    data = compact_learning(learning_data(project, language=language, memory_read=prepared))
+    data.pop('memory_read', None)
+    return data
+
+
 def compact_learning(data):
     knowledge = data.get('knowledge', {})
     knowledge.pop('evidence', None)
     knowledge['nodes'] = [{'id': node['id'], 'title': node['title'], 'beliefs': node['beliefs'], 'learning_status': node['learning_status']} for node in knowledge.get('nodes', [])]
-    data['tasks'] = data.get('tasks', [])[-15:]
+    if not data.get('memory_read'):
+        data['tasks'] = data.get('tasks', [])[-15:]
     data['events'] = data['events'][:5]
     for event in data['events']:
         if event['source']:
