@@ -20,6 +20,9 @@ def _inject_kp_chain_experiences(kp_ids: list, user, institution=None) -> list[s
     用于 Phase 3 kp_chain 二次注入：初次对话时还没确定 KP，
     等到搜索知识树返回 KP 后再检查经验。
     """
+    from .memory_core import prism_active
+    if prism_active():
+        return []
     from .experience_applicator import get_applicable_experiences, record_trigger
 
     hints = []

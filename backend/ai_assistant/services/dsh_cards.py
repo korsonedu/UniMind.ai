@@ -30,6 +30,11 @@ def build_tool_card(name, result):
         return data_card('确认学习路径', [item(stage['title'], stage['outcome'])
             for stage in result.get('pending_plan', {}).get('plan', {}).get('stages', [])[:10]],
             ('查看并确认学习路径', result['href']), '确认后开始，原学习安排在确认前保持不变。')
+    if name == 'manage_learning_tasks' and result.get('diagnostic_support', {}).get('status') == 'disclosed':
+        timing = '作答前' if result.get('status') == 'completed' else '此前'
+        link = ('打开学习任务', result['href']) if result.get('href') else None
+        return data_card(result['title'], [item('独立完成', '需换题复查')], link,
+                         f'{timing}已讲过本题解法中的步骤。')
     if name == 'manage_learning_tasks' and result.get('href'):
         return data_card(result['title'], [item('学习任务', '已准备，等待你实际作答')],
             ('打开学习任务', result['href']))

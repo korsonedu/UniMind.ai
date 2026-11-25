@@ -221,7 +221,7 @@ def verified_knowledge_events(project, version_id):
     return {'events': valid, 'total': len(checks), 'excluded_provenance': excluded_count, 'other_algorithm': other_algorithm}
 
 
-def knowledge_state(project, state, *, compact=False, current_message=None):
+def knowledge_state(project, state, *, compact=False, current_message=None, estimates=None, diagnostic_excluded=None):
     path = state.plan.get('knowledge_path')
     if not path:
         return {'algorithm': ALGORITHM_VERSION, 'path': None, 'nodes': [], 'recommendations': [], 'probes': []}
@@ -236,15 +236,32 @@ def knowledge_state(project, state, *, compact=False, current_message=None):
         evidence.append({'event_id': event.pk, 'message_id': event.message_id, 'source': event.message.content[:2000], 'conversation_id': str(event.message.conversation_id),
             'at': event.created_at.isoformat(), **check})
     from .learning_task_evidence import formal_observations
-    formal, task_provenance = formal_observations(project, version.pk)
+    from django.conf import settings
+    if getattr(settings, 'UNIMIND_SDTM_TASK_MEMORY_MODE', 'off') == 'active':
+        from .learning_continuity import formal_observations as continuous_observations
+        formal, task_provenance, _ = continuous_observations(project, version.pk)
+    else:
+        formal, task_provenance = formal_observations(project, version.pk)
+    from . import learning_diagnostics
+    excluded = set()
+    if learning_diagnostics.active():
+        excluded = diagnostic_excluded
+        if excluded is None:
+            excluded = learning_diagnostics.excluded_tasks(learning_diagnostics.read_sources(
+                project, {row['task_id'] for row in formal}))
     for row in formal:
-        observations.setdefault((row['node_id'], row['mode']), []).append(row)
+        if row['task_id'] not in excluded:
+            observations.setdefault((row['node_id'], row['mode']), []).append(row)
         evidence.append(row)
     evidence.sort(key=lambda row: (row['at'], row['event_id']))
     for rows in observations.values():
         rows.sort(key=lambda row: row['at'])
     now = timezone.now()
-    states = [{**node, 'beliefs': {mode: belief(observations.get((node['id'], mode), []), now) for mode in ('apply', 'transfer')}} for node in nodes]
+    def estimate(node_id, mode):
+        current = estimates.get(f'{node_id}:{mode}') if estimates is not None else None
+        return current if current is not None else belief(observations.get((node_id, mode), []), now)
+
+    states = [{**node, 'beliefs': {mode: estimate(node['id'], mode) for mode in ('apply', 'transfer')}} for node in nodes]
     by_id = {node['id']: node for node in states}
     # Conservative routing heuristic, not a mastery gate or a calibrated probability threshold.
     def ready(node):

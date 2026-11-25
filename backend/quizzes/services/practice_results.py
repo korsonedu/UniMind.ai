@@ -174,7 +174,7 @@ def _knowledge_point(snapshot: dict, question):
     return None, '', ''
 
 
-def _result_payload(result: ExamQuestionResult) -> dict:
+def question_result_payload(result: ExamQuestionResult) -> dict:
     snapshot = result.question_snapshot or {}
     question = result.question
     kp_id, kp_name, kp_code = _knowledge_point(snapshot, question)
@@ -249,7 +249,11 @@ def _kp_breakdown(results: list[dict]) -> list[dict]:
 
 def exam_result_payload(exam: QuizExam, include_results: bool = True) -> dict:
     results = list(exam.results.select_related('question__knowledge_point').order_by('position', 'id'))
-    payload_results = [_result_payload(result) for result in results]
+    return _exam_result_payload(exam, results, include_results)
+
+
+def _exam_result_payload(exam, results, include_results=True):
+    payload_results = [question_result_payload(result) for result in results]
     graded = [item for item in payload_results if item['status'] == 'graded']
     total_score = sum(item['score'] for item in graded)
     max_score = sum(item['max_score'] for item in graded)

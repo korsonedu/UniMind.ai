@@ -47,6 +47,7 @@ export interface TeachingGuidance {
 }
 export interface ProjectLearning {
   revision: number; conversation_id: string | null; server_time: string;
+  memory_connectors?: boolean; last_viewed_node?: { node_id: string; version_id: number } | null;
   focus_task_id?: string | null; planning_enabled: boolean; reminders_enabled: boolean;
   teaching_guidance?: TeachingGuidance;
   knowledge?: LearningKnowledge;

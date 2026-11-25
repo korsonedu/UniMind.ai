@@ -270,6 +270,32 @@ UNIMIND_DSH_XIAOYU_ENABLED = _dsh_flag("UNIMIND_DSH_XIAOYU_ENABLED")
 UNIMIND_ULR_PROTOTYPE = DEBUG and _get_bool("UNIMIND_ULR_PROTOTYPE")
 UNIMIND_ULR_RECHECK_STRATEGY = os.getenv("UNIMIND_ULR_RECHECK_STRATEGY", "immediate")
 UNIMIND_DSH_SITE_ENABLED = _dsh_flag("UNIMIND_DSH_SITE_ENABLED")
+
+UNIMIND_PRISM_MODE = os.getenv('UNIMIND_PRISM_MODE', 'off')
+if UNIMIND_PRISM_MODE not in ('off', 'shadow', 'active'):
+    raise ImproperlyConfigured('UNIMIND_PRISM_MODE must be off, shadow or active.')
+UNIMIND_SDTM_TASK_MEMORY_MODE = os.getenv('UNIMIND_SDTM_TASK_MEMORY_MODE', 'off')
+if UNIMIND_SDTM_TASK_MEMORY_MODE not in ('off', 'shadow', 'active'):
+    raise ImproperlyConfigured('UNIMIND_SDTM_TASK_MEMORY_MODE must be off, shadow or active.')
+UNIMIND_SDTM_STRUCTURED_DIAGNOSTICS = _get_bool('UNIMIND_SDTM_STRUCTURED_DIAGNOSTICS')
+try:
+    UNIMIND_SDTM_DIAGNOSTIC_PROJECTS = frozenset(int(value) for value in
+        os.getenv('UNIMIND_SDTM_DIAGNOSTIC_PROJECTS', '').split(',') if value.strip())
+except ValueError as error:
+    raise ImproperlyConfigured('UNIMIND_SDTM_DIAGNOSTIC_PROJECTS must contain comma-separated project IDs.') from error
+
+UNIMIND_LEARNING_MEMORY_CONNECTORS = _get_bool('UNIMIND_LEARNING_MEMORY_CONNECTORS')
+UNIMIND_LEARNING_MEMORY_OAUTH_ORIGIN = os.getenv('UNIMIND_LEARNING_MEMORY_OAUTH_ORIGIN', '').rstrip('/')
+UNIMIND_LEARNING_MEMORY_OAUTH_CLIENT_IDS = frozenset(_get_list('UNIMIND_LEARNING_MEMORY_OAUTH_CLIENT_IDS'))
+if UNIMIND_LEARNING_MEMORY_OAUTH_ORIGIN:
+    from urllib.parse import urlsplit
+    _memory_oauth_origin = urlsplit(UNIMIND_LEARNING_MEMORY_OAUTH_ORIGIN)
+    if (not _memory_oauth_origin.hostname or _memory_oauth_origin.username or _memory_oauth_origin.password
+            or _memory_oauth_origin.path or _memory_oauth_origin.query or _memory_oauth_origin.fragment
+            or (_memory_oauth_origin.scheme != 'https' and
+                (IS_PROD or _memory_oauth_origin.scheme != 'http' or _memory_oauth_origin.hostname not in ('127.0.0.1', 'localhost', '::1')))):
+        raise ImproperlyConfigured('UNIMIND_LEARNING_MEMORY_OAUTH_ORIGIN must be an HTTPS origin.')
+
 UNIMIND_DSH_PYTHON = os.getenv("UNIMIND_DSH_PYTHON", "")
 UNIMIND_DSH_API_URL = os.getenv("UNIMIND_DSH_API_URL", "")
 UNIMIND_DSH_STATE_DIR = os.getenv("UNIMIND_DSH_STATE_DIR", "")

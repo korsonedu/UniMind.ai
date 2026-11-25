@@ -223,3 +223,14 @@ def test_practice_reads_the_owned_session_and_saved_result(auth_client, user, se
     PracticeSubmission.objects.create(user=user, session_id=sid, answers_hash='synthetic', response={'total_score': 8, 'results': []})
     cache.delete(f'practice:session:{sid}')
     assert auth_client.get(url).json()['result'] == {'total_score': 8, 'results': []}
+
+
+def test_prism_wire_schema_preserves_bounds_for_backend_validation():
+    from ai_assistant.services.dsh_tasks import PRISM_OBSERVATION_SCHEMA, wire_schema
+    wire = wire_schema(PRISM_OBSERVATION_SCHEMA)
+    assert 'maxItems' not in wire['properties']['features']
+    assert 'maxItems' in wire['properties']['features']['description']
+    assert PRISM_OBSERVATION_SCHEMA['properties']['features']['maxItems'] == 16
+    from jsonschema import validate, ValidationError
+    with pytest.raises(ValidationError):
+        validate({'features': [{'key': 'course', 'value': 'SIM', 'evidence': 'SIM'}] * 17, 'behavior': []}, PRISM_OBSERVATION_SCHEMA)

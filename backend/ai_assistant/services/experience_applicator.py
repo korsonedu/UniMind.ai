@@ -165,6 +165,10 @@ def apply_memory_experiences(user, experiences: list) -> int:
     Returns:
         写入的记忆数量
     """
+    from .memory_core import prism_active
+    from .fact_evidence import active
+    if prism_active() or active():
+        return 0
     from ..models import AgentMemory
 
     saved = 0
@@ -176,7 +180,6 @@ def apply_memory_experiences(user, experiences: list) -> int:
         existing = AgentMemory.objects.filter(
             user=user,
             key=f'experience:{exp.id}',
-            is_active=True,
         ).exists()
         if existing:
             continue

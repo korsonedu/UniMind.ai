@@ -115,6 +115,12 @@ def task_context_data(user, claims, message, *, history_limit, reauthorize=False
         }
     else:
         history = _get_chat_history(user, current.bot, current.conversation_id, exclude_ids=(current.pk,), limit=history_limit)
+    if history_limit and not reauthorize:
+        from .prism_execution import execution_view
+        from .prism_memory import context as prism_context, safely
+        prism = execution_view(safely(prism_context, current, history))
+        if prism:
+            scope['prism'] = prism
     if external_video := current.metadata.get('external_video_context'):
         scope['external_video'] = external_video_context_text(external_video)
     return {'history': [{**row, 'content': row['content'][:800]} for row in history],
@@ -202,6 +208,10 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
             user_event = {'type': 'user_message', 'message_id': current.pk, 'metadata': current.metadata}
             emit(user_event)
             chat_context = {'conversation_id': str(conversation_id), 'bot_id': bot.pk, 'message_id': current.pk}
+            from .prism_gate import clarification
+            from .prism_memory import prepare as prism_prepare, safely
+            safely(prism_prepare, current)
+            gated = clarification(user, bot, chat_context) if not ulr else None
             session = None
             handoff = False
             context_sources = None
@@ -228,6 +238,9 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                 metadata = {'engine': 'ulr', 'ulr_task_id': task_id}
                 if strategy_use_ids := context_sources.pop('strategy_use_ids', None):
                     metadata['ulr_strategy_use_ids'] = strategy_use_ids
+            elif gated:
+                content, cards = gated, []
+                metadata = {'engine': 'dsh', 'prism_clarification': True}
             else:
                 answers = AIChatMessage.objects.filter(user=user, bot=bot, conversation_id=conversation_id, role='assistant')
                 handoff = has_handoff_history(user, bot, conversation_id)
@@ -309,6 +322,9 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                 stored_metadata = {**metadata, 'ulr_context_sources': context_sources} if context_sources is not None else metadata
                 answer = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=conversation_id,
                     role='assistant', content=content, metadata=stored_metadata)
+                from . import learning_diagnostics
+                if learning_diagnostics.active():
+                    learning_diagnostics.capture(current, answer)
                 title = conversation.title
                 needs_title = not title
                 if not title:
@@ -330,13 +346,15 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                         and can_use_learning_context(user) and not conversation_uses_notes(user, conversation_id)):
                     extract_memories_async(user, [{'role': 'user', 'content': message}], str(conversation_id),
                                            ulr=True, source_message_id=current.pk, answer_message_id=answer.pk)
-            if native_only:
-                turn_lock.close()
+                if native_only or handoff:
+                    # The ledger and conversation locks serialize admission through commit.
+                    # Stateless turns can release the file lock before exposing the receipt.
+                    turn_lock.close()
             # Auxiliary failures never turn a committed answer into a second paid retry.
-            from .teaching_sidecar import observe, record_turn_completion
-            observe(record_turn_completion, answer)
+            from .memory_core import record_completed_reply
+            safely(record_completed_reply, answer)
             try:
-                if needs_title and not native_only and getattr(settings, 'UNIMIND_DSH_TITLE_ENABLED', False):
+                if not gated and needs_title and not native_only and getattr(settings, 'UNIMIND_DSH_TITLE_ENABLED', False):
                     generated = sync_generate_title(str(conversation_id), user.pk, bot.pk, expected_title=title,
                                                     **({'ulr': True} if ulr else {}))
                     if generated and not ulr:
@@ -344,7 +362,7 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                     payload['conversation_title'] = Conversation.objects.get(user=user, conversation_id=conversation_id).title
                     AIUsageReservation.objects.filter(pk=reservation.pk, status='succeeded',
                         response__message_id=answer.pk).update(response=payload)
-                if (not ulr and getattr(settings, 'UNIMIND_DSH_MEMORY_ENABLED', False) and can_use_learning_context(user)
+                if (not gated and not ulr and getattr(settings, 'UNIMIND_DSH_MEMORY_ENABLED', False) and can_use_learning_context(user)
                         and not conversation_uses_notes(user, conversation_id)):
                     extract_memories_async(user, [{'role': 'user', 'content': message}], str(conversation_id),
                                            source_message_id=current.pk, answer_message_id=answer.pk)

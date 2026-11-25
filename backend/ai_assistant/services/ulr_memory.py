@@ -7,8 +7,10 @@ from rest_framework.exceptions import PermissionDenied
 from notes.context import conversation_uses_notes
 from ai_engine.observability import observe_background
 from users.feature_access import has_learning_feature
-from ..models import AIChatMessage, Conversation, MemoryExtractionLog, PendingMemoryExtraction
+from ..models import AIChatMessage, Conversation, MemoryExtractionLog, MemoryWriteState, PendingMemoryExtraction
 from .dsh_tasks import MEMORY_EXTRACTION_SCHEMA
+from .fact_evidence import active as fact_evidence_active
+from .memory_core import fact_write_revision
 from .memory_service import _build_dsh_extraction_prompt, _memory_message_hash, _merge_memory_candidates
 from .ulr_outbox import consume_job, publish_after_commit, publish_job
 from .ulr_structured import run_collector
@@ -90,6 +92,7 @@ def extract_answer_memory(question_id, answer_id, *, redelivered=False):
         current = question_for_answer(question_id, answer_id)
         if current is None or current.content != original.content or records.exists():
             return 0
+        write_revision = fact_write_revision(current.user) if fact_evidence_active() else None
         with observe_background('ulr', f'memory:{current.conversation_id}',
                                 source_message_id=question_id, answer_message_id=answer_id):
             result = run_collector(_build_dsh_extraction_prompt([{'role': 'user', 'content': current.content}]),
@@ -108,8 +111,10 @@ def extract_answer_memory(question_id, answer_id, *, redelivered=False):
             })
             if not created:
                 return 0
-            log.saved_count = _merge_memory_candidates(current.user, candidates, current.content,
-                                                       identity['conversation_id'], ulr=True)
+            if write_revision is None or MemoryWriteState.objects.select_for_update().get(
+                    user_id=current.user_id).revision == write_revision:
+                log.saved_count = _merge_memory_candidates(current.user, candidates, current.content,
+                    identity['conversation_id'], ulr=True, write_revision=write_revision, question=current)
             log.save(update_fields=['saved_count'])
             return log.saved_count
     finally:

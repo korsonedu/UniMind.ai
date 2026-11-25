@@ -22,7 +22,7 @@ from ai_assistant.services.learning_knowledge import knowledge_state
 from ai_assistant.services.learning_task_evidence import formal_observations
 from ai_assistant.services.learning_tasks import create_task
 from ai_assistant.services.ulr_tool_program import CURRENT_COURSE_NAME, VERSION as TOOL_PROGRAM_VERSION
-from courses.models import Course, TranscriptSegment, VideoTranscript
+from courses.models import Course, CourseModule, TranscriptSegment, VideoProgress, VideoTranscript
 from notes.models import Note
 from quizzes.ai_workflow import run_exam_grading
 from quizzes.models import KnowledgePoint, Question
@@ -183,6 +183,14 @@ def test_ulr_polling_and_sse_share_the_renamed_xiaoyu_turn(auth_client, user, se
                'message': '通过轮询继续上一轮。'}
     streaming = {**polling, 'request_id': str(uuid4()), 'message': '通过流式入口继续上一轮。'}
     fallback_reply = '继续使用已有的对话。'
+    cleanup_started, finish_cleanup = Event(), Event()
+    from ai_assistant.services.teaching_sidecar import observe, record_turn_completion
+
+    def observe_during_handoff(callback, *args, **kwargs):
+        if callback is record_turn_completion and args[0].metadata.get('dsh_handoff') and not cleanup_started.is_set():
+            cleanup_started.set()
+            finish_cleanup.wait(8)
+        return observe(callback, *args, **kwargs)
 
     def dsh_worker(user, action, *, message, session_id, reservation, on_event, chat_context):
         assert action == 'chat' and session_id is None and chat_context['history_digest']
@@ -200,14 +208,19 @@ def test_ulr_polling_and_sse_share_the_renamed_xiaoyu_turn(auth_client, user, se
         assert accepted.data['status'] == 'pending'
         answer = await completed(polling)
         assert answer['metadata']['dsh_handoff']
-        events = await read_stream(streaming)
+        try:
+            assert await sync_to_async(cleanup_started.wait, thread_sensitive=False)(5)
+            events = await read_stream(streaming)
+        finally:
+            finish_cleanup.set()
         reply = events[-1]
-        assert events[0]['type'] == 'user_message'
+        assert events[0].get('type') == 'user_message', events
         assert reply['metadata']['dsh_handoff'] and reply['full_content'] == fallback_reply
         assert 'session_id' not in reply and not any(event.get('type') == 'text_delta' for event in events)
         assert await read_stream(streaming) == [reply]
 
-    with patch('ai_assistant.services.dsh_xiaoyu.run_site_action', side_effect=dsh_worker) as worker:
+    with patch('ai_assistant.services.dsh_xiaoyu.run_site_action', side_effect=dsh_worker) as worker, \
+            patch('ai_assistant.services.teaching_sidecar.observe', side_effect=observe_during_handoff):
         async_to_sync(exercise_handoff)()
         assert worker.call_count == 2
     assert WeeklyAIUsage.objects.get(user=user).ai_calls == 4
@@ -411,6 +424,59 @@ def test_ulr_general_chat_can_discover_tools_and_resume_with_notes(auth_client, 
         assert state.plan['goal'] == '理解折现率' and state.current_stage == 'first'
         assert provider.call_count == 6
     assert WeeklyAIUsage.objects.get(user=user).ai_calls == 3
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ulr_recalls_workspace_learning_sources(auth_client, user, settings, tmp_path):
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    settings.UNIMIND_DSH_STATE_DIR = str(tmp_path)
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    settings.UNIMIND_LEARNING_MEMORY_CONNECTORS = True
+    settings.UNIMIND_SDTM_TASK_MEMORY_MODE = 'active'
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 20})
+    bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
+    course = Course.objects.create(title='合成课程', is_published=True,
+                                   module=CourseModule.objects.create(name='开放课', is_public=True))
+    VideoProgress.objects.create(user=user, course=course, last_position=52)
+    transcript = VideoTranscript.objects.create(course=course, asr_status='completed', revision=3)
+    TranscriptSegment.objects.create(transcript=transcript, index=0, start_time=50, end_time=60,
+                                     text='按现金流时点分别折现。')
+    attached = Note.objects.create(user=user, title='本次授权笔记', content='先画时间轴。')
+    Note.objects.create(user=user, title='本次未授权笔记', content='PRIVATE_NOTE_MARKER')
+
+    def call(name, arguments):
+        return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+            'id': name, 'type': 'function', 'function': {'name': name, 'arguments': json.dumps(arguments)},
+        }]}}]}
+
+    def model(messages, **kwargs):
+        names = {tool['function']['name'] for tool in kwargs['tools'] or []}
+        if messages[-1]['role'] == 'user':
+            assert 'recall_learning' in names
+            return call('recall_learning', {})
+        result = json.loads(messages[-1]['content'])
+        if 'course_progress' in result:
+            assert result['course_progress'][0]['position_seconds'] == 52
+            assert [note['source'] for note in result['notes']] == [f'note:{attached.pk}']
+            assert 'read_learning_source' in names
+            return call('read_learning_source', {'source': result['course_progress'][0]['source']})
+        assert result['segments'][0]['text'] == '按现金流时点分别折现。'
+        return {'choices': [{'finish_reason': 'stop', 'message': {'content': '从上次的现金流时点继续。'}}]}
+
+    async def consume(response):
+        return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')]
+
+    with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider:
+        response = auth_client.post('/api/ai/chat/stream/', {'bot_id': bot.pk, 'conversation_id': str(uuid4()),
+            'request_id': str(uuid4()), 'message': '请接着上次学。', 'note_ids': [attached.pk]}, format='json')
+        assert response.status_code == 200
+        final = async_to_sync(consume)(response)[-1]
+    assert final.get('engine') == 'ulr' and final['full_content'] == '从上次的现金流时点继续。', final
+    sources = AIChatMessage.objects.get(pk=final['message_id']).metadata['ulr_context_sources']
+    assert sources['transcripts'] == [[course.pk, transcript.pk, 3]]
+    assert sources['notes'] == [[attached.pk, attached.version]]
+    assert provider.call_count == 3
 
 
 LONG_HISTORY_ANCHOR = '第五轮的折现率推导锚点'
