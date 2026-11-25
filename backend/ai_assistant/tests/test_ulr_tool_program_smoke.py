@@ -101,21 +101,33 @@ def test_practice_instruction_never_widens_a_missing_or_ambiguous_match():
 
 
 def test_practice_instruction_binds_card_delivery_to_the_requested_topic():
+    calls = []
+
     def execute(name, arguments):
-        if name == 'search_knowledge_tree':
-            return {'results': [{'id': 77}]}
-        assert name == 'get_practice_questions' and arguments == {'knowledge_point_id': 77, 'limit': 1}
-        return {'questions': []}
+        calls.append((name, arguments))
+        return {'results': [{'id': 77}]} if name == 'search_knowledge_tree' else {'questions': []}
 
     request = '按久期保护知识点给我一道练习题。'
-    for message, find, card_only in (
-        (request, '久期保护', True),
-        (request + '再讲解这道题。', '久期保护', False),
-        (request, '另一个知识点', False),
+    for message, arguments, card_only, limit in (
+        (request, {'find': '久期保护'}, True, 1),
+        (request, {'find': '久期保护', 'limit': 2}, True, 1),
+        (request.replace('一道', '２ 道'), {'find': '久期保护', 'limit': 1}, True, 2),
+        ('请给我两道久期保护知识点的练习题。', {'find': '久期保护'}, True, 2),
+        ('先查久期保护知识点，再根据第一项出三道练习题。', {'find': '久期保护'}, True, 3),
+        (request.replace('一道', '几道'), {'find': '久期保护', 'limit': 2}, True, 2),
+        (request + '再讲解这道题。', {'find': '久期保护', 'limit': 2}, False, 2),
+        (request, {'find': '另一个知识点', 'limit': 2}, False, 2),
     ):
-        result = run_program({'find': find, 'limit': 1}, PROGRAM_OPS[PRACTICE_NAME], execute,
-                             name=PRACTICE_NAME, message=message)
+        result = run_program(arguments, PROGRAM_OPS[PRACTICE_NAME], execute, name=PRACTICE_NAME, message=message)
         assert bool(result.get('_ulr_card_only')) == card_only
+        assert calls[-1] == ('get_practice_questions', {'knowledge_point_id': 77, 'limit': limit})
+
+    calls.clear()
+    for count in ('0', '11', '十一', '９９９'):
+        result = run_program({'find': '久期保护', 'limit': 1}, PROGRAM_OPS[PRACTICE_NAME], execute,
+                             name=PRACTICE_NAME, message=request.replace('一', count))
+        assert result['error']['code'] == 'practice_count_out_of_range'
+        assert result['_ulr_card_only'] and result['steps_executed'] == [] and calls == []
 
 
 def test_practice_compiler_requires_an_explicit_card_and_literal_topic():

@@ -14,7 +14,7 @@ NAME = 'run_course_tools'
 PRACTICE_NAME = 'run_practice_tools'
 CURRENT_COURSE_NAME = 'locate_current_course_transcript'
 # Bump when the instruction grammar or its bound operation contracts change.
-VERSION = 21
+VERSION = 22
 # Earlier versions with the same operations may still echo version and rank.
 LEGACY_VERSION = 6
 PROGRAM_OPS = {
@@ -25,6 +25,7 @@ PROGRAM_OPS = {
 SOURCE_ACCESS_REVOKED = 'source_access_revoked'
 TEXT = {'type': 'string', 'pattern': r'\S'}
 PRACTICE_FILTERS = ('difficulty', 'q_type', 'subjective_type', 'limit', 'exclude_mastered')
+PRACTICE_MAX_COUNT = GET_PRACTICE_QUESTIONS_SCHEMA['properties']['limit']['maximum']
 PROGRAM_DESCRIPTIONS = {
     NAME: '查找课程并在命中的一门课内定位讲稿。',
     PRACTICE_NAME: '查找知识点并从命中的一个知识点准备站内练习卡。',
@@ -93,13 +94,14 @@ PRACTICE_ONLY = re.compile(r'(?:^|[。！？.!?]\s*)(?:只(?:要|发|返回)练�
 PRACTICE_LOCATOR = re.compile(
     rf'\s*(?:请)?给我\s*(?P<limit>[1-9１-９][0-9０-９]?|两|{"|".join(_ORDINALS)})\s*道\s*'
     r'「(?P<find>[^「」\r\n]+)」知识点的练习题\s*')
-_PRACTICE_COUNT = r'(?:\d+|[一二两三四五六七八九十百几]+)道'
+_PRACTICE_COUNT = r'\d+|[一二两三四五六七八九十百几零〇]+'
 _PRACTICE_ORDINAL = r'第[\d零〇一二两三四五六七八九十百千万亿]+项'
 _PRACTICE_TOPIC = r'[^。！？；，、,.!?;：:\n]+'
 PRACTICE_CARD_REQUEST = re.compile(
-    rf'\s*(?:请)?(?:给我{_PRACTICE_COUNT}(?P<direct>{_PRACTICE_TOPIC})知识点的|'
-    rf'按(?P<by_topic>{_PRACTICE_TOPIC})知识点给我{_PRACTICE_COUNT}|'
-    rf'先查(?P<lookup>{_PRACTICE_TOPIC})知识点[,，]\s*再根据{_PRACTICE_ORDINAL}(?:出|给我){_PRACTICE_COUNT})练习题'
+    rf'\s*(?:请)?(?:给我\s*(?P<direct_count>{_PRACTICE_COUNT})\s*道(?P<direct>{_PRACTICE_TOPIC})知识点的|'
+    rf'按(?P<by_topic>{_PRACTICE_TOPIC})知识点给我\s*(?P<by_topic_count>{_PRACTICE_COUNT})\s*道|'
+    rf'先查(?P<lookup>{_PRACTICE_TOPIC})知识点[,，]\s*再根据{_PRACTICE_ORDINAL}(?:出|给我)'
+    rf'\s*(?P<lookup_count>{_PRACTICE_COUNT})\s*道)练习题'
     rf'(?:[。.!！,，]\s*(?:让我在卡片里作答|选择{_PRACTICE_ORDINAL}(?:[,，]\s*也选择{_PRACTICE_ORDINAL})?))?'
     r'\s*[。.!！]?\s*')
 PROGRAM_TOOLS = {
@@ -108,7 +110,9 @@ PROGRAM_TOOLS = {
          'limit': SEARCH_ASR_SCHEMA['properties']['limit']}, SELECTION_RULE),
     PRACTICE_NAME: program_tool(PRACTICE_NAME, 'find',
         {**FIND_PROPERTIES, **{field: GET_PRACTICE_QUESTIONS_SCHEMA['properties'][field]
-                               for field in PRACTICE_FILTERS}}, SELECTION_RULE),
+                               for field in PRACTICE_FILTERS},
+         'limit': {**GET_PRACTICE_QUESTIONS_SCHEMA['properties']['limit'],
+                   'description': '明确的直接取题数量由内核绑定，其余情况可指定，默认 5'}}, SELECTION_RULE),
     CURRENT_COURSE_NAME: program_tool(CURRENT_COURSE_NAME, 'query',
         {'query': QUERY_PROPERTY, 'limit': SEARCH_ASR_SCHEMA['properties']['limit']}),
 }
@@ -132,15 +136,32 @@ def compile_named_course_locator(message):
     return None
 
 
+def practice_card_request(message):
+    if delivery := PRACTICE_ONLY.search(message):
+        message = message[:delivery.start()]
+    return PRACTICE_CARD_REQUEST.fullmatch(normalize('NFKC', message))
+
+
+def practice_question_count(value):
+    value = normalize('NFKC', value)
+    if value.isdecimal():
+        digits = value.lstrip('0') or '0'
+        return int(digits) if len(digits) <= len(str(PRACTICE_MAX_COUNT)) else PRACTICE_MAX_COUNT + 1
+    if value in ('零', '〇'):
+        return 0
+    value = '二' if value == '两' else value
+    if value in _ORDINALS:
+        return _ORDINALS.index(value) + 1
+    if '几' not in value and ('十' in value or '百' in value):
+        return PRACTICE_MAX_COUNT + 1
+    return None
+
+
 def compile_practice_request(message):
     delivery = PRACTICE_ONLY.search(message)
     if delivery and (request := PRACTICE_LOCATOR.fullmatch(message[:delivery.start()])):
-        count = normalize('NFKC', request['limit'])
-        if count.isdecimal():
-            limit = int(count)
-        else:
-            limit = _ORDINALS.index('二' if count == '两' else count) + 1
-        if limit <= GET_PRACTICE_QUESTIONS_SCHEMA['properties']['limit']['maximum'] and (find := request['find'].strip()):
+        limit = practice_question_count(request['limit'])
+        if 1 <= limit <= PRACTICE_MAX_COUNT and (find := request['find'].strip()):
             return {'find': find, 'limit': limit}
     return None
 
@@ -265,12 +286,22 @@ def run_program(arguments, allowed_tools, execute, *, name=NAME, message='', cur
     if practice and arguments.get('q_type') == 'objective' and 'subjective_type' in arguments:
         return failure('invalid_arguments', '客观题不能指定主观题题型。', field='$.subjective_type')
 
+    literal_practice = compile_practice_request(message) if practice else None
     if practice:
         card_only = PRACTICE_ONLY.search(message) is not None
-        if not card_only and (request := PRACTICE_CARD_REQUEST.fullmatch(normalize('NFKC', message))):
+        if request := practice_card_request(message):
             topic = (request['direct'] or request['by_topic'] or request['lookup']).strip()
             query = normalize('NFKC', arguments['find']).strip()
-            card_only = query in (topic, f'{topic}知识点')
+            if literal := re.fullmatch(r'「([^「」]+)」', topic):
+                topic = literal[1].strip()
+            if query in (topic, f'{topic}知识点'):
+                card_only = True
+                count = request['direct_count'] or request['by_topic_count'] or request['lookup_count']
+                if (limit := practice_question_count(count)) is not None:
+                    if not 1 <= limit <= PRACTICE_MAX_COUNT:
+                        return failure('practice_count_out_of_range', '题量超出可查询范围。', field='$.limit',
+                                       minimum=1, maximum=PRACTICE_MAX_COUNT)
+                    arguments['limit'] = limit
     else:
         card_only = TIMESTAMP_ONLY.search(message) is not None
     if anchored and not card_only and (locator := CURRENT_COURSE_LOCATOR.fullmatch(message)):
@@ -283,7 +314,7 @@ def run_program(arguments, allowed_tools, execute, *, name=NAME, message='', cur
     else:
         first = operations[0]
         # A quoted course title or topic is a string value, even when its name contains an ordinal.
-        rank, needs_confirmation = ((None, False) if exact_course_title or (practice and compile_practice_request(message))
+        rank, needs_confirmation = ((None, False) if exact_course_title or literal_practice
                                     else requested_rank(message, practice))
         if needs_confirmation:
             return failure('selection_needs_confirmation', '请用户确认要使用的课程或知识点。')

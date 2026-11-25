@@ -186,7 +186,7 @@ def test_private_note_receipt_rechecks_original_note_and_consent(auth_client, us
 def test_practice_answer_receipts_are_protected_without_changing_the_official_submission(auth_client, user, settings):
     from ai_assistant.views import _reserve_chat_request
     from quizzes.ai_workflow import run_exam_grading
-    from quizzes.models import KnowledgePoint, Question, QuizExam
+    from quizzes.models import KnowledgePoint, Question, QuizExam, UserQuestionStatus
     from users.learning import confirm_ai_call
     from users.models import CourseStudentStatus, WeeklyAIQuotaConfig
 
@@ -198,6 +198,8 @@ def test_practice_answer_receipts_are_protected_without_changing_the_official_su
     bot = Bot.objects.create(name='小宇', is_xiaoyu=True, bot_type='planner')
     point = KnowledgePoint.objects.create(name='久期保护')
     question = Question.objects.create(knowledge_point=point, text='合成题干', options=['甲', '乙'], correct_answer='B')
+    UserQuestionStatus.objects.create(user=user, question=question, wrong_count=1)
+    Question.objects.create(knowledge_point=point, text='另一道合成题', options=['甲', '乙'], correct_answer='A')
     marker = 'SYNTHETIC_PRE_PRACTICE_ANSWER'
     card = {'tool': 'lookup_question', 'type': 'question_preview',
             'payload': {'questions': [{'id': question.pk, 'answer': marker}]}}
@@ -222,7 +224,7 @@ def test_practice_answer_receipts_are_protected_without_changing_the_official_su
 
     def model(messages, **kwargs):
         tools = {tool['function']['name'] for tool in kwargs['tools']}
-        name, args = 'run_practice_tools', {'find': point.name, 'limit': 1, 'output': 'card'}
+        name, args = 'run_practice_tools', {'find': point.name}
         if name not in tools:
             name, args = 'find_learning_tools', {'program': name, 'instruction': args}
         return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
@@ -231,13 +233,15 @@ def test_practice_answer_receipts_are_protected_without_changing_the_official_su
 
     active = Conversation.objects.create(user=user, bot=bot, title='新的正式练习', conversation_id=uuid4())
     body = {'bot_id': bot.pk, 'conversation_id': str(active.conversation_id),
-            'request_id': str(uuid4()), 'message': '按久期保护知识点给我一道练习题。'}
+            'request_id': str(uuid4()), 'message': '按久期保护知识点给我１ 道练习题。'}
     with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider, \
             patch('ai_assistant.services.dsh_xiaoyu.extract_memories_async'):
         created = async_to_sync(consume_receipt)(auth_client.post('/api/ai/chat/stream/', body, format='json'))
         assert not created.get('is_error'), created
         practice, = created['metadata']['dsh_cards']
         assert practice['type'] == 'practice_quiz' and provider.call_count == 1
+        row, = practice['payload']['questions']
+        assert row['id'] == question.pk
         for original, receipt in originals:
             assert_replay_denied(auth_client, original, '原题已进入正式练习', 403, marker)
             assert AIUsageReservation.objects.get(request_id=original['request_id']).response == receipt

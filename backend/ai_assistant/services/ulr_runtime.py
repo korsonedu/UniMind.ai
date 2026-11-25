@@ -22,10 +22,11 @@ from .ulr_artifacts import TurnArtifacts
 from .ulr_grading import grade_probe
 from .ulr_history import card_question_answers, require_current_practice_answers, scoped_history
 from .ulr_tool_program import (
-    CURRENT_COURSE_NAME, MAX_RANKS, NAME as PROGRAM_NAME, PRACTICE_NAME, PROGRAM_OPS, PROGRAM_TOOLS, SOURCE_ACCESS_REVOKED,
+    CURRENT_COURSE_NAME, MAX_RANKS, NAME as PROGRAM_NAME, PRACTICE_MAX_COUNT, PRACTICE_NAME, PROGRAM_OPS, PROGRAM_TOOLS,
+    SOURCE_ACCESS_REVOKED,
     TIMESTAMP_ONLY, VERSION as PROGRAM_VERSION, compile_current_course_locator, compile_named_course_locator,
     compile_practice_request,
-    duplicate_program_scope, program_discovery,
+    duplicate_program_scope, practice_card_request, program_discovery,
     repair_program_tool, run_program,
 )
 from .ulr_capabilities import (
@@ -43,6 +44,8 @@ CURRENT_STRATEGY_USE = 'current_strategy_use'
 PROJECT_CHANGE_RECEIPTS = {'plan_learning_project': 'ulr_plan', 'set_learning_followup': 'ulr_followup',
                            PROGRESS_TOOL: 'ulr_progress'}
 PRACTICE_CARD_SELECTION_REPLIES = {
+    'practice_count_out_of_range': (f'请指定 1 至 {PRACTICE_MAX_COUNT} 道练习题。',
+                                    f'Request between 1 and {PRACTICE_MAX_COUNT} practice questions.'),
     'missing_dependency': ('找不到指定的知识点。请核对名称或补充学科。',
                            'I could not find that knowledge point. Check the name or add the subject.'),
     'ambiguous_dependency': ('匹配到多个知识点。请补充学科或更具体的名称。',
@@ -169,10 +172,12 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
                    '\n方法试用回执随答复确认。任务工具提供 strategy_ref 时引用本轮唯一试用，多项试用时使用所选回执的 use_id。')
     messages = [{'role': 'system', 'content': prompt}, {'role': 'user', 'content': message}]
     local_practice = compile_practice_request(message) if not task and not source_context['notes'] else None
-    practice_request = local_practice is not None or (not task and not re.search(r'诊断|diagnos', message, re.I) and (
-        ('知识点' in message and (EXERCISE_REQUEST.search(message)
-                             or re.search(r'给(?:我)?(?:一|几|两|\d+)道[^。！？\n]*练习题', message)))
-        or re.search(r'knowledge point.*(?:practice|exercise|question)', message, re.I)))
+    practice_request = not task and (
+        local_practice is not None or practice_card_request(message) is not None or (
+            not re.search(r'诊断|diagnos', message, re.I) and (
+                ('知识点' in message and (EXERCISE_REQUEST.search(message)
+                    or re.search(r'给(?:我)?(?:一|几|两|\d+)道[^。！？\n]*练习题', message)))
+                or re.search(r'knowledge point.*(?:practice|exercise|question)', message, re.I))))
     allowed_names = {tool['function']['name'] for tool in available_tools}
     available_programs = {name: PROGRAM_TOOLS[name] for name, ops in PROGRAM_OPS.items() if set(ops) <= allowed_names
                           and (name != CURRENT_COURSE_NAME or current_course_id is not None)
