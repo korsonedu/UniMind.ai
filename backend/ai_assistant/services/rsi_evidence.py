@@ -5,7 +5,9 @@ from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from ai_assistant.models import Conversation, LearningStrategyOutcome, LearningStrategyUse, ProjectLearning, TeachingDecisionLog
+from ai_assistant.models import (
+    AIChatMessage, Conversation, LearningStrategyOutcome, LearningStrategyUse, ProjectLearning, TeachingDecisionLog,
+)
 from users.feature_access import has_learning_feature
 from . import fact_evidence, learning_continuity, learning_diagnostics, method_adoption, public_methods, rsi_policy
 from .learning_library import _adopted_method, unconfirmed_strategy_use_ids
@@ -24,10 +26,14 @@ def _eligible(outcome):
 
 
 def _record(project, ledger, identity, method_ref, *, task_id, question_id, reply_id,
-            assigned_at, completed_at, mechanisms, selection, source_available, outcomes):
+            assigned_at, completed_at, mechanisms, selection, source_available, outcomes, presentation):
     propensity = selection.get('propensity')
     if type(propensity) not in (int, float) or not 0 <= propensity <= 1:
         propensity = None
+    exposure = {'status': 'reply_completed' if reply_id and source_available else 'assigned',
+                'adherence': 'unverified', 'presentation': 'unknown'}
+    if source_available and reply_id and presentation and presentation.get('status') == 'presented':
+        exposure.update(status='presented', presentation='presented', presented_at=presentation['presented_at'])
     return {'ledger': ledger, 'use_id': f"{method_ref['kind']}:{identity}", 'project_id': project.pk,
             'task_id': task_id, 'method_ref': method_ref, 'question_id': question_id if source_available else None,
             'reply_id': reply_id if source_available else None, 'assigned_at': assigned_at,
@@ -36,8 +42,7 @@ def _record(project, ledger, identity, method_ref, *, task_id, question_id, repl
             'selection': {'selection_kind': selection.get('selection_kind'),
                           'propensity': float(propensity) if propensity is not None else None,
                           'model_visible_candidate_set': selection.get('model_visible_candidate_set')},
-            'exposure': {'status': 'reply_completed' if reply_id and source_available else 'assigned',
-                         'adherence': 'unverified', 'presentation': 'unknown'},
+            'exposure': exposure,
             'source_available': source_available, 'outcomes': outcomes,
             'eligible_for_eval': source_available and any(_eligible(row) for row in outcomes), 'causal_claim': False}
 
@@ -135,7 +140,8 @@ def _private_records(project, task_access, now):
             task_id=ids[0] if len(ids) == 1 else None, question_id=use.message_id, reply_id=reply.pk if reply else None,
             assigned_at=use.created_at.isoformat(), completed_at=completed.isoformat() if completed else None,
             mechanisms=use.decision.get('mechanisms') or use.message.metadata.get('rsi_sidecar'),
-            selection=use.decision if available else {}, source_available=available, outcomes=outcomes)
+            selection=use.decision if available else {}, source_available=available, outcomes=outcomes,
+            presentation=reply.metadata.get('rsi_presentation') if reply else None)
 
 
 def _public_records(project, now):
@@ -152,6 +158,9 @@ def _public_records(project, now):
     definitions = {version['id']: version['definition'] for version in versions}
     decisions = {log.message_id: log for log in TeachingDecisionLog.objects.filter(project=project,
         owner_id=project.user_id, decision_point='method_ranking', message_id__in=[row['question_id'] for row in history])}
+    reply_ids = {row['answer_id'] for row in history if row['source_available'] and row['reply_completed']}
+    presentations = dict(AIChatMessage.objects.filter(user_id=project.user_id, pk__in=reply_ids)
+                         .values_list('pk', 'metadata__rsi_presentation'))
     for row in history:
         task = task_rows.get(row['task_id'])
         if task is None:
@@ -177,7 +186,8 @@ def _public_records(project, now):
              'domain': None, 'topic': definition.get('requires', {}).get('topic'), 'version_id': row['method_id']},
             task_id=row['task_id'], question_id=row['question_id'], reply_id=row['answer_id'] if row['reply_completed'] else None,
             assigned_at=row['assigned_at'], completed_at=row['completed_at'], mechanisms=row['mechanisms'],
-            selection=selection, source_available=available, outcomes=outcomes)
+            selection=selection, source_available=available, outcomes=outcomes,
+            presentation=presentations.get(row['answer_id']))
 
 
 def project_method_evidence(project, *, include_private=True, include_public=True, now=None):
@@ -203,7 +213,7 @@ def summarize_method_evidence(records):
             'uncertain_outcome_count', 'independent_success_count', 'independent_failure_count',
             'excluded_disclosure_count', 'excluded_repeated_count', 'excluded_overlap_count'), 0))
         count['assigned_count'] += 1
-        count['reply_completed_count'] += row['exposure']['status'] == 'reply_completed'
+        count['reply_completed_count'] += row['exposure']['status'] in ('reply_completed', 'presented')
         for outcome in row['outcomes']:
             eligible = row['source_available'] and _eligible(outcome)
             count['outcome_count'] += 1

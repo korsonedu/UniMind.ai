@@ -9,15 +9,17 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
 from ai_assistant.models import (
     AIChatMessage, Conversation, LearningStrategy, LearningStrategyOutcome,
     LearningStrategyUse, LearningStrategyVersion, ProjectLearningEvent,
     TaskMemoryObject, TeachingDecisionLog, TeachingMechanismVersion,
 )
+from users.feature_access import has_learning_feature
 
 logger = logging.getLogger(__name__)
+PRESENTATION_SURFACES = ('chat_card', 'hint_reply', 'recheck_card', 'practice_card')
 SCHEMA = 'rsi-sidecar-6ab-v1'
 SOURCES = {
     'G': ['prompts/ai_assistant/bots/xiaoyu/project_learning.txt',
@@ -229,30 +231,92 @@ def record_tool_result(user, context, name, arguments, result, channel=None):
         message.save(update_fields=['metadata'])
 
 
+def _presentation_exposure(receipt):
+    return {'status': 'presented', 'presentation': 'presented', 'presented_at': receipt['presented_at'],
+            'presentation_surface': receipt['surface'], 'adherence': 'unverified'}
+
+
+@transaction.atomic
 def record_turn_completion(reply):
+    reply = AIChatMessage.objects.select_for_update().filter(pk=reply.pk, role='assistant').first()
+    if not reply:
+        return
     turn = reply.metadata.get('learning_turn', {})
-    if reply.role != 'assistant' or not turn.get('completed'):
+    if not turn.get('completed'):
         return
     trigger = AIChatMessage.objects.filter(pk=turn.get('message_id'), user_id=reply.user_id,
         bot_id=reply.bot_id, conversation_id=reply.conversation_id, role='user').first()
     if not trigger:
         return
-    TeachingDecisionLog.objects.filter(message=trigger, owner_id=reply.user_id, project__user_id=reply.user_id,
-        exposure__status='assigned').filter(Q(answer=reply) | Q(answer__isnull=True)).update(answer=reply, exposure={
-            'status': 'reply_completed', 'reply_id': reply.pk, 'reply_hash': canonical_hash(reply.content),
-            'completed_at': turn.get('completed_at'), 'saved_at': reply.timestamp.isoformat(),
-            'presentation': 'unknown', 'adherence': 'unverified'})
+    completion = {'status': 'reply_completed', 'reply_id': reply.pk, 'reply_hash': canonical_hash(reply.content),
+                  'completed_at': turn.get('completed_at'), 'saved_at': reply.timestamp.isoformat(),
+                  'adherence': 'unverified'}
+    decisions = TeachingDecisionLog.objects.filter(message=trigger, owner_id=reply.user_id,
+        project__user_id=reply.user_id).filter(Q(answer=reply) | Q(answer__isnull=True))
+    pending = Q(exposure__status='assigned')
+    decision_exposure = {**completion, 'presentation': 'unknown'}
+    if receipt := reply.metadata.get('rsi_presentation'):
+        # History can expose the saved reply before the completion observer runs.
+        pending |= Q(answer=reply, exposure__presentation='presented', exposure__reply_id__isnull=True)
+        completion.update(_presentation_exposure(receipt))
+        decision_exposure.update(completion, presentation_card_type=receipt['card_type'])
+    decisions.filter(pending).update(answer=reply, exposure=decision_exposure)
     from .learning_library import unconfirmed_strategy_use_ids
     uses = LearningStrategyUse.objects.filter(message=trigger, project__user_id=reply.user_id)
     for use in uses.exclude(pk__in=unconfirmed_strategy_use_ids(reply.user_id, uses)):
         if use.decision and use.exposure.get('status') == 'assigned':
-            use.exposure = {'status': 'reply_completed', 'adherence': 'unverified',
-                'reply_id': reply.pk, 'reply_hash': canonical_hash(reply.content),
-                'completed_at': turn.get('completed_at'), 'saved_at': reply.timestamp.isoformat(),
-                'engine': reply.metadata.get('engine')}
+            use.exposure = {**completion, 'engine': reply.metadata.get('engine')}
             if action := (reply.metadata.get('ulr_teaching') or {}).get('action'):
                 use.exposure['ulr_teaching_action'] = action
             use.save(update_fields=['exposure'])
+
+
+def record_exposure_presentation(user, *, message_id, surface='chat_card', card_type=''):
+    if not user.is_authenticated or not has_learning_feature(user, 'ai.assistant'):
+        raise PermissionDenied()
+    if surface not in PRESENTATION_SURFACES:
+        raise ValidationError({'surface': '无效的学习回复呈现场景。'})
+    if not isinstance(card_type, str) or len(card_type) > 64:
+        raise ValidationError({'card_type': '卡片类型须为最多 64 个字符的字符串。'})
+
+    from .learning_library import unconfirmed_strategy_use_ids
+    with transaction.atomic():
+        reply = AIChatMessage.objects.select_for_update().filter(pk=message_id, user=user, role='assistant',
+            metadata__learning_turn__completed=True).first()
+        if not reply or not Conversation.objects.filter(user=user, conversation_id=reply.conversation_id).exists():
+            raise NotFound('学习回复记录不可用。')
+
+        receipt = reply.metadata.get('rsi_presentation')
+        created = receipt is None
+        if created:
+            receipt = {'status': 'presented', 'presented_at': timezone.now().isoformat(),
+                       'surface': surface, 'card_type': card_type}
+            reply.metadata['rsi_presentation'] = receipt
+        teaching = reply.metadata.get('ulr_teaching')
+        mark_teaching = isinstance(teaching, dict) and teaching.get('presentation') == 'unknown'
+        if mark_teaching:
+            teaching.update(presentation='presented', presented_at=receipt['presented_at'])
+        if created or mark_teaching:
+            reply.save(update_fields=['metadata'])
+
+        exposure = _presentation_exposure(receipt)
+        updated_decisions = 0
+        for decision in TeachingDecisionLog.objects.filter(owner=user, answer=reply):
+            if decision.exposure.get('presentation') != 'presented':
+                decision.exposure.update(exposure, presentation_card_type=receipt['card_type'])
+                decision.save(update_fields=['exposure'])
+                updated_decisions += 1
+
+        uses = LearningStrategyUse.objects.filter(project__user=user,
+            message_id=reply.metadata['learning_turn'].get('message_id'), exposure__reply_id=reply.pk)
+        updated_strategy_uses = 0
+        for use in uses.exclude(pk__in=unconfirmed_strategy_use_ids(user.pk, uses)):
+            if use.exposure.get('presentation') != 'presented':
+                use.exposure.update(exposure)
+                use.save(update_fields=['exposure'])
+                updated_strategy_uses += 1
+        return {'message_id': reply.pk, 'status': 'presented', 'presented_at': receipt['presented_at'], 'created': created,
+                'updated_decisions': updated_decisions, 'updated_strategy_uses': updated_strategy_uses}
 
 
 def validate_strategy_use(project, use_id, *, pending_message_id=None):

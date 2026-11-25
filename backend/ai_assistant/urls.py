@@ -19,13 +19,14 @@ from .views_api import (
 )
 from .views_learning_experiments import LearningExperimentView
 
-from .views_learning import ProjectLearningView, ProjectLearningLibraryView, ProjectLearningKnowledgeView
+from .views_learning import LearningExposurePresentView, ProjectLearningView, ProjectLearningLibraryView, ProjectLearningKnowledgeView
 from .views_learning_tasks import ProjectLearningTaskListView, ProjectLearningTaskDetailView
 
 from .views_learning_memory import LearningMemoryGrantsView, LearningMemoryGrantView, LearningMemoryMcpView
 from .views_learning_memory_sources import LearningMemorySourcesView, LearningMemorySourceView
 
 urlpatterns = [
+    path('learning/exposure/present/', LearningExposurePresentView.as_view(), name='learning-exposure-present'),
     path('learning-memory/mcp/', LearningMemoryMcpView.as_view(), name='learning-memory-mcp'),
     path('learning-memory/grants/', LearningMemoryGrantsView.as_view(), name='workspace-learning-memory-grants'),
     path('learning-memory/grants/<int:grant_id>/', LearningMemoryGrantView.as_view(), name='workspace-learning-memory-grant'),
