@@ -22,6 +22,8 @@ export const queryKeys = {
     history: ['exams', 'history'] as const,
   },
   workbench: {
+    studio: (projectId: number) => ['workbench', projectId, 'studio'] as const,
+    notes: (projectId: number) => ['workbench', projectId, 'notes'] as const,
     sources: (projectId: number) => ['workbench', projectId, 'sources'] as const,
     courses: (projectId: number, search: string) => ['workbench', projectId, 'courses', search] as const,
     source: (projectId: number, sourceId: string, status?: string, updatedAt?: string) =>

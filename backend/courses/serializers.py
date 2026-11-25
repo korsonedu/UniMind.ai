@@ -149,6 +149,12 @@ class CourseSerializer(serializers.ModelSerializer):
         fields = ('id', 'title', 'module', 'module_name', 'module_sort_order', 'subject_name', 'album', 'album_obj', 'description', 'knowledge_point', 'cover_image', 'video_file', 'courseware', 'reference_materials', 'ai_outline_enabled', 'sort_order', 'institution', 'tags', 'progress', 'created_at', 'updated_at', 'author')
         read_only_fields = ('author', 'institution')
 
+class PersonalCourseDetailSerializer(CourseSerializer):
+    class Meta(CourseSerializer.Meta):
+        fields = (*CourseSerializer.Meta.fields, 'is_workbench_companion')
+        read_only_fields = (*CourseSerializer.Meta.read_only_fields, 'is_workbench_companion')
+
+
 class StartupMaterialSerializer(serializers.ModelSerializer):
     file = RelativeFileField(required=False)
 

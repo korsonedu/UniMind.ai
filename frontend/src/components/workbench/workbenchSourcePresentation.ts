@@ -47,7 +47,7 @@ export function playbackHref(base: string | null, seconds: number | null, conver
   if (!base) return null;
   if (/^\/course\/\d+([?#]|$)/.test(base)) {
     const url = new URL(base, 'https://unimind.invalid');
-    if (seconds !== null) url.searchParams.set('t', String(Math.floor(seconds)));
+    if (seconds !== null) url.searchParams.set('t', String(seconds));
     if (conversationId) url.searchParams.set('conversation', conversationId);
     return `${url.pathname}${url.search}${url.hash}`;
   }

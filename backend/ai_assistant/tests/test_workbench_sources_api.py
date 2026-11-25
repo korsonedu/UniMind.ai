@@ -148,6 +148,7 @@ def test_station_course_import_requires_access_and_updates_subtitles(workbench):
     play_link = urlsplit(imported.data['companion_play_url'])
     assert play_link.path == f'/course/{course.pk}'
     assert parse_qs(play_link.query) == {'project': [str(project.pk)]}
+    assert client.get(detail_url).data['is_workbench_companion'] is False
     assert client.get(detail_url, {'workbench_project': project.pk}).data['id'] == course.pk
     assert client.get(detail_url, {'workbench_project': project.pk + 1}).status_code == 404
 
@@ -285,6 +286,7 @@ def test_mp4_queues_playback_and_deletes_only_exclusive_companion(workbench, set
     assert client.get(course_url).status_code == 200
     course_detail = client.get(course_url, {'workbench_project': project.pk})
     assert course_detail.status_code == 200
+    assert course_detail.data['is_workbench_companion'] is True
     stream_url = course_detail.data['video_file']
     media = client.get(stream_url, HTTP_RANGE='bytes=4-11')
     assert media.status_code == 206

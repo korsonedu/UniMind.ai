@@ -90,3 +90,71 @@ export interface SourceAnchor {
   startSeconds?: number | null;
   quote?: string;
 }
+
+export type StudioMarkdownKind = 'study_guide' | 'briefing' | 'faq';
+export type StudioKind = StudioMarkdownKind | 'flashcards' | 'quiz';
+export type FlashcardMastery = 'unseen' | 'learning' | 'mastered';
+
+export interface StudioFlashcard {
+  id: string;
+  front: string;
+  back: string;
+  hint: string;
+  cite_key: string;
+  mastery: FlashcardMastery;
+}
+
+export type StudioQuizQuestion = { id: string; prompt: string; cite_key: string } & (
+  | { type: 'single_choice'; options: string[] }
+  | { type: 'subjective' }
+);
+
+export type StudioQuizAnswer = { question_id: string; answer: number | string };
+
+export interface StudioQuizResult {
+  question_id: string;
+  answer: StudioQuizAnswer['answer'] | null;
+  correct_answer: StudioQuizAnswer['answer'];
+  score: number;
+  max_score: number;
+  explanation: string;
+  feedback: string;
+  citation: WorkbenchCitation;
+}
+
+export interface StudioQuizAttempt {
+  score: number;
+  max_score: number;
+  results: StudioQuizResult[];
+  submitted_at: string;
+}
+
+interface StudioArtifactDetails {
+  id: string;
+  title: string;
+  error_message: string;
+  source_ids: string[];
+  content_markdown: string;
+  linked_note: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type StudioArtifact = StudioArtifactDetails & (
+  | { status: 'generating'; kind: StudioKind }
+  | { status: 'failed'; kind: StudioKind }
+  | ({ status: 'ready' } & (
+    | { kind: StudioMarkdownKind; citations: WorkbenchCitation[] }
+    | { kind: 'flashcards'; citations: WorkbenchCitation[]; structured_payload: { cards: StudioFlashcard[] } }
+    | { kind: 'quiz'; structured_payload: { questions: StudioQuizQuestion[]; latest_attempt?: StudioQuizAttempt } }
+  ))
+);
+
+export interface ProjectNote {
+  id: number;
+  notebook_id: number;
+  title: string;
+  content: string;
+  version: number;
+  updated_at: string;
+}

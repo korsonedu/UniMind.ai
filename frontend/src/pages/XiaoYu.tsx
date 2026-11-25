@@ -58,6 +58,8 @@ function XiaoYuProject() {
 
 function XiaoYuWorkbench({ projectId }: { projectId: number }) {
   const { chat } = useXiaoYuChat();
+  const workspace = useLearningWorkspace({ studio: true });
+  const stageCount = workspace.project?.plan.stages?.length ?? 0;
   const query = useWorkbenchSources(projectId);
   const client = useQueryClient();
   const selected = selectedReadySources(query.data?.sources ?? []);
@@ -77,13 +79,17 @@ function XiaoYuWorkbench({ projectId }: { projectId: number }) {
   const getSources = useCallback(() => client.getQueryData<ProjectSourceList>(queryKeys.workbench.sources(projectId)), [client, projectId]);
   const getExtraPayload = useCallback(() => ({
     workbench_source_ids: selectedReadySources(getSources()?.sources ?? []).map(source => source.id),
-  }), [getSources]);
+    ...workspace.getExtraPayload(),
+  }), [getSources, workspace.getExtraPayload]);
   const beforeSend = useCallback(async () => {
     if (!getSources()) throw new Error(t('请先加载项目资料，再发送消息。'));
   }, [getSources]);
   const openAdd = () => { setAnchor(null); setLeftOpen(true); setMobileTab('sources'); setAddOpen(true); };
 
   return <WorkbenchCitationContext.Provider value={citationContext}>
+    {!!stageCount && workspace.sidebar.visible && workspace.sidebar.host && createPortal(
+      <LearningPathCanvas workspace={workspace} messages={chat.messages} conversationId={chat.conversationId} />, workspace.sidebar.host,
+    )}
     <XiaoYuConversation getExtraPayload={getExtraPayload} beforeSend={beforeSend} workbench={{
       canSend: !!query.data,
       composerContext: <div className="um-wb-grounding" role="status">
@@ -102,7 +108,10 @@ function XiaoYuWorkbench({ projectId }: { projectId: number }) {
         sources={<WorkbenchSourcesPane projectId={projectId} query={query} activeAnchor={anchor}
           onSelect={onSelect} onBack={() => setAnchor(null)} addOpen={addOpen} setAddOpen={setAddOpen}
           conversationId={chat.conversationId} />}
-        studio={<WorkbenchStudioPane />}>{children}</WorkbenchLayout>,
+        studio={<WorkbenchStudioPane projectId={projectId} selected={selected} legacyPath={stageCount > 0 &&
+          <button className="um-agent-button" onClick={() => { workspace.show('path'); workspace.openLearning(); }}>
+            <BookOpen size={16} />{t('查看阶段计划 ({0})', { 0: stageCount })}
+          </button>} />}>{children}</WorkbenchLayout>,
     }} />
   </WorkbenchCitationContext.Provider>;
 }

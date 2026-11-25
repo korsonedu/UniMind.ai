@@ -40,7 +40,7 @@ def _next_course_sort_order(institution):
 
     current = Course.objects.filter(institution=institution).aggregate(m=Max('sort_order'))['m']
     return (current or 0) + 1
-from .serializers import CourseSerializer, AlbumSerializer, StartupMaterialSerializer
+from .serializers import CourseSerializer, PersonalCourseDetailSerializer, AlbumSerializer, StartupMaterialSerializer
 from users.permissions import IsMember
 from quizzes.utils import safe_int as _safe_int
 from core.file_validation import (
@@ -791,6 +791,13 @@ class CourseReorderView(APIView):
 class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Course.objects.select_related('module')
     serializer_class = CourseSerializer
+
+    def get_serializer_class(self):
+        from users.workspaces.identity import learner_identity
+
+        if self.request.method in ('GET', 'HEAD') and learner_identity(self.request.user) is None:
+            return PersonalCourseDetailSerializer
+        return super().get_serializer_class()
 
     def get_queryset(self):
         if self.request.method in ('GET', 'HEAD'):

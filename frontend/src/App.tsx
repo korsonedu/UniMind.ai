@@ -1,4 +1,5 @@
 import { activeWorkspace } from '@/lib/activeWorkspace';
+import { companionProjectId, companionReturnHref } from '@/lib/companionVideo';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { OfflineTrialPage } from '@/components/OfflineTrialPage';
 import { getLocale, t, useLocale } from '@/i18n';
@@ -230,28 +231,33 @@ const WorkspaceEntry = () => {
 const workspacePage = (Component: React.ComponentType) => <ErrorBoundary><Component /></ErrorBoundary>;
 const PersonalCourseRedirect = () => {
   const { data, isPending } = useWorkspace();
-  const { pathname, key } = useLocation();
+  const { pathname, key, search } = useLocation();
+  const params = new URLSearchParams(search);
+  const projectId = pathname.startsWith('/course/') ? companionProjectId(params) : null;
+  const back = projectId ? companionReturnHref(projectId, params.get('conversation') || undefined) : '/xiaoyu';
   const hasCourseSpace = data?.workspaces?.some(space => space.service_active);
   useEffect(() => {
     if (isPending) return;
-    const message = hasCourseSpace
+    const message = projectId ? '这段伴学视频暂时无法打开，已返回项目工作台。' : hasCourseSpace
       ? pathname === '/courses'
         ? '请从左上角切换到课程空间，打开课程中心。'
         : '课程视频位于课程空间，请从左上角切换到对应课程空间查看。'
       : '请先加入可用的课程空间。';
     toast.info(t(message), { id: `course-space-${key}` });
-  }, [hasCourseSpace, isPending, key, pathname]);
-  return isPending ? <PageLoader /> : <Navigate to="/xiaoyu" replace />;
+  }, [hasCourseSpace, isPending, key, pathname, projectId]);
+  return isPending ? <PageLoader /> : <Navigate to={back} replace />;
 };
 function InstitutionCourses() {
   const { id } = useParams();
   const [params] = useSearchParams();
-  const project = Number(params.get('project'));
+  const project = companionProjectId(params);
   if (activeWorkspace() !== 'personal') {
     return <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{workspacePage(CourseCenter)}</FeatureGuard>;
   }
-  if (id && Number.isSafeInteger(project) && project > 0) {
-    return <ErrorBoundary><VideoLesson key={id} workbenchVideo missingCourse={<PersonalCourseRedirect />} /></ErrorBoundary>;
+  if (id) {
+    return <ErrorBoundary><div className="um-course-detail-player um-personal-course-detail">
+      <VideoLesson key={`${id}:${project ?? ''}`} workbenchVideo={project !== null} missingCourse={<PersonalCourseRedirect />} />
+    </div></ErrorBoundary>;
   }
   return <PersonalCourseRedirect />;
 }

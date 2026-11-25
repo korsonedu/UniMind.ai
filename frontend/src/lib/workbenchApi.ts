@@ -10,6 +10,10 @@ const sourceUrl = (projectId: number, sourceId: string) => `${sourcesUrl(project
 const overviewUrl = (projectId: number) => `/ai/projects/${projectId}/workbench-overview/`;
 
 type SourceImport = { kind: 'web_url'; url: string } | { kind: 'course'; course_id: number };
+export async function importWorkbenchSource(projectId: number, input: SourceImport) {
+  return (await api.post<ProjectSourceSummary>(`${sourcesUrl(projectId)}import/`, input)).data;
+}
+
 type SourcePatch = { title: string } | { is_selected: boolean } | { action: 'retry' };
 export type SourceChange =
   | { type: 'upload'; files: File[]; onProgress: (percent: number) => void }
@@ -60,7 +64,7 @@ export function useWorkbenchSourceActions(projectId: number) {
           return data.sources;
         }
         case 'import':
-          return [(await api.post<ProjectSourceSummary>(`${url}import/`, change.input)).data];
+          return [await importWorkbenchSource(projectId, change.input)];
         case 'patch':
           return [(await api.patch<ProjectSourceSummary>(sourceUrl(projectId, change.sourceId), change.patch)).data];
         case 'selectAll':

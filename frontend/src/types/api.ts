@@ -124,6 +124,7 @@ export interface Course {
   reference_materials: string | null;
   elo_reward: number;
   ai_outline_enabled: boolean;
+  is_workbench_companion?: boolean;
   sort_order: number;
   tags: { id: number; name: string; slug: string }[];
   progress: { last_position: number; is_finished: boolean } | null;

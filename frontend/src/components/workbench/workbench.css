@@ -218,7 +218,7 @@
 .um-wb-overview { margin: clamp(4px, 2.5vh, 28px) auto 0; padding: clamp(18px, 3vw, 30px); border: 1px solid var(--um-color-border); border-radius: 16px; background: var(--um-color-context); }
 .um-wb-overview > header { display: flex; align-items: center; gap: 8px; color: var(--um-color-accent); }
 .um-wb-overview h2 { color: var(--um-color-text); font-size: 18px; font-weight: var(--um-weight-semibold); }
-.um-wb-overview-empty, .um-wb-studio-body { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.um-wb-overview-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
 .um-wb-overview-empty { justify-content: center; min-height: 245px; }
 .um-wb-overview-empty > p { max-width: 360px; color: var(--um-color-text-muted); line-height: 1.65; }
 .um-wb-overview-empty > button { margin-top: 6px; }
@@ -231,8 +231,6 @@
 .um-wb-question { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 11px; text-align: start; border: 1px solid var(--um-color-border); border-radius: 12px; background: var(--um-color-surface); color: var(--um-color-text); cursor: pointer; }
 .um-wb-question > svg { flex: 0 0 auto; color: var(--um-color-accent); }
 .um-wb-question:hover:not(:disabled) { color: var(--um-color-accent); border-color: var(--um-color-accent); }
-.um-wb-studio-body { padding: 24px 14px; margin: 12px; background: var(--um-color-context); border-radius: 12px; }
-.um-wb-studio-body h3 { font-weight: var(--um-weight-semibold); }
 
 .um-wb-chat .um-agent-chat-input .um-wb-grounding { margin: 0 0 7px 3px; background: transparent; }
 .um-wb-grounding > span { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; background: var(--um-color-accent-subtle); color: var(--um-color-accent); font-size: 11px; }
@@ -281,3 +279,115 @@
 @media (prefers-reduced-motion: reduce) {
   .um-wb-chunk[data-highlight] { animation: none; }
 }
+
+.um-wb-studio-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+  font-size: 13px;
+}
+.um-wb-studio-body > * { flex-shrink: 0; min-width: 0; }
+.um-wb-studio-body h3 { font-size: 14px; font-weight: var(--um-weight-semibold); overflow-wrap: anywhere; }
+.um-wb-studio-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.um-wb-studio-action { display: flex; }
+.um-wb-studio-action button {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: start;
+  gap: 5px;
+  min-height: 104px;
+  border: 1px solid var(--um-color-border);
+  border-radius: 12px;
+  background: var(--um-color-context);
+  padding: 10px;
+  text-align: left;
+}
+.um-wb-studio-action button:not(:disabled):hover { border-color: var(--um-color-accent); background: var(--um-color-selected); }
+.um-wb-studio-action button:disabled { opacity: .62; cursor: not-allowed; }
+.um-wb-studio-action svg { color: var(--um-color-accent); }
+.um-wb-studio-action small, .um-wb-studio-list small { color: var(--um-color-text-muted); font-size: 11px; line-height: 1.45; }
+.um-wb-studio-section { display: grid; gap: 8px; border-top: 1px solid var(--um-color-border); padding-top: 12px; }
+.um-wb-studio-list { display: grid; gap: 3px; }
+.um-wb-studio-list button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  width: 100%;
+  border-radius: 8px;
+  text-align: left;
+  padding: 8px;
+  overflow-wrap: anywhere;
+}
+.um-wb-studio-list button:hover { background: var(--um-color-hover); }
+.um-wb-studio-list button svg { margin-top: 2px; color: var(--um-color-text-muted); }
+.um-wb-studio-list button small { display: block; }
+.um-wb-artifact-heading, .um-wb-deck-counts, .um-wb-deck-controls { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.um-wb-studio-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.um-wb-studio-tools .um-agent-button[aria-pressed='true'] { background: var(--um-color-selected); color: var(--um-color-accent); }
+.um-wb-studio-status { display: flex; align-items: center; gap: 6px; color: var(--um-color-accent); }
+.um-wb-artifact-markdown { line-height: 1.65; overflow-wrap: anywhere; }
+.um-wb-artifact-markdown :is(h1, h2, h3, h4) { margin-block: 12px 6px; font-weight: var(--um-weight-semibold); }
+.um-wb-artifact-markdown :is(p, pre, table, ul, ol, blockquote) { margin-block: 8px; }
+.um-wb-artifact-markdown :is(pre, .katex-display) { overflow: auto; }
+.um-wb-artifact-markdown :is(th, td) { border: 1px solid var(--um-color-border); padding: 4px; }
+.um-wb-artifact-markdown ul { list-style: disc; padding-inline-start: 18px; }
+.um-wb-artifact-markdown ol { list-style: decimal; padding-inline-start: 18px; }
+.um-wb-artifact-markdown a { color: var(--um-color-accent); text-decoration: underline; }
+
+.um-wb-note-editor, .um-wb-deck, .um-wb-quiz { display: grid; gap: 10px; min-width: 0; }
+.um-wb-note-editor label { display: grid; gap: 5px; }
+.um-wb-studio-input {
+  width: 100%;
+  border: 1px solid var(--um-color-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--um-color-text);
+  background: var(--um-color-context);
+}
+textarea.um-wb-studio-input { resize: vertical; }
+.um-wb-deck-counts { color: var(--um-color-text-muted); font-size: 12px; }
+.um-wb-studio-progress { width: 100%; height: 6px; accent-color: var(--um-color-accent); }
+.um-wb-flashcard { display: grid; perspective: 850px; }
+.um-wb-card-face {
+  display: flex;
+  grid-area: 1 / 1;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 165px;
+  border: 1px solid var(--um-color-border);
+  border-radius: 14px;
+  background: var(--um-color-context);
+  padding: 14px;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  backface-visibility: hidden;
+  transition: transform 280ms ease;
+}
+.um-wb-card-face small { color: var(--um-color-accent); font-weight: var(--um-weight-semibold); }
+.um-wb-card-front span { color: var(--um-color-text-muted); font-size: 12px; }
+.um-wb-card-back { transform: rotateY(180deg); background: var(--um-color-selected); }
+.um-wb-flashcard[data-flipped='true'] .um-wb-card-front { transform: rotateY(-180deg); }
+.um-wb-flashcard[data-flipped='true'] .um-wb-card-back { transform: rotateY(0); }
+@media (prefers-reduced-motion: reduce) { .um-wb-card-face { transition: none; } }
+.um-wb-quiz-score { display: grid; gap: 4px; border-radius: 10px; padding: 10px 12px; background: var(--um-color-selected); }
+.um-wb-quiz-score strong { color: var(--um-color-accent); font-size: 20px; }
+.um-wb-quiz-question { min-width: 0; border: 1px solid var(--um-color-border); border-radius: 10px; padding: 8px; }
+.um-wb-quiz-question legend { max-width: 100%; padding-inline: 4px; font-weight: var(--um-weight-semibold); overflow-wrap: anywhere; }
+.um-wb-quiz-options, .um-wb-quiz-feedback { display: grid; gap: 7px; overflow-wrap: anywhere; }
+.um-wb-quiz-options label { display: flex; align-items: baseline; gap: 6px; padding: 6px; border-radius: 7px; background: var(--um-color-context); }
+.um-wb-quiz-options label:has(:checked) { background: var(--um-color-selected); }
+.um-wb-quiz-options input { accent-color: var(--um-color-accent); }
+.um-wb-quiz-feedback .um-wb-citation { justify-self: start; }
+.um-wb-quiz-points { align-self: start; color: var(--um-color-text-muted); }
+.um-wb-quiz-points[data-full='true'] { color: var(--um-color-accent); }
