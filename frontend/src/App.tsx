@@ -3,7 +3,7 @@ import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { OfflineTrialPage } from '@/components/OfflineTrialPage';
 import { getLocale, t, useLocale } from '@/i18n';
 import { saveLanguagePreference } from '@/lib/languagePreference';
-import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { registerSW } from 'virtual:pwa-register';
 import axios from 'axios';
@@ -33,6 +33,7 @@ let serviceWorkerRegistered = false;
 // Lazy-loaded pages — named exports need .then() wrapper
 const Landing = lazy(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
 const CourseCenter = lazy(() => import('./pages/CourseCenter').then(module => ({ default: module.CourseCenter })));
+const VideoLesson = lazy(() => import('./pages/VideoLesson').then(module => ({ default: module.VideoLesson })));
 const TestLadder = lazy(() => import('./pages/TestLadder').then(module => ({ default: module.TestLadder })));
 const InstitutionManagement = lazy(() => import('./pages/InstitutionManagement'));
 const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })));
@@ -242,9 +243,18 @@ const PersonalCourseRedirect = () => {
   }, [hasCourseSpace, isPending, key, pathname]);
   return isPending ? <PageLoader /> : <Navigate to="/xiaoyu" replace />;
 };
-const InstitutionCourses = () => activeWorkspace() === 'personal'
-  ? <PersonalCourseRedirect />
-  : <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{workspacePage(CourseCenter)}</FeatureGuard>;
+function InstitutionCourses() {
+  const { id } = useParams();
+  const [params] = useSearchParams();
+  const project = Number(params.get('project'));
+  if (activeWorkspace() !== 'personal') {
+    return <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{workspacePage(CourseCenter)}</FeatureGuard>;
+  }
+  if (id && Number.isSafeInteger(project) && project > 0) {
+    return <ErrorBoundary><VideoLesson key={id} workbenchVideo missingCourse={<PersonalCourseRedirect />} /></ErrorBoundary>;
+  }
+  return <PersonalCourseRedirect />;
+}
 
 const lazyPage = (Component: React.ComponentType) => (
   <ErrorBoundary>

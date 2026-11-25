@@ -1,8 +1,11 @@
-from django.db import models
+import uuid
+from pathlib import PurePosixPath
+
+from django.db import models, transaction
 from django.conf import settings
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
-import uuid
+from django.utils.text import get_valid_filename
 
 class AIChatMessage(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -29,6 +32,131 @@ class ConversationProject(models.Model):
 
     class Meta:
         ordering = ['created_at', 'id']
+
+
+WORKBENCH_SOURCE_PREFIX = 'workbench_sources/'
+
+
+def workbench_source_upload_path(instance, filename):
+    filename = get_valid_filename(PurePosixPath(filename.replace('\\', '/')).name)
+    prefix = f'{WORKBENCH_SOURCE_PREFIX}{instance.user_id}/{instance.pk}_'
+    # Course.video_file can reference the same key. Leave room for the storage collision suffix.
+    budget = 100 - len(prefix) - 8
+    suffix = PurePosixPath(filename).suffix
+    if suffix and len(suffix) < budget:
+        filename = filename[:-len(suffix)][:budget - len(suffix)] + suffix
+    else:
+        filename = filename[:budget]
+    return prefix + filename
+
+
+class ProjectSource(models.Model):
+    class Type(models.TextChoices):
+        PDF = 'pdf', 'PDF'
+        PPTX = 'pptx', 'PPT'
+        DOCX = 'docx', 'Word'
+        TEXT = 'text', '文本/Markdown'
+        WEB_URL = 'web_url', '网页'
+        UPLOADED_MEDIA = 'uploaded_media', '本地音视频'
+        COURSE = 'course', '站内课程'
+        EXTERNAL_VIDEO = 'external_video', '外部视频'
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', '等待处理'
+        PROCESSING = 'processing', '解析中'
+        READY = 'ready', '就绪'
+        FAILED = 'failed', '失败'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE, related_name='workbench_sources')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='workbench_sources')
+    source_type = models.CharField(max_length=24, choices=Type.choices)
+    title = models.CharField(max_length=240)
+    file = models.FileField(upload_to=workbench_source_upload_path, max_length=255, blank=True, null=True)
+    mime_type = models.CharField(max_length=120, blank=True, default='')
+    file_size = models.PositiveBigIntegerField(default=0)
+    source_url = models.URLField(max_length=3000, blank=True, default='')
+    course = models.ForeignKey('courses.Course', null=True, blank=True, on_delete=models.SET_NULL,
+                               related_name='workbench_sources')
+    companion_course = models.ForeignKey('courses.Course', null=True, blank=True, on_delete=models.SET_NULL,
+                                         related_name='companion_workbench_sources')
+    external_key = models.CharField(max_length=200, blank=True, default='', db_index=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True)
+    error_message = models.TextField(blank=True, default='')
+    is_selected = models.BooleanField(default=True)
+    summary = models.TextField(blank=True, default='')
+    unit_count = models.PositiveIntegerField(default=0)
+    word_count = models.PositiveIntegerField(default=0)
+    duration_seconds = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['project', 'created_at']),
+            models.Index(fields=['project', 'is_selected', 'status']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['project', 'external_key'], condition=~models.Q(external_key=''),
+                name='uniq_workbench_project_ext_key',
+            ),
+        ]
+
+
+@receiver(pre_delete, sender=ProjectSource)
+def delete_project_source_file(sender, instance, using, **kwargs):
+    record = sender.objects.using(using).select_for_update().filter(pk=instance.pk).values_list(
+        'file', 'companion_course_id', 'user_id',
+    ).first()
+    if record is None:
+        return
+    name, companion_id, user_id = record
+    if not name and not companion_id:
+        return
+
+    def cleanup():
+        from courses.models import Course
+
+        if companion_id:
+            Course.objects.using(using).filter(
+                pk=companion_id, is_workbench_companion=True, author_id=user_id,
+                companion_workbench_sources__isnull=True,
+            ).delete()
+        if (name and name.startswith(f'{WORKBENCH_SOURCE_PREFIX}{user_id}/')
+                and not sender.objects.using(using).filter(file=name).exists()):
+            sender._meta.get_field('file').storage.delete(name)
+
+    transaction.on_commit(cleanup, using=using, robust=True)
+
+
+class ProjectSourceChunk(models.Model):
+    class Anchor(models.TextChoices):
+        PAGE = 'page', '页码'
+        SLIDE = 'slide', '幻灯片'
+        SECTION = 'section', '章节段落'
+        TIMESTAMP = 'timestamp', '时间戳'
+
+    source = models.ForeignKey(ProjectSource, on_delete=models.CASCADE, related_name='chunks')
+    chunk_index = models.PositiveIntegerField()
+    anchor_type = models.CharField(max_length=16, choices=Anchor.choices)
+    locator_label = models.CharField(max_length=80)
+    heading = models.CharField(max_length=240, blank=True, default='')
+    content = models.TextField()
+    page_number = models.PositiveIntegerField(null=True, blank=True)
+    slide_number = models.PositiveIntegerField(null=True, blank=True)
+    start_seconds = models.FloatField(null=True, blank=True)
+    end_seconds = models.FloatField(null=True, blank=True)
+    token_estimate = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['chunk_index']
+        constraints = [
+            models.UniqueConstraint(fields=['source', 'chunk_index'], name='uniq_project_source_chunk_index'),
+        ]
+        indexes = [models.Index(fields=['source', 'anchor_type'])]
 
 
 class Conversation(models.Model):

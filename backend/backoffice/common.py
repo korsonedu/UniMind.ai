@@ -20,6 +20,8 @@ def content_institution(required=False):
 
 
 def managed(queryset):
+    if queryset.model._meta.label_lower == 'courses.course':
+        queryset = queryset.filter(is_workbench_companion=False)
     return queryset.filter(institution=content_institution(required=True))
 
 

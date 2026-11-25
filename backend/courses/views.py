@@ -17,7 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from users.permissions import IsAdmin, HasQuota
 
 from .models import Course, Album, StartupMaterial, VideoProgress
-from .access import HasFullCourseAccess
+from .access import CanReadCourse, HasFullCourseAccess, private_companion_courses
 
 from core.utils import apply_institution_filter, get_content_institution
 
@@ -779,15 +779,24 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CourseSerializer
 
     def get_queryset(self):
-        if self.request.method == 'GET':
+        if self.request.method in ('GET', 'HEAD'):
             from .access import visible_courses
+            project = self.request.query_params.get('workbench_project')
+            if project is not None:
+                project_id = _safe_int(project)
+                return private_companion_courses(self.request.user, project_id) if project_id else Course.objects.none()
+            private = private_companion_courses(self.request.user).filter(pk=self.kwargs['pk'])
+            if private.exists():
+                return private
             return visible_courses(self.request)
-        return apply_institution_filter(super().get_queryset(), self.request.user, self.request)
+        return apply_institution_filter(
+            super().get_queryset().filter(is_workbench_companion=False), self.request.user, self.request,
+        )
 
     def get_permissions(self):
         if self.request.method in ['PATCH', 'PUT', 'DELETE']:
             return [IsAdmin()]
-        return [IsMember()]
+        return [CanReadCourse()]
 
 
 class CourseOutlineView(APIView):
@@ -836,10 +845,12 @@ class CourseOutlineView(APIView):
 
 class CourseTranscriptView(APIView):
     def get_permissions(self):
-        return [IsMember()] if self.request.method == 'GET' else [IsMember(), HasFullCourseAccess()]
+        return [CanReadCourse()] if self.request.method in ('GET', 'HEAD') else [IsMember(), HasFullCourseAccess()]
 
     def get(self, request, pk):
-        course = _get_course_for_user(pk, request.user, request)
+        course = private_companion_courses(request.user).filter(pk=pk).first()
+        if course is None:
+            course = _get_course_for_user(pk, request.user, request)
         if not course:
             return Response({'error': '课程不存在'}, status=404)
 

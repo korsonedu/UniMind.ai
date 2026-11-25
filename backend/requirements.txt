@@ -30,8 +30,10 @@ pyasn1==0.6.5
 pyasn1_modules==0.4.2
 pycparser==3.0
 pyOpenSSL==26.4.0
+pypdf==7.1.1
 python-docx==1.2.0
 python-dotenv==1.2.2
+python-pptx==1.0.2
 redis==7.1.1
 requests==2.33.0
 service-identity==24.2.0

@@ -43,6 +43,7 @@ class CourseModule(models.Model):
 class Course(models.Model):
     title = models.CharField(max_length=200)
     is_published = models.BooleanField(default=False, db_index=True, verbose_name='已发布')
+    is_workbench_companion = models.BooleanField(default=False, editable=False)
     module = models.ForeignKey(CourseModule, on_delete=models.PROTECT, null=True, blank=True, related_name='courses', verbose_name='所属模块')
     album_obj = models.ForeignKey(Album, on_delete=models.SET_NULL, null=True, blank=True, related_name='courses', verbose_name="所属专辑")
     description = models.TextField(blank=True, null=True)
@@ -59,11 +60,23 @@ class Course(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(is_workbench_companion=False) | models.Q(is_published=False),
+                name='course_workbench_companion_unpublished',
+            ),
+        ]
+
     def __str__(self):
         return self.title
 
     @staticmethod
     def _delete_unused_file(storage, name, using):
+        from ai_assistant.models import WORKBENCH_SOURCE_PREFIX
+
+        if name.startswith(WORKBENCH_SOURCE_PREFIX):
+            return  # 工作台视频由 ProjectSource 管理文件生命周期。
         # 同一对象仍被任一课程字段引用时保留，避免重用同名对象后误删。
         references = models.Q()
         for field in ('video_file', 'cover_image', 'courseware', 'reference_materials'):
