@@ -6,7 +6,6 @@ import { SelectField, SelectOption } from '@/components/ui/select';
 import { DesktopSettings } from '@/components/DesktopSettings';
 import { ThemeSceneSwitch } from '@/components/settings/ThemeSceneSwitch';
 import { APP_VERSION, APP_BUILD } from '@/constants/version';
-import { useDesktopStore } from '@/lib/desktop';
 import NoteAISettings from './notes/NoteAISettings';
 import { formatApiErrorToast } from '@/lib/apiError';
 import { useEffect, useRef, useState } from 'react';
@@ -42,7 +41,7 @@ const SECTIONS = [
   { id: 'shortcuts', label: '键盘快捷键', icon: Keyboard, keywords: '键盘 快捷键 Enter 发送 全局', desktopOnly: true },
   { id: 'storage', label: '存储', icon: HardDrives, keywords: '下载 离线 缓存 同步 存储', desktopOnly: true },
   { id: 'data', label: '数据管理', icon: Database, keywords: '导出 下载 注销 删除 隐私 协议 离线 缓存 同步' },
-  { id: 'about', label: '关于 UniMind.ai', icon: ChatCircle, keywords: '产品 客户端 版本 构建 关于 更新' },
+  { id: 'about', label: '关于 UniMind.ai', icon: ChatCircle, keywords: '客户端 版本 关于 更新', desktopOnly: true },
   { id: 'agent-connections', label: '外部 Agent', icon: PlugsConnected, keywords: '高级 连接 授权 学习记忆 MCP Codex WorkBuddy' },
 ] as const;
 const AVATAR_STYLES: Record<string, string> = {
@@ -55,7 +54,6 @@ export const Settings: React.FC = () => {
   const { theme, setTheme, setPageHeader, readingSize, density, reduceMotion, sendShortcut, toolDetails, practiceCount, practicePreference, videoSpeed, videoSubtitles, setExperience } = useSystemStore();
   const user = useAuthStore(state => state.user);
   const canConnectAgents = useInstitutionStore(state => state.features.includes('learning.memory.connectors'));
-  const desktopState = useDesktopStore(state => state.state);
   const updateUser = useAuthStore(state => state.updateUser);
   const setAuth = useAuthStore(state => state.setAuth);
   const nativePlatform = isNativePlatform();
@@ -164,7 +162,7 @@ export const Settings: React.FC = () => {
     finally { setBusy(null); }
   };
 
-  return <div className="um-settings-workspace">
+  return <div className="um-settings-workspace" data-product-version={APP_VERSION} data-product-build={APP_BUILD}>
     <aside className="um-settings-sidebar" aria-label={t("设置目录")}>
       <Link to="/xiaoyu" className="um-settings-back"><ArrowLeft size={16} aria-hidden="true" />{t("返回小宇")}</Link>
       <h1>{t("设置")}</h1>
@@ -283,15 +281,7 @@ export const Settings: React.FC = () => {
           <h3 className="um-settings-group-title">{t("笔记参考")}</h3>
           <section className="um-settings-group"><div className="um-settings-note-ai"><NoteAISettings /></div></section>
         </>}
-        {current?.id === 'about' && <>
-          <DesktopSettings key="updates" section="updates" />
-          <h3 className="um-settings-group-title">{t("版本信息")}</h3>
-          <section className="um-settings-group" aria-label={t("版本信息")}>
-            <div className="um-settings-row"><span>{t("产品版本")}</span><span className="um-settings-value">{APP_VERSION}</span></div>
-            {!!window.unimindDesktop && <div className="um-settings-row"><div><span>{t("客户端版本")}</span></div><span className="um-settings-value">{desktopState?.version || t("正在读取…")}</span></div>}
-            <div className="um-settings-row"><details><summary>{t("技术详情")}</summary><p>{t("产品构建：")}{APP_BUILD}</p></details></div>
-          </section>
-        </>}
+        {current?.id === 'about' && <DesktopSettings key="updates" section="updates" />}
         {current?.id === 'data' && <>
           <h3 className="um-settings-group-title">{t("导出与保留")}</h3><section className="um-settings-group"><div className="um-settings-row"><div><span>{t("导出个人数据")}</span></div><Button type="button" variant="outline" disabled={!!busy} onClick={() => void exportData()}><DownloadSimple size={16} />{busy === 'export' ? t("导出中…") : t("下载我的数据")}</Button></div></section>
           <h3 className="um-settings-group-title">{t("隐私与账户")}</h3><section className="um-settings-group"><div className="um-settings-row"><div><span>{t("笔记参考权限")}</span></div><Button variant="outline" onClick={() => setSection('notes')}>{t("管理")}</Button></div><div className="um-settings-row"><span>{t("账户与注销")}</span><Button variant="outline" onClick={() => setSection('account')}>{t("前往账户")}</Button></div></section>
