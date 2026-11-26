@@ -120,3 +120,19 @@ def test_teaching_sidecar_hashes_real_canonical_source_bytes():
         assert teaching_sidecar._source_bytes(rel) == real_bytes
         assert not real_bytes.startswith(b'"""Compatibility alias')
         assert len(real_bytes) > 500
+
+
+def test_project_learning_split_enforces_one_way_decision_to_state_dependency():
+    from ai_assistant.services.decision import project_learning
+    from ai_assistant.services.state import project_state
+
+    state_source = Path(project_state.__file__).read_text(encoding='utf-8')
+    assert 'decision.project_learning' not in state_source
+    assert 'services.project_learning' not in state_source
+    for attr in (
+        'LearningConflict', 'learning_data', 'activity_snapshot',
+        'project_context', 'model_project_context', 'turn_project_context',
+        'model_learning_data', 'compact_learning', 'current_project',
+    ):
+        assert getattr(project_learning, attr) is getattr(project_state, attr)
+
