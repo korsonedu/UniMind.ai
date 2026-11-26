@@ -138,7 +138,7 @@ api.defaults.adapter = async config => {
     case '/ai/reset/': break;
     case '/ai/feedback/': history = history.map(message => message.id === payload.message_id ? { ...message, feedback: payload.feedback } : message); break;
     case '/csrf/': data = { csrf_token: 'local-preview' }; break;
-    case '/users/institution/me/features/': data = { features: Object.values(FEATURES).filter(feature => !blockedFeatures.includes(feature)), is_platform_admin: false, has_course_catalog: !personalPreview, institution: personalPreview ? null : user.institution, usage: null }; break;
+    case '/users/institution/me/features/': data = { features: [...Object.values(FEATURES), 'learning.memory.connectors'].filter(feature => !blockedFeatures.includes(feature)), is_platform_admin: false, has_course_catalog: !personalPreview, institution: personalPreview ? null : user.institution, usage: null }; break;
     case '/notifications/unread-count/': data = { unread_count: notifications.filter(item => !item.is_read).length }; break;
     case '/notifications/': data = notifications; break;
     case '/notifications/read/': notifications.forEach(item => { item.is_read = true; }); break;
@@ -183,6 +183,7 @@ api.defaults.adapter = async config => {
     case '/payments/orders/': data = []; break;
     default:
       if (/^\/notifications\/read\/\d+\/$/.test(path)) { const notification = notifications.find(item => item.id === Number(path.split('/')[3])); if (notification) notification.is_read = true; }
+      else if (path === '/ai/learning-memory/grants/' && config.method === 'get') data = [];
       else if (/^\/quizzes\/exams\/\d+\/(status\/|retry\/)?$/.test(path)) data = exams.find(exam => exam.id === Number(path.split('/')[3])) || exams[0];
       else if (/^\/ai\/conversations\/[^/]+\/$/.test(path)) {
         const id = path.split('/')[3];

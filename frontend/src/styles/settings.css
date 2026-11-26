@@ -8,8 +8,8 @@
 .um-settings-search > button { display: flex; flex-shrink: 0; color: var(--um-color-text-muted); }
 .um-settings-search:focus-within { box-shadow: var(--um-focus-shadow); }
 .um-settings-nav-label { margin: 18px 8px 6px; color: var(--um-color-text-muted); font-size: 12px; }
-.um-settings-sidebar nav { display: grid; gap: 8px; }
-.um-settings-sidebar nav button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px; padding: 8px 10px; border-radius: 8px; color: var(--um-color-text-muted); text-align: left; transition: background-color 150ms, color 150ms; cursor: pointer; }
+.um-settings-sidebar nav { display: grid; gap: 4px; }
+.um-settings-sidebar nav button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 32px; padding: 5px 10px; border-radius: 8px; color: var(--um-color-text-muted); text-align: left; transition: background-color 150ms, color 150ms; cursor: pointer; }
 .um-settings-sidebar nav button:hover { background: var(--um-color-hover); color: var(--um-color-text); }
 .um-settings-sidebar nav button[aria-current='page'] { background: var(--um-color-hover); color: var(--um-color-text); font-weight: var(--um-weight-medium); }
 .um-settings-sidebar svg { flex-shrink: 0; }
