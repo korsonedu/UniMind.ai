@@ -204,7 +204,7 @@ class ToolRunCoordinator:
             normalized_tool_call['function']['arguments'] = '{}'
         safe_arguments = arguments if isinstance(arguments, dict) else {}
         try:
-            from ai_assistant.services.tool_executor import generate_step_label
+            from ai_assistant.services.views.step_formatting import generate_step_label
             label = generate_step_label(name, safe_arguments)
         except Exception:
             label = f'执行 {name}'
@@ -338,7 +338,7 @@ class ToolRunCoordinator:
     def _event_extras(self, call: PreparedToolCall, result: str) -> dict:
         extras = {}
         try:
-            from ai_assistant.services.tool_executor import extract_step_actions, summarize_tool_result
+            from ai_assistant.services.views.step_formatting import extract_step_actions, summarize_tool_result
             extras['result_summary'] = summarize_tool_result(call.name, result)
             actions = extract_step_actions(result)
             if actions:

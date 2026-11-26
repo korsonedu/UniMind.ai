@@ -246,6 +246,7 @@ sudo journalctl -u unimind.service -f
 
 | 文档 | 内容 |
 |------|------|
+| `docs/architecture/FOUR_LAYER_ARCHITECTURE.md` | 四层总体架构（事实—状态—决策—视图 + ULR 脊柱）与代码子包规范 |
 | `docs/tech/AI_SYSTEM_REFERENCE.md` | AI 系统完整参考（Schema 目录、Prompt 模板、模型路由表） |
 | `docs/tech/architecture/SINGLE_PLATFORM_TRANSITION.md` | 当前单平台权限、内容边界与历史依赖 |
 | `docs/tech/architecture/PERMISSION_ARCHITECTURE.md` | 历史四层权限设计，不作为现行授权规范 |

@@ -136,3 +136,66 @@ def test_project_learning_split_enforces_one_way_decision_to_state_dependency():
     ):
         assert getattr(project_learning, attr) is getattr(project_state, attr)
 
+
+def test_learning_recall_split_enforces_one_way_view_to_fact_dependency():
+    from ai_assistant.services.facts import learning_recall, source_reader
+    from ai_assistant.services.views import recall_projection
+
+    fact_source = Path(source_reader.__file__).read_text(encoding='utf-8')
+    assert 'services.views' not in fact_source
+    assert learning_recall.read_learning_source is source_reader.read_learning_source
+    assert learning_recall.record_recall_sources is source_reader.record_recall_sources
+    assert learning_recall.recall is recall_projection.recall
+    assert learning_recall.RECALL_TOOL is recall_projection.RECALL_TOOL
+    assert learning_recall.SOURCE_TOOL is source_reader.SOURCE_TOOL
+
+
+def test_step_formatting_lives_in_views_layer():
+    from ai_assistant.services import tool_executor
+    from ai_assistant.services.views import step_formatting
+
+    assert tool_executor.generate_step_label is step_formatting.generate_step_label
+    assert tool_executor.extract_step_actions is step_formatting.extract_step_actions
+    assert tool_executor.summarize_tool_result is step_formatting.summarize_tool_result
+
+
+FROZEN_FLAT_LEGACY_AND_WORKER_FILES = frozenset({
+    '__init__',
+    # Browser-worker subprocess & static-asset bundle (pending worker root migration)
+    'learning_experiments',
+    'learning_experiment_preview',
+    'learning_experiment_review',
+    'learning_worker',
+    'session_tool_worker',
+    # Sample fixture
+    'function_sample',
+    # Legacy / dual-track modules frozen for sunset (no new flat services allowed)
+    'chat_service',
+    'dsh_runtime',
+    'experience_applicator',
+    'experience_extractor',
+    'experience_router',
+    'memory_analyzer',
+    'memory_service',
+    'memory_system',
+    'mutar_variants',
+    'practice',
+    'prompt_adapter',
+    'tenant_memory',
+    'tool_executor',
+    'trajectory_recorder',
+})
+
+
+def test_no_unregistered_flat_service_modules():
+    """Enforce PR Redline #1: new services must live in facts/state/decision/views/runtime."""
+    services_dir = Path(__file__).resolve().parents[1] / 'services'
+    flat_names = {p.stem for p in services_dir.glob('*.py')}
+    allowed = set(MIGRATED_MODULES) | FROZEN_FLAT_LEGACY_AND_WORKER_FILES
+    unexpected = sorted(flat_names - allowed)
+    assert not unexpected, (
+        f'New flat modules found in ai_assistant/services/: {unexpected}. '
+        'Place new services under facts/, state/, decision/, views/, or runtime/.'
+    )
+
+
