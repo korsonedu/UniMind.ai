@@ -75,6 +75,7 @@ body:has(.um-app-shell) { scrollbar-gutter: auto; }
 .um-space-switcher > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .um-space-switcher > svg { flex-shrink: 0; }
 .um-space-menu { width: 288px; max-width: calc(100vw - 16px); }
+.um-desktop .um-space-menu { -webkit-app-region: no-drag; }
 .um-space-menu [role='menuitem'] { gap: 10px; padding: 10px; }
 .um-space-menu [role='menuitem'] > div { flex: 1; min-width: 0; }
 .um-space-menu strong { display: block; font-size: 13px; font-weight: var(--um-weight-medium); overflow-wrap: anywhere; }
