@@ -596,6 +596,10 @@ class AIChatStreamView(APIView):
                 metadata['course_context'] = course_context
             if external_video_context:
                 metadata['external_video_context'] = external_video_context
+            from .services.chat_images import chat_image_messages, prepare_chat_images
+            chat_images = prepare_chat_images(request.data.get('images'))
+            if chat_images:
+                metadata['chat_images'] = chat_images
             user_msg = AIChatMessage.objects.create(
                 user=request.user, role='user', content=user_message,
                 bot=bot, conversation_id=conversation_id,
@@ -635,6 +639,10 @@ class AIChatStreamView(APIView):
                 if visual := external_video_visual_messages(external_video_context):
                     video_messages.append({'role': 'user', 'content': visual})
                 project_history = project_history + video_messages
+            if chat_images:
+                img_blocks = chat_image_messages(chat_images)
+                if img_blocks:
+                    project_history = project_history + [{'role': 'user', 'content': img_blocks}]
 
             from ai_assistant.services.memory_service import build_memory_context
             student_context, memory_context, adaptive_directives = '', '', ''

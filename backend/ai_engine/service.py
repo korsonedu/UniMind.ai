@@ -10,7 +10,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from django.conf import settings
 from . import AIExecutionCancelled
-from .config import get_model_for_task
+from .config import get_model_for_task, get_vision_model_for_task, messages_contain_images
 from .observability import model_token_counts, record_ai_operation, runtime_observation
 from .tool_policy import READ_ONLY_TOOLS
 
@@ -364,7 +364,11 @@ class AIEngine:
                 )
             return None
 
-        config = get_model_for_task(operation)
+        config = (
+            get_vision_model_for_task(operation)
+            if messages_contain_images(messages)
+            else get_model_for_task(operation)
+        )
         if not config['api_key']:
             msg = "LLM_API_KEY 未设置，AI 调用被跳过。"
             logger.error(msg)
@@ -974,7 +978,11 @@ class AIEngine:
                 tool_calls = message.get('tool_calls') or []
                 finish_reason = choice.get('finish_reason')
             else:
-                config = get_model_for_task(operation)
+                config = (
+            get_vision_model_for_task(operation)
+            if messages_contain_images(messages)
+            else get_model_for_task(operation)
+        )
                 if not config['api_key']:
                     if on_step:
                         on_step({"type": "error", "message": "LLM_API_KEY 未设置"})
@@ -1290,7 +1298,11 @@ class AIEngine:
             "content": "工具调用轮次已用完。请根据已有信息直接给出最终回复，不要再调用任何工具。",
         })
         try:
-            config = get_model_for_task(operation)
+            config = (
+            get_vision_model_for_task(operation)
+            if messages_contain_images(messages)
+            else get_model_for_task(operation)
+        )
             final_resp = cls.call_ai(
                 messages=[*all_messages, coordinator.response_context()],
                 tools=None,
@@ -1432,7 +1444,11 @@ class AIEngine:
 
         if max_retries is None:
             max_retries = getattr(settings, "LLM_REQUEST_MAX_RETRIES", 1)
-        config = get_model_for_task(operation)
+        config = (
+            get_vision_model_for_task(operation)
+            if messages_contain_images(messages)
+            else get_model_for_task(operation)
+        )
         if not config['api_key']:
             record_ai_operation(operation=operation, success=False, duration_ms=0, error_category='config',
                                 metadata={'reason': 'missing_api_key'})

@@ -1,12 +1,14 @@
 """Project-scoped learning recall from the application's live source records."""
 
 import re
-from math import isfinite
+from itertools import zip_longest
+from json import dumps
+from math import isfinite, log1p
 from types import SimpleNamespace
 from uuid import UUID
 
 from django.db import transaction
-from django.db.models import IntegerField, Q
+from django.db.models import Case, Count, FloatField, IntegerField, OuterRef, Q, Subquery, Value, When
 from django.db.models.fields.json import KeyTextTransform
 from django.db.models.functions import Cast
 from django.utils import timezone
@@ -34,19 +36,34 @@ RECALL_TOOL = {
     'annotations': {'readOnlyHint': True, 'openWorldHint': False},
 }
 
+HISTORY_LOOKUP_MAX_TOPICS = 3
+
 SOURCE_TOOL = {
     'name': 'read_learning_source',
     'description': '按来源读取旧问答、课程讲稿和播放位置、练习原作答及批改，或翻页查练习、错题与复习历史。'
-                   '先用 recall_learning 找来源。用 next_offset 继续读取。',
+                   '历史线索分散时，可用 conversation_history 和 topics 在一次调用中分别查找并读取相邻原文。用 next_offset 继续读取单个来源。',
     'inputSchema': {'type': 'object', 'properties': {
         'source': {'type': 'string', 'maxLength': 80, 'description': '例如 exam:42、answer:42、course:42、conversation:<UUID>、message:42，'
                    '或 practice、wrong_answers、review_history、conversation_history'},
         'topic': {'type': 'string', 'maxLength': 120, 'description': '可选的关键词，用来查讲稿和历史记录'},
+        'topics': {'type': 'array', 'minItems': 1, 'maxItems': HISTORY_LOOKUP_MAX_TOPICS,
+                   'items': {'type': 'string', 'minLength': 1, 'maxLength': 120},
+                   'description': '仅用于 conversation_history。不与 topic 或 offset 同时使用。每项填写一条独立线索，例如不同的人、事件或缺失事实。'},
         'offset': {'type': 'integer', 'minimum': 0, 'maximum': 1000000},
         'start_seconds': {'type': 'number', 'minimum': 0, 'maximum': 10000000, 'description': '仅用于课程，从视频指定时间附近读讲稿'},
     }, 'required': ['source'], 'additionalProperties': False},
     'annotations': {'readOnlyHint': True, 'openWorldHint': False},
 }
+
+HISTORY_STOP_WORDS = frozenset(
+    'a an and are as at be been being but by can could did do does for from had has have he her him his how i if '
+    'in into is it its me my of on or our she that the their them then there these they this to us was we were '
+    'what when where which who why will with would you your d ll m re s t ve'.split()
+)
+HISTORY_PAGE_SIZE = 8
+HISTORY_LOOKUP_MAX_ENTRIES = 32
+HISTORY_LOOKUP_MAX_BYTES = 16_384
+
 
 def _matching(rows, words, *fields):
     if not words:
@@ -56,6 +73,30 @@ def _matching(rows, words, *fields):
         for field in fields:
             clauses |= Q(**{f'{field}__icontains': word})
     return rows.filter(clauses)
+
+
+def _ranked_history(rows, topic):
+    words = re.findall(r'[^\W_]+', topic.casefold())
+    terms = [word for word in words if word not in HISTORY_STOP_WORDS] or words
+    terms = list(dict.fromkeys(terms))[:12]
+    if not terms:
+        return rows.order_by('-pk'), ()
+
+    filters = {f'term_{index}': Q(content__icontains=term) for index, term in enumerate(terms)}
+    counts = rows.aggregate(total=Count('pk'), **{name: Count('pk', filter=match) for name, match in filters.items()})
+    ranked = sorted(((counts[name], name, term) for name, term in zip(filters, terms, strict=True) if counts[name]),
+                    key=lambda match: match[0])
+    if not ranked:
+        return rows.none(), ()
+
+    matches = Q()
+    score = Value(0.0)
+    for count, name, _ in ranked:
+        match = filters[name]
+        matches |= match
+        weight = log1p((counts['total'] - count + 0.5) / (count + 0.5))
+        score += Case(When(match, then=Value(weight)), default=Value(0.0), output_field=FloatField())
+    return rows.filter(matches).order_by(score.desc(), '-pk'), tuple(term for _, _, term in ranked)
 
 
 def _excerpt(text, words, limit=800):
@@ -194,9 +235,16 @@ def _current_sources(learner, row):
     return True
 
 
-def _message_record(row, offset=0, limit=800):
+def _message_record(row, offset=0, limit=800, *, search_terms=()):
+    if len(row.content) > limit:
+        for term in search_terms:
+            if match := re.search(re.escape(term), row.content, re.IGNORECASE):
+                offset = max(0, match.start() - 160)
+                break
     entry = {'source': f'message:{row.pk}', 'conversation_id': str(row.conversation_id),
              'role': row.role, 'text': row.content[offset:offset + limit], 'at': row.timestamp}
+    if search_terms and offset:
+        entry['excerpt_start'] = offset
     if course := row.metadata.get('course_context'):
         entry['course_segment'] = {key: course.get(key) for key in ('course_id', 'video_seconds', 'revision')}
         entry['course_segment']['excerpt'] = ' '.join(item.get('text', '') for item in course.get('segments', [])[:2])[:700]
@@ -221,6 +269,44 @@ def _history_dependencies(messages, items):
         ids.update(dependencies or [])
         practice = practice or bool(practice_used)
     return {'course_dependencies': sorted(ids), 'practice_dependency': practice}
+
+
+def _history_evidence(history, learner, topics):
+    ranked_queries = []
+    for topic in topics:
+        ranked, terms = _ranked_history(history, topic)
+        hits = [row for row in ranked[:HISTORY_PAGE_SIZE] if _current_sources(learner, row)][:4]
+        ranked_queries.append([(row, terms) for row in hits])
+    anchors = {}
+    for group in zip_longest(*ranked_queries):
+        for hit in group:
+            if hit is not None:
+                anchors.setdefault(hit[0].pk, hit)
+    if not anchors:
+        return []
+
+    same_room = history.filter(conversation_id=OuterRef('conversation_id'))
+    before = same_room.filter(pk__lt=OuterRef('pk')).order_by('-pk').values('pk')[:1]
+    after = same_room.filter(pk__gt=OuterRef('pk')).order_by('pk').values('pk')[:1]
+    adjacent = history.filter(pk__in=anchors).annotate(
+        previous_pk=Subquery(before), next_pk=Subquery(after),
+    ).values_list('previous_pk', 'next_pk')
+    neighbor_ids = {pk for pair in adjacent for pk in pair if pk is not None and pk not in anchors}
+    neighbors = history.in_bulk(neighbor_ids)
+
+    entries = {}
+    remaining = HISTORY_LOOKUP_MAX_BYTES
+    candidates = [*anchors.values(), *((neighbors[pk], ()) for pk in sorted(neighbors)
+                                      if _current_sources(learner, neighbors[pk]))]
+    for row, terms in candidates:
+        entry = _message_record(row, limit=480, search_terms=terms)
+        size = len(dumps(entry, ensure_ascii=False, default=str).encode()) + 2
+        if size <= remaining:
+            entries[row.pk] = entry
+            remaining -= size
+        if len(entries) == HISTORY_LOOKUP_MAX_ENTRIES:
+            break
+    return [entries[pk] for pk in sorted(entries)]
 
 
 def recall(project, learner, topic='', *, current_message=None, include_notes=True,
@@ -264,8 +350,10 @@ def recall(project, learner, topic='', *, current_message=None, include_notes=Tr
     } for row in _matching(notes, words, 'title', 'content').order_by('-updated_at', '-pk')[:5]] if include_notes else []
 
     include_practice = (include_workspace_checkpoints or not project) and has_learning_feature(learner, 'quiz.exam')
-    history = _matching(_readable_history(messages, visible, courses, current_message, include_practice), words, 'content')
-    reply_rows = [_message_record(row) for row in history.order_by('-id')[:8] if _current_sources(learner, row)]
+    history, search_terms = _ranked_history(
+        _readable_history(messages, visible, courses, current_message, include_practice), topic)
+    reply_rows = [_message_record(row, search_terms=search_terms) for row in history[:HISTORY_PAGE_SIZE]
+                  if _current_sources(learner, row)]
 
     stage = _stage(state)
     nodes = version.snapshot.get('nodes', []) if version else []
@@ -348,9 +436,14 @@ def _read_course(course, learner, words, offset, start_seconds):
 
 
 def read_learning_source(project, learner, source, topic='', offset=0, start_seconds=None, *,
-                         current_message=None, include_practice=False):
+                         topics=None, current_message=None, include_practice=False):
     if start_seconds is not None and not isfinite(start_seconds):
         raise NotFound('时间位置无效。')
+    if topics is not None and (source != 'conversation_history' or topic or offset or start_seconds is not None
+            or not isinstance(topics, list) or not 1 <= len(topics) <= HISTORY_LOOKUP_MAX_TOPICS
+            or any(not isinstance(value, str) or len(value) > 120 or not re.search(r'[^\W_]', value)
+                   for value in topics)):
+        raise ValidationError('多线索搜索只接受对话历史和一至三条非空线索。')
     visible, messages = _scope(project, learner)
     words = re.findall(r'[\w]+', topic)[:6]
     kind, _, key = source.partition(':')
@@ -380,6 +473,10 @@ def read_learning_source(project, learner, source, topic='', offset=0, start_sec
     if kind in ('message', 'conversation') or source == 'conversation_history':
         history = _readable_history(messages, visible, courses, current_message,
                                     include_practice and has_learning_feature(learner, 'quiz.exam'))
+        if topics is not None:
+            entries = _history_evidence(history, learner, list(dict.fromkeys(value.strip() for value in topics)))
+            return {'source': source, 'conversation': entries, 'next_offset': None,
+                    **_history_dependencies(messages, entries)}
         if kind == 'message':
             row = history.filter(pk=key).first()
             if row and _current_sources(learner, row):
@@ -388,9 +485,15 @@ def read_learning_source(project, learner, source, topic='', offset=0, start_sec
                 return {'source': source, 'conversation': entries, 'next_offset': next_offset,
                         **_history_dependencies(messages, entries)}
         else:
-            rows = list(_matching(history, words, 'content').order_by('-pk' if source == 'conversation_history' else 'pk')[offset:offset + 9])
+            if source == 'conversation_history':
+                matching, search_terms = _ranked_history(history, topic)
+            else:
+                matching, search_terms = _matching(history, words, 'content').order_by('pk'), ()
+            rows = list(matching[offset:offset + HISTORY_PAGE_SIZE + 1])
             if rows or source == 'conversation_history' or history.exists():
-                entries = [_message_record(row) for row in rows[:8] if _current_sources(learner, row)]
-                return {'source': source, 'conversation': entries, 'next_offset': offset + 8 if len(rows) > 8 else None,
+                entries = [_message_record(row, search_terms=search_terms) for row in rows[:HISTORY_PAGE_SIZE]
+                           if _current_sources(learner, row)]
+                return {'source': source, 'conversation': entries,
+                        'next_offset': offset + HISTORY_PAGE_SIZE if len(rows) > HISTORY_PAGE_SIZE else None,
                         **_history_dependencies(messages, entries)}
     raise NotFound('找不到可读取的学习来源。')

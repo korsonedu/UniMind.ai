@@ -5,6 +5,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from ai_engine.observability import normalize_trace_id
 from users.learning import AI_RESERVATION_TTL, CHAT_RESERVATION_TTL
 from users.models import AIUsageReservation
 from .models import chat_receipt_deleted
@@ -33,6 +34,13 @@ class ChatRequestStatusView(APIView):
                 payload.update(status='failed', response=reservation.response)
             elif reservation.status == 'pending' and reservation.updated_at >= timezone.now() - ttl:
                 payload['status'] = 'pending'
+        trace_id = None
+        if reservation and isinstance(reservation.response, dict):
+            trace_id = normalize_trace_id(reservation.response.get('trace_id'))
+        if trace_id:
+            payload['trace_id'] = trace_id
         response = Response(payload)
         response['Cache-Control'] = 'no-store'
+        if trace_id:
+            response['X-Trace-Id'] = trace_id
         return response

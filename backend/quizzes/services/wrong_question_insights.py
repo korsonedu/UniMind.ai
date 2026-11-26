@@ -8,10 +8,10 @@ DEFAULT_CAUSE = "expression"
 
 # 内联自 quizzes.services.review_insights（该模块在 B2 删除）
 CAUSE_RULES = [
-    ("concept", ["概念", "定义", "术语", "本质", "含义"]),
-    ("calculation", ["计算", "公式", "运算", "推导", "数量"]),
-    ("reasoning", ["逻辑", "因果", "审题", "链条", "论证"]),
-    ("memory", ["记忆", "混淆", "遗忘", "漏写", "遗漏"]),
+    ("concept", ["概念", "定义", "术语", "本质", "含义", "定理", "性质", "原理", "misconception", "concept", "definition"]),
+    ("calculation", ["计算", "公式", "运算", "推导", "数量", "符号", "正负", "小数", "分数", "arithmetic", "calculation", "sign"]),
+    ("reasoning", ["逻辑", "因果", "审题", "链条", "论证", "条件", "步骤", "推理", "reasoning", "step", "order of operations"]),
+    ("memory", ["记忆", "混淆", "遗忘", "漏写", "遗漏", "混用", "记错", "forgot", "confused"]),
 ]
 
 CAUSE_LABELS = {
@@ -34,23 +34,39 @@ def infer_primary_cause(feedback: str, analysis: str) -> str:
     return "expression"
 
 
-def _pick_latest_wrong_cause_by_question(user, question_ids: List[int]) -> Dict[int, str]:
+def _pick_latest_wrong_details_by_question(user, question_ids: List[int]) -> Dict[int, Dict[str, str]]:
     latest_results = (
         ExamQuestionResult.objects.filter(
             exam__user=user,
             is_correct=False,
             question_id__in=question_ids,
         )
-        .select_related("exam")
+        .select_related("exam", "question__knowledge_point")
         .order_by("question_id", "-exam__created_at", "-id")
     )
 
-    cause_by_question: Dict[int, str] = {}
+    details: Dict[int, Dict[str, str]] = {}
     for row in latest_results:
-        if row.question_id in cause_by_question:
+        if row.question_id in details:
             continue
-        cause_by_question[row.question_id] = infer_primary_cause(row.feedback, row.analysis)
-    return cause_by_question
+        kp_name = row.question.knowledge_point.name if row.question and row.question.knowledge_point_id else ""
+        details[row.question_id] = {
+            "cause": infer_primary_cause(row.feedback, row.analysis),
+            "query": " ".join(
+                part for part in (
+                    kp_name,
+                    (row.question.text[:240] if row.question and row.question.text else ""),
+                    row.feedback or "",
+                    row.analysis or "",
+                )
+                if part
+            ),
+        }
+    return details
+
+
+def _pick_latest_wrong_cause_by_question(user, question_ids: List[int]) -> Dict[int, str]:
+    return {qid: item["cause"] for qid, item in _pick_latest_wrong_details_by_question(user, question_ids).items()}
 
 
 def build_wrong_question_insights(user, top_k: int = 3) -> Dict[str, object]:
@@ -66,29 +82,54 @@ def build_wrong_question_insights(user, top_k: int = 3) -> Dict[str, object]:
                 "wrong_attempts": 0,
             },
             "cause_breakdown": [],
+            "misconception_breakdown": [],
             "knowledge_point_breakdown": [],
             "recommended_drills": [],
         }
 
     question_ids = [status.question_id for status in statuses]
-    cause_by_question = _pick_latest_wrong_cause_by_question(user=user, question_ids=question_ids)
+    wrong_details = _pick_latest_wrong_details_by_question(user=user, question_ids=question_ids)
 
     cause_bucket = defaultdict(lambda: {"question_ids": [], "wrong_attempts": 0, "question_count": 0})
     kp_bucket = defaultdict(
         lambda: {"knowledge_point_id": None, "knowledge_point_name": "未归类考点", "question_ids": [], "wrong_attempts": 0}
     )
+    misc_bucket = {}
+
+    from quizzes.services.misconception_diagnosis import get_default_diagnoser
+    diagnoser = get_default_diagnoser()
 
     total_wrong_attempts = 0
     for status in statuses:
         total_wrong_attempts += int(status.wrong_count or 0)
         qid = status.question_id
-        cause_key = cause_by_question.get(qid, DEFAULT_CAUSE)
+        detail = wrong_details.get(qid)
+        cause_key = detail["cause"] if detail else DEFAULT_CAUSE
         cause_item = cause_bucket[cause_key]
         cause_item["question_ids"].append(qid)
         cause_item["wrong_attempts"] += int(status.wrong_count or 0)
         cause_item["question_count"] += 1
 
         kp = status.question.knowledge_point
+        query = detail["query"] if detail else f"{kp.name if kp else ''} {status.question.text[:240] if status.question.text else ''}"
+        hits = diagnoser.retrieve(query, top_k=1)
+        if hits and hits[0]["score"] > 0.0:
+            hit = hits[0]
+            mid = hit["misconception_id"]
+            if mid not in misc_bucket:
+                misc_bucket[mid] = {
+                    "misconception_id": mid,
+                    "name": hit["name"],
+                    "subject": hit["subject"],
+                    "topic": hit["topic"],
+                    "question_ids": [],
+                    "wrong_attempts": 0,
+                    "question_count": 0,
+                }
+            misc_bucket[mid]["question_ids"].append(qid)
+            misc_bucket[mid]["wrong_attempts"] += int(status.wrong_count or 0)
+            misc_bucket[mid]["question_count"] += 1
+
         kp_key = kp.id if kp else "unknown"
         kp_item = kp_bucket[kp_key]
         kp_item["knowledge_point_id"] = kp.id if kp else None
@@ -110,6 +151,11 @@ def build_wrong_question_insights(user, top_k: int = 3) -> Dict[str, object]:
             }
         )
     cause_breakdown.sort(key=lambda x: (-x["question_count"], -x["wrong_attempts"]))
+
+    misconception_breakdown = sorted(
+        misc_bucket.values(),
+        key=lambda x: (-x["question_count"], -x["wrong_attempts"], x["misconception_id"]),
+    )[:top_k]
 
     knowledge_point_breakdown = []
     for _, item in kp_bucket.items():
@@ -159,6 +205,7 @@ def build_wrong_question_insights(user, top_k: int = 3) -> Dict[str, object]:
             "wrong_attempts": total_wrong_attempts,
         },
         "cause_breakdown": cause_breakdown,
+        "misconception_breakdown": misconception_breakdown,
         "knowledge_point_breakdown": knowledge_point_breakdown,
         "recommended_drills": recommended_drills,
     }

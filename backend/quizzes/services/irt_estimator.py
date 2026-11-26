@@ -100,17 +100,20 @@ class IRTEstimator:
     def estimate_user_ability(
         responses: list[dict],
         item_params: dict[int, ItemEstimate],
+        prior_std: float = 1.0,
     ) -> Optional[float]:
         """
-        给定题目参数，估计单个学生的 θ（能力）。
+        给定题目参数，使用联合似然 + 标准正态先验（MAP）估计单个学生的 θ（能力）。
 
         responses: [{'question_id': int, 'is_correct': bool}, ...]
         item_params: {question_id: ItemEstimate, ...}
 
-        只使用有 IRT 参数的题目。MLE 估计 θ。
+        只使用有 IRT 参数的题目；联合最小化：
+          -Σ [y_i log P_i(θ) + (1 - y_i) log(1 - P_i(θ))] + θ² / (2 * prior_std²)
         """
         valid = [
-            r for r in responses
+            (item_params[r['question_id']], 1.0 if r['is_correct'] else 0.0)
+            for r in responses
             if r['question_id'] in item_params
         ]
         if len(valid) < 3:
@@ -121,23 +124,18 @@ class IRTEstimator:
         except ImportError:
             return None
 
-        thetas_est = []
-        for r in valid:
-            ip = item_params[r['question_id']]
-            correct = 1.0 if r['is_correct'] else 0.0
+        inv_var = 1.0 / (prior_std ** 2) if prior_std and prior_std > 0 else 0.0
 
-            def neg_ll_single(theta):
+        def joint_neg_log_posterior(theta: float) -> float:
+            total = 0.5 * inv_var * (theta ** 2)
+            for ip, correct in valid:
                 p = IRTEstimator.p_correct(theta, ip.discrimination, ip.difficulty, ip.guessing)
                 p = max(1e-6, min(1.0 - 1e-6, p))
-                return -(correct * math.log(p) + (1.0 - correct) * math.log(1.0 - p))
+                total -= correct * math.log(p) + (1.0 - correct) * math.log(1.0 - p)
+            return total
 
-            result = minimize_scalar(neg_ll_single, bounds=(-3.0, 3.0), method='bounded')
-            thetas_est.append(float(result.x))
-
-        if not thetas_est:
-            return None
-
-        return round(float(np.mean(thetas_est)), 4)
+        result = minimize_scalar(joint_neg_log_posterior, bounds=(-3.0, 3.0), method='bounded')
+        return round(float(result.x), 4)
 
     # ── 批处理入口 ────────────────────────────────────
 
@@ -261,27 +259,28 @@ class IRTEstimator:
 
         users_estimated = 0
         for uid, responses in user_responses.items():
-            theta = IRTEstimator.estimate_user_ability(responses, estimated_items)
-            if theta is None:
+            global_theta = IRTEstimator.estimate_user_ability(responses, estimated_items)
+            if global_theta is None:
                 continue
 
-            # 按知识点聚合，对每个知识点写入 UserAbility
-            kp_thetas: dict[int, list[float]] = {}
+            # 按知识点分组，样本充足时单独做知识点 MAP 估计，不足时回退全局 θ
+            kp_responses: dict[int, list[dict]] = {}
             for r in responses:
                 kp_id = question_kp.get(r['question_id'])
                 if kp_id:
-                    kp_thetas.setdefault(kp_id, []).append(theta)
+                    kp_responses.setdefault(kp_id, []).append(r)
 
             if not dry_run:
-                for kp_id, thetas in kp_thetas.items():
-                    avg_theta = round(float(np.mean(thetas)), 4)
+                for kp_id, kp_resps in kp_responses.items():
+                    kp_theta = IRTEstimator.estimate_user_ability(kp_resps, estimated_items)
+                    final_theta = kp_theta if kp_theta is not None else global_theta
                     UserAbility.objects.update_or_create(
                         user_id=uid,
                         knowledge_point_id=kp_id,
                         institution_id=inst.id,
                         defaults={
-                            'theta': avg_theta,
-                            'responses_count': len(thetas),
+                            'theta': final_theta,
+                            'responses_count': len(kp_resps),
                         },
                     )
                     users_estimated += 1

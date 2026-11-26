@@ -204,7 +204,8 @@ def _extract_memories_via_dsh(user_id, conversation_history, conversation_id, wr
         if MemoryExtractionLog.objects.filter(user=user, conversation_id=conversation_key, message_hash=message_hash).exists():
             return
         known = list(AgentMemory.objects.filter(user=user).values('id', 'memory_type', 'key'))
-        with observe_background('legacy', f'memory:{conversation_key}',
+        trace_id = (question.metadata or {}).get('trace_id') or (question.metadata or {}).get('runtime_request_id')
+        with observe_background('legacy', f'memory:{conversation_key}', trace_id=trace_id,
                                 source_message_id=question.pk, answer_message_id=answer_message_id):
             result = run_structured('assistant.memory_extract', _build_dsh_extraction_prompt(
                 conversation_history, known_facts=known, observed_at=question.timestamp.isoformat()))
