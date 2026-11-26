@@ -486,7 +486,7 @@ async def turn_events(request, bot, conversation_id, message, *, course_context=
             elif event['type'] == 'text_delta':
                 event = {'type': 'text_delta', 'delta': event['text']}
             elif event['type'] == 'tool_status':
-                from ai_assistant.services.tool_executor import generate_step_label
+                from ai_assistant.services.views.step_formatting import generate_step_label
                 event = {'type': 'step', 'run_id': run_id, 'call_id': event['call_id'],
                     'round': round_number, 'name': event['name'],
                     'label': '切换学习工具' if event['name'] == 'find_learning_tools' else '展示学习内容' if event['name'] == 'present_learning_visual' else '运行会话计算工具' if event['name'].startswith('session_') else generate_step_label(event['name'], {}),
