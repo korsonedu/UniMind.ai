@@ -357,7 +357,7 @@ def _field_rerank(question_ids, user, now, _alpha_unused=None):
     乘性形式（论文 §5.1）：u_i 高的 KP 不会被邻居拖到前面。
     """
     from quizzes.models import UserQuestionStatus, Question
-    from quizzes.memorix.service import load_optimizer, predict_retrievability
+    from quizzes.memorix.service import estimate_user_mastery, load_optimizer, predict_retrievability
     from quizzes.memorix.field import get_u_vector, compute_field_score, ensure_u_entry, get_field_params
 
     adj = _build_adjacency_from_edges()
@@ -369,6 +369,8 @@ def _field_rerank(question_ids, user, now, _alpha_unused=None):
     ).values_list('id', 'knowledge_point_id'))
 
     kp_ids = set(q_to_kp.values())
+    mastery_snapshot = estimate_user_mastery(user, question_ids, now=now, kc_graph=adj)
+    calibrated_preds = mastery_snapshot.get('predictions', {})
 
     # 加载 u 向量（扩散状态估计器）
     u = get_u_vector(user.id)
@@ -378,7 +380,7 @@ def _field_rerank(question_ids, user, now, _alpha_unused=None):
     params = get_field_params(inst_id)
 
     # 对有 u 条目的 KP，直接用 u 值评分
-    # 对无 u 条目的 KP，用 Weibull R(t) 作为 fallback urgency
+    # 对无 u 条目的 KP，优先用 UnifiedMasteryEstimator 校准预测，再回退 Weibull R(t)
     kps_without_u = [kp for kp in kp_ids if kp and kp not in u]
 
     kp_urgency_fallback = {}
@@ -396,15 +398,21 @@ def _field_rerank(question_ids, user, now, _alpha_unused=None):
             # 同时初始化 u 条目，下次调度就能用扩散值
             ensure_u_entry(user.id, kp_id, R)
 
-    # 评分
+    # 评分：将校准的 1 - P(correct) 与图扩散分融合，优先攻克低掌握且高中心性节点
     scored = []
+    has_history = mastery_snapshot.get('history_count', 0) > 0
     for qid in question_ids:
         kp_id = q_to_kp.get(qid)
         if kp_id and kp_id in u:
             # 有扩散状态 → 乘性评分（机构参数）
-            score = compute_field_score(u, kp_id, adj, params)
+            field_score = compute_field_score(u, kp_id, adj, params)
+            if has_history and qid in calibrated_preds:
+                score = 0.5 * field_score + 0.5 * (1.0 - calibrated_preds[qid])
+            else:
+                score = field_score
+        elif has_history and qid in calibrated_preds:
+            score = max(0.0, 1.0 - calibrated_preds[qid])
         elif kp_id and kp_id in kp_urgency_fallback:
-            # 无 u 条目但有复习历史 → Weibull urgency（纯 urgency，无 field_benefit）
             score = kp_urgency_fallback[kp_id]
         else:
             # 全新 KP（无 u 条目、无复习记录）→ 中性分，不挤到最末

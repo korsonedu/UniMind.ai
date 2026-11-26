@@ -229,3 +229,77 @@ class MemorixService:
         profile = MemorixProfile.objects.select_for_update().filter(user_id=user_id).first()
         if profile:
             _save_weights(profile, _get_optimizer(user_id, profile=profile))
+
+
+def estimate_user_mastery(user, question_ids=None, *, now=None, kc_graph=None, max_history: int = 300) -> dict:
+    """Compute calibrated per-question P(correct) and global student ability using UnifiedMasteryEstimator.
+
+    Reads persisted ExamQuestionResult history + optional ItemParameter IRT difficulties
+    with zero schema migrations and O(history + candidates) complexity.
+    """
+    from quizzes.memorix.mastery import MasteryConfig, StudentMasteryState, UnifiedMasteryEstimator, _sigmoid
+    from quizzes.models import ExamQuestionResult, ItemParameter, Question
+
+    now = now or timezone.now()
+    now_ts = now.timestamp()
+    candidate_ids = list(question_ids or [])
+
+    history_rows = list(
+        ExamQuestionResult.objects.filter(
+            exam__user=user,
+            status='graded',
+            is_correct__isnull=False,
+        )
+        .select_related('question')
+        .order_by('-graded_at', '-id')[:max_history]
+    )
+    history_rows.reverse()
+
+    involved_qids = set(candidate_ids)
+    for row in history_rows:
+        if row.question_id:
+            involved_qids.add(row.question_id)
+
+    q_to_kp = dict(
+        Question.objects.filter(id__in=involved_qids).values_list('id', 'knowledge_point_id')
+    )
+    # Map IRT ItemParameter difficulty b ∈ [-3, 3] to empirical prior P(correct) = sigmoid(-b)
+    q_priors = {}
+    inst_id = getattr(user, 'institution_id', None)
+    ip_qs = ItemParameter.objects.filter(question_id__in=involved_qids)
+    if inst_id is not None:
+        ip_qs = ip_qs.filter(institution_id=inst_id)
+    for qid, diff_b in ip_qs.values_list('question_id', 'difficulty'):
+        q_priors[qid] = _sigmoid(-float(diff_b))
+
+    estimator = UnifiedMasteryEstimator(
+        config=MasteryConfig(),
+        question_priors=q_priors,
+        kc_graph=kc_graph,
+    )
+    state = StudentMasteryState()
+    for row in history_rows:
+        qid = row.question_id
+        kp_id = q_to_kp.get(qid) or f"q:{qid}"
+        ts_sec = (row.graded_at or now).timestamp()
+        estimator.update(
+            state,
+            kp_id,
+            bool(row.is_correct),
+            question_id=qid,
+            ts_sec=ts_sec,
+        )
+
+    predictions = {}
+    for qid in candidate_ids:
+        kp_id = q_to_kp.get(qid) or f"q:{qid}"
+        predictions[qid] = round(
+            estimator.predict(state, kp_id, question_id=qid, ts_sec=now_ts),
+            4,
+        )
+
+    return {
+        'theta_global': round(state.theta_global, 4),
+        'history_count': len(history_rows),
+        'predictions': predictions,
+    }

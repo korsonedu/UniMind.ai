@@ -277,6 +277,7 @@ class MemorixOptimizer:
 
         # ── L2 regularization toward global prior ──
         self.weights = self.weights - self.l2_beta * (self.weights - self.global_weights)
+        self._clamp_weights()
 
         # ── EMA update for stable serving weights ──
         self.ema_weights = self.ema_decay * self.ema_weights + (1 - self.ema_decay) * self.weights
@@ -297,6 +298,26 @@ class MemorixOptimizer:
             'learning_rate': round(self.lr, 6),
         }
 
+    def _clamp_weights(self) -> None:
+        """Keep online-updated weights within numerically safe physical bounds."""
+        self.weights[:4] = np.clip(self.weights[:4], 0.05, 60.0)
+        self.weights[W_INIT_D] = np.clip(self.weights[W_INIT_D], 1.0, 10.0)
+        self.weights[W_DELTA_D] = np.clip(self.weights[W_DELTA_D], 0.05, 3.0)
+        self.weights[W_D_REVERT] = np.clip(self.weights[W_D_REVERT], 0.0, 0.5)
+        self.weights[W_D_TARGET] = np.clip(self.weights[W_D_TARGET], 0.0, 1.0)
+        self.weights[W_S_INC_BASE] = np.clip(self.weights[W_S_INC_BASE], -2.0, 4.0)
+        self.weights[W_S_INC_DIFF] = np.clip(self.weights[W_S_INC_DIFF], 0.0, 1.0)
+        self.weights[W_S_INC_RET] = np.clip(self.weights[W_S_INC_RET], 0.05, 3.0)
+        self.weights[W_S_LAPSE_BASE] = np.clip(self.weights[W_S_LAPSE_BASE], 0.1, 10.0)
+        self.weights[W_S_LAPSE_DIFF] = np.clip(self.weights[W_S_LAPSE_DIFF], 0.0, 1.0)
+        self.weights[W_S_LAPSE_STAB] = np.clip(self.weights[W_S_LAPSE_STAB], 0.05, 1.0)
+        self.weights[W_S_LAPSE_RET] = np.clip(self.weights[W_S_LAPSE_RET], 0.05, 3.0)
+        self.weights[W_S_HARD_MUL] = np.clip(self.weights[W_S_HARD_MUL], 0.05, 1.0)
+        self.weights[W_S_EASY_MUL] = np.clip(self.weights[W_S_EASY_MUL], 1.0, 5.0)
+        self.weights[W_WEIBULL_K] = np.clip(self.weights[W_WEIBULL_K], 0.1, 5.0)
+        self.weights[W_EMBED_STR] = np.clip(self.weights[W_EMBED_STR], 0.0, 1.0)
+        self.weights[W_COST_SENS] = np.clip(self.weights[W_COST_SENS], 0.005, 0.5)
+
     def _compute_gradient(
         self,
         grade: int,
@@ -307,19 +328,63 @@ class MemorixOptimizer:
         y: float,
         knowledge_embedding: Optional[np.ndarray] = None,
     ) -> np.ndarray:
-        """Finite-difference gradient of Brier loss w.r.t. weights."""
-        eps = 1e-6
+        """Gradient of Brier loss w.r.t. both Weibull k and stability/difficulty weights.
+
+        Combines:
+          1. Direct sensitivity dL/dw_17 via R(t; stability, k)
+          2. Stability-transition sensitivity dL/dS * dS_next/dw_i so initial/growth/lapse
+             weights actively adapt online instead of receiving zero gradient.
+        """
+        eps = 1e-5
         grad = np.zeros_like(self.weights)
+        base_loss = (retrievability_pred - y) ** 2
 
-        for i in range(len(self.weights)):
-            orig = self.weights[i]
-            self.weights[i] = orig + eps
-            r_plus = self.predict_retrievability(stability, elapsed_days)
-            loss_plus = (r_plus - y) ** 2
-            self.weights[i] = orig
-            grad[i] = (loss_plus - (retrievability_pred - y) ** 2) / eps
+        # 1. Direct gradient for Weibull shape k (w17)
+        orig_k = self.weights[W_WEIBULL_K]
+        self.weights[W_WEIBULL_K] = orig_k + eps
+        r_plus = self.predict_retrievability(stability, elapsed_days)
+        self.weights[W_WEIBULL_K] = orig_k
+        grad[W_WEIBULL_K] = ((r_plus - y) ** 2 - base_loss) / eps
 
-        return grad
+        # 2. Chain-rule sensitivity through stability S: dL/dS = 2(R - y) * dR/dS
+        s_safe = max(0.01, float(stability))
+        t_safe = max(0.0, float(elapsed_days))
+        k = max(0.1, min(5.0, float(self.weights[W_WEIBULL_K])))
+        if t_safe > 0.0 and retrievability_pred > 1e-9:
+            dr_ds = retrievability_pred * k * ((t_safe / s_safe) ** k) / s_safe
+        else:
+            dr_ds = 0.0
+        dl_ds = 2.0 * (retrievability_pred - y) * dr_ds
+
+        if abs(dl_ds) > 1e-12:
+            base_s_next, _ = self.update_stability(
+                grade=grade,
+                stability=s_safe,
+                difficulty=difficulty,
+                retrievability=retrievability_pred,
+                knowledge_embedding=knowledge_embedding,
+            )
+            scale = s_safe / max(base_s_next, 0.01)
+            for i in range(len(self.weights)):
+                if i in (W_WEIBULL_K, W_COST_SENS):
+                    continue
+                orig = self.weights[i]
+                self.weights[i] = orig + eps
+                if i < 4 and i == grade - 1:
+                    ds_dw = 1.0
+                else:
+                    s_next_plus, _ = self.update_stability(
+                        grade=grade,
+                        stability=s_safe,
+                        difficulty=difficulty,
+                        retrievability=retrievability_pred,
+                        knowledge_embedding=knowledge_embedding,
+                    )
+                    ds_dw = ((s_next_plus - base_s_next) / eps) * scale
+                self.weights[i] = orig
+                grad[i] = dl_ds * ds_dw
+
+        return np.clip(grad, -5.0, 5.0)
 
     # ── Optimal Review Scheduling ──────────────────────────────────
 
@@ -332,33 +397,42 @@ class MemorixOptimizer:
         """
         Compute the optimal interval (in days) before the next review.
 
-        Uses regret minimization:
-          R(t) = (1 - retrievability(t)) + α * C(t)
-        where C(t) = log(1 + t) is the review opportunity cost.
-
-        The optimal t* minimizes R(t), solved via binary search since
-        R(t) is convex in t for k ≥ 0.5.
-
-        Returns recommended interval in days.
+        Minimizes expected regret R(t) = (1 - retrievability(t)) + α * log(1 + t)
+        subject to not exceeding the interval where retrievability hits target_retrievability.
         """
-        alpha = max(0.01, self.weights[W_COST_SENS])
-        k = max(0.1, min(5.0, self.weights[W_WEIBULL_K]))
+        alpha = max(0.005, float(self.weights[W_COST_SENS]))
+        k = max(0.1, min(5.0, float(self.weights[W_WEIBULL_K])))
+        s_safe = max(0.01, float(stability))
 
-        # Binary search for t* that makes R(t) = target_retrievability
-        lo, hi = 0.1, max(365.0, stability * 5)
-        for _ in range(50):
-            mid = (lo + hi) / 2
-            r = math.exp(-(mid / max(stability, 0.01)) ** k)
-            # Regret: want to review BEFORE forgetting, weighted by cost
-            regret = (1 - r) + alpha * math.log(1 + mid)
-            # Minimize regret: d(regret)/dt = -dr/dt + alpha/(1+t) ≈ 0
-            # Simpler: just target the retrievability threshold
-            if r >= target_retrievability:
-                lo = mid
+        # Upper bound from target retrievability: exp(-(t/S)^k) = target_r
+        target_r = max(0.05, min(0.99, float(target_retrievability)))
+        t_target = s_safe * ((-math.log(target_r)) ** (1.0 / k))
+        hi = max(0.2, min(365.0, max(t_target, s_safe * 2.0)))
+        lo = 0.1
+
+        # Golden-section search minimizing regret(t) = (1 - R(t)) + alpha * log(1 + t)
+        # while preferring review before retrievability drops below target_r
+        def objective(t: float) -> float:
+            r = math.exp(-((t / s_safe) ** k))
+            penalty = max(0.0, target_r - r) * 5.0
+            return (1.0 - r) + alpha * math.log(1.0 + t) + penalty
+
+        phi = (math.sqrt(5.0) - 1.0) / 2.0
+        a, b = lo, hi
+        m1 = b - phi * (b - a)
+        m2 = a + phi * (b - a)
+        f1, f2 = objective(m1), objective(m2)
+        for _ in range(40):
+            if f1 <= f2:
+                b, m2, f2 = m2, m1, f1
+                m1 = b - phi * (b - a)
+                f1 = objective(m1)
             else:
-                hi = mid
+                a, m1, f1 = m1, m2, f2
+                m2 = a + phi * (b - a)
+                f2 = objective(m2)
 
-        return round(lo, 1)
+        return round((a + b) / 2.0, 1)
 
     # ── Batch Simulation (for hyperparameter tuning) ───────────────
 
