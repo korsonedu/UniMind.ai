@@ -77,6 +77,8 @@ def grouped_tools(allowed, message, recent_messages=None, project=False):
         initial = 'interactive' if '题' in message else 'authoring'
     if 'recall' in groups and any(word in message.lower() for word in (
         '上次学', '上次讲', '之前学', '之前讲', '接着学', '接着上次', '学习记忆', 'continue studying', 'last session',
+        '上次聊', '之前聊', '上次说', '上次提到', '对话历史', 'earlier conversation', 'previous conversation',
+        'past conversation', 'conversation history', 'what we discussed',
     )):
         initial = 'recall'
     initial = initial if initial in groups else ''

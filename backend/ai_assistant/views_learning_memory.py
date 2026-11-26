@@ -1,5 +1,6 @@
 from json import dumps
 from datetime import timedelta
+from time import monotonic
 
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
@@ -12,16 +13,19 @@ from django.utils import timezone
 from django.urls import reverse
 from rest_framework import serializers
 from rest_framework.authentication import BaseAuthentication
-from rest_framework.exceptions import AuthenticationFailed, NotFound, PermissionDenied
+from rest_framework.exceptions import AuthenticationFailed, NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ai_assistant.models import ConversationProject, LearningMemoryCheckpoint, LearningMemoryGrant, ProjectLearningEvent
-from ai_assistant.services.learning_recall import RECALL_TOOL, SOURCE_TOOL, read_learning_source, recall
+from ai_assistant.services.learning_recall import (
+    HISTORY_LOOKUP_MAX_TOPICS, RECALL_TOOL, SOURCE_TOOL, read_learning_source, recall,
+)
 from ai_assistant.services.learning_memory_oauth import (
     READ_SCOPE, digest as _digest, learner_account_active, memory_token, oauth_enabled, registered_client, resource_uri,
 )
+from ai_engine.observability import log_ai_operation, observe_runtime, resolve_trace_id
 from users.workspaces.identity import account_user
 from users.workspaces.access import membership_for
 
@@ -68,6 +72,8 @@ class CheckpointInput(serializers.Serializer):
 class SourceInput(serializers.Serializer):
     source = serializers.CharField(max_length=80)
     topic = serializers.CharField(max_length=120, allow_blank=True, default='')
+    topics = serializers.ListField(child=serializers.CharField(max_length=120), min_length=1,
+                                   max_length=HISTORY_LOOKUP_MAX_TOPICS, required=False)
     offset = serializers.IntegerField(min_value=0, max_value=1000000, default=0)
     start_seconds = serializers.FloatField(min_value=0, max_value=10000000, required=False)
 
@@ -166,6 +172,7 @@ class LearningMemoryMcpView(APIView):
     def post(self, request):
         data = request.data
         request_id = data.get('id') if isinstance(data, dict) else None
+        trace_id = resolve_trace_id(request.headers.get('X-Trace-Id'))
 
         def reply(result=None, *, code=None, message=None, status=200):
             response = {'jsonrpc': '2.0', 'id': request_id}
@@ -173,7 +180,7 @@ class LearningMemoryMcpView(APIView):
                 response['result'] = result
             else:
                 response['error'] = {'code': code, 'message': message}
-            return JsonResponse(response, status=status, headers={'Cache-Control': 'no-store'})
+            return JsonResponse(response, status=status, headers={'Cache-Control': 'no-store', 'X-Trace-Id': trace_id})
 
         if not isinstance(data, dict) or data.get('jsonrpc') != '2.0' or type(request_id) not in (int, str, type(None)):
             return reply(code=-32600, message='Invalid JSON-RPC request', status=400)
@@ -220,41 +227,53 @@ class LearningMemoryMcpView(APIView):
             return reply(code=-32602, message='Tool unavailable for this grant')
         if not inputs.is_valid():
             return reply(code=-32602, message='Invalid tool arguments')
-        if name == RECALL_TOOL['name']:
-            project = request.auth.project
-            if project_id := inputs.validated_data.get('project_id'):
-                if request.auth.learner_id:
-                    project = ConversationProject.objects.filter(pk=project_id, user=request.user).first()
-                if not project or project.pk != project_id:
-                    return reply(code=-32602, message='Project unavailable for this grant')
-            result = recall(project, request.user, inputs.validated_data['topic'], include_notes=request.auth.share_notes,
-                            include_workspace_checkpoints=bool(request.auth.learner_id))
-        elif name == SOURCE_TOOL['name']:
-            try:
-                result = read_learning_source(None, request.user, include_practice=True, **inputs.validated_data)
-            except NotFound:
-                return reply(code=-32602, message='Learning source unavailable for this grant')
-        else:
-            key = _digest(f"memory-checkpoint:{request.auth.pk}:{inputs.validated_data['request_id']}")
-            value = {'agent': request.auth.name, 'text': inputs.validated_data['text']}
-            with transaction.atomic():
-                valid = LearningMemoryGrant.objects.select_for_update().filter(
-                    pk=request.auth.pk, digest=request.auth.digest, expires_at__gt=timezone.now(),
-                    can_write=True,
-                ).first()
-                if not valid:
-                    raise AuthenticationFailed('学习记忆授权已撤销或到期。')
-                if valid.learner_id:
-                    event, _ = LearningMemoryCheckpoint.objects.get_or_create(
-                        request_key=key, defaults={'learner_id': valid.learner_id, 'content': value})
-                    source = f'checkpoint:{event.pk}'
-                else:
-                    event, _ = ProjectLearningEvent.objects.get_or_create(request_key=key, defaults={
-                        'project_id': valid.project_id, 'kind': 'agent_checkpoint', 'content': value})
-                    source = f'event:{event.pk}'
-            if event.content != value:
-                return reply(code=-32602, message='Request ID already used for different checkpoint text')
-            result = {'source': source, 'kind': 'external_self_report', 'saved_at': event.created_at}
+        if name == CHECKPOINT_TOOL['name'] and not request.headers.get('X-Trace-Id'):
+            trace_id = resolve_trace_id(None, fallback=inputs.validated_data['request_id'])
+        started_at = monotonic()
+        with observe_runtime('mcp', f'mcp:{name}:{request_id}', trace_id=trace_id, grant_id=request.auth.pk):
+            if name == RECALL_TOOL['name']:
+                project = request.auth.project
+                if project_id := inputs.validated_data.get('project_id'):
+                    if request.auth.learner_id:
+                        project = ConversationProject.objects.filter(pk=project_id, user=request.user).first()
+                    if not project or project.pk != project_id:
+                        log_ai_operation(f'mcp.{name}', False, (monotonic() - started_at) * 1000, 'permission')
+                        return reply(code=-32602, message='Project unavailable for this grant')
+                result = recall(project, request.user, inputs.validated_data['topic'], include_notes=request.auth.share_notes,
+                                include_workspace_checkpoints=bool(request.auth.learner_id))
+            elif name == SOURCE_TOOL['name']:
+                try:
+                    result = read_learning_source(None, request.user, include_practice=True, **inputs.validated_data)
+                except ValidationError:
+                    log_ai_operation(f'mcp.{name}', False, (monotonic() - started_at) * 1000, 'validation')
+                    return reply(code=-32602, message='Invalid tool arguments')
+                except NotFound:
+                    log_ai_operation(f'mcp.{name}', False, (monotonic() - started_at) * 1000, 'not_found')
+                    return reply(code=-32602, message='Learning source unavailable for this grant')
+            else:
+                key = _digest(f"memory-checkpoint:{request.auth.pk}:{inputs.validated_data['request_id']}")
+                value = {'agent': request.auth.name, 'text': inputs.validated_data['text']}
+                with transaction.atomic():
+                    valid = LearningMemoryGrant.objects.select_for_update().filter(
+                        pk=request.auth.pk, digest=request.auth.digest, expires_at__gt=timezone.now(),
+                        can_write=True,
+                    ).first()
+                    if not valid:
+                        log_ai_operation(f'mcp.{name}', False, (monotonic() - started_at) * 1000, 'auth')
+                        raise AuthenticationFailed('学习记忆授权已撤销或到期。')
+                    if valid.learner_id:
+                        event, _ = LearningMemoryCheckpoint.objects.get_or_create(
+                            request_key=key, defaults={'learner_id': valid.learner_id, 'content': value})
+                        source = f'checkpoint:{event.pk}'
+                    else:
+                        event, _ = ProjectLearningEvent.objects.get_or_create(request_key=key, defaults={
+                            'project_id': valid.project_id, 'kind': 'agent_checkpoint', 'content': value})
+                        source = f'event:{event.pk}'
+                if event.content != value:
+                    log_ai_operation(f'mcp.{name}', False, (monotonic() - started_at) * 1000, 'conflict')
+                    return reply(code=-32602, message='Request ID already used for different checkpoint text')
+                result = {'source': source, 'kind': 'external_self_report', 'saved_at': event.created_at}
+            log_ai_operation(f'mcp.{name}', True, (monotonic() - started_at) * 1000)
         _absolute_source_links(request, result)
         envelope = {'content': [{'type': 'text', 'text': dumps(result, cls=DjangoJSONEncoder, ensure_ascii=False)}]}
         if protocol != '2025-03-26':

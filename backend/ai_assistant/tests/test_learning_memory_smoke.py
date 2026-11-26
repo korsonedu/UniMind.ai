@@ -14,6 +14,84 @@ from notes.models import ConversationNoteReference, Note
 
 
 @pytest.mark.django_db
+def test_history_recall_ranks_relevant_old_messages_and_pages_within_project(settings, user):
+    from ai_assistant.services.learning_recall import recall, read_learning_source
+
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    settings.UNIMIND_LEARNING_MEMORY_CONNECTORS = True
+    user.is_member = True
+    user.save(update_fields=['is_member'])
+    bot = Bot.objects.create(name='小宇')
+    project = ConversationProject.objects.create(user=user, name='Learning history')
+    room = Conversation.objects.create(user=user, bot=bot, project=project, conversation_id=uuid4())
+    evidence = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=room.conversation_id, role='user',
+        content='Earlier note. ' * 100 + 'Audrey could not walk her dogs because of a knee injury.')
+    AIChatMessage.objects.bulk_create([AIChatMessage(user=user, bot=bot, conversation_id=room.conversation_id,
+        role='user', content=f'I walk my dogs every day, note {index}.') for index in range(9)])
+    AIChatMessage.objects.create(user=user, bot=bot, conversation_id=uuid4(), role='user',
+        content='Audrey walks her dogs. This message is outside the project.')
+    current = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=room.conversation_id, role='user',
+        content='From our earlier conversations, why could Audrey not walk her dogs?')
+    claims = {'message_id': current.pk, 'conversation_id': str(room.conversation_id), 'bot_id': bot.pk}
+    assert build_context(user, current.content, chat_context=claims, ulr=True)['routing']['initial_group'] == 'recall'
+
+    topic = 'Audrey walk my dogs'
+    first = read_learning_source(project, user, 'conversation_history', topic, current_message=current)
+    second = read_learning_source(project, user, 'conversation_history', topic, first['next_offset'], current_message=current)
+    assert recall(project, user, topic, current_message=current)['conversation'] == first['conversation']
+    best = first['conversation'][0]
+    assert best['source'] == f'message:{evidence.pk}'
+    assert best['excerpt_start'] > 800 and 'knee injury' in best['text']
+    assert len({row['source'] for row in first['conversation'] + second['conversation']}) == 10
+    assert second['next_offset'] is None
+
+
+@pytest.mark.django_db
+def test_multi_topic_history_returns_scoped_neighbors_and_unique_sources(settings, user, auth_client, django_user_model):
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    settings.UNIMIND_LEARNING_MEMORY_CONNECTORS = True
+    user.is_member = True
+    user.save(update_fields=['is_member'])
+    bot = Bot.objects.create(name='小宇')
+    project = ConversationProject.objects.create(user=user, name='Two sessions')
+
+    def room():
+        return Conversation.objects.create(user=user, bot=bot, project=project, conversation_id=uuid4()).conversation_id
+
+    first_room, second_room, blocked_room = room(), room(), room()
+
+    def message(cid, text, **kwargs):
+        return AIChatMessage.objects.create(user=user, bot=bot, conversation_id=cid, role='user', content=text, **kwargs)
+
+    nearby = message(first_room, 'I read it on Tuesday.')
+    book = message(first_room, 'We discussed the biography.')
+    trip = message(second_room, 'I mentioned the trip.')
+    place = message(second_room, 'That was in Alaska.')
+    message(blocked_room, 'The private biography and trip.', metadata={'notes_context_used': True})
+    current = message(second_room, 'From our earlier conversations, compare the biography and the trip.')
+    other = django_user_model.objects.create_user(username='foreign-history-owner')
+    AIChatMessage.objects.create(user=other, bot=bot, conversation_id=uuid4(), role='user',
+                                 content='Another biography and trip.')
+
+    claims = {'message_id': current.pk, 'conversation_id': str(second_room), 'bot_id': bot.pk}
+    context = build_context(user, current.content, chat_context=claims, ulr=True)
+    arguments = {'source': 'conversation_history', 'topics': ['biography', 'trip', 'biography trip']}
+    result = execute_tool(user, 'read_learning_source', arguments, context['memory']['version'], chat_context=claims)
+    assert result['next_offset'] is None
+    assert [row['source'] for row in result['conversation']] == [f'message:{row.pk}' for row in (nearby, book, trip, place)]
+
+    token = auth_client.post('/api/ai/learning-memory/grants/', {'name': 'history'}, format='json').data['token']
+    external = APIClient()
+    def rpc(arguments):
+        return external.post('/api/ai/learning-memory/mcp/', {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
+            'params': {'name': 'read_learning_source', 'arguments': arguments}}, format='json',
+            HTTP_AUTHORIZATION=f'Bearer {token}').json()
+
+    assert f'message:{place.pk}' in str(rpc(arguments)['result']['structuredContent'])
+    assert rpc({**arguments, 'offset': 8})['error']['code'] == -32602
+
+
+@pytest.mark.django_db
 def test_workspace_source_reads_keep_original_evidence_and_permissions(settings, user, auth_client, django_user_model):
     from courses.models import TranscriptSegment, VideoTranscript
     from quizzes.models import ExamQuestionResult, KnowledgePoint, Question, QuizExam, ReviewLog, UserQuestionStatus
