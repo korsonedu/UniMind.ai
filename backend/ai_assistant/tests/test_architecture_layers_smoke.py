@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 # legacy_name -> (subpackage, canonical_module_name)
 MIGRATED_MODULES = {
-    # L1 facts (10)
+    # L1 facts (12)
     'learning_task_evidence': ('facts', 'learning_task_evidence'),
     'diagnostic_revisions': ('facts', 'diagnostic_revisions'),
     'course_context': ('facts', 'course_context'),
@@ -17,6 +17,8 @@ MIGRATED_MODULES = {
     'teaching_sidecar': ('facts', 'teaching_sidecar'),
     'learning_tasks': ('facts', 'learning_tasks'),
     'learning_library': ('facts', 'learning_library'),
+    'learning_recall': ('facts', 'learning_recall'),
+    'chat_images': ('facts', 'chat_images'),
     # L2 state (20)
     'bayesian_evidence': ('state.bep', 'bayesian_evidence'),
     'bayesian_evaluation': ('state.bep', 'bayesian_evaluation'),
@@ -54,7 +56,7 @@ MIGRATED_MODULES = {
     'dsh_cards': ('views', 'cards'),
     'dsh_stream': ('views', 'stream'),
     'planner_visuals': ('views', 'planner_visuals'),
-    # ULR runtime spine (19)
+    # ULR runtime spine (22)
     'ulr_config': ('runtime', 'ulr_config'),
     'ulr_outbox': ('runtime', 'ulr_outbox'),
     'ulr_structured': ('runtime', 'ulr_structured'),
@@ -72,13 +74,16 @@ MIGRATED_MODULES = {
     'dsh_tasks': ('runtime', 'fixed_tasks'),
     'dsh_actions': ('runtime', 'diagnostics_actions'),
     'dsh_generation': ('runtime', 'generation_gateway'),
+    'dsh_routing': ('runtime', 'tool_routing'),
+    'dsh_service': ('runtime', 'bridge'),
+    'dsh_xiaoyu': ('runtime', 'xiaoyu_turn'),
     'chat_dispatch': ('runtime', 'chat_dispatch'),
     'exam_generator_tool_executor': ('runtime', 'exam_generator_tool_executor'),
 }
 
 
 def test_canonical_and_legacy_imports_share_identical_module_object():
-    assert len(MIGRATED_MODULES) == 63
+    assert len(MIGRATED_MODULES) == 68
     for legacy_name, (subpkg, canon_name) in MIGRATED_MODULES.items():
         canonical = importlib.import_module(f'ai_assistant.services.{subpkg}.{canon_name}')
         legacy = importlib.import_module(f'ai_assistant.services.{legacy_name}')
@@ -88,18 +93,20 @@ def test_canonical_and_legacy_imports_share_identical_module_object():
 
 
 def test_patch_on_legacy_alias_targets_canonical_module():
-    from ai_assistant.services.runtime import ulr_config as canonical_config
+    from ai_assistant.services.runtime import bridge as canonical_bridge, ulr_config as canonical_config
     from ai_assistant.services.views import cards as canonical_cards
     with patch('ai_assistant.services.ulr_config.ulr_enabled', return_value=True):
         assert canonical_config.ulr_enabled() is True
     with patch('ai_assistant.services.dsh_cards.build_tool_card', return_value={'ok': True}):
         assert canonical_cards.build_tool_card('x', {}) == {'ok': True}
+    with patch('ai_assistant.services.dsh_service.permitted_tools', return_value=[]):
+        assert canonical_bridge.permitted_tools(None, None) == []
 
 
 def test_teaching_sidecar_hashes_real_canonical_source_bytes():
     from ai_assistant.services.facts import teaching_sidecar
     from ai_assistant.services.decision import project_learning
-    from ai_assistant.services.runtime import fixed_tasks
+    from ai_assistant.services.runtime import bridge, fixed_tasks
     from ai_assistant.services.state.prism import prism_kernel
 
     for rel, mod in (
@@ -107,6 +114,7 @@ def test_teaching_sidecar_hashes_real_canonical_source_bytes():
         ('ai_assistant/services/teaching_sidecar.py', teaching_sidecar),
         ('ai_assistant/services/project_learning.py', project_learning),
         ('ai_assistant/services/dsh_tasks.py', fixed_tasks),
+        ('ai_assistant/services/dsh_service.py', bridge),
     ):
         real_bytes = Path(mod.__file__).read_bytes()
         assert teaching_sidecar._source_bytes(rel) == real_bytes
