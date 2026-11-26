@@ -4,12 +4,16 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useDesktopStore, type DesktopState } from '@/lib/desktop';
+import { getApiBaseUrl } from '@/lib/serverConfig';
+
+type WebsiteUpdate = { version: string; prerelease: boolean; url?: string };
 
 export function DesktopSettings({ section = 'all' }: { section?: 'all' | 'general' | 'notifications' | 'storage' | 'updates' | 'shortcuts' }) {
   useLocale();
   const { state, error } = useDesktopStore();
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
+  const [websiteResult, setWebsiteResult] = useState<WebsiteUpdate | 'current' | null>(null);
   const desktop = window.unimindDesktop;
   if (!desktop) return null;
   const run = async (key: string, action: () => Promise<DesktopState | void>) => {
@@ -21,6 +25,28 @@ export function DesktopSettings({ section = 'all' }: { section?: 'all' | 'genera
   };
   if (!state) return <div className="um-settings-empty"><p role="status">{error ? t(error) : t('正在读取桌面设置…')}</p>{error && <Button variant="outline" disabled={!!busy} onClick={() => void run('sync', desktop.syncIdentity)}>{t('重试')}</Button>}</div>;
   const updateLabels = { unconfigured: t('发布源未配置'), idle: t('可以检查更新'), checking: t('正在检查更新…'), available: t('发现新版本'), downloading: t('正在下载更新…'), downloaded: t('更新已准备好'), error: t('更新检查失败') };
+  const checkWebsite = state.update.status === 'unconfigured';
+  const websiteUpdate = checkWebsite && typeof websiteResult === 'object' ? websiteResult : null;
+  const checkForUpdates = async () => {
+    if (!checkWebsite) return desktop.checkForUpdates();
+    setWebsiteResult(null);
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/desktop-release/`, { cache: 'no-store' });
+      if (!response.ok) throw new Error();
+      const release: { version: string; prerelease: boolean; packages: { mac?: string; windows?: string } } = await response.json();
+      const installed = state.version.match(/^(\d+\.\d+\.\d+)(-[\w.-]+)?(?:\+[\w.-]+)?$/);
+      if (!installed || !/^\d+\.\d+\.\d+$/.test(release.version)) throw new Error();
+      const order = release.version.localeCompare(installed[1], 'en', { numeric: true });
+      if (order < 0 || (order === 0 && !installed[2])) {
+        setWebsiteResult('current');
+        return;
+      }
+      const url = state.platform === 'darwin' ? release.packages.mac : state.platform === 'win32' ? release.packages.windows : undefined;
+      setWebsiteResult({ version: release.version, prerelease: release.prerelease, url });
+    } catch {
+      throw new Error('更新检查失败');
+    }
+  };
   const usedBytes = state.storage?.usedBytes ?? 0;
   const storageLabel = usedBytes >= 1024 ** 3 ? `${(usedBytes / 1024 ** 3).toFixed(1)} GB` : `${(usedBytes / 1024 ** 2).toFixed(1)} MB`;
   const focusLabel = state.focus ? `${Math.floor(state.focus.remaining / 60)}:${String(state.focus.remaining % 60).padStart(2, '0')}` : '';
@@ -79,7 +105,27 @@ export function DesktopSettings({ section = 'all' }: { section?: 'all' | 'genera
     </>}
     {(section === 'all' || section === 'updates') && <>
     <h3 className="um-settings-group-title">{t('版本与更新')}</h3>
-    <section className="um-settings-group"><div className="um-settings-row"><div><span>{t('客户端版本')} {state.version}</span>{!['unconfigured', 'idle'].includes(state.update.status) && <p>{t(updateLabels[state.update.status])}{state.update.version ? ` · ${state.update.version}` : ''}</p>}{state.update.status === 'error' && state.update.error && <p>{t(state.update.error)}</p>}</div>{state.update.status === 'downloaded' ? <Button disabled={!!busy} onClick={() => void run('install', desktop.installUpdate)}>{t('重启并更新')}</Button> : <Button variant="outline" disabled={!!busy || ['unconfigured', 'checking', 'available', 'downloading'].includes(state.update.status)} onClick={() => void run('update', desktop.checkForUpdates)}>{t('检查更新')}</Button>}</div></section>
+    <section className="um-settings-group">
+      <div className="um-settings-row">
+        <div>
+          <span>{t('客户端版本')} {state.version}</span>
+          {!['unconfigured', 'idle'].includes(state.update.status) && <p role="status">{updateLabels[state.update.status]}{state.update.version ? ` · ${state.update.version}` : ''}</p>}
+          {state.update.status === 'error' && state.update.error && <p>{t(state.update.error)}</p>}
+          {checkWebsite && busy === 'update' && <p role="status">{t('正在检查更新…')}</p>}
+          {checkWebsite && websiteResult === 'current' && <p role="status">{t('当前已是最新版')}</p>}
+          {websiteUpdate && <>
+            <p role="status">{t('发现新版本')} · {websiteUpdate.version}{websiteUpdate.prerelease && t(' · 预发布版')}</p>
+            <p>{websiteUpdate.url ? t('下载后请退出 App 并手动安装。') : t('暂无对应安装包')}</p>
+          </>}
+        </div>
+        <div className="um-desktop-actions">
+          {websiteUpdate?.url && <Button asChild><a href={websiteUpdate.url} download>{t('下载新版')}</a></Button>}
+          {state.update.status === 'downloaded'
+            ? <Button disabled={!!busy} onClick={() => void run('install', desktop.installUpdate)}>{t('重启并更新')}</Button>
+            : <Button variant="outline" disabled={!!busy || ['checking', 'available', 'downloading'].includes(state.update.status)} onClick={() => void run('update', checkForUpdates)}>{t('检查更新')}</Button>}
+        </div>
+      </div>
+    </section>
     </>}
   </>;
 }
