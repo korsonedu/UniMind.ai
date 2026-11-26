@@ -1,5 +1,6 @@
 """Observational RSI sidecar. No candidate activation or teaching-effect claims."""
 import hashlib
+import importlib
 import json
 import logging
 from pathlib import Path
@@ -15,6 +16,7 @@ from ai_assistant.models import (
     LearningStrategyUse, LearningStrategyVersion, ProjectLearningEvent,
     TeachingMechanismVersion,
 )
+from ai_engine.observability import current_trace_id, normalize_trace_id
 
 logger = logging.getLogger(__name__)
 SCHEMA = 'rsi-sidecar-6ab-v1'
@@ -64,6 +66,18 @@ def register_mechanism(kind, content, *, owner=None, parent=None):
     return _store_mechanism(kind, content, owner, parent)
 
 
+def _source_bytes(rel_path):
+    file_path = Path(settings.BASE_DIR) / rel_path
+    data = file_path.read_bytes()
+    if rel_path.endswith('.py') and b'sys.modules[__name__] = _impl' in data:
+        module_name = rel_path[:-3].replace('/', '.')
+        mod = importlib.import_module(module_name)
+        mod_file = getattr(mod, '__file__', None)
+        if mod_file:
+            return Path(mod_file).read_bytes()
+    return data
+
+
 def current_bundle():
     from ai_engine.config import get_model_for_task
     models = {key: get_model_for_task(operation)['model'] for key, operation in
@@ -77,7 +91,7 @@ def current_bundle():
                      'ai_assistant/services/prism_outcomes.py']
         content = {'schema': SCHEMA, 'role': 'reserved_not_running' if kind == 'M' else 'existing_runtime_descriptor',
                    'selection': 'model_directed_nonrandom' if kind == 'S' else None,
-                   'sources': {path: hashlib.sha256((Path(settings.BASE_DIR) / path).read_bytes()).hexdigest()
+                   'sources': {path: hashlib.sha256(_source_bytes(path)).hexdigest()
                                for path in paths},
                    'models': models, 'provider_weights_pinned': False, 'candidate_activation': False}
         if kind == 'M' and prism_mode != 'off':
@@ -90,6 +104,16 @@ def current_bundle():
     return bundle
 
 
+def _message_trace_id(*messages):
+    for msg in messages:
+        meta = getattr(msg, 'metadata', None) if msg is not None else None
+        if isinstance(meta, dict):
+            trace_id = normalize_trace_id(meta.get('trace_id') or meta.get('runtime_request_id'))
+            if trace_id:
+                return trace_id
+    return current_trace_id()
+
+
 def freeze_turn(project, message, snapshot):
     if message.user_id != project.user_id or message.role != 'user' or not Conversation.objects.filter(
             user_id=project.user_id, project=project, conversation_id=message.conversation_id).exists():
@@ -100,9 +124,11 @@ def freeze_turn(project, message, snapshot):
             conversation_id=message.conversation_id, role='assistant',
             metadata__learning_turn__message_id=message.pk).exists():
         return None  # Do not instrument an already completed historical turn retroactively.
+    trace_id = _message_trace_id(message)
     frozen = {'schema': SCHEMA, 'mode': 'observational', 'project_id': project.pk,
               'bundle': current_bundle(), 'context_hash': canonical_hash(snapshot),
-              'frozen_at': timezone.now().isoformat()}
+              'frozen_at': timezone.now().isoformat(),
+              **({'trace_id': trace_id} if trace_id else {})}
     message.metadata['rsi_sidecar'] = frozen
     message.save(update_fields=['metadata'])
     return frozen
@@ -147,6 +173,7 @@ def record_strategy_use(use, *, created):
     for strategy in candidates:
         candidate = ensure_method_version(strategy)
         eligible.append({'strategy_id': strategy.pk, 'version_id': candidate.pk, 'digest': candidate.digest})
+    trace_id = normalize_trace_id((frozen or {}).get('trace_id')) or _message_trace_id(use.message)
     use.method_version = version
     use.decision = {'schema': SCHEMA, 'status': 'observed' if frozen else 'unobserved_turn',
                     'decision_id': use.pk,
@@ -155,7 +182,8 @@ def record_strategy_use(use, *, created):
                     'model_visible_candidate_set': 'not_inferred_from_eligibility',
                     'selected_version_id': version.pk, 'selected_digest': version.digest,
                     'prediction': None, 'prediction_status': 'not_recorded',
-                    'assigned_at': use.created_at.isoformat()}
+                    'assigned_at': use.created_at.isoformat(),
+                    **({'trace_id': trace_id} if trace_id else {})}
     from .memory_core import prism_active
     if prism_active():
         from .prism_memory import context
@@ -196,11 +224,13 @@ def record_turn_completion(reply):
         return
     from .learning_library import unconfirmed_strategy_use_ids
     uses = LearningStrategyUse.objects.filter(message=trigger, project__user_id=reply.user_id)
+    trace_id = _message_trace_id(reply, trigger)
     for use in uses.exclude(pk__in=unconfirmed_strategy_use_ids(reply.user_id, uses)):
         if use.decision and use.exposure.get('status') == 'assigned':
             use.exposure = {'status': 'reply_completed', 'adherence': 'unverified',
                 'reply_id': reply.pk, 'reply_hash': canonical_hash(reply.content),
-                'completed_at': turn.get('completed_at'), 'saved_at': reply.timestamp.isoformat()}
+                'completed_at': turn.get('completed_at'), 'saved_at': reply.timestamp.isoformat(),
+                **({'trace_id': trace_id} if trace_id else {})}
             use.save(update_fields=['exposure'])
 
 
@@ -266,6 +296,11 @@ def record_task_outcome(task, result, event):
         reasons.append('overlapping_methods')
     if not use.decision or use.decision.get('status') != 'observed':
         reasons.append('unobserved_assignment')
+    outcome_trace_id = (
+        normalize_trace_id((use.decision or {}).get('trace_id'))
+        or normalize_trace_id((use.exposure or {}).get('trace_id'))
+        or _message_trace_id(reply, use.message)
+    )
     snapshot = {**expected, 'schema': SCHEMA, 'use_id': use.pk, 'result_id': result.pk,
                 'method_version_id': use.method_version_id, 'purpose': task.purpose,
                 'question_hash': expected['question_hash'], 'assistance_source': 'submission_report',
@@ -273,6 +308,7 @@ def record_task_outcome(task, result, event):
                 'timing_verified': timing, 'repeated': repeated, 'overlapping_methods': overlaps,
                 'status': 'uncertain' if reasons else 'independent_reported_observation',
                 'reasons': reasons, 'causal_claim': False, 'independent_label_verified': False,
-                'exposure': use.exposure, 'graded_at': result.graded_at.isoformat() if result.graded_at else None}
+                'exposure': use.exposure, 'graded_at': result.graded_at.isoformat() if result.graded_at else None,
+                **({'trace_id': outcome_trace_id} if outcome_trace_id else {})}
     LearningStrategyOutcome.objects.get_or_create(use=use, result=result,
         defaults={'task': task, 'event': event, 'snapshot': snapshot})

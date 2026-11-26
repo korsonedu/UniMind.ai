@@ -20,7 +20,7 @@ from ai_assistant.services.title_generator import schedule_conversation_title, s
 from ai_assistant.services.memory_service import extract_memories_async
 from ai_assistant.views_projects import save_new_conversation_project, learning_activity_metadata
 from ai_engine import AIExecutionCancelled
-from ai_engine.observability import runtime_observation
+from ai_engine.observability import normalize_trace_id, resolve_trace_id, runtime_observation
 from notes.context import prepare_note_context, conversation_uses_notes
 from notes.awareness import note_message_metadata
 from core.interface_language import ui_text, error_text
@@ -31,6 +31,7 @@ from .dsh_stream import action_events
 from .course_context import (
     course_context_text, course_visual_messages, require_current_transcript_sources, transcript_source,
 )
+from .chat_images import chat_image_messages, prepare_chat_images
 from .external_video_context import external_video_context_text, external_video_visual_messages
 from .ulr_config import standalone_ulr
 
@@ -78,14 +79,15 @@ def task_message(user, claims, message):
 
 def task_course_visual(user, claims, message):
     current = task_message(user, claims, message)
+    user_images = chat_image_messages(current.metadata.get('chat_images'))
     course = current.metadata.get('course_context')
     if not course:
-        return external_video_visual_messages(current.metadata.get('external_video_context'))
+        return [*external_video_visual_messages(current.metadata.get('external_video_context')), *user_images]
     if not course.get('visual'):
-        return []
+        return user_images
     # Recheck course access before returning any saved pixels to the runtime.
     course_context_text(SimpleNamespace(user=user, query_params={}), course)
-    return course_visual_messages(course)
+    return [*course_visual_messages(course), *user_images]
 
 
 def task_context_data(user, claims, message, *, history_limit, reauthorize=False):
@@ -146,6 +148,14 @@ def task_context(user, claims, message):
     return format_task_context(data)
 
 
+def _request_trace_id(request, *, fallback=None):
+    headers = getattr(request, 'headers', None)
+    header_trace = headers.get('X-Trace-Id') if headers and hasattr(headers, 'get') else None
+    data = getattr(request, 'data', None)
+    data_trace = data.get('trace_id') if isinstance(data, dict) else None
+    return resolve_trace_id(header_trace or data_trace, fallback=fallback)
+
+
 def complete_turn(request, bot, conversation_id, message, emit, *, course_context=None, external_video_context=None, ulr=False):
     from ai_assistant.views import _chat_request_fingerprint, _reserve_chat_request
     user = request.user
@@ -177,8 +187,14 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                 raise ConversationDeleted()
             return reservation.response
         current = None
-        observation = runtime_observation.set({'runtime': 'ulr' if ulr else 'dsh',
-            'request_id': reservation.request_id, 'attempt_id': reservation.attempt_id})
+        trace_id = _request_trace_id(request, fallback=reservation.request_id)
+        obs_state = {
+            'runtime': 'ulr' if ulr else 'dsh',
+            'request_id': reservation.request_id,
+            'attempt_id': reservation.attempt_id,
+            'trace_id': trace_id,
+        }
+        observation = runtime_observation.set(obs_state)
         try:
             with quota_write_lock(), transaction.atomic():
                 conversations.select_for_update().exists()
@@ -188,17 +204,23 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                     raise ConversationDeleted()
                 current = AIChatMessage.objects.filter(user=user, bot=bot, conversation_id=conversation_id,
                     role='user', metadata__runtime_request_id=str(reservation.request_id)).first()
+                if current and (existing_trace := normalize_trace_id(current.metadata.get('trace_id'))):
+                    trace_id = existing_trace
+                    obs_state['trace_id'] = trace_id
                 if not current:
                     save_new_conversation_project(request, bot, conversation_id)
                 notes, sources = prepare_note_context(user, bot, conversation_id, message,
                     request.data.get('note_ids'), request.data.get('note_selection', ''))
                 metadata = {**note_message_metadata(notes, sources, request.data.get('note_selection', '')),
                             **learning_activity_metadata(request, conversation_id), 'ui_language': request_language(request),
-                            'runtime_request_id': str(reservation.request_id)}
+                            'runtime_request_id': str(reservation.request_id), 'trace_id': trace_id}
                 if course_context:
                     metadata['course_context'] = course_context
                 if external_video_context:
                     metadata['external_video_context'] = external_video_context
+                chat_images = prepare_chat_images(request.data.get('images'))
+                if chat_images:
+                    metadata['chat_images'] = chat_images
                 if current:
                     current.metadata = metadata
                     current.save(update_fields=['metadata'])
@@ -271,7 +293,7 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                     session = runtime_session
                     metadata = {'engine': 'dsh', 'dsh_session_id': session['id']}
             from .project_learning import completed_learning_turn
-            metadata.update(dsh_cards=cards, learning_turn=completed_learning_turn(current.pk))
+            metadata.update(dsh_cards=cards, learning_turn=completed_learning_turn(current.pk), trace_id=trace_id)
             if course_context:
                 metadata['course_context'] = course_context
             if external_video_context:
@@ -332,7 +354,7 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                 conversations.update(title=title, updated_at=timezone.now())
                 payload = {'done': True, 'full_content': content, 'message_id': answer.pk,
                     'user_message': user_event, 'conversation_title': title, 'metadata': metadata,
-                    'engine': metadata['engine']}
+                    'engine': metadata['engine'], 'trace_id': trace_id}
                 if ulr:
                     payload.update(conversation_id=str(conversation_id), request_id=str(reservation.request_id))
                 if session:
@@ -404,7 +426,13 @@ def polling_response(request, bot, conversation_id, message, *, course_context=N
     data = request.data.copy()
     if not data.get('request_id'):
         data['request_id'] = str(uuid4())
-    request = SimpleNamespace(user=request.user, data=data, ui_language=request_language(request))
+    trace_id = _request_trace_id(request, fallback=data['request_id'])
+    request = SimpleNamespace(
+        user=request.user,
+        data=data,
+        ui_language=request_language(request),
+        headers={'X-Trace-Id': trace_id},
+    )
     ready = Future()
     identifiers = {'request_id': str(data['request_id']), 'conversation_id': str(conversation_id)}
 
@@ -427,8 +455,10 @@ def polling_response(request, bot, conversation_id, message, *, course_context=N
             connections.close_all()
 
     _THREAD_POOL.submit(work)
-    result = Response(ready.result())
+    body = ready.result()
+    result = Response(body)
     result['Cache-Control'] = 'no-store'
+    result['X-Trace-Id'] = body.get('trace_id') or trace_id
     return result
 
 
@@ -498,6 +528,12 @@ def response(request, bot, conversation_id, message, *, course_context=None, ext
     result = StreamingHttpResponse(events(), content_type='text/event-stream')
     result['Cache-Control'] = 'no-store'
     result['X-Accel-Buffering'] = 'no'
+    if stream_trace := normalize_trace_id(
+        (getattr(request, 'headers', None) or {}).get('X-Trace-Id')
+        or (request.data.get('trace_id') if isinstance(getattr(request, 'data', None), dict) else None)
+        or (request.data.get('request_id') if isinstance(getattr(request, 'data', None), dict) else None)
+    ):
+        result['X-Trace-Id'] = stream_trace
     return result
 
 

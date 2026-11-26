@@ -153,8 +153,13 @@ def sync_generate_title(conversation_id, user_id, bot_id, *, expected_title='', 
             f"{instruction}"
         )
 
+        trace_id = (
+            (assistant_msg.metadata or {}).get('trace_id')
+            or (user_msg.metadata or {}).get('trace_id')
+            or (user_msg.metadata or {}).get('runtime_request_id')
+        )
         with observe_background('ulr' if ulr else 'legacy', f'title:{assistant_msg.conversation_id}',
-                                source_message_id=user_msg.pk, answer_message_id=assistant_msg.pk):
+                                trace_id=trace_id, source_message_id=user_msg.pk, answer_message_id=assistant_msg.pk):
             if ulr:
                 from .dsh_tasks import TITLE_SCHEMA
                 from .ulr_structured import run_collector

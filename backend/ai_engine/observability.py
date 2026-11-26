@@ -10,11 +10,61 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 runtime_observation = ContextVar('runtime_observation', default={})
+_TRACE_ID_MAX_LEN = 128
+
+
+def normalize_trace_id(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or len(text) > _TRACE_ID_MAX_LEN:
+        return None
+    if any(ord(ch) <= 32 or ord(ch) >= 127 for ch in text):
+        return None
+    return text
+
+
+def current_trace_id() -> Optional[str]:
+    current = runtime_observation.get()
+    if not isinstance(current, dict):
+        return None
+    return normalize_trace_id(current.get('trace_id'))
+
+
+def resolve_trace_id(explicit: Any = None, *, fallback: Any = None) -> str:
+    for candidate in (explicit, current_trace_id(), fallback):
+        normalized = normalize_trace_id(candidate)
+        if normalized:
+            return normalized
+    return str(uuid4())
 
 
 @contextmanager
-def observe_background(runtime, request_id, **source):
-    token = runtime_observation.set({**source, 'runtime': runtime, 'request_id': request_id, 'attempt_id': uuid4()})
+def observe_runtime(runtime, request_id, *, trace_id=None, attempt_id=None, **source):
+    resolved_trace = resolve_trace_id(trace_id, fallback=request_id)
+    token = runtime_observation.set({
+        **source,
+        'runtime': runtime,
+        'request_id': request_id,
+        'attempt_id': attempt_id or uuid4(),
+        'trace_id': resolved_trace,
+    })
+    try:
+        yield resolved_trace
+    finally:
+        runtime_observation.reset(token)
+
+
+@contextmanager
+def observe_background(runtime, request_id, *, trace_id=None, **source):
+    resolved_trace = resolve_trace_id(trace_id, fallback=request_id)
+    token = runtime_observation.set({
+        **source,
+        'runtime': runtime,
+        'request_id': request_id,
+        'attempt_id': uuid4(),
+        'trace_id': resolved_trace,
+    })
     try:
         yield
     finally:
@@ -117,7 +167,7 @@ def record_schema_event(
     _safe_incr(f'{base}:total')
     _safe_incr(f'{base}:success' if success else f'{base}:fail')
 
-    meta = _as_text_dict(metadata)
+    meta = {**_as_text_dict(runtime_observation.get()), **_as_text_dict(metadata)}
     if detail:
         meta['detail'] = str(detail)
 
