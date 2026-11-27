@@ -104,10 +104,7 @@
 .um-learning-dialog :is(.um-agent-button-primary, label, summary) { font-weight: 500; }
 
 .um-learning-preferences { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-top: 16px; }
-.um-learning-preferences label, .um-agent-project-dialog .um-project-mode label {
+.um-learning-preferences label {
   display: inline-flex; align-items: center; gap: 10px;
 }
 .um-agent-project-dialog h2 + .sr-only + form { margin-top: 20px; }
-.um-project-mode legend { margin-bottom: 8px; font-weight: 500; }
-.um-project-mode label { margin-inline-end: 20px; }
-.um-agent-project-dialog .um-project-mode input { width: 16px; height: 16px; padding: 0; accent-color: var(--um-color-accent); }
