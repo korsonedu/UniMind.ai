@@ -1,5 +1,7 @@
 from core.utils import apply_institution_filter, get_content_institution_id, get_user_content_institution_id
+from django.db.models import Exists, OuterRef
 from rest_framework.permissions import BasePermission
+from users.permissions import IsMember
 
 from .models import Course
 
@@ -23,16 +25,51 @@ class HasFullCourseAccess(BasePermission):
 
 
 def visible_courses(request):
+    return visible_courses_for(request.user, request)
+
+
+def visible_courses_for(user, request=None):
     """课程学员可读本平台全课，注册学生仅可读明确开放的模块。"""
     from users.workspaces.access import membership_for, active_course_ids
-    member = membership_for(request.user)
+    member = membership_for(user)
     if member:
         return Course.objects.filter(is_published=True, pk__in=active_course_ids(member))
-    courses = apply_institution_filter(Course.objects.filter(is_published=True), request.user, request).filter(
+    courses = apply_institution_filter(Course.objects.filter(is_published=True), user, request).filter(
         workspace_content__isnull=True, institution__learning_workspace__isnull=True)
-    if not has_full_course_access(request.user):
+    if not has_full_course_access(user):
         courses = courses.filter(module__is_public=True, module__institution_id=get_content_institution_id())
     return courses
+
+
+def private_companion_courses(user, project_id=None):
+    if not user.is_authenticated or not user.is_active:
+        return Course.objects.none()
+    from ai_assistant.models import ProjectSource
+    sources = ProjectSource.objects.filter(
+        companion_course_id=OuterRef('pk'), file=OuterRef('video_file'),
+        user=user, project__user=user, source_type=ProjectSource.Type.UPLOADED_MEDIA,
+    )
+    if project_id is not None:
+        sources = sources.filter(project_id=project_id)
+    return Course.objects.filter(is_workbench_companion=True, is_published=False, author=user).filter(Exists(sources))
+
+
+def project_station_courses(request, project_id, course_id):
+    from ai_assistant.models import ProjectSource
+    if not ProjectSource.objects.filter(
+        project_id=project_id, project__user=request.user, user=request.user,
+        source_type=ProjectSource.Type.COURSE, course_id=course_id,
+    ).exists():
+        return Course.objects.none()
+    return visible_courses(request).filter(pk=course_id)
+
+
+class CanReadCourse(IsMember):
+    def has_permission(self, request, view):
+        return super().has_permission(request, view) or (
+            request.method in ('GET', 'HEAD')
+            and private_companion_courses(request.user).filter(pk=view.kwargs['pk']).exists()
+        )
 
 
 def course_list_queryset(queryset, request):

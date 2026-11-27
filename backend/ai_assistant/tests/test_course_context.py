@@ -225,3 +225,40 @@ def test_selected_window_does_not_use_transcript_end_as_video_duration(user, les
     request = question(user, course, position=position)
     context = prepare_course_context(request, bot, request.data['conversation_id'])
     assert (context['selected_start_seconds'], context['selected_end_seconds']) == window
+
+
+@pytest.mark.django_db
+def test_private_companion_context_uses_the_conversations_owned_project(user, lesson):
+    from ai_assistant.models import Conversation, ConversationProject, ProjectSource
+    from ai_assistant.services.course_context import course_context_text
+
+    _, _, bot = lesson
+    project = ConversationProject.objects.create(user=user, name='上传视频')
+    unrelated_project = ConversationProject.objects.create(user=user, name='另一项目')
+    course = Course.objects.create(title='私有视频', author=user, is_workbench_companion=True,
+                                   is_published=False, video_file='workbench/private.mp4')
+    source = ProjectSource.objects.create(project=project, user=user, source_type='uploaded_media',
+                                          companion_course=course, file=course.video_file.name)
+    transcript = VideoTranscript.objects.create(course=course, asr_status='completed')
+    TranscriptSegment.objects.create(transcript=transcript, index=0, start_time=10, end_time=20, text='私有讲稿')
+
+    request = question(user, course, position=12.5)
+    cid = request.data['conversation_id']
+    with pytest.raises(NotFound):
+        prepare_course_context(request, bot, cid)
+    request.data['project_id'] = project.pk
+    context = prepare_course_context(request, bot, cid)
+    assert context['workbench_project'] == project.pk
+    assert context['video_seconds'] == 12.5
+    assert '私有讲稿' in course_context_text(request, context)
+
+    conversation = Conversation.objects.create(user=user, bot=bot, project=unrelated_project, conversation_id=cid)
+    with pytest.raises(NotFound):
+        prepare_course_context(request, bot, cid)
+    conversation.project = project
+    conversation.save(update_fields=['project'])
+    del request.data['project_id']
+    assert prepare_course_context(request, bot, cid) == context
+    ProjectSource.objects.filter(pk=source.pk).update(companion_course=None)
+    with pytest.raises(NotFound):
+        course_context_text(request, context)

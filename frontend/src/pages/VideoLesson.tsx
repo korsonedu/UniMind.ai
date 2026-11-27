@@ -6,6 +6,7 @@ import type { Course } from '@/types/api';
 import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { Play, Pause, Star, FileText, Download, ArrowsOut, ArrowsIn, ClosedCaptioning, SpeakerHigh, SpeakerX } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
@@ -14,6 +15,9 @@ import { OutlinePanel } from '@/components/course/OutlinePanel';
 import { SubtitlesOverlay } from '@/components/course/SubtitlesOverlay';
 import { CourseChatPanel } from '@/components/course/CourseChatPanel';
 import ProjectCourseChat from '@/components/course/ProjectCourseChat';
+import { CourseWorkbenchToolbar } from '@/components/course/CourseWorkbenchToolbar';
+import { companionProjectId, companionSeconds } from '@/lib/companionVideo';
+import { isPersonalWorkspace } from '@/lib/workbenchMode';
 import { toast } from 'sonner';
 import { shouldTogglePlayback } from './videoLessonKeyboard';
 import { useLearningSession } from '@/hooks/useLearningSession';
@@ -28,28 +32,35 @@ const formatTime = (s: number) => {
 };
 
 interface VideoLessonProps {
+  workbenchVideo?: boolean;
+  missingCourse?: React.ReactNode;
   isFavorite?: boolean;
   favoritePending?: boolean;
   onFavoriteChange?: () => void;
 }
 
-export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, favoritePending = false, onFavoriteChange }) => {
+export const VideoLesson: React.FC<VideoLessonProps> = ({
+  workbenchVideo = false, missingCourse, isFavorite = false, favoritePending = false, onFavoriteChange,
+}) => {
   useLocale();
   const hasCourseCatalog = useInstitutionStore(state => state.hasCourseCatalog);
   const { id } = useParams();
   const { key: locationKey } = useLocation();
   const [searchParams] = useSearchParams();
-  const linkedPosition = searchParams.get('t');
-  const requestedSeconds = linkedPosition?.trim() ? Number(linkedPosition) : Number.NaN;
-  const linkedSeconds = Number.isFinite(requestedSeconds) && requestedSeconds >= 0 ? requestedSeconds : null;
+  const linkedSeconds = companionSeconds(searchParams);
+  const personal = isPersonalWorkspace();
   const requestedProject = Number(searchParams.get('project'));
-  const projectId = Number.isSafeInteger(requestedProject) && requestedProject > 0 ? requestedProject : null;
+  const projectId = personal ? companionProjectId(searchParams)
+    : Number.isSafeInteger(requestedProject) && requestedProject > 0 ? requestedProject : null;
+  const workbenchProject = workbenchVideo ? projectId : null;
   const linkedConversation = searchParams.get('conversation') || undefined;
   const userId = useAuthStore(s => s.user?.id);
   const desktopState = useDesktopStore(s => s.state);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoContainerRef = useRef<HTMLDivElement | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
+  const privateCompanion = workbenchVideo && course?.is_workbench_companion === true;
+  const appliedPosition = useRef('');
   const renewedPlayback = useRef<{ time: number; playing: boolean } | null>(null);
   const media = useProtectedMedia(course?.video_file, () => {
     const video = videoRef.current;
@@ -64,6 +75,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     if (result.isError) { renewedPlayback.current = null; toast.error(t('视频授权更新失败，请重新打开课程')); }
   };
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [completionSaved, setCompletionSaved] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -113,11 +125,11 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   useEffect(() => {
     if (projectId && sidebarReady && !window.matchMedia('(max-width: 767px)').matches) openProjectChat();
   }, [projectId, sidebarReady, openProjectChat]);
-  useLearningSession({ enabled: !loading && course?.id === courseId && !!course.video_file, kind: 'video', courseId, videoRef });
+  useLearningSession({ enabled: !privateCompanion && !loading && course?.id === courseId && !!course.video_file, kind: 'video', courseId, videoRef });
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !course?.video_file) return;
+    if (privateCompanion || !video || !course?.video_file) return;
     let lastTick = performance.now();
     let watched = 0;
     let saving = false;
@@ -148,7 +160,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     const clock = window.setInterval(tick, 1000);
     const save = window.setInterval(() => { void flush(); }, 10000);
     return () => { clearInterval(clock); clearInterval(save); video.removeEventListener('play', syncPosition); video.removeEventListener('seeking', syncPosition); video.removeEventListener('pause', onPause); void flush(); };
-  }, [courseId, course?.video_file, loading]);
+  }, [courseId, course?.video_file, loading, privateCompanion]);
 
   const SPEEDS = [1, 1.25, 1.5, 2];
 
@@ -253,19 +265,30 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
       try {
         setLoading(true);
         setCourse(null);
+        setNotFound(false);
         setCompletionSaved(false);
         setVideoAspectRatio(16 / 9);
-        const res = await api.get(`/courses/${courseId}/`, { signal: controller.signal });
-        setCourse(res.data);
-      } catch (e) { if (!controller.signal.aborted) console.error('fetchCourse failed', e); }
+        const res = await api.get<Course>(`/courses/${courseId}/`, {
+          signal: controller.signal,
+          params: workbenchProject === null ? undefined : { workbench_project: workbenchProject },
+        });
+        if (controller.signal.aborted) return;
+        if (personal && res.data.is_workbench_companion && workbenchProject === null) setNotFound(true);
+        else setCourse(res.data);
+      } catch (e) {
+        if (!controller.signal.aborted) {
+          if (personal && isAxiosError(e) && [403, 404].includes(e.response?.status ?? 0)) setNotFound(true);
+          else console.error('fetchCourse failed', e);
+        }
+      }
       finally { if (!controller.signal.aborted) setLoading(false); }
     };
     fetchData();
     return () => controller.abort();
-  }, [courseId]);
+  }, [courseId, workbenchProject, personal]);
 
   const handleVideoEnd = async () => {
-    if (completionSaved) return;
+    if (privateCompanion || completionSaved) return;
     try {
       await api.post(`/courses/${courseId}/progress/`, { is_finished: true });
       setCompletionSaved(true);
@@ -290,10 +313,23 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     setCurrentTime(seconds);
   }, []);
 
+  const applyLinkedPosition = useCallback((video: HTMLVideoElement) => {
+    if (linkedSeconds === null) return false;
+    if (personal) {
+      if (appliedPosition.current === locationKey) return false;
+      appliedPosition.current = locationKey;
+      seekTo(Number.isFinite(video.duration) ? Math.min(linkedSeconds, video.duration) : linkedSeconds);
+    } else {
+      if (!(linkedSeconds < video.duration)) return false;
+      seekTo(linkedSeconds);
+    }
+    return true;
+  }, [linkedSeconds, locationKey, personal, seekTo]);
+
   useEffect(() => {
     const video = videoRef.current;
-    if (video?.readyState && linkedSeconds !== null && linkedSeconds < video.duration) seekTo(linkedSeconds);
-  }, [linkedSeconds, locationKey, seekTo]);
+    if (video?.readyState && (!personal || !renewedPlayback.current)) applyLinkedPosition(video);
+  }, [applyLinkedPosition, personal]);
 
   const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     const video = e.currentTarget;
@@ -304,15 +340,12 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     const restored = renewedPlayback.current;
     if (restored) {
       renewedPlayback.current = null;
-      seekTo(restored.time);
+      if (!personal || !applyLinkedPosition(video)) seekTo(restored.time);
       if (restored.playing) void video.play().catch(() => toast(t('点击播放继续观看')));
       return;
     }
-    if (Number.isFinite(dur) && dur > 0) api.post(`/courses/${courseId}/progress/`, { duration: dur }).catch(() => {});
-    if (linkedSeconds !== null && linkedSeconds < dur) {
-      seekTo(linkedSeconds);
-      return;
-    }
+    if (!privateCompanion && Number.isFinite(dur) && dur > 0) api.post(`/courses/${courseId}/progress/`, { duration: dur }).catch(() => {});
+    if (applyLinkedPosition(video) || (personal && linkedSeconds !== null)) return;
     // 续播：从上次位置继续（已完成、接近开头或结尾则不跳）
     const p = course?.progress;
     if (p && !p.is_finished && p.last_position > 10 && dur > 0 && p.last_position < dur - 10) {
@@ -330,17 +363,27 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     setCurrentTime(t);
   };
 
-  if (loading) return (
+  const workbenchToolbar = personal && (course || projectId) && <CourseWorkbenchToolbar
+    courseId={courseId} title={course?.title ?? ''} projectId={projectId}
+    linkedConversation={linkedConversation} canImport={!!course && !privateCompanion} />;
+
+  if (loading) return <>
+    {workbenchToolbar}
     <div className="um-lesson um-lesson-state" role="status">
       <div className="h-10 w-10 border-4 border-border border-t-primary rounded-full animate-spin" />
       <p>{t('正在加载课程…')}</p>
     </div>
-  );
+  </>;
 
-  if (!course) return <div className="um-lesson um-lesson-state">{t('课程未找到')}</div>;
+  if (!course) return notFound && missingCourse ? missingCourse : <>
+    {workbenchToolbar}
+    <div className="um-lesson um-lesson-state">{t('课程未找到')}</div>
+  </>;
 
   return (
-    <div className="um-lesson um-lesson-unified" style={{ '--um-video-aspect-ratio': videoAspectRatio } as React.CSSProperties}>
+    <div className="um-lesson um-lesson-unified"
+      data-personal-course={personal || undefined} style={{ '--um-video-aspect-ratio': videoAspectRatio } as React.CSSProperties}>
+      {workbenchToolbar}
       <section className="um-lesson-view" aria-label={t('视频与课程信息')}>
         <div className="um-lesson-stage">
         <div
@@ -368,7 +411,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
                 setIsPlaying(false);
                 setShowControls(true);
                 // 暂停时补存进度，避免最后 10 秒内的位置丢失
-                api.post(`/courses/${courseId}/progress/`, { position: videoRef.current?.currentTime ?? 0 }).catch(() => {});
+                if (!privateCompanion) api.post(`/courses/${courseId}/progress/`, { position: videoRef.current?.currentTime ?? 0 }).catch(() => {});
               }}
               onClick={() => { if (videoRef.current?.paused) void videoRef.current.play(); else videoRef.current?.pause(); }}
               src={media.src || undefined}
@@ -416,8 +459,8 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
         </div>
         </div>
         <header className="um-lesson-heading">
-          <div><p className="um-lesson-module">{[course.subject_name, course.module_name].filter(Boolean).join(' / ') || t('待归类')}</p><h1>{course.title}</h1></div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div>{!privateCompanion && <p className="um-lesson-module">{[course.subject_name, course.module_name].filter(Boolean).join(' / ') || t('待归类')}</p>}<h1>{course.title}</h1></div>
+          {!personal && <div className="flex flex-wrap items-center justify-end gap-2">
             {window.unimindDesktop && course.video_file && (
               <button className="um-lesson-favorite" disabled={offlinePending || offlineDownload?.status === 'downloading'} onClick={() => void handleOffline()} title={offlineDownload?.error}>
                 {offlineReady ? <Play size={18} /> : <Download size={18} />}
@@ -433,24 +476,28 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
               finally { setOfflinePending(false); }
             }}><Pause size={18} />{t('暂停下载')}</button>}
             <button className="um-lesson-favorite" disabled={favoritePending || !onFavoriteChange} onClick={onFavoriteChange} aria-pressed={isFavorite}><Star size={18} weight={isFavorite ? 'fill' : 'regular'} />{hasCourseCatalog ? (isFavorite ? t('已收藏') : t('收藏')) : (isFavorite ? t('已保存') : t('保存课程'))}</button>
-          </div>
+          </div>}
         </header>
-        <section className="um-lesson-intro" aria-labelledby="lesson-intro-heading">
+        {!privateCompanion && <section className="um-lesson-intro" aria-labelledby="lesson-intro-heading">
           <h2 id="lesson-intro-heading">{t('课程简介')}</h2>
           <div className="um-lesson-description"><p>{course.description || t('暂无课程简介')}</p></div>
-        </section>
+        </section>}
       </section>
-      {sidebarHost && createPortal(<aside className="um-course-sidebar-content" aria-label={t('课程侧栏')}>
+      {sidebarReady && sidebarHost && createPortal(<aside className="um-course-sidebar-content" aria-label={t('课程侧栏')}>
         <div id="sidebar-panel-chat" role="tabpanel" aria-labelledby="sidebar-tab-chat" className="um-course-sidebar-chat" hidden={sidebarView !== 'chat'}>
           {projectId ? <ProjectCourseChat key={`${projectId}:${linkedConversation || ''}`} projectId={projectId} linkedConversation={linkedConversation}
-            courseId={courseId} videoRef={videoRef} mode="sidebar" visible={sidebarVisible && sidebarView === 'chat'} onSeek={seekTo} />
+            courseId={courseId} videoRef={videoRef} mode="sidebar" visible={sidebarVisible && sidebarView === 'chat'} onSeek={seekTo} workbench={personal} />
             : <CourseChatPanel key={`${userId}:${courseId}`} courseId={courseId} videoRef={videoRef}
               mode="sidebar" visible={sidebarVisible && sidebarView === 'chat'} onSeek={seekTo} />}
         </div>
         <div id="sidebar-panel-outline" role="tabpanel" aria-labelledby="sidebar-tab-outline" className="um-course-info" hidden={sidebarView !== 'outline'}>
         <section className="um-lesson-outline-section" aria-labelledby="lesson-outline-heading">
           <h2 id="lesson-outline-heading">{t('课程大纲')}</h2>
-          {course.ai_outline_enabled !== false ? <OutlinePanel courseId={courseId} videoRef={videoRef} /> : <p className="um-lesson-empty">{t('本课程暂无大纲')}</p>}
+          {course.ai_outline_enabled !== false || (personal && linkedSeconds !== null)
+            ? <OutlinePanel courseId={courseId} videoRef={videoRef} enabled={course.ai_outline_enabled !== false}
+              currentTime={personal && linkedSeconds !== null ? currentTime : undefined}
+              visible={sidebarVisible && sidebarView === 'outline'} onSeek={personal ? seekTo : undefined} />
+            : <p className="um-lesson-empty">{t('本课程暂无大纲')}</p>}
         </section>
         </div>
         <div id="sidebar-panel-materials" role="tabpanel" aria-labelledby="sidebar-tab-materials" className="um-course-info" hidden={sidebarView !== 'materials'}>

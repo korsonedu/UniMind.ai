@@ -14,6 +14,8 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'record_learning_progress': lambda a: '记录这次表现与学习反馈',
         'set_learning_followup': lambda a: '调整后续学习与跟进',
         'find_learning_resources': lambda a: '查找并核对学习资料',
+        'search_workbench_sources': lambda a: '检索本轮选中的项目资料',
+        'read_workbench_source_chunks': lambda a: '阅读项目资料原文',
         'register_session_tool': lambda a: '编写并注册会话计算工具',
         'read_session_tool': lambda a: '读取会话工具代码与版本',
         'build_learning_experiment': lambda a: f"编写并检查「{a.get('title', '交互实验')}」",
@@ -111,6 +113,8 @@ def summarize_tool_result(tool_name: str, result) -> str:
         ),
         'get_user_wrong_questions': lambda r: f"找到 {r.get('total_found', 0)} 道错题",
         'search_asr': lambda r: f"找到 {r.get('total_found', 0)} 个视频片段",
+        'search_workbench_sources': lambda r: f"找到 {len(r.get('chunks', []))} 个相关片段",
+        'read_workbench_source_chunks': lambda r: f"已读取 {len(r.get('chunks', []))} 个片段",
         'get_practice_questions': lambda r: f"抽取 {len(r.get('questions', []))} 道练习题",
         'grade_student_answer': lambda r: f"得分 {r.get('score', 0)}/{r.get('max_score', 0)}" + (
             ' · ' + {'concept_error': '概念错误', 'calculation_error': '计算失误', 'careless_mistake': '审题失误'}.get(

@@ -252,3 +252,40 @@ body:has(.um-lesson[data-resizing='true']) * { cursor: col-resize !important; }
   .um-lesson-progress{height:28px}
   .um-lesson-favorite{min-height:44px}
 }
+
+.um-personal-course-detail { display: flex; flex: 1; min-height: 0; height: 100%; }
+.um-personal-course-detail > .um-lesson[data-personal-course='true'] { justify-items: center; }
+.um-course-workbench-toolbar { display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; }
+.um-course-workbench-title, .um-course-workbench-return span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.um-course-workbench-title { font-size: 14px; font-weight: var(--um-weight-semibold); }
+.um-course-workbench-return, .um-course-workbench-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border-radius: 8px;
+  padding: 4px 9px;
+  font-size: 13px;
+  font-weight: var(--um-weight-semibold);
+}
+.um-course-workbench-return { min-width: 0; color: var(--um-color-accent); background: var(--um-color-selected); }
+.um-course-workbench-return svg { flex-shrink: 0; }
+.um-course-workbench-add { flex-shrink: 0; margin-inline-start: auto; border: 1px solid var(--um-color-border); }
+.um-course-workbench-add:hover, .um-course-workbench-return:hover { background: var(--um-color-hover); }
+.um-course-workbench-popover {
+  z-index: 60;
+  width: min(270px, calc(100vw - 24px));
+  border: 1px solid var(--um-color-border);
+  border-radius: 12px;
+  padding: 12px;
+  color: var(--um-color-text);
+  background: var(--um-color-surface);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 12%);
+  font-size: 13px;
+}
+.um-course-workbench-popover :is(form, label) { display: grid; gap: 6px; }
+.um-course-workbench-popover form { gap: 10px; }
+.um-course-workbench-popover :is(input, select) { width: 100%; border: 1px solid var(--um-color-border); border-radius: 8px; padding: 7px; background: var(--um-color-context); }
+.um-course-workbench-popover [role='alert'] { color: var(--destructive); }
+.um-lesson-outline-items button[aria-current='true'] { background: var(--um-color-selected); color: var(--um-color-accent); }
+.um-lesson-transcript { flex: 1; min-height: 120px; }

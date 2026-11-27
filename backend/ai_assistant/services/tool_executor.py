@@ -394,6 +394,19 @@ class PlannerToolExecutor(BaseToolExecutor):
 
     def __init__(self, user, institution=None):
         super().__init__(user, institution)
+        self.workbench_grounding = None
+
+    def _handle_search_workbench_sources(self, args):
+        if self.workbench_grounding is None:
+            return {'error': '当前会话没有可检索的项目资料。'}
+        return self.workbench_grounding.search_workbench_sources(args.get('query'), args.get('source_id', ''))
+
+    def _handle_read_workbench_source_chunks(self, args):
+        if self.workbench_grounding is None:
+            return {'error': '当前会话没有可读取的项目资料。'}
+        return self.workbench_grounding.read_workbench_source_chunks(
+            args.get('source_id'), args.get('start_chunk', 0), args.get('limit', 6), locator=args.get('locator'),
+        )
 
     def _project_learning(self, name, args):
         from rest_framework.exceptions import APIException

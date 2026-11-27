@@ -90,3 +90,22 @@ export interface CaptureContextResult {
   descriptor: ActiveVideoDescriptor | null;
   warnings: string[];
 }
+
+export interface WorkbenchVideoSnapshot {
+  descriptor: ActiveVideoDescriptor;
+  segments: TranscriptSegmentItem[];
+}
+
+export interface WorkbenchArticle {
+  title: string;
+  url: string;
+  content: string;
+}
+
+export type WorkbenchSource =
+  | { kind: 'external_video'; platform: 'bilibili' | 'youtube'; external_id: string; part: number;
+      title: string; url: string; duration_seconds: number; segments: TranscriptSegmentItem[] }
+  | { kind: 'text'; title: string; source_url: string; content: string }
+  | { kind: 'web_url'; title: string; url: string };
+
+export type WorkbenchCaptureResult = { source: WorkbenchSource } | { error: string };

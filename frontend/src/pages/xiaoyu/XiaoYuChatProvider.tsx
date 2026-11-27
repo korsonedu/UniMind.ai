@@ -11,6 +11,7 @@ import { readRecovery, recoveryScope } from '@/lib/conversationRecovery';
 import { queryClient } from '@/lib/queryClient';
 import { learningKey, type ProjectLearning } from '@/lib/projectLearning';
 import { activeWorkspace } from '@/lib/activeWorkspace';
+import { companionProjectId } from '@/lib/companionVideo';
 import { XiaoYuChatContext, type PageChatHooks } from './xiaoYuChatContext';
 
 /**
@@ -53,7 +54,9 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
   });
   const { conversationId, setBot, setInitialized, setSessions, groupIntoSessions } = chat;
   const userId = useAuthStore(state => state.user?.id);
-  const blockedCourse = activeWorkspace() === 'personal' && (location.pathname === '/courses' || location.pathname.startsWith('/course/'));
+  const personal = activeWorkspace() === 'personal';
+  const companion = personal && location.pathname.startsWith('/course/') && !!companionProjectId(new URLSearchParams(location.search));
+  const blockedCourse = personal && (location.pathname === '/courses' || (location.pathname.startsWith('/course/') && !companion));
   const shouldActivate = activated || (!blockedCourse && new URLSearchParams(location.search).has('project'));
 
   useEffect(() => {
@@ -194,7 +197,7 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
       const targetConversation = params.get('conversation');
       const sameConversation = current.projectId === Number(explicit) && (
         targetConversation ? targetConversation === current.conversationId
-          : location.pathname === '/xiaoyu' && (params.has('learning_task') || params.has('learning_view'))
+          : companion || (location.pathname === '/xiaoyu' && (params.has('learning_task') || params.has('learning_view')))
       );
       const restore = sameConversation ? Promise.resolve() : openProject(Number(explicit), targetConversation || undefined);
       void restore.then(() => {
@@ -206,7 +209,7 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
       });
     });
     return () => { cancelled = true; };
-  }, [userId, chat.initialized, blockedCourse, location.key, location.pathname, location.search, navigate, openProject]);
+  }, [userId, chat.initialized, blockedCourse, companion, location.key, location.pathname, location.search, navigate, openProject]);
   useEffect(() => {
     if (!chat.loading && chat.projectId && userId) {
       void queryClient.invalidateQueries({ queryKey: learningKey(userId, chat.projectId) });

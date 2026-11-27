@@ -1,0 +1,5 @@
+生成 4–6 道靶向自测，填写 questions。include_subjective 为 true 时恰好有一道简短的主观应用题，为 false 时全部为单选题，为 null 时仅在 custom_focus 明确要求简答或应用题时加入一道主观题。题干所需背景必须足够，考点与正确答案须能由所引原文推出。
+
+单选题用类型 single_choice，提供互不相同的选项和唯一正确选项的零基索引 answer_index。主观题用类型 subjective，提供简明参考答案和少量相互独立、等权的评分点 rubric。每个评分点写出 criterion 及 keywords，keywords 是能表达该点的完整短语或可互换的同义短语，避免只用容易误匹配的通用词。
+
+每道题附上 explanation，说明正确答案及原文依据，并提供一个能直接核验答案的 cite_key。避免让一个选项的措辞或其他题目直接泄露答案。

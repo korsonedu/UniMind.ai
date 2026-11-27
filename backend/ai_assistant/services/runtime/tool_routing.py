@@ -5,6 +5,8 @@ from ai_assistant.services.learning_experiments import EXERCISE_REQUEST, VISUAL_
 
 
 GROUPS = {
+    'workbench': ('项目资料', '检索和阅读本轮选中的项目资料。',
+                  ('search_workbench_sources', 'read_workbench_source_chunks')),
     'recall': ('继续学习与回顾', '找回学习记忆，并按来源读取旧问答、讲稿、作答、错题或复习记录。',
                ('recall_learning', 'read_learning_source')),
     'project': ('目标学习与跟进', '读取当前项目；规划阶段、查公开资源、记录实际学习反馈、调整与主动跟进。', (
@@ -93,6 +95,8 @@ def grouped_tools(allowed, message, recent_messages=None, project=False):
         'past conversation', 'conversation history', 'what we discussed',
     )):
         initial = 'recall'
+    if 'workbench' in groups and not project and initial not in ('interactive', 'authoring', 'recall', 'external_mcp'):
+        initial = 'workbench'
     initial = initial if initial in groups else ''
     selected = list(groups[initial]['tools']) if initial else []
     if groups:

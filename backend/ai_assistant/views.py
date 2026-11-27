@@ -14,7 +14,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from users.workspaces.identity import selected_institution
-from .models import AIChatMessage, AgentMemory, Bot, Conversation, chat_receipt_deleted, mark_runtime_requests_deleted
+from .models import AIChatMessage, AgentMemory, Bot, Conversation, ProjectSource, chat_receipt_deleted, mark_runtime_requests_deleted
 from .services.external_audio_asr import ExternalAudioSnippetInput, transcribe_external_snippet
 from .services.external_video_context import (
     external_video_context_text,
@@ -23,9 +23,13 @@ from .services.external_video_context import (
 )
 from .services.language import request_language
 from .services.ulr_config import ulr_enabled
+from .services.runtime.workbench_grounding import (
+    WorkbenchGrounding, active_sources, include_workbench_tools, is_personal_space,
+    parse_source_ids, workbench_citation_metadata,
+)
 from .serializers import AIChatMessageSerializer, AgentMemorySerializer, BotSerializer, ConversationSerializer
 from .utils import get_student_academic_context
-from .views_projects import add_project_context, save_new_conversation_project, learning_activity_metadata
+from .views_projects import ProjectAssignmentSerializer, add_project_context, save_new_conversation_project, learning_activity_metadata
 from notes.context import prepare_note_context, conversation_uses_notes
 from notes.awareness import note_message_metadata
 from django.db import transaction
@@ -60,7 +64,60 @@ def _can_use_learning_context(user):
     return has_learning_feature(user, 'full.report')
 
 
-def _chat_request_fingerprint(data, bot):
+def _workbench_user(user, bot):
+    return bot.bot_type == 'planner' and is_personal_space(user)
+
+
+def _workbench_source_ids(request, bot):
+    if 'workbench_source_ids' in request.data and _workbench_user(request.user, bot):
+        return parse_source_ids(request.data['workbench_source_ids'])
+    return None
+
+
+def _requires_workbench_runtime(request, bot, conversation_id, source_ids):
+    if not _workbench_user(request.user, bot):
+        return False
+    if source_ids:
+        return True
+    conversation = Conversation.objects.filter(user=request.user, conversation_id=conversation_id).select_related(
+        'project',
+    ).first()
+    if conversation:
+        project = conversation.project
+    else:
+        if not request.data.get('project_id') or AIChatMessage.objects.filter(
+            user=request.user, conversation_id=conversation_id,
+        ).exists():
+            return False
+        assignment = ProjectAssignmentSerializer(data={'project_id': request.data['project_id']}, context={'request': request})
+        assignment.is_valid(raise_exception=True)
+        project = assignment.validated_data['project_id']
+    return project is not None and project.user_id == request.user.pk and (
+        source_ids is not None or project.workbench_sources.filter(
+            user=request.user, is_selected=True, status=ProjectSource.Status.READY,
+        ).exists()
+    )
+
+
+def _save_chat_project(request, bot, conversation_id, source_ids):
+    if not _workbench_user(request.user, bot):
+        save_new_conversation_project(request, bot, conversation_id)
+        return None
+    with transaction.atomic():
+        conversation = save_new_conversation_project(request, bot, conversation_id)
+        return _chat_workbench_grounding(conversation, source_ids)
+
+
+def _chat_workbench_grounding(conversation, source_ids):
+    project = conversation.project
+    if project is not None and project.user_id == conversation.user_id:
+        return WorkbenchGrounding(project, active_sources(project, source_ids))
+    if source_ids:
+        raise serializers.ValidationError({'workbench_source_ids': '请在当前资料所属的项目会话中选择资料。'})
+    return None
+
+
+def _chat_request_fingerprint(user, data, bot):
     import hashlib
     import json
     request_content = {
@@ -83,12 +140,14 @@ def _chat_request_fingerprint(data, bot):
         request_content['external_video_context'] = external_context
     if 'learning_activity' in data:
         request_content['learning_activity'] = data['learning_activity']
+    if 'workbench_source_ids' in data and _workbench_user(user, bot):
+        request_content['workbench_source_ids'] = data['workbench_source_ids']
     return hashlib.sha256(json.dumps(request_content, sort_keys=True).encode()).hexdigest()
 
 
 def _reserve_chat_request(user, data, bot, *, conversation_id=None):
     from users.learning import reserve_ai_call
-    reservation = reserve_ai_call(user, data.get('request_id'), fingerprint=_chat_request_fingerprint(data, bot),
+    reservation = reserve_ai_call(user, data.get('request_id'), fingerprint=_chat_request_fingerprint(user, data, bot),
                                   conversation_id=conversation_id)
     if not reservation.acquired:
         if chat_receipt_deleted(reservation):
@@ -137,7 +196,7 @@ def process_ai_chat(*args, reservation=None, **kwargs):
 
 def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=None,
                     history_limit=10, current_user_message_id=None, reservation=None,
-                    note_context='', note_sources=None, external_video_context=None):
+                    note_context='', note_sources=None, external_video_context=None, workbench_grounding=None):
     history_msgs = _get_chat_history(
         user,
         bot,
@@ -179,6 +238,7 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                 student_context=student_context,
                 memory_context=memory_context,
                 adaptive_directives=adaptive_directives,
+                workbench_grounding=workbench_grounding,
             )
             res = dispatch_result['result']
             tool_executor = dispatch_result['tool_executor']
@@ -200,6 +260,7 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                 pending_msg.content = ai_content
                 # 统一 metadata 构建
                 msg_metadata = {'note_sources': note_sources} if note_sources else {}
+                msg_metadata.update(workbench_citation_metadata(ai_content, tool_executor))
                 if external_video_context:
                     msg_metadata['external_video_context'] = external_video_context
                 if getattr(tool_executor, '_prism_clarification', False):
@@ -331,11 +392,13 @@ class AIChatView(APIView):
         bot = Bot.objects.filter(pk=bot_id, is_xiaoyu=True, is_active=True).first()
         if not bot:
             return Response({'error': 'Bot not found'}, status=404)
+        source_ids = _workbench_source_ids(request, bot)
         from .services.course_context import prepare_course_context
         from .services.dsh_xiaoyu import dsh_handoff_enabled, polling_response
         external_video_context = prepare_external_video_context(request, bot, conversation_id)
         ulr = ulr_enabled()
-        if ulr or dsh_handoff_enabled(request.user, bot, conversation_id):
+        if ulr or (dsh_handoff_enabled(request.user, bot, conversation_id)
+                   and not _requires_workbench_runtime(request, bot, conversation_id, source_ids)):
             message = user_message.strip()
             if not message:
                 return Response({'error': 'Message is required'}, status=400)
@@ -351,8 +414,7 @@ class AIChatView(APIView):
 
         try:
             # 1. Save User Message
-            if bot:
-                save_new_conversation_project(request, bot, conversation_id)
+            workbench_grounding = _save_chat_project(request, bot, conversation_id, source_ids)
             note_context, note_sources = prepare_note_context(
                 request.user, bot, conversation_id, user_message,
                 request.data.get('note_ids'), request.data.get('note_selection', ''),
@@ -387,6 +449,7 @@ class AIChatView(APIView):
                 reservation=reservation,
                 note_context=note_context, note_sources=note_sources,
                 external_video_context=external_video_context,
+                workbench_grounding=workbench_grounding,
             )
 
         except BaseException:
@@ -561,13 +624,17 @@ class AIChatStreamView(APIView):
         bot = Bot.objects.filter(pk=bot_id, is_xiaoyu=True, is_active=True).first()
         if not bot:
             return Response({'error': 'Bot not found'}, status=404)
+        source_ids = _workbench_source_ids(request, bot)
         from .services.course_context import prepare_course_context, course_context_text, course_visual_messages
         external_video_context = prepare_external_video_context(request, bot, conversation_id)
         course_context = (prepare_course_context(request, bot, conversation_id)
                           if external_video_context is None else None)
 
         ulr = ulr_enabled()
-        if ulr or settings.UNIMIND_DSH_XIAOYU_ENABLED:
+        # Legacy DSH does not carry the per-turn workbench source registry.
+        if ulr or (settings.UNIMIND_DSH_XIAOYU_ENABLED
+                   and not (course_context and course_context.get('workbench_project'))
+                   and not _requires_workbench_runtime(request, bot, conversation_id, source_ids)):
             from .services.dsh_xiaoyu import response
             return response(request, bot, conversation_id, user_message, course_context=course_context,
                             external_video_context=external_video_context, ulr=ulr)
@@ -582,7 +649,7 @@ class AIChatStreamView(APIView):
 
         try:
             # Save user message
-            save_new_conversation_project(request, bot, conversation_id)
+            workbench_grounding = _save_chat_project(request, bot, conversation_id, source_ids)
             note_context, note_sources = prepare_note_context(
                 request.user, bot, conversation_id, user_message,
                 request.data.get('note_ids'), request.data.get('note_selection', ''),
@@ -663,6 +730,7 @@ class AIChatStreamView(APIView):
                 student_context=student_context,
                 memory_context=memory_context,
                 adaptive_directives=adaptive_directives,
+                workbench_grounding=workbench_grounding,
             )
             if getattr(tool_executor, '_prism_clarification', False):
                 return history_msgs, messages, [], tool_executor, profile, variant_name
@@ -674,6 +742,7 @@ class AIChatStreamView(APIView):
 
             from .services.project_learning_tools import include_project_tools
             tools = include_project_tools(tools, tool_executor)
+            tools = include_workbench_tools(tools, tool_executor, bot.bot_type)
 
             # 工具白名单（防止 prompt injection 调用非预期工具）
             if experiment_prototype:
@@ -845,6 +914,8 @@ class AIChatStreamView(APIView):
                 metrics['content_chars'] = len(ai_content)
 
                 metadata = {'note_sources': note_sources} if note_sources else {}
+                if ai_content:
+                    metadata.update(workbench_citation_metadata(ai_content, tool_executor))
                 if getattr(tool_executor, '_prism_clarification', False):
                     metadata['prism_clarification'] = True
                 if course_context:

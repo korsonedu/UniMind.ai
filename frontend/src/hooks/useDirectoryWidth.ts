@@ -16,12 +16,13 @@ export function resolveDirectoryWidth(value: number, collapseThreshold = COLLAPS
   return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, value));
 }
 
-export function useDirectoryWidth(collapseThreshold = COLLAPSE_WIDTH) {
-  const [width, setWidth] = useState(DEFAULT_WIDTH);
+export function useDirectoryWidth(collapseThreshold = COLLAPSE_WIDTH, initiallyCollapsed = false) {
+  const initialWidth = initiallyCollapsed ? 0 : DEFAULT_WIDTH;
+  const [width, setWidth] = useState(initialWidth);
   const [animated, setAnimated] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
-  const currentWidth = useRef(DEFAULT_WIDTH);
-  const targetWidth = useRef(DEFAULT_WIDTH);
+  const [collapsed, setCollapsed] = useState(initiallyCollapsed);
+  const currentWidth = useRef(initialWidth);
+  const targetWidth = useRef(initialWidth);
   const [lastWidth, setLastWidth] = useState(DEFAULT_WIDTH);
   const frame = useRef<number | null>(null);
 

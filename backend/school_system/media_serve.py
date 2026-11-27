@@ -14,8 +14,8 @@ from urllib.parse import unquote, urlsplit
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import signing
-from django.http import HttpResponse, StreamingHttpResponse, HttpResponseRedirect
-from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
+from django.http import HttpResponse, HttpResponseNotAllowed, StreamingHttpResponse, HttpResponseRedirect
+from rest_framework.exceptions import AuthenticationFailed, NotFound, PermissionDenied
 
 from core.authentication import CookieTokenAuthentication
 
@@ -103,6 +103,11 @@ def issue_media_ticket(user, raw_path: str) -> tuple[str, str] | None:
     media_path = normalize_media_path(raw_path)
     if not media_path:
         return None
+    from ai_assistant.models import WORKBENCH_SOURCE_PREFIX
+    if media_path.startswith(WORKBENCH_SOURCE_PREFIX):
+        from courses.access import private_companion_courses
+        if not private_companion_courses(user).filter(video_file=media_path).exists():
+            raise NotFound('视频不存在。')
     from users.workspaces.identity import account_user
     account = account_user(user)
     payload = {
@@ -173,6 +178,24 @@ def media_serve(request, path):
         except PermissionDenied:
             return HttpResponse(status=403)
 
+    from ai_assistant.models import WORKBENCH_SOURCE_PREFIX
+    if path.startswith(WORKBENCH_SOURCE_PREFIX):
+        if request.method not in ('GET', 'HEAD'):
+            return HttpResponseNotAllowed(('GET', 'HEAD'))
+        if not request.user.is_authenticated:
+            return HttpResponse(status=401)
+        from courses.access import private_companion_courses
+        if not private_companion_courses(request.user).filter(video_file=path).exists():
+            return HttpResponse(status=404)
+        response = _serve_media_file(request, path)
+        response['Cache-Control'] = 'private, no-store'
+        return response
+
+    denial = _shared_media_denial(request, path)
+    return denial if denial is not None else _serve_media_file(request, path)
+
+
+def _shared_media_denial(request, path):
     from django.db.models import Q
     from courses.models import Course, StartupMaterial
     from faq_system.models import Question
@@ -221,6 +244,8 @@ def media_serve(request, path):
             # 未关联业务记录的文件不能凭路径获得新的签名。
             return HttpResponse(status=404)
 
+
+def _serve_media_file(request, path):
     # 如果配置了 OSS，使用签名 URL
     if hasattr(settings, 'OSS_ACCESS_KEY_ID') and settings.OSS_ACCESS_KEY_ID:
         import oss2

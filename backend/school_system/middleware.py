@@ -73,6 +73,7 @@ class SecurityHeadersMiddleware:
 
     def __call__(self, request):
         response = self.get_response(request)
+        frame_src = "frame-src 'self' blob:; " if getattr(response, "allow_blob_frames", False) else ""
         response["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline'; "
@@ -80,6 +81,7 @@ class SecurityHeadersMiddleware:
             "img-src 'self' data: https:; "
             "font-src 'self' data:; "
             "connect-src 'self' https: wss:; "
+            f"{frame_src}"
             "frame-ancestors 'none'"
         )
         response["X-Content-Type-Options"] = "nosniff"
