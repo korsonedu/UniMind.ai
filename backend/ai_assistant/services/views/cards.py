@@ -161,7 +161,8 @@ def build_learning_visual(arguments):
                     mode = action.get('reply_mode', 'single')
                     modes.add(mode)
                     if mode in {'input', 'rating'} and len(payload['cards']) != 1:
-                        raise ValueError()
+                        raise ValidationError({'arguments':
+                            f'payload.cards 使用 {mode} 模式时只能有一张卡。保留单张卡重试；多个普通回复选项可使用 single 模式。'})
                     if mode == 'rating' and action['url'] != '评分：{rating}':
                         raise ValueError()
                     if not action['url'].strip() and mode != 'input':
