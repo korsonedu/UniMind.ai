@@ -238,10 +238,10 @@ def build_context(user, message, recent_messages=None, chat_context=None, *, ulr
 
 def execute_tool(user, name, arguments, memory_version, source=None, chat_context=None, tool_revision=None,
                  *, prepare_change=False, project_ticket=None, artifacts=None, practice_questions=None,
-                 exact_lookup=False, recall_notes=None):
+                 exact_lookup=False, recall_notes=None, observation_channel=None):
     def observed(result):
         from ai_assistant.services.facts.teaching_sidecar import observe, record_tool_result
-        observe(record_tool_result, user, chat_context, name, arguments, result)
+        observe(record_tool_result, user, chat_context, name, arguments, result, channel=observation_channel)
         return result
 
     prototype_names = {'build_learning_experiment', 'read_learning_experiment', 'register_session_tool', 'read_session_tool'}

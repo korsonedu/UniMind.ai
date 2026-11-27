@@ -45,6 +45,11 @@ def apply_public(project, data, message):
     value = {'method_id': candidate['method_id'], 'method_digest': candidate['method_digest'],
         'method_key': candidate['key'], 'task_id': str(task.pk), 'binding': candidate['binding'],
         'reason': data['reason'], 'assigned_at': timezone.now().isoformat(), 'question_hash': digest(message.content)}
+    frozen = message.metadata.get('rsi_sidecar')
+    bundle = (frozen or {}).get('bundle')
+    value['mechanisms_status'] = 'observed' if frozen else 'unobserved_turn'
+    if bundle is not None:
+        value['rsi_bundle_digest'] = digest(bundle)
     row, created = _put(project, 'method_use', identity, value, question=message, task=task)
     return {'use_id': row.digest, 'created': created, 'status': 'assigned',
             'instruction': candidate['instruction'], 'method_id': candidate['method_id'], 'adherence': 'unverified'}
@@ -216,7 +221,8 @@ def qualify_diagnostic_outcomes(history, excluded, *, changed=None):
         yield {**use, 'status': state, 'outcomes': outcomes}
 
 
-def history_source(project, verified, tasks, catalogue, verified_versions, *, diagnostic_sources=None):
+def history_source(project, verified, tasks, catalogue, verified_versions, *, diagnostic_sources=None,
+                   include_provenance=False):
     from quizzes.models import ExamQuestionResult
     from ai_assistant.services.learning_tasks import task_prompt_hash
     from ai_assistant.services.state.prism.prism_memory import accessible
@@ -305,6 +311,13 @@ def history_source(project, verified, tasks, catalogue, verified_versions, *, di
             'status': state, 'outcomes': outcomes, 'distribution_current': value['method_id'] in current,
             'source_available': source_ok and available, 'question_id': use.question_id,
             'answer_id': receipt.answer_id if receipt else None, 'dependencies': dependencies})
+        if include_provenance:
+            frozen = use.question.metadata.get('rsi_sidecar')
+            if value.get('mechanisms_status') == 'unobserved_turn' or (
+                    'rsi_bundle_digest' in value and value['rsi_bundle_digest'] != digest((frozen or {}).get('bundle'))):
+                frozen = None
+            history[-1].update(assigned_at=value['assigned_at'], mechanisms=frozen,
+                reply_completed=receipt_ok, completed_at=receipt.value['completed_at'] if receipt_ok else None)
     return list(qualify_diagnostic_outcomes(history, excluded, changed=excluded)), list(referenced.values())
 
 

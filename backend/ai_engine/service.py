@@ -268,8 +268,8 @@ class AIEngine:
         tools / tool_choice: OpenAI 兼容的 function calling 参数。
         不传则行为与之前完全一致。
         """
-        from ai_assistant.services.ulr_config import standalone_ulr
-        if standalone_ulr():
+        from ai_assistant.services.ulr_config import standalone_ulr, ulr_enabled
+        if standalone_ulr() or (operation == 'assistant.chat.planner.rsi_shadow' and ulr_enabled()):
             from ai_assistant.services.dsh_scope import generation_scope, current_execution, check_execution
             with generation_scope():
                 execution = current_execution()

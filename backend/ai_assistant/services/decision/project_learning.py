@@ -28,6 +28,7 @@ from ai_assistant.services.state.project_state import (
     model_project_context,
     project_context,
     public_event_content,
+    rank_task_methods,
     turn_project_context,
     unconfirmed_pending_plan,
     unconfirmed_plan_ids,
@@ -372,7 +373,8 @@ def tool_operation(executor, name, arguments, *, prepare_change=False, project_t
                 if data['is_current'] and data['status'] == 'ready':
                     from ai_assistant.services.state.sdtm.task_memory_store import preview
                     data['href'] = f'/xiaoyu?project={project.pk}&learning_task={task.pk}'
-                    data['public_methods'] = preview(project, project.user, task_id=task.pk)['packet']['public_methods']
+                    prepared = preview(project, project.user, task_id=task.pk)
+                    data['public_methods'] = rank_task_methods(project, message, task.pk, prepared)
             return data
         if arguments.get('action') != 'create':
             raise ValidationError('不支持的任务操作。')
@@ -420,7 +422,7 @@ def tool_operation(executor, name, arguments, *, prepare_change=False, project_t
         return strategy_operation(project, arguments, message=message,
                                   pending_progress_id=(project_ticket or {}).get('progress_event_id'))
     if name == 'read_learning_project':
-        return model_learning_data(project, executor.user)
+        return model_learning_data(project, executor.user, current_message=message)
     if name == 'find_learning_resources':
         from ai_assistant.services.runtime.learning_resources import find_resources
         result = find_resources(project, arguments)
@@ -459,6 +461,7 @@ __all__ = [
     'progress_prepared',
     'project_context',
     'public_event_content',
+    'rank_task_methods',
     'tool_operation',
     'turn_project_context',
     'unconfirmed_pending_plan',

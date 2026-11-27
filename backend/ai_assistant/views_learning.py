@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.conf import settings
@@ -8,6 +9,28 @@ from .models import ConversationProject, Conversation
 from .services.project_learning import change_learning, learning_data
 from .services.learning_resources import find_resources
 from .services.language import request_language
+from .services.facts.teaching_sidecar import PRESENTATION_SURFACES, record_exposure_presentation
+
+
+class LearningExposurePresentSerializer(serializers.Serializer):
+    message_id = serializers.IntegerField(min_value=1, max_value=2**63 - 1)
+    surface = serializers.ChoiceField(choices=PRESENTATION_SURFACES, default='chat_card')
+    card_type = serializers.CharField(max_length=64, allow_blank=True, trim_whitespace=False, default='')
+
+    def validate_card_type(self, value):
+        if not isinstance(self.initial_data.get('card_type', ''), str):
+            raise serializers.ValidationError('卡片类型须为字符串。')
+        return value
+
+
+class LearningExposurePresentView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = LearningExposurePresentSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(record_exposure_presentation(request.user, **serializer.validated_data))
 
 
 class ProjectLearningView(APIView):

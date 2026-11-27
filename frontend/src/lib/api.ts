@@ -1,5 +1,5 @@
 import { getLocale, t } from '@/i18n';
-import axios from 'axios';
+import axios, { type AxiosRequestConfig } from 'axios';
 import { Preferences } from '@capacitor/preferences';
 import { DEMO_USER, isOfflineDemo, isNativeOffline, setNativeOffline, OFFLINE_MESSAGE } from './offlineSession';
 import { getServerOrigin } from './serverConfig';
@@ -14,12 +14,14 @@ const api = axios.create({
   timeout: 30000,
 });
 
+export const backgroundRequest: AxiosRequestConfig & { background: true } = { background: true };
+
 let csrfRequest: Promise<string> | null = null;
-export function getCsrfToken(): Promise<string> {
+export function getCsrfToken(background = false): Promise<string> {
   const cookie = document.cookie.split('; ').find(item => item.startsWith('csrftoken='));
   if (cookie) return Promise.resolve(decodeURIComponent(cookie.slice('csrftoken='.length)));
   if (!csrfRequest) {
-    csrfRequest = api.get('/csrf/')
+    csrfRequest = api.get('/csrf/', background ? backgroundRequest : undefined)
       .then(response => response.data.csrf_token as string)
       .finally(() => { csrfRequest = null; });
   }
@@ -35,6 +37,8 @@ api.interceptors.request.use(async (config) => {
   config.headers.set('X-UniMind-Workspace', activeWorkspace());
   if (!config.headers.has('Accept-Language')) config.headers.set('Accept-Language', getLocale());
   const native = isNativePlatform();
+  const background = 'background' in config && config.background === true;
+  if (background && native && (isOfflineDemo() || isNativeOffline())) throw new axios.CanceledError();
   if (native && isOfflineDemo()) {
     config.adapter = async request => {
       const path = (request.url || '').replace(/^\/api/, '').split('?')[0];
@@ -70,7 +74,7 @@ api.interceptors.request.use(async (config) => {
     }
   } else if (!['get', 'head', 'options'].includes(config.method?.toLowerCase() || 'get')) {
     // Web/Electron authenticate via httpOnly cookie (CookieTokenAuthentication) + CSRF.
-    config.headers.set('X-CSRFToken', await getCsrfToken());
+    config.headers.set('X-CSRFToken', await getCsrfToken(background));
   }
   // Attach preview institution ID for backend filtering
   if (_previewInstitutionId) {
@@ -91,6 +95,7 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
+    if (error.config?.background) return Promise.reject(error);
     if (error.response?.status === 403 && error.response?.data?.code === 'workspace_unavailable') {
       setActiveWorkspace(null);
       window.location.replace('/xiaoyu');
