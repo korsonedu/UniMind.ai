@@ -24,11 +24,15 @@ from .views_learning_tasks import ProjectLearningTaskListView, ProjectLearningTa
 
 from .views_learning_memory import LearningMemoryGrantsView, LearningMemoryGrantView, LearningMemoryMcpView
 from .views_learning_memory_sources import LearningMemorySourcesView, LearningMemorySourceView
+from .views_mcp_client import ExternalMcpServerDetailView, ExternalMcpServerListCreateView, ExternalMcpServerSyncView
 
 urlpatterns = [
     path('learning-memory/mcp/', LearningMemoryMcpView.as_view(), name='learning-memory-mcp'),
     path('learning-memory/grants/', LearningMemoryGrantsView.as_view(), name='workspace-learning-memory-grants'),
     path('learning-memory/grants/<int:grant_id>/', LearningMemoryGrantView.as_view(), name='workspace-learning-memory-grant'),
+    path('mcp-servers/', ExternalMcpServerListCreateView.as_view(), name='external-mcp-server-list'),
+    path('mcp-servers/<int:server_id>/', ExternalMcpServerDetailView.as_view(), name='external-mcp-server-detail'),
+    path('mcp-servers/<int:server_id>/sync/', ExternalMcpServerSyncView.as_view(), name='external-mcp-server-sync'),
     path('projects/<int:project_id>/learning-memory/sources/', LearningMemorySourcesView.as_view(), name='learning-memory-sources'),
     path('projects/<int:project_id>/learning-memory/sources/<int:source_link_id>/', LearningMemorySourceView.as_view(), name='learning-memory-source'),
     path('projects/<int:project_id>/learning-memory/grants/', LearningMemoryGrantsView.as_view(), name='learning-memory-grants'),

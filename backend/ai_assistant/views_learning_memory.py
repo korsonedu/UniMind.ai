@@ -25,6 +25,17 @@ from ai_assistant.services.learning_recall import (
 from ai_assistant.services.learning_memory_oauth import (
     READ_SCOPE, digest as _digest, learner_account_active, memory_token, oauth_enabled, registered_client, resource_uri,
 )
+from ai_assistant.services.views.learning_memory_mcp_tools import (
+    DUE_REVIEWS_TOOL,
+    SAVE_NOTE_TOOL,
+    START_PRACTICE_TOOL,
+    DueReviewsInput,
+    SaveNoteInput,
+    StartPracticeInput,
+    run_due_reviews,
+    run_save_learning_note,
+    run_start_practice,
+)
 from ai_engine.observability import log_ai_operation, observe_runtime, resolve_trace_id
 from users.workspaces.identity import account_user
 from users.workspaces.access import membership_for
@@ -210,9 +221,11 @@ class LearningMemoryMcpView(APIView):
                                    'type': 'integer', 'description': '可选。查看该项目的完整续学状态和任务。'}}}}
             tools = [recall_tool]
             if request.auth.learner_id:
-                tools.append(SOURCE_TOOL)
+                tools.extend((SOURCE_TOOL, DUE_REVIEWS_TOOL, START_PRACTICE_TOOL))
             if request.auth.can_write:
                 tools.append(CHECKPOINT_TOOL)
+                if request.auth.learner_id and request.auth.share_notes:
+                    tools.append(SAVE_NOTE_TOOL)
             return reply({'tools': tools})
         if method != 'tools/call':
             return reply(code=-32601, message='Method not found')
@@ -221,13 +234,20 @@ class LearningMemoryMcpView(APIView):
             inputs = RecallInput(data=params.get('arguments', {}))
         elif name == SOURCE_TOOL['name'] and request.auth.learner_id:
             inputs = SourceInput(data=params.get('arguments', {}))
+        elif name == DUE_REVIEWS_TOOL['name'] and request.auth.learner_id:
+            inputs = DueReviewsInput(data=params.get('arguments', {}))
+        elif name == START_PRACTICE_TOOL['name'] and request.auth.learner_id:
+            inputs = StartPracticeInput(data=params.get('arguments', {}))
         elif name == CHECKPOINT_TOOL['name'] and request.auth.can_write:
             inputs = CheckpointInput(data=params.get('arguments', {}))
+        elif (name == SAVE_NOTE_TOOL['name'] and request.auth.learner_id
+              and request.auth.can_write and request.auth.share_notes):
+            inputs = SaveNoteInput(data=params.get('arguments', {}))
         else:
             return reply(code=-32602, message='Tool unavailable for this grant')
         if not inputs.is_valid():
             return reply(code=-32602, message='Invalid tool arguments')
-        if name == CHECKPOINT_TOOL['name'] and not request.headers.get('X-Trace-Id'):
+        if name in (CHECKPOINT_TOOL['name'], SAVE_NOTE_TOOL['name']) and not request.headers.get('X-Trace-Id'):
             trace_id = resolve_trace_id(None, fallback=inputs.validated_data['request_id'])
         started_at = monotonic()
         with observe_runtime('mcp', f'mcp:{name}:{request_id}', trace_id=trace_id, grant_id=request.auth.pk):
@@ -250,6 +270,19 @@ class LearningMemoryMcpView(APIView):
                 except NotFound:
                     log_ai_operation(f'mcp.{name}', False, (monotonic() - started_at) * 1000, 'not_found')
                     return reply(code=-32602, message='Learning source unavailable for this grant')
+            elif name == DUE_REVIEWS_TOOL['name']:
+                result = run_due_reviews(request.user, **inputs.validated_data)
+            elif name == START_PRACTICE_TOOL['name']:
+                result = run_start_practice(request.user, **inputs.validated_data)
+            elif name == SAVE_NOTE_TOOL['name']:
+                try:
+                    result = run_save_learning_note(request.user, request.auth, **inputs.validated_data)
+                except ValidationError as exc:
+                    log_ai_operation(f'mcp.{name}', False, (monotonic() - started_at) * 1000, 'conflict')
+                    return reply(code=-32602, message=str(exc.detail[0]) if isinstance(exc.detail, list) else str(exc.detail))
+                except NotFound:
+                    log_ai_operation(f'mcp.{name}', False, (monotonic() - started_at) * 1000, 'not_found')
+                    return reply(code=-32602, message='Note unavailable for this grant')
             else:
                 key = _digest(f"memory-checkpoint:{request.auth.pk}:{inputs.validated_data['request_id']}")
                 value = {'agent': request.auth.name, 'text': inputs.validated_data['text']}
