@@ -141,8 +141,8 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
         }}>
           <label>{t('项目名称')}<input autoFocus required aria-label={t('项目名称')} placeholder={t('例如：金融学考研复习')} maxLength={60} value={editing.name} disabled={controls.pending} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
           <label>{t('项目背景与要求（选填）')}<textarea aria-label={t('项目背景与要求')} maxLength={4000} rows={5} value={editing.instructions} disabled={controls.pending} onChange={event => setEditing({ ...editing, instructions: event.target.value })} /></label>
-            <legend>{t('项目模式')}</legend>
           {editing.id === undefined && <fieldset className="um-project-mode" disabled={controls.pending}>
+            <legend>{t('项目模式')}</legend>
             <label><input type="radio" name="project-mode" checked={!editing.planning} onChange={() => setEditing({ ...editing, planning: false })} />{t('自由对话')}</label>
             <label><input type="radio" name="project-mode" checked={!!editing.planning} onChange={() => setEditing({ ...editing, planning: true })} />{t('规划模式')}</label>
           </fieldset>}
