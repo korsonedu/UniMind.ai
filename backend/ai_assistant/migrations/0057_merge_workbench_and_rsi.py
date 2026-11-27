@@ -7,7 +7,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("ai_assistant", "0044_conversationproject_workbench_notebook_and_more"),
-        ("ai_assistant", "0053_mcp_dcr_and_external_servers"),
+        ("ai_assistant", "0056_teachingmechanismactivation"),
     ]
 
     operations = []

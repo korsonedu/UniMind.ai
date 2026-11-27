@@ -14,7 +14,9 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from ai_assistant.models import AIChatMessage, Conversation, chat_receipt_deleted, mark_runtime_requests_deleted
+from ai_assistant.models import (
+    AIChatMessage, Conversation, TeachingDecisionLog, chat_receipt_deleted, mark_runtime_requests_deleted,
+)
 from ai_assistant.services.language import request_language
 from ai_assistant.services.title_generator import schedule_conversation_title, sync_generate_title
 from ai_assistant.services.memory_service import extract_memories_async
@@ -232,13 +234,20 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                 chat_images = prepare_chat_images(request.data.get('images'))
                 if chat_images:
                     metadata['chat_images'] = chat_images
+                stored_user_metadata = metadata
+                if ulr:
+                    prior = current.metadata if current else getattr(reservation, 'previous_response', {})
+                    if (frozen := prior.get('rsi_sidecar')) and conversations.filter(
+                            project_id=frozen['project_id'], project__user=user).exists():
+                        stored_user_metadata = {**metadata, **{key: prior[key] for key in
+                            ('rsi_sidecar', 'rsi_observations') if key in prior}}
                 if current:
-                    current.metadata = metadata
+                    current.metadata = stored_user_metadata
                     current.save(update_fields=['metadata'])
                 else:
                     current = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=conversation_id,
-                        role='user', content=message, metadata=metadata)
-            user_event = {'type': 'user_message', 'message_id': current.pk, 'metadata': current.metadata}
+                        role='user', content=message, metadata=stored_user_metadata)
+            user_event = {'type': 'user_message', 'message_id': current.pk, 'metadata': metadata}
             emit(user_event)
             chat_context = {'conversation_id': str(conversation_id), 'bot_id': bot.pk, 'message_id': current.pk}
             from ai_assistant.services.decision.prism_gate import clarification
@@ -364,6 +373,8 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                 stored_metadata = {**metadata, 'ulr_context_sources': context_sources} if context_sources is not None else metadata
                 answer = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=conversation_id,
                     role='assistant', content=content, metadata=stored_metadata)
+                if ulr:
+                    TeachingDecisionLog.objects.filter(message=current, answer__isnull=True).update(answer=answer)
                 from ai_assistant.services.facts import learning_diagnostics
                 if learning_diagnostics.active():
                     learning_diagnostics.capture(current, answer)
@@ -423,6 +434,14 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                         failure = {
                             'done': True, 'is_error': True, 'full_content': error,
                             **({'learning_failure': saved['learning_failure']} if saved.get('learning_failure') else {})}
+                    if ulr:
+                        # The failed question may be deleted. Keep its freeze for the same request ID.
+                        frozen = getattr(reservation, 'previous_response', {}).get('rsi_sidecar')
+                        if current:
+                            frozen = AIChatMessage.objects.filter(pk=current.pk).values_list(
+                                'metadata__rsi_sidecar', flat=True).first() or frozen
+                        if frozen:
+                            failure = {**(failure or {}), 'rsi_sidecar': frozen}
                     failed = finish_ai_call(reservation, success=False, response=failure)
                     if (current and failed.attempt_id == reservation.attempt_id and failed.status == 'released'
                             and not failed.response.get('deleted') and not current.projectlearningevent_set.exists()):

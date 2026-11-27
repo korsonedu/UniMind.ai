@@ -7,35 +7,53 @@ from pathlib import Path
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
 from ai_assistant.models import (
     AIChatMessage, Conversation, LearningStrategy, LearningStrategyOutcome,
     LearningStrategyUse, LearningStrategyVersion, ProjectLearningEvent,
-    TeachingMechanismVersion,
+    TaskMemoryObject, TeachingDecisionLog, TeachingMechanismVersion,
 )
 from ai_engine.observability import current_trace_id, normalize_trace_id
+from users.feature_access import has_learning_feature
 
 logger = logging.getLogger('ai_assistant.services.teaching_sidecar')
+PRESENTATION_SURFACES = ('chat_card', 'hint_reply', 'recheck_card', 'practice_card')
 SCHEMA = 'rsi-sidecar-6ab-v1'
 SOURCES = {
     'G': ['prompts/ai_assistant/bots/xiaoyu/project_learning.txt',
           'prompts/ai_assistant/bots/xiaoyu/dsh_system_prompt.txt',
-          'ai_assistant/services/project_learning.py', 'ai_assistant/services/dsh_service.py'],
-    'S': ['ai_assistant/services/learning_library.py', 'ai_assistant/services/bayesian_evidence.py'],
+          'ai_assistant/services/project_learning.py', 'ai_assistant/services/dsh_service.py',
+          'ai_assistant/services/ulr_runtime.py', 'ai_assistant/services/ulr_tool_program.py',
+          'ai_assistant/services/ulr_capabilities.py', 'ai_assistant/services/public_methods.py'],
+    'S': ['ai_assistant/services/learning_library.py', 'ai_assistant/services/bayesian_evidence.py',
+          'ai_assistant/services/ulr_teaching.py', 'ai_assistant/services/public_methods.py',
+          'ai_assistant/services/method_adoption.py', 'ai_assistant/services/decision/rsi_policy.py',
+          'ai_assistant/services/state/rsi/rsi_evidence.py'],
     'E': ['prompts/quizzes/grading_prompt.txt', 'ai_assistant/services/learning_guidance.py',
           'ai_assistant/services/learning_task_evidence.py', 'ai_assistant/services/learning_tasks.py',
           'quizzes/services/ai_task_service.py', 'quizzes/services/question_generator.py',
-          'ai_assistant/services/dsh_tasks.py', 'ai_assistant/services/dsh_generation.py'],
-    'M': ['ai_assistant/services/teaching_sidecar.py'],
+          'ai_assistant/services/dsh_tasks.py', 'ai_assistant/services/dsh_generation.py',
+          'ai_assistant/services/ulr_grading.py', 'ai_assistant/services/ulr_structured.py',
+          'ai_assistant/services/learning_diagnostics.py'],
+    'M': ['ai_assistant/services/teaching_sidecar.py', 'ai_assistant/services/teaching_shadow.py',
+          'ai_assistant/services/state/rsi/rsi_dataset.py', 'ai_assistant/services/decision/rsi_governance.py'],
 }
+SDTM_SOURCES = [
+    'ai_assistant/services/task_memory_store.py', 'ai_assistant/services/task_memory_projection.py',
+    'ai_assistant/services/learning_continuity.py', 'ai_assistant/services/fact_evidence.py',
+    'ai_assistant/services/prism_kernel.py', 'ai_assistant/services/prism_memory.py',
+    'ai_assistant/services/prism_feedback.py', 'ai_assistant/services/memory_core.py',
+    'ai_assistant/services/prism_outcomes.py',
+]
 
 
-def canonical_hash(value):
+def canonical_hash(value, *, default=None):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False,
-                                    separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+                                    separators=(',', ':'), allow_nan=False, default=default).encode()).hexdigest()
 
 
 def observe(callback, *args, **kwargs):
@@ -44,7 +62,8 @@ def observe(callback, *args, **kwargs):
         with transaction.atomic():
             return callback(*args, **kwargs)
     except Exception as exc:
-        logger.warning('rsi_observation_error action=%s error_type=%s', callback.__name__, type(exc).__name__)
+        logger.warning('rsi_observation_error action=%s error_type=%s',
+                       getattr(callback, '__name__', type(callback).__name__), type(exc).__name__)
         return None
 
 
@@ -80,25 +99,37 @@ def _source_bytes(rel_path):
 
 def current_bundle():
     from ai_engine.config import get_model_for_task
+    from ai_assistant.services.runtime.ulr_config import ulr_enabled
+
     models = {key: get_model_for_task(operation)['model'] for key, operation in
               [('chat', 'assistant.chat.planner'), ('grade', 'quizzes.grade')]}
+    prism_mode = settings.UNIMIND_PRISM_MODE
+    task_memory_mode = settings.UNIMIND_SDTM_TASK_MEMORY_MODE
+    routes = {key: bool(getattr(settings, key, False)) for key in
+              ('UNIMIND_DSH_GENERATION_ENABLED', 'UNIMIND_DSH_GRADING_ENABLED', 'UNIMIND_DSH_XIAOYU_ENABLED')}
+    routes.update(ulr_enabled=ulr_enabled(), ulr_recheck_strategy=settings.UNIMIND_ULR_RECHECK_STRATEGY,
+                  prism_mode=prism_mode, sdtm_task_memory_mode=task_memory_mode,
+                  sdtm_structured_diagnostics=settings.UNIMIND_SDTM_STRUCTURED_DIAGNOSTICS,
+                  rsi_online_policy_mode=settings.UNIMIND_RSI_ONLINE_POLICY_MODE,
+                  rsi_exploration_rate=settings.UNIMIND_RSI_EXPLORATION_RATE)
+    root = Path(settings.BASE_DIR)
+    model_config_hash = hashlib.sha256((root / 'ai_engine/config.py').read_bytes()).hexdigest()
     bundle = {}
     for kind, paths in SOURCES.items():
-        prism_mode = getattr(settings, 'UNIMIND_PRISM_MODE', 'off')
-        if kind == 'M' and prism_mode != 'off':
-            paths = [*paths, 'ai_assistant/services/prism_kernel.py', 'ai_assistant/services/prism_memory.py',
-                     'ai_assistant/services/prism_feedback.py', 'ai_assistant/services/memory_core.py',
-                     'ai_assistant/services/prism_outcomes.py']
-        content = {'schema': SCHEMA, 'role': 'reserved_not_running' if kind == 'M' else 'existing_runtime_descriptor',
+        role = 'existing_runtime_descriptor'
+        if kind == 'M':
+            mode = 'active' if 'active' in (prism_mode, task_memory_mode) else (
+                prism_mode if prism_mode != 'off' else task_memory_mode)
+            role = 'observational_sidecar' if mode == 'off' else f'sdtm_{mode}'
+            if mode != 'off':
+                paths = [*paths, *SDTM_SOURCES]
+        content = {'schema': SCHEMA, 'role': role,
                    'selection': 'model_directed_nonrandom' if kind == 'S' else None,
-                   'sources': {path: hashlib.sha256(_source_bytes(path)).hexdigest()
-                               for path in paths},
-                   'models': models, 'provider_weights_pinned': False, 'candidate_activation': False}
+                   'sources': {path: hashlib.sha256(_source_bytes(path)).hexdigest() for path in paths},
+                   'models': models, 'provider_weights_pinned': False, 'candidate_activation': False,
+                   'routes': routes, 'model_config_hash': model_config_hash}
         if kind == 'M' and prism_mode != 'off':
-            content.update(role=f'sdtm_{prism_mode}', prism_mode=prism_mode, reference_activation='reviewed_only')
-        content['routes'] = {key: bool(getattr(settings, key, False)) for key in
-            ('UNIMIND_DSH_GENERATION_ENABLED', 'UNIMIND_DSH_GRADING_ENABLED', 'UNIMIND_DSH_XIAOYU_ENABLED')}
-        content['model_config_hash'] = hashlib.sha256((Path(settings.BASE_DIR) / 'ai_engine/config.py').read_bytes()).hexdigest()
+            content.update(prism_mode=prism_mode, reference_activation='reviewed_only')
         row = _store_mechanism(kind, content, None, None)
         bundle[kind] = {'id': row.pk, 'digest': row.digest}
     return bundle
@@ -114,12 +145,14 @@ def _message_trace_id(*messages):
     return current_trace_id()
 
 
+@transaction.atomic
 def freeze_turn(project, message, snapshot):
     if message.user_id != project.user_id or message.role != 'user' or not Conversation.objects.filter(
             user_id=project.user_id, project=project, conversation_id=message.conversation_id).exists():
         raise PermissionDenied('当前教学提问不属于本人项目。')
-    if message.metadata.get('rsi_sidecar'):
-        return message.metadata['rsi_sidecar']
+    metadata = AIChatMessage.objects.select_for_update().values_list('metadata', flat=True).get(pk=message.pk)
+    if frozen := metadata.get('rsi_sidecar'):
+        return frozen
     if AIChatMessage.objects.filter(user_id=message.user_id, bot_id=message.bot_id,
             conversation_id=message.conversation_id, role='assistant',
             metadata__learning_turn__message_id=message.pk).exists():
@@ -129,7 +162,7 @@ def freeze_turn(project, message, snapshot):
               'bundle': current_bundle(), 'context_hash': canonical_hash(snapshot),
               'frozen_at': timezone.now().isoformat(),
               **({'trace_id': trace_id} if trace_id else {})}
-    message.metadata['rsi_sidecar'] = frozen
+    message.metadata = {**metadata, 'rsi_sidecar': frozen}
     message.save(update_fields=['metadata'])
     return frozen
 
@@ -184,7 +217,15 @@ def record_strategy_use(use, *, created):
                     'prediction': None, 'prediction_status': 'not_recorded',
                     'assigned_at': use.created_at.isoformat(),
                     **({'trace_id': trace_id} if trace_id else {})}
-    from ai_assistant.services.memory_core import prism_active
+    log = TeachingDecisionLog.objects.filter(message=use.message, project=use.project,
+        owner_id=use.project.user_id, decision_point='method_ranking').first()
+    if log:
+        from ai_assistant.services.decision.rsi_policy import method_assignment
+        use.decision.update(model_visible_candidate_set=log.candidates, decision_log_id=log.pk)
+        candidate = method_assignment(log, kind='private', method_id=use.strategy_id, method_digest=version.digest)
+        if candidate and candidate['action'] == log.selected_action and log.propensity is not None:
+            use.decision.update(propensity=log.propensity, selection_kind=log.selection_mode)
+    from ai_assistant.services.state.sdtm.memory_core import prism_active
     if prism_active():
         from ai_assistant.services.state.prism.prism_memory import context
         packet = context(use.message)
@@ -196,7 +237,7 @@ def record_strategy_use(use, *, created):
     use.save(update_fields=['method_version', 'decision', 'exposure'])
 
 
-def record_tool_result(user, context, name, arguments, result):
+def record_tool_result(user, context, name, arguments, result, channel=None):
     if not context:
         return
     message = AIChatMessage.objects.select_for_update().filter(pk=context.get('message_id'), user=user,
@@ -204,9 +245,14 @@ def record_tool_result(user, context, name, arguments, result):
     if not message or not message.metadata.get('rsi_sidecar'):
         return
     project_id = message.metadata['rsi_sidecar']['project_id']
-    if not Conversation.objects.filter(user=user, project_id=project_id, conversation_id=message.conversation_id).exists():
+    if not Conversation.objects.filter(user=user, project_id=project_id, project__user=user,
+                                       conversation_id=message.conversation_id).exists():
         return
-    entry = {'tool': name, 'arguments_hash': canonical_hash(arguments), 'result_hash': canonical_hash(result)}
+    # Project commits can carry datetimes before the shared tool executor serializes them.
+    entry = {'tool': name, 'arguments_hash': canonical_hash(arguments),
+             'result_hash': canonical_hash(result, default=str)}
+    if channel is not None:
+        entry['channel'] = channel
     entries = message.metadata.get('rsi_observations', [])
     if entry not in entries:
         entries.append(entry)
@@ -214,24 +260,94 @@ def record_tool_result(user, context, name, arguments, result):
         message.save(update_fields=['metadata'])
 
 
+def _presentation_exposure(receipt):
+    return {'status': 'presented', 'presentation': 'presented', 'presented_at': receipt['presented_at'],
+            'presentation_surface': receipt['surface'], 'adherence': 'unverified'}
+
+
+@transaction.atomic
 def record_turn_completion(reply):
+    reply = AIChatMessage.objects.select_for_update().filter(pk=reply.pk, role='assistant').first()
+    if not reply:
+        return
     turn = reply.metadata.get('learning_turn', {})
-    if reply.role != 'assistant' or not turn.get('completed'):
+    if not turn.get('completed'):
         return
     trigger = AIChatMessage.objects.filter(pk=turn.get('message_id'), user_id=reply.user_id,
         bot_id=reply.bot_id, conversation_id=reply.conversation_id, role='user').first()
     if not trigger:
         return
-    from ai_assistant.services.learning_library import unconfirmed_strategy_use_ids
-    uses = LearningStrategyUse.objects.filter(message=trigger, project__user_id=reply.user_id)
     trace_id = _message_trace_id(reply, trigger)
+    completion = {'status': 'reply_completed', 'reply_id': reply.pk, 'reply_hash': canonical_hash(reply.content),
+                  'completed_at': turn.get('completed_at'), 'saved_at': reply.timestamp.isoformat(),
+                  'adherence': 'unverified'}
+    decisions = TeachingDecisionLog.objects.filter(message=trigger, owner_id=reply.user_id,
+        project__user_id=reply.user_id).filter(Q(answer=reply) | Q(answer__isnull=True))
+    pending = Q(exposure__status='assigned')
+    decision_exposure = {**completion, 'presentation': 'unknown'}
+    if receipt := reply.metadata.get('rsi_presentation'):
+        # History can expose the saved reply before the completion observer runs.
+        pending |= Q(answer=reply, exposure__presentation='presented', exposure__reply_id__isnull=True)
+        completion.update(_presentation_exposure(receipt))
+        decision_exposure.update(completion, presentation_card_type=receipt['card_type'])
+    decisions.filter(pending).update(answer=reply, exposure=decision_exposure)
+    from ai_assistant.services.facts.learning_library import unconfirmed_strategy_use_ids
+    uses = LearningStrategyUse.objects.filter(message=trigger, project__user_id=reply.user_id)
     for use in uses.exclude(pk__in=unconfirmed_strategy_use_ids(reply.user_id, uses)):
         if use.decision and use.exposure.get('status') == 'assigned':
-            use.exposure = {'status': 'reply_completed', 'adherence': 'unverified',
-                'reply_id': reply.pk, 'reply_hash': canonical_hash(reply.content),
-                'completed_at': turn.get('completed_at'), 'saved_at': reply.timestamp.isoformat(),
-                **({'trace_id': trace_id} if trace_id else {})}
+            use.exposure = {**completion, 'engine': reply.metadata.get('engine'),
+                            **({'trace_id': trace_id} if trace_id else {})}
+            if action := (reply.metadata.get('ulr_teaching') or {}).get('action'):
+                use.exposure['ulr_teaching_action'] = action
             use.save(update_fields=['exposure'])
+
+
+def record_exposure_presentation(user, *, message_id, surface='chat_card', card_type=''):
+    if not user.is_authenticated or not has_learning_feature(user, 'ai.assistant'):
+        raise PermissionDenied()
+    if surface not in PRESENTATION_SURFACES:
+        raise ValidationError({'surface': '无效的学习回复呈现场景。'})
+    if not isinstance(card_type, str) or len(card_type) > 64:
+        raise ValidationError({'card_type': '卡片类型须为最多 64 个字符的字符串。'})
+
+    from ai_assistant.services.facts.learning_library import unconfirmed_strategy_use_ids
+    with transaction.atomic():
+        reply = AIChatMessage.objects.select_for_update().filter(pk=message_id, user=user, role='assistant',
+            metadata__learning_turn__completed=True).first()
+        if not reply or not Conversation.objects.filter(user=user, conversation_id=reply.conversation_id).exists():
+            raise NotFound('学习回复记录不可用。')
+
+        receipt = reply.metadata.get('rsi_presentation')
+        created = receipt is None
+        if created:
+            receipt = {'status': 'presented', 'presented_at': timezone.now().isoformat(),
+                       'surface': surface, 'card_type': card_type}
+            reply.metadata['rsi_presentation'] = receipt
+        teaching = reply.metadata.get('ulr_teaching')
+        mark_teaching = isinstance(teaching, dict) and teaching.get('presentation') == 'unknown'
+        if mark_teaching:
+            teaching.update(presentation='presented', presented_at=receipt['presented_at'])
+        if created or mark_teaching:
+            reply.save(update_fields=['metadata'])
+
+        exposure = _presentation_exposure(receipt)
+        updated_decisions = 0
+        for decision in TeachingDecisionLog.objects.filter(owner=user, answer=reply):
+            if decision.exposure.get('presentation') != 'presented':
+                decision.exposure.update(exposure, presentation_card_type=receipt['card_type'])
+                decision.save(update_fields=['exposure'])
+                updated_decisions += 1
+
+        uses = LearningStrategyUse.objects.filter(project__user=user,
+            message_id=reply.metadata['learning_turn'].get('message_id'), exposure__reply_id=reply.pk)
+        updated_strategy_uses = 0
+        for use in uses.exclude(pk__in=unconfirmed_strategy_use_ids(user.pk, uses)):
+            if use.exposure.get('presentation') != 'presented':
+                use.exposure.update(exposure)
+                use.save(update_fields=['exposure'])
+                updated_strategy_uses += 1
+        return {'message_id': reply.pk, 'status': 'presented', 'presented_at': receipt['presented_at'], 'created': created,
+                'updated_decisions': updated_decisions, 'updated_strategy_uses': updated_strategy_uses}
 
 
 def validate_strategy_use(project, use_id, *, pending_message_id=None):
@@ -249,10 +365,32 @@ def validate_strategy_use(project, use_id, *, pending_message_id=None):
     return use
 
 
+def verified_strategy_reply(use):
+    reply = AIChatMessage.objects.filter(pk=use.exposure.get('reply_id'), user_id=use.project.user_id,
+        bot_id=use.message.bot_id, conversation_id=use.message.conversation_id, role='assistant',
+        metadata__learning_turn__message_id=use.message_id, metadata__learning_turn__completed=True).first()
+    if not reply:
+        return None, None
+    completed_at = reply.metadata['learning_turn'].get('completed_at')
+    completed = parse_datetime(completed_at or '')
+    if (completed and timezone.is_aware(completed) and use.exposure.get('completed_at') == completed_at
+            and use.exposure.get('reply_hash') == canonical_hash(reply.content)
+            and use.exposure.get('saved_at') == reply.timestamp.isoformat()):
+        return reply, completed
+    return None, None
+
+
+def overlapping_public_use(task, assigned_at, submitted_at):
+    assignments = TaskMemoryObject.objects.filter(owner_id=task.project.user_id, project=task.project,
+        kind='method_use', task=task).values_list('value__assigned_at', flat=True)
+    return any(timezone.is_aware(stamp) and assigned_at <= stamp <= submitted_at
+               for value in assignments if (stamp := parse_datetime(value or '')))
+
+
 def record_task_outcome(task, result, event):
     if not task.strategy_use_id or result.status != 'graded':
         return
-    from ai_assistant.services.learning_tasks import task_result_snapshot, task_label_source, task_question_hash, task_prompt_hash, _hash
+    from ai_assistant.services.facts.learning_tasks import task_result_snapshot, task_label_source, task_question_hash, task_prompt_hash, _hash
     use = validate_strategy_use(task.project, task.strategy_use_id)
     question = task_result_snapshot(task, result)  # Current permission and frozen-content revalidation.
     if event.project_id != task.project_id or event.kind != 'assessment' or event.content.get('result_id') != result.pk:
@@ -264,14 +402,8 @@ def record_task_outcome(task, result, event):
         raise ValidationError('教学观察的原始证据已变化。')
     if use.method_version_id and use.method_version.digest != canonical_hash(method_snapshot(use.strategy)):
         raise ValidationError('教学方法的冻结依据已变化。')
-    reply = AIChatMessage.objects.filter(pk=use.exposure.get('reply_id'), user_id=task.project.user_id,
-        bot_id=use.message.bot_id, conversation_id=use.message.conversation_id, role='assistant',
-        metadata__learning_turn__message_id=use.message_id, metadata__learning_turn__completed=True).first()
-    completed = parse_datetime(reply.metadata['learning_turn'].get('completed_at', '')) if reply else None
-    exposure_matches = bool(reply and use.exposure.get('reply_hash') == canonical_hash(reply.content)
-        and use.exposure.get('completed_at') == reply.metadata['learning_turn'].get('completed_at')
-        and use.exposure.get('saved_at') == reply.timestamp.isoformat())
-    timing = bool(exposure_matches and completed and timezone.is_aware(completed) and result.graded_at
+    reply, completed = verified_strategy_reply(use)
+    timing = bool(reply and result.graded_at
                   and result.exam.created_at > max(completed, reply.timestamp)
                   and result.exam.created_at >= max(use.created_at, task.created_at)
                   and result.graded_at >= result.exam.created_at)
@@ -281,10 +413,15 @@ def record_task_outcome(task, result, event):
     repeated = any((result.question_id is not None and row['question_id'] == result.question_id)
         or (row['question_snapshot'].get('text') and task_prompt_hash(row['question_snapshot']) == task_prompt_hash(question))
         for row in prior)
-    from ai_assistant.services.learning_library import unconfirmed_strategy_use_ids
+    from ai_assistant.services.facts.learning_library import unconfirmed_strategy_use_ids
     trials = LearningStrategyUse.objects.filter(project=task.project, created_at__gte=use.created_at,
         created_at__lte=result.exam.created_at).exclude(pk=use.pk)
     overlaps = trials.exclude(pk__in=unconfirmed_strategy_use_ids(task.project.user_id, trials)).exists()
+    overlaps = overlaps or overlapping_public_use(task, use.created_at, result.exam.created_at)
+    from ai_assistant.services.facts import learning_diagnostics
+    task_id = str(task.pk)
+    disclosed = learning_diagnostics.active(task.project_id) and task_id in learning_diagnostics.excluded_tasks(
+        learning_diagnostics.read_sources(task.project, {task_id}))
     reasons = []
     if not timing:
         reasons.append('no_completed_prior_teaching')
@@ -296,6 +433,8 @@ def record_task_outcome(task, result, event):
         reasons.append('overlapping_methods')
     if not use.decision or use.decision.get('status') != 'observed':
         reasons.append('unobserved_assignment')
+    if disclosed:
+        reasons.append('same_instance_solution_disclosed')
     outcome_trace_id = (
         normalize_trace_id((use.decision or {}).get('trace_id'))
         or normalize_trace_id((use.exposure or {}).get('trace_id'))
@@ -305,7 +444,7 @@ def record_task_outcome(task, result, event):
                 'method_version_id': use.method_version_id, 'purpose': task.purpose,
                 'question_hash': expected['question_hash'], 'assistance_source': 'submission_report',
                 'prompt_hash': task_prompt_hash(question), 'novelty_verified': False,
-                'timing_verified': timing, 'repeated': repeated, 'overlapping_methods': overlaps,
+                'timing_verified': timing, 'repeated': repeated, 'overlapping_methods': overlaps, 'disclosed': disclosed,
                 'status': 'uncertain' if reasons else 'independent_reported_observation',
                 'reasons': reasons, 'causal_claim': False, 'independent_label_verified': False,
                 'exposure': use.exposure, 'graded_at': result.graded_at.isoformat() if result.graded_at else None,

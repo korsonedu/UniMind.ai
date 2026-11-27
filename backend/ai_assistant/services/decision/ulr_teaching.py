@@ -1,19 +1,14 @@
 """Versioned decisions for the first ULR teaching flow."""
-from django.conf import settings
-from rest_framework.exceptions import ValidationError
-
 from core.utils import get_content_institution_id
 from quizzes.models import Question
 from users.feature_access import has_learning_feature
-from ai_assistant.models import AIChatMessage, ProjectLearning
-from ai_assistant.services.dsh_cards import build_tool_card
+from ai_assistant.models import AIChatMessage, ProjectLearning, TaskMemoryFrame
+from ai_assistant.services.decision import rsi_policy
+from ai_assistant.services.views.cards import build_tool_card
 from ai_assistant.services.facts.learning_task_evidence import verified_task_events
-from ai_assistant.services.learning_tasks import available_project_tasks
-from ai_assistant.services.project_learning import assert_learning_turn, current_project
+from ai_assistant.services.facts.learning_tasks import available_project_tasks
+from ai_assistant.services.decision.project_learning import assert_learning_turn, current_project
 from ai_assistant.services.runtime.ulr_capabilities import create_recheck
-
-
-RECHECK_DELAYS = {'immediate-v1': 0, 'delayed-v1': 2}
 
 
 def selected_task(user, chat_context, current):
@@ -69,11 +64,24 @@ def record_decision(user, chat_context, current, task_id):
         metadata__ulr_teaching__action__in=('wait', 'no_question', 'offer_recheck', 'already_submitted'),
     ).order_by('-pk').values_list('metadata', flat=True).first()
     prior = previous['ulr_teaching'] if previous else None
-    strategy = prior['strategy'] if prior else f'{settings.UNIMIND_ULR_RECHECK_STRATEGY}-v1'
-    if strategy not in RECHECK_DELAYS:
-        raise ValidationError('ULR 复测策略配置无效。')
-    remaining = max(0, prior['remaining_turns'] - 1) if prior else RECHECK_DELAYS[strategy]
+    frame_id, program_digest = None, ''
+    if not prior:
+        frame_id = current.metadata.get('sdtm_frame_id') or (
+            current.metadata.get('learning_snapshot') or {}).get('memory_frame_id')
+        program_digest = current.metadata.get('sdtm_program_digest') or ''
+        frames = TaskMemoryFrame.objects.filter(memory__project=task.project, memory__owner=user)
+        frame = frames.filter(pk=frame_id).values_list('pk', 'program__digest').first() if frame_id else None
+        if not frame:
+            frame = frames.order_by('-revision').values_list('pk', 'program__digest').first()
+        if frame:
+            frame_id, program_digest = frame
+    strategy, log = rsi_policy.select_recheck_timing(task.project, task, current,
+        source_result_id=evidence['result_id'], prior_decision=prior,
+        sdtm_frame_id=frame_id, sdtm_program_digest=program_digest)
+    remaining = max(0, prior['remaining_turns'] - 1) if prior else rsi_policy.RECHECK_DELAYS[strategy]
     decision = {'strategy': strategy, 'source_result_id': evidence['result_id'], 'remaining_turns': remaining}
+    if log and rsi_policy.policy_mode(task.project_id) != 'off':
+        decision.update(decision_id=log.pk, selection_mode=log.selection_mode, propensity=log.propensity)
     recheck = task.followup_tasks.filter(purpose='recheck').order_by('created_at', 'pk').first()
     if recheck is None and remaining:
         return {**decision, 'action': 'wait'}, None

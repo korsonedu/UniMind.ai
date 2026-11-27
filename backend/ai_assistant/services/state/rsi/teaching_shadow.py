@@ -1,4 +1,4 @@
-"""Owner-scoped G/E shadow comparisons. Nothing here activates a teaching policy."""
+"""Owner-scoped G/E shadow comparisons and offline S replay."""
 import json
 import math
 import time
@@ -6,10 +6,14 @@ from pathlib import Path
 from uuid import UUID
 
 from django.conf import settings
+from django.db import transaction
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from ai_assistant.models import ConversationProject, ProjectLearningTask, TeachingResearchRun
+from ai_assistant.models import ConversationProject, ProjectLearningTask, TeachingMechanismVersion, TeachingResearchRun
+from quizzes.models import ExamQuestionResult
 from users.feature_access import has_learning_feature
+from ai_assistant.services.state.rsi import rsi_dataset
+from ai_assistant.services.runtime import ulr_config
 from ai_assistant.services.facts.teaching_sidecar import canonical_hash, current_bundle, register_mechanism
 
 OPERATION = 'assistant.chat.planner.rsi_shadow'
@@ -63,9 +67,8 @@ def _cases(project, packet):
             task_ids.add(task_id)
             task = ProjectLearningTask.objects.select_related('project', 'exam').filter(pk=task_id, project=project).first()
             _check(task is not None and task.exam_id is not None, '本人已提交任务不可用。')
-            from ai_assistant.services.learning_tasks import task_result_snapshot, task_label_source, task_prompt_hash
-            from quizzes.models import ExamQuestionResult
-            results = list(task.exam.results.filter(status='graded').select_related('exam', 'question'))
+            from ai_assistant.services.facts.learning_tasks import task_result_snapshot, task_label_source, task_prompt_hash
+            results = list(task.exam.results.filter(status='graded').select_related('exam', 'question').order_by('position', 'pk'))
             _check(bool(results), '任务尚无可核验成果。')
             material = {'id': key, 'task_id': str(task.pk), 'goal': task.title,
                         'assistance': task.assistance, 'assistance_source': 'submission_report',
@@ -174,14 +177,36 @@ def _call_model(system, material, schema, max_tokens):
     return output, {'usage': response.get('usage'), 'observed_model': response.get('model')}
 
 
+def _anchor_validation(project, kind, packet, cases):
+    unattested = 'operator_supplied_not_attested'
+    anchors = packet.get('anchors', [])
+    if (kind != 'E' or packet['provenance']['origin'] != 'observational' or not anchors
+            or any(anchor['source'] != 'objective_answer_key' for anchor in anchors)):
+        return unattested
+    by_id = {case['id']: case for case in cases}
+    for anchor in anchors:
+        case = by_id[anchor['case_id']]
+        if len(case['results']) != 1:
+            return unattested
+        result = ExamQuestionResult.objects.select_related('exam__learning_task__project', 'question').filter(
+            pk=case['results'][0]['result_id'], exam__learning_task__pk=case['task_id'], exam__learning_task__project=project).first()
+        expected = rsi_dataset.objective_anchor(result.exam.learning_task, result) if result else None
+        if not expected or any(anchor[key] != expected[key] for key in anchor.keys() - {'case_id'}):
+            return unattested
+    return 'objective_answer_key_verified'
+
+
 def run_shadow(project, kind, packet, *, live_model=False):
     """Explicit operator run; no implicit production scan or policy activation."""
     project = _authorize(project)
-    from ai_assistant.services.dsh_generation import enabled
-    dsh_adapter = enabled(OPERATION)
+    from ai_assistant.services.runtime.generation_gateway import enabled
+    ulr_adapter = ulr_config.ulr_enabled()
+    dsh_adapter = not ulr_adapter and enabled(OPERATION)
     if live_model and dsh_adapter and getattr(settings, 'UNIMIND_DSH_FIXTURE_URL', ''):
         raise ValidationError('DSH协议模拟不能标记为真实模型研究。')
     cases = _validate_packet(project, kind, packet, live_model)
+    temporal_split = rsi_dataset.verify_sdtm_shadow_split(project, kind, packet)
+    anchor_validation = _anchor_validation(project, kind, packet, cases)
     from ai_engine.config import get_model_for_task
     config = get_model_for_task(OPERATION)
     limits = packet['budget']
@@ -202,14 +227,14 @@ def run_shadow(project, kind, packet, *, live_model=False):
                 usage = observed.get('usage')
                 valid_usage = isinstance(usage, dict) and all(type(usage.get(key)) is int and usage[key] >= 0
                     for key in ('prompt_tokens', 'completion_tokens', 'total_tokens'))
-                record['usage'] = usage if valid_usage else None
-                record['observed_model'] = observed.get('observed_model')
+                record['usage'] = {key: usage[key] for key in ('prompt_tokens', 'completion_tokens', 'total_tokens')} if valid_usage else None
+                observed_model = observed.get('observed_model')
+                record['observed_model'] = observed_model if isinstance(observed_model, str) else None
             else:
                 from jsonschema import validate
                 output = packet.get('fixture_outputs', {}).get(arm, {}).get(case_id, {}).get(purpose)
                 validate(output, schema)
-            if 'score' in output and not math.isfinite(output['score']):
-                raise ValidationError('模型分数必须有限。')
+            json.dumps(output, allow_nan=False)
             record['status'] = 'completed'
             return output
         except Exception as exc:
@@ -221,7 +246,6 @@ def run_shadow(project, kind, packet, *, live_model=False):
             calls.append(record)
 
     bundle = current_bundle()
-    from ai_assistant.models import TeachingMechanismVersion
     ancestor = TeachingMechanismVersion.objects.get(pk=bundle[kind]['id'])
     baseline = register_mechanism(kind, {'instruction': packet['baseline']['instruction'],
         'scope': 'operator_supplied_shadow_seed'}, owner=project.user, parent=ancestor)
@@ -257,7 +281,12 @@ def run_shadow(project, kind, packet, *, live_model=False):
 
     # Re-resolve references and current permissions before persisting/exporting results.
     project = _authorize(project)
-    _cases(project, packet)
+    current_cases = _cases(project, packet)
+    if temporal_split:
+        rsi_dataset.verify_sdtm_shadow_split(project, kind, packet)
+        _check(current_cases == cases, 'SDTM 冻结案例已经变化，请重建评测包。')
+    if _anchor_validation(project, kind, packet, current_cases) != anchor_validation:
+        anchor_validation = 'operator_supplied_not_attested'
     labels = {item['case_id']: item['expected_score'] for item in packet.get('anchors', [])}
     support_labels = {item['case_id']: item['expected_independent_support'] for item in packet.get('anchors', [])
                       if 'expected_independent_support' in item}
@@ -271,13 +300,15 @@ def run_shadow(project, kind, packet, *, live_model=False):
                 for key, item in outputs[arm].items() if item.get('evaluation') and key in support_labels),
             'operator_support_anchor_count': sum(key in support_labels for key, _ in scored)}
     completed = all(metrics[arm]['completed_cases'] == len(cases) for arm in metrics)
+    verified_anchors = anchor_validation == 'objective_answer_key_verified'
     report = {'schema_version': 'rsi-shadow-report-1', 'kind': kind,
         'execution': 'live_model' if live_model else 'synthetic_fixture',
-        'status': 'awaiting_independent_anchors' if completed else 'incomplete',
+        'status': ('evaluated_objective_anchors' if verified_anchors else 'awaiting_independent_anchors') if completed else 'incomplete',
         'eligible': False, 'activated': False, 'learning_effect_verified': False,
         'scope': {'project_id': project.pk, 'owner_id': project.user_id, 'origin': packet['provenance']['origin'],
-                  'baseline': 'operator_supplied_shadow_seed', 'split': 'operator_declared_not_verified'},
-        'anchor_validation': 'operator_supplied_not_attested', 'anchors_sent_to_models': False,
+                  'baseline': 'operator_supplied_shadow_seed',
+                  'split': 'sdtm_temporal_holdout' if temporal_split else 'operator_declared_not_verified'},
+        'anchor_validation': anchor_validation, 'anchors_sent_to_models': False,
         'packet_hash': canonical_hash(packet), 'case_hashes': {case['id']: canonical_hash(case) for case in cases},
         'artifacts': {'baseline_instruction': packet['baseline']['instruction'],
                       'candidate_instruction': candidate_instruction},
@@ -290,7 +321,7 @@ def run_shadow(project, kind, packet, *, live_model=False):
                        'same_frozen_materials': True, 'matched_evaluation_caps': True, 'actual_cost_equal': False,
                        'candidate_instruction_changed': candidate_instruction != packet['baseline']['instruction'] if candidate_instruction else False},
         'model': {'operation': OPERATION, 'configured_model': config['model'],
-                  'adapter': 'dsh' if dsh_adapter else 'ai_engine_direct', 'temperature': .2,
+                  'adapter': 'ulr_native' if ulr_adapter else 'dsh' if dsh_adapter else 'ai_engine_direct', 'temperature': .2,
                   'configured_retry_limit': getattr(settings, 'LLM_REQUEST_MAX_RETRIES', 1),
                   'provider_attempt_count_observed': False},
         'budget': {'limits_per_arm': limits, 'engine_call_slots_used': spent,
@@ -300,10 +331,81 @@ def run_shadow(project, kind, packet, *, live_model=False):
                    'provider_total_usage_complete': False,
                    'status': 'limited' if any(call['status'] != 'completed' for call in calls) else 'within_call_caps_token_cost_unverified'},
         'calls': calls, 'outputs': outputs, 'metrics': metrics,
-        'notice': 'Shadow comparison only. Model scores and operator-declared anchors do not attest independent accuracy, learning gain, or recursive improvement. No policy activation.'}
+        'notice': 'Shadow comparison only. Anchor agreement is descriptive. No learning-effect or recursive-improvement claim and no policy activation.'}
     run = TeachingResearchRun.objects.create(owner=project.user, project=project, kind=kind,
         baseline=baseline, candidate=candidate, packet_hash=report['packet_hash'],
         protocol={'schema_version': packet['schema_version'], 'provenance': packet['provenance'],
                   'budget': limits, 'note': packet.get('protocol', {}).get('note', ''),
                   'case_hashes': report['case_hashes'], 'anchors_hash': canonical_hash(packet.get('anchors', []))}, report=report)
+    return {'run_id': run.pk, **report}
+
+
+def _target_probabilities(target_policy):
+    _check(isinstance(target_policy, dict) and target_policy, '目标策略须为动作或动作权重字典。')
+    if target_policy.keys() == {'action'} and isinstance(target_policy['action'], str):
+        target_policy = {target_policy['action']: 1.0}
+    weights = {}
+    for action, weight in target_policy.items():
+        _check(isinstance(action, str) and bool(action.strip()) and type(weight) in (int, float),
+               '动作须为非空字符串，权重须为有限非负数。')
+        try:
+            weight = float(weight)
+        except OverflowError as exc:
+            raise ValidationError('目标策略权重须为有限非负数。') from exc
+        _check(math.isfinite(weight) and weight >= 0, '目标策略权重须为有限非负数。')
+        weights[action] = weight
+    peak = max(weights.values())
+    _check(peak > 0, '目标策略至少需要一个正权重。')
+    scaled = {action: weight / peak for action, weight in weights.items()}
+    total = math.fsum(scaled.values())
+    return {action: weight / total for action, weight in scaled.items()}
+
+
+def run_s_offline_replay(project, *, decision_point, target_policy, cutoff_at=None, max_records=200, min_propensity=.05):
+    project = rsi_dataset.authorize(project)
+    _check(decision_point in rsi_dataset.DECISION_POINTS, '决策点无效。')
+    _check(type(min_propensity) in (int, float) and 0 < min_propensity <= 1
+           and math.isfinite(1.0 / min_propensity), '最小倾向概率须在有效的 (0, 1] 范围内。')
+    probabilities = _target_probabilities(target_policy)
+    dataset = rsi_dataset.build_s_replay_dataset(project, decision_point=decision_point, cutoff_at=cutoff_at,
+                                                max_records=max_records)
+    cap = 1.0 / min_propensity
+    weighted = [(min(cap, probabilities.get(row['selected_action'], 0.0) / row['propensity']), row['reward'])
+                for row in dataset['rows']
+                if type(row['propensity']) in (int, float) and min_propensity <= row['propensity'] <= 1
+                and type(row['reward']) in (int, float) and 0 <= row['reward'] <= 1]
+    n = len(weighted)
+    peak = max((weight for weight, _ in weighted), default=0.0)
+    ips, snips, ess = (0.0 if n else None), None, 0.0
+    if peak:
+        # Scaling preserves SNIPS and Kish ESS and keeps the weight sums and squares finite.
+        scaled = [(weight / peak, reward) for weight, reward in weighted]
+        reward_sum = math.fsum(weight * reward for weight, reward in scaled)
+        weight_sum = math.fsum(weight for weight, _ in scaled)
+        ips = (reward_sum / n) * peak
+        snips = reward_sum / weight_sum
+        ess = weight_sum ** 2 / math.fsum(weight ** 2 for weight, _ in scaled)
+
+    protocol = {'decision_point': decision_point, 'cutoff_at': cutoff_at.isoformat() if cutoff_at is not None else None,
+                'max_records': max_records, 'min_propensity': min_propensity, 'max_importance_weight': cap,
+                'target_policy': probabilities, 'estimators': ['IPS', 'SNIPS', 'Kish ESS']}
+    packet_hash = canonical_hash({'dataset': dataset, 'protocol': protocol})
+    with transaction.atomic():
+        project = rsi_dataset.authorize(project)
+        bundle = current_bundle()
+        ancestor = TeachingMechanismVersion.objects.get(pk=bundle['S']['id'])
+        baseline = register_mechanism('S', {'scope': 'logged_behavior_policy', 'decision_point': decision_point},
+                                      owner=project.user, parent=ancestor)
+        candidate = register_mechanism('S', {'scope': 'offline_target_policy', 'decision_point': decision_point,
+                                             'probabilities': probabilities}, owner=project.user, parent=ancestor)
+        report = {'schema_version': 'rsi-s-replay-report-1', 'kind': 'S', 'execution': 'offline_replay',
+                  'status': 'evaluated_offline_replay' if peak else 'insufficient_randomized_support',
+                  'eligible': False, 'activated': False, 'causal_claim': False, 'learning_effect_verified': False,
+                  'scope': {'project_id': project.pk, 'owner_id': project.user_id}, 'packet_hash': packet_hash,
+                  'protocol': protocol, **dataset, 'n': n, 'estimator_rows_excluded': len(dataset['rows']) - n,
+                  'ips_estimate': ips, 'snips_estimate': snips, 'effective_sample_size': ess,
+                  'baseline_mean_reward': math.fsum(reward for _, reward in weighted) / n if n else None,
+                  'mechanisms': {'runtime_baseline': bundle['S'], 'baseline': baseline.digest, 'candidate': candidate.digest}}
+        run = TeachingResearchRun.objects.create(owner=project.user, project=project, kind='S',
+            baseline=baseline, candidate=candidate, packet_hash=packet_hash, protocol=protocol, report=report)
     return {'run_id': run.pk, **report}

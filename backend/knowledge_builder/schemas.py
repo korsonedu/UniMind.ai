@@ -61,3 +61,38 @@ SCHEMAS['requirement_intake'] = obj(dict(cards={**array(INTAKE_CARD, 4), 'maxIte
         recommended_archetype=enum('auto', 'institution_mechanism_theory', 'formula_derivation_chain', 'taskflow_diagnostic_tree', 'case_synthesis_deduction'),
         scope_inclusions=array(TEXT), scope_exclusions=array(TEXT), depth_preference=STRING,
         learner_background=STRING, suggested_entry_topics=array(TEXT)))))
+
+SOURCE_ALIGNMENT_ITEM = obj(dict(
+    atom_code=TEXT,
+    source_node_id=TEXT,
+    alignment_role=enum('primary_textbook', 'official_syllabus', 'video_lecture', 'worked_example'),
+    match_reason=TEXT,
+    confidence={'type': 'number', 'minimum': 0, 'maximum': 1},
+))
+SCHEMAS['source_tree_align'] = obj(dict(
+    alignments=array(SOURCE_ALIGNMENT_ITEM, 0),
+))
+
+MICRO_LESSON_OPTION = obj(dict(key=TEXT, label=TEXT))
+MICRO_LESSON_QUICK_CHECK = obj(dict(
+    question=TEXT,
+    options={**array(MICRO_LESSON_OPTION, 2), 'maxItems': 4},
+    answer=TEXT,
+    explanation=TEXT,
+))
+MICRO_LESSON_VISUAL = {
+    'type': 'object',
+    'properties': {
+        'type': enum('concept_diagram', 'comparison_table', 'storyboard', 'latex_derivation', 'step_solution'),
+        'payload': {'type': 'object'},
+    },
+    'required': ['type', 'payload'],
+    'additionalProperties': False,
+}
+SCHEMAS['atom_micro_lesson'] = obj(dict(
+    hook_summary=TEXT,
+    pitfalls={**array(TEXT, 1), 'maxItems': 4},
+    narration_script=TEXT,
+    visuals={**array(MICRO_LESSON_VISUAL, 1), 'maxItems': 2},
+    quick_check=MICRO_LESSON_QUICK_CHECK,
+))
