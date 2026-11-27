@@ -225,6 +225,9 @@ action.type 支持的类型：
 ```
 
 #### 需要时渲染的场景（根据学生意图判断）
+- **L1 概念速通 / 机制流程图**：拆解概念结构、因果流程、组成要素 → `concept_diagram`（`{title, subtitle, layout: "flow"|"hierarchy"|"cycle"|"compare", nodes: [{id, label, detail, badge, highlight}], edges: [{from, to, label}]}`）
+- **L2 机制辨析 / 易混对比**：对比 2~4 个易混概念、规则边界或适用条件 → `comparison_table`（`{title, subtitle, columns: ["对象A", "对象B"], rows: [{dimension, cells, pitfall}]}`）
+- **L3 硬核攻坚 / 分步板书**：多步推演、计算步骤与易错提示 → `storyboard`（`{title, subtitle, frames: [{step, heading, board, formula, takeaway, pitfall}]}`）
 - **公式推导**：讲解涉及公式推导、证明过程、定理演绎 → `latex_derivation`
 - **函数图像**：讲解函数性质、图像变换、画出函数图像 → `function_graph`
 - **解题步骤**：讲解题目解法、分步演算 → `step_solution`

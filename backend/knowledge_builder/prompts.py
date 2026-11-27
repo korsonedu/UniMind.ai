@@ -19,6 +19,7 @@ SYSTEM_PREFIX_KEYS = {
     'intrablock_steps': ('subject', 'requirements', 'profile', 'block_summaries'),
     'intrablock_repair': ('subject', 'requirements', 'profile', 'block_summaries'),
     'interface_bind': ('subject', 'requirements', 'profile', 'block_summaries'),
+    'source_tree_align': ('subject', 'source_title', 'source_kind', 'source_nodes'),
 }
 
 
