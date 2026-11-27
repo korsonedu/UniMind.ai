@@ -1,0 +1,83 @@
+.um-chat-tasks {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition: grid-template-rows 180ms cubic-bezier(.2, .8, .2, 1), opacity 150ms ease-out;
+}
+
+@starting-style {
+  .um-chat-tasks {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
+.um-chat-tasks-panel {
+  overflow: hidden;
+  background: var(--um-color-context);
+  border: 1px solid var(--um-color-border);
+  border-radius: var(--um-radius-panel);
+  color: var(--um-color-text);
+}
+
+.um-chat-tasks-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 5px 12px;
+  color: var(--um-color-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  transition: background-color var(--um-motion-fast) ease;
+}
+
+.um-chat-tasks-summary > svg { flex-shrink: 0; }
+.um-chat-tasks-summary:hover { background: var(--um-color-hover); }
+.um-chat-tasks-summary:focus-visible { outline: 2px solid var(--um-color-focus); outline-offset: -2px; }
+
+.um-chat-tasks-items {
+  max-height: min(12rem, 26dvh);
+  margin: 0 12px;
+  padding: 4px 0 6px;
+  border-top: 1px solid var(--um-color-border);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.um-chat-task {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.um-chat-task-status { flex: 0 0 16px; margin-top: 3px; color: var(--um-color-text-muted); }
+.um-chat-task-duration { flex-shrink: 0; color: var(--um-color-text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.um-chat-task-error { color: var(--um-color-danger); font-size: 12px; }
+.um-chat-task[data-status='succeeded'] { color: var(--um-color-text-muted); }
+.um-chat-task[data-status='succeeded'] .um-chat-task-status { color: var(--um-color-success); }
+.um-chat-task[data-status='failed'] .um-chat-task-status { color: var(--um-color-danger); }
+.um-chat-task[data-status='running'] .um-chat-task-status { color: var(--um-color-accent); }
+
+@media (pointer: coarse) {
+  .um-chat-tasks-summary { min-height: var(--um-height-touch-target); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-reduce-motion='true']) .um-chat-task[data-status='running'] .um-chat-task-status {
+    animation: spin 1s linear infinite;
+  }
+}
+
+html[data-reduce-motion='true'] :is(.um-chat-tasks, .um-chat-tasks-summary, .um-chat-tasks .um-collapse, .um-chat-tasks .um-disclosure-chevron) {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .um-chat-tasks, .um-chat-tasks-summary { transition: none; }
+}

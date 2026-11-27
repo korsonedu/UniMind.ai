@@ -2197,6 +2197,7 @@ const en: Record<string, string> = {
   "调整右侧栏宽度": "Resize the right sidebar",
   "全部完成 · {0} 项": "All complete · Items: {0}",
   "本轮未完成 · {0} 成功 · {1} 失败": "Run incomplete · {0} succeeded · {1} failed",
+  "进行中": "In progress",
   "进行中 · {0}/{1} 项": "In progress · Items: {0}/{1}",
   "展开学习侧栏": "Expand learning sidebar",
   "收起学习侧栏": "Collapse learning sidebar",
