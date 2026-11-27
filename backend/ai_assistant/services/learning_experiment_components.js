@@ -1,14 +1,32 @@
 // Shared chart layout. Generated code supplies data and teaching logic.
 const chartInstances = new WeakMap();
 function renderChart(host, options) {
-  if (!(host instanceof HTMLElement) || !options || !['bar', 'line'].includes(options.type)
-      || !Array.isArray(options.labels) || options.labels.length < 1 || options.labels.length > 12
-      || Array.from(options.labels).some(label => typeof label !== 'string' || !label.trim() || label.length > 48)
-      || !Array.isArray(options.series) || options.series.length < 1 || options.series.length > 3
-      || Array.from(options.series).some(series => !series || typeof series.label !== 'string' || !series.label.trim() || series.label.length > 24
-        || !Array.isArray(series.values) || series.values.length !== options.labels.length
-        || Array.from(series.values).some(value => typeof value !== 'number' || !Number.isFinite(value)))) {
-    throw Error('chart需要bar/line、1至12个labels和1至3组等长的有限数值series。');
+  if (!(host instanceof HTMLElement)) throw Error('chart.host 必须是 HTML 元素。');
+  if (!options || !['bar', 'line'].includes(options.type)) throw Error('chart.type 只支持 bar 或 line。');
+  const {labels, series} = options;
+  if (!Array.isArray(labels)) throw Error('chart.labels 必须是数组。');
+  if (labels.length < 1 || labels.length > 12) {
+    throw Error(`chart.labels.length 为 ${labels.length}，须为 1 至 12。`);
+  }
+  for (const [index, label] of labels.entries()) {
+    if (typeof label !== 'string' || !label.trim() || label.length > 48) {
+      throw Error(`chart.labels[${index}] 必须是非空字符串，最多 48 字符。`);
+    }
+  }
+  if (!Array.isArray(series)) throw Error('chart.series 必须是数组。');
+  if (series.length < 1 || series.length > 3) {
+    throw Error(`chart.series.length 为 ${series.length}，须为 1 至 3。`);
+  }
+  for (const [index, item] of series.entries()) {
+    if (!item || typeof item.label !== 'string' || !item.label.trim() || item.label.length > 24) {
+      throw Error(`chart.series[${index}].label 必须是非空字符串，最多 24 字符。`);
+    }
+    if (!Array.isArray(item.values)) throw Error(`chart.series[${index}].values 必须是数组。`);
+    if (item.values.length !== labels.length) {
+      throw Error(`chart.series[${index}].values.length 为 ${item.values.length}，须等于 labels.length（${labels.length}）。`);
+    }
+    const invalidValue = Array.from(item.values).findIndex(value => !Number.isFinite(value));
+    if (invalidValue !== -1) throw Error(`chart.series[${index}].values[${invalidValue}] 必须是有限数值。`);
   }
   const config = JSON.parse(JSON.stringify(options));
   const colors = ['var(--um-accent)', 'var(--um-secondary)', 'var(--um-positive)'];
