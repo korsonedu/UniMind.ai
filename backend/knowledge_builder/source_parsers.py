@@ -277,21 +277,33 @@ def parse_pdf_bytes(data: bytes, filename: str = '') -> tuple[list[dict], dict[s
             logger.warning('DOC_PARSER_ENDPOINT failed, falling back to local PDF parser: %s', exc)
 
     pages: list[str] = []
-    # Try optional lightweight libraries when present in the environment.
     try:
         import io
         from pypdf import PdfReader  # type: ignore
-        reader = PdfReader(io.BytesIO(data))
-        for page in reader.pages[:MAX_TOC_NODES]:
-            pages.append((page.extract_text() or '').strip())
+        from pypdf.errors import PyPdfError  # type: ignore
     except ImportError:
+        pass
+    else:
+        try:
+            reader = PdfReader(io.BytesIO(data))
+            pages = [(page.extract_text() or '').strip() for page in reader.pages[:MAX_TOC_NODES]]
+        except PyPdfError as exc:
+            logger.warning('pypdf could not read source PDF: %s', exc)
+
+    if not pages:
         try:
             import fitz  # type: ignore
-            doc = fitz.open(stream=data, filetype='pdf')
-            for idx in range(min(len(doc), MAX_TOC_NODES)):
-                pages.append((doc[idx].get_text('text') or '').strip())
         except ImportError:
-            pages = _extract_pdf_pages_pure_python(data)
+            pass
+        else:
+            try:
+                with fitz.open(stream=data, filetype='pdf') as doc:
+                    pages = [(doc[idx].get_text('text') or '').strip() for idx in range(min(len(doc), MAX_TOC_NODES))]
+            except fitz.FileDataError as exc:
+                logger.warning('PyMuPDF could not read source PDF: %s', exc)
+
+    if not pages:
+        pages = _extract_pdf_pages_pure_python(data)
 
     non_empty = [(idx + 1, text) for idx, text in enumerate(pages) if text and text.strip()]
     if not non_empty:
