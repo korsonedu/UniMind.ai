@@ -192,6 +192,7 @@ def reserve_ai_call(user, request_id=None, *, fingerprint='', conversation_id=No
     values = {'attempt_id': uuid4(), 'week': week, 'status': 'pending', 'addon': addon, 'conversation_id': conversation_id,
               'unlimited': unlimited, 'response': {}, 'fingerprint': fingerprint, 'workspace_id': member.workspace_id if workspace_active(member) else None}
     if existing:
+        existing.previous_response = existing.response
         for key, value in values.items():
             setattr(existing, key, value)
         existing.save()

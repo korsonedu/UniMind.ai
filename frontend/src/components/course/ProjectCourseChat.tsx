@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Sparkle, X } from '@phosphor-icons/react';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { learningUrl, useProjectLearning } from '@/lib/projectLearning';
+import { reportMessageExposure } from '@/lib/learningExposure';
 import ChatBubble from '@/components/ChatBubble';
 import { ToolStepMessage } from '@/components/AgentStepCard';
 import { DshToolCard, type DshCard } from '@/components/DshToolCard';
@@ -46,6 +47,12 @@ export default function ProjectCourseChat({ projectId, linkedConversation, cours
       video_seconds: snapshot.current ?? Math.max(0, videoRef.current?.currentTime || 0) } }) });
     return () => setPageHooks(null);
   }, [ready, courseId, videoRef, setPageHooks]);
+  useEffect(() => {
+    if (!ready || !visible || (floating && !open)) return;
+    for (const message of chat.messages.filter(message => message.role === 'user' || message.visible !== false).slice(-16)) {
+      reportMessageExposure(message, true);
+    }
+  }, [ready, visible, floating, open, chat.messages]);
   useEffect(() => { bottom.current?.scrollIntoView({ block: 'end' }); }, [chat.messages.length, chat.loading]);
   const update = (text: string) => {
     if (!chat.input.trim() && text.trim()) snapshot.current = Math.max(0, videoRef.current?.currentTime || 0);

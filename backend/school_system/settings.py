@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import math
 import os
 from pathlib import Path
 
@@ -283,6 +284,20 @@ try:
         os.getenv('UNIMIND_SDTM_DIAGNOSTIC_PROJECTS', '').split(',') if value.strip())
 except ValueError as error:
     raise ImproperlyConfigured('UNIMIND_SDTM_DIAGNOSTIC_PROJECTS must contain comma-separated project IDs.') from error
+UNIMIND_RSI_ONLINE_POLICY_MODE = os.getenv('UNIMIND_RSI_ONLINE_POLICY_MODE', 'off')
+if UNIMIND_RSI_ONLINE_POLICY_MODE not in ('off', 'shadow', 'active'):
+    raise ImproperlyConfigured('UNIMIND_RSI_ONLINE_POLICY_MODE must be off, shadow or active.')
+try:
+    UNIMIND_RSI_POLICY_PROJECTS = frozenset(int(value) for value in
+        os.getenv('UNIMIND_RSI_POLICY_PROJECTS', '').split(',') if value.strip())
+except ValueError as error:
+    raise ImproperlyConfigured('UNIMIND_RSI_POLICY_PROJECTS must contain comma-separated project IDs.') from error
+try:
+    UNIMIND_RSI_EXPLORATION_RATE = float(os.getenv('UNIMIND_RSI_EXPLORATION_RATE', '0.0'))
+except ValueError as error:
+    raise ImproperlyConfigured('UNIMIND_RSI_EXPLORATION_RATE must be a finite number between 0.0 and 0.5.') from error
+if not math.isfinite(UNIMIND_RSI_EXPLORATION_RATE) or not 0.0 <= UNIMIND_RSI_EXPLORATION_RATE <= 0.5:
+    raise ImproperlyConfigured('UNIMIND_RSI_EXPLORATION_RATE must be a finite number between 0.0 and 0.5.')
 
 UNIMIND_LEARNING_MEMORY_CONNECTORS = _get_bool('UNIMIND_LEARNING_MEMORY_CONNECTORS')
 UNIMIND_LEARNING_MEMORY_OAUTH_ORIGIN = os.getenv('UNIMIND_LEARNING_MEMORY_OAUTH_ORIGIN', '').rstrip('/')

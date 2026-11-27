@@ -121,6 +121,53 @@ def public_event_content(event):
     return content
 
 
+def _rank_context_methods(project, message, data):
+    from ai_assistant.services.decision import rsi_policy
+    if message is None or rsi_policy.policy_mode(project.pk) == 'off':
+        return
+    from ai_assistant.models import LearningStrategy
+    from ai_assistant.services.state.prism.prism_memory import accessible
+    from ai_assistant.services.facts.teaching_sidecar import canonical_hash, method_snapshot
+
+    private = []
+    if accessible(message):
+        strategies = LearningStrategy.objects.filter(user=project.user, is_retired=False,
+            source_event__project__user=project.user,
+            source_event__message__user=project.user, source_event__message__role='user').exclude(
+            source_event_id__in=unconfirmed_progress_ids(project.user_id)).select_related(
+            'source_event__message__user', 'source_event__message__bot').order_by('-id')[:3]
+        for strategy in strategies:
+            source = strategy.source_event
+            if (not str(source.content.get('strategy', '')).strip() or not accessible(source.message)
+                    or not Conversation.objects.filter(user=project.user, project_id=source.project_id,
+                        conversation_id=source.message.conversation_id).exists()):
+                continue
+            snapshot = method_snapshot(strategy)
+            private.append({'id': strategy.pk, 'method': snapshot['method'][:1000],
+                'domain': strategy.domain, 'topic': strategy.topic, 'method_digest': canonical_hash(snapshot)})
+    public = data.get('public_methods', ())
+    if public or private:
+        readout = data.get('memory_read') or {}
+        ranked = rsi_policy.rank_method_candidates(project, message, public_methods=public, private_strategies=private,
+            sdtm_frame_id=readout.get('frame_id'), sdtm_program_digest=readout.get('program_digest', ''))
+        if public:
+            data['public_methods'] = ranked['public_methods']
+        if private:
+            data['private_strategies'] = ranked['private_strategies']
+        data['method_candidate_order'] = ranked['method_candidate_order']
+
+
+def rank_task_methods(project, message, task_id, prepared):
+    from ai_assistant.services.decision import rsi_policy
+    public = prepared['packet']['public_methods']
+    if public and rsi_policy.policy_mode(project.pk) != 'off':
+        ranked = rsi_policy.rank_method_candidates(project, message, public_methods=public,
+            task=project.learning_tasks.get(pk=task_id), sdtm_frame_id=prepared.get('frame_id'),
+            sdtm_program_digest=prepared['program_digest'])
+        return ranked['public_methods']
+    return public
+
+
 def learning_data(project, language='zh-CN', *, current_message=None, memory_read=None, diagnostic_excluded=None):
     state, _ = ProjectLearning.objects.get_or_create(project=project)
     from users.feature_access import has_learning_feature
@@ -271,11 +318,13 @@ def activity_snapshot(project, raw):
                               if raw.get('node_id') in stage.get('knowledge_nodes', [])), None), 'mainline': False}
 
 
-def project_context(user, conversation_id, *, message=None, private_probe_review=False, memory_read=None, diagnostic_excluded=None):
+def project_context(user, conversation_id, *, message=None, private_probe_review=False, memory_read=None,
+                    diagnostic_excluded=None, rank_methods=True):
     conversation = Conversation.objects.select_related('project').filter(user=user,
         conversation_id=conversation_id, project__user=user).first()
     if not conversation:
         return ''
+    current_message = message
     if message is None:
         message = AIChatMessage.objects.filter(user=user, conversation_id=conversation_id, role='user').order_by('-id').first()
     if not ProjectLearning.objects.filter(project_id=conversation.project_id, planning_enabled=True).exists():
@@ -296,6 +345,8 @@ def project_context(user, conversation_id, *, message=None, private_probe_review
             prepared = memory_read
     data = compact_learning(learning_data(conversation.project, current_message=message, memory_read=prepared,
         diagnostic_excluded=diagnostic_excluded if prepared is not None else None))
+    if rank_methods:
+        _rank_context_methods(conversation.project, current_message, data)
     if memory_mode == 'shadow':
         from ai_assistant.services.state.sdtm.task_memory_store import prepare
         from ai_assistant.services.facts.teaching_sidecar import observe
@@ -335,7 +386,7 @@ def model_project_context(value):
     return '\n'.join([*lines[:2], json.dumps(data, ensure_ascii=False, default=str)])
 
 
-def turn_project_context(user, context, *, private_probe_review=False):
+def turn_project_context(user, context, *, private_probe_review=False, rank_methods=True):
     """Freeze teaching data for this signed question; authorization stays live."""
     if not context:
         return ''
@@ -364,7 +415,8 @@ def turn_project_context(user, context, *, private_probe_review=False):
             if followup and not followup.content.get('response_message_id'):
                 followup.content['response_message_id'] = message.pk
                 followup.save(update_fields=['content'])
-        value = project_context(user, message.conversation_id, message=message, private_probe_review=private_probe_review) if project_id else ''
+        value = project_context(user, message.conversation_id, message=message,
+            private_probe_review=private_probe_review, rank_methods=rank_methods) if project_id else ''
         message.metadata['learning_snapshot'] = {'project_id': project_id, 'context': value, 'probe_rubrics_scoped': True,
                                                  'private_probe_review': private_probe_review}
         if value.startswith('\n当前项目的学习状态'):
@@ -379,13 +431,14 @@ def turn_project_context(user, context, *, private_probe_review=False):
         return value
 
 
-def model_learning_data(project, user, *, language='zh-CN'):
+def model_learning_data(project, user, *, language='zh-CN', current_message=None):
     from django.conf import settings
     prepared = None
     if getattr(settings, 'UNIMIND_SDTM_TASK_MEMORY_MODE', 'off') == 'active':
         from ai_assistant.services.state.sdtm.task_memory_store import preview
         prepared = preview(project, user)
     data = compact_learning(learning_data(project, language=language, memory_read=prepared))
+    _rank_context_methods(project, current_message, data)
     data.pop('memory_read', None)
     return data
 

@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { PaperPlaneTilt, Spinner, ArrowCounterClockwise, Lightbulb, ClockCounterClockwise, Trash, Sparkle, Plus, ArrowUp, MagnifyingGlass, Folder, Check } from '@phosphor-icons/react';
 import api from '@/lib/api';
+import { reportMessageExposure } from '@/lib/learningExposure';
 import { cn } from '@/lib/utils';
 import { useTypewriter } from '@/hooks/useTypewriter';
 import ChatBubble from '@/components/ChatBubble';
@@ -200,6 +201,10 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   } = chat;
 
   useEffect(() => { activate(); }, [activate]);
+  useEffect(() => {
+    if (!initialized || !hasConversation) return;
+    for (const message of messages) reportMessageExposure(message, layout === 'inline');
+  }, [initialized, hasConversation, messages, layout]);
 
   useLayoutEffect(() => {
     setPageHooks({

@@ -799,6 +799,37 @@ class TeachingMechanismVersion(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class TeachingDecisionLog(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='teaching_decisions')
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE, related_name='teaching_decisions')
+    message = models.ForeignKey(AIChatMessage, on_delete=models.CASCADE, related_name='teaching_decisions')
+    answer = models.ForeignKey(AIChatMessage, null=True, blank=True, on_delete=models.SET_NULL,
+                               related_name='committed_teaching_decisions')
+    task = models.ForeignKey(ProjectLearningTask, null=True, blank=True, on_delete=models.SET_NULL,
+                             related_name='teaching_decisions')
+    decision_point = models.CharField(max_length=40, choices=[
+        ('recheck_timing', '复测时机'), ('method_ranking', '方法候选排序')])
+    mechanism = models.ForeignKey(TeachingMechanismVersion, null=True, blank=True, on_delete=models.SET_NULL,
+                                  related_name='decisions')
+    policy_version = models.CharField(max_length=80)
+    selection_mode = models.CharField(max_length=32, choices=[
+        ('deterministic', '确定性'), ('stratified_random', '受控随机'),
+        ('bounded_exploration', '受限探索'), ('shadow_only', '影子评估')])
+    selected_action = models.CharField(max_length=120)
+    propensity = models.FloatField(null=True, blank=True)
+    candidates = models.JSONField(default=list)
+    sdtm_frame_id = models.BigIntegerField(null=True, blank=True)
+    sdtm_program_digest = models.CharField(max_length=64, blank=True, default='')
+    trace_id = models.CharField(max_length=64, blank=True, default='', db_index=True)
+    context_snapshot = models.JSONField(default=dict)
+    exposure = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['message', 'decision_point'], name='teaching_decision_message_point')]
+        indexes = [models.Index(fields=['project', 'decision_point', 'created_at'])]
+
+
 class LearningStrategyVersion(models.Model):
     strategy = models.ForeignKey(LearningStrategy, on_delete=models.CASCADE, related_name='versions')
     generator = models.ForeignKey(TeachingMechanismVersion, null=True, blank=True, on_delete=models.SET_NULL)
@@ -825,13 +856,48 @@ class LearningStrategyOutcome(models.Model):
 class TeachingResearchRun(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE)
-    kind = models.CharField(max_length=1, choices=[('G', '生成'), ('E', '评价')])
+    kind = models.CharField(max_length=1, choices=[('G', '生成'), ('E', '评价'), ('S', '选择')])
     baseline = models.ForeignKey(TeachingMechanismVersion, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
     candidate = models.ForeignKey(TeachingMechanismVersion, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
     packet_hash = models.CharField(max_length=64)
     protocol = models.JSONField()
     report = models.JSONField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class TeachingMechanismActivation(models.Model):
+    kind = models.CharField(max_length=1, choices=[('G', '生成'), ('S', '选择'), ('E', '评价')])
+    scope = models.CharField(max_length=24, choices=[('project_canary', '项目灰度'), ('global', '全局')])
+    project = models.ForeignKey(ConversationProject, null=True, blank=True, on_delete=models.CASCADE,
+                                related_name='mechanism_activations')
+    decision_point = models.CharField(max_length=40, blank=True, default='')
+    research_run = models.ForeignKey(TeachingResearchRun, on_delete=models.PROTECT, related_name='activations')
+    mechanism = models.ForeignKey(TeachingMechanismVersion, on_delete=models.PROTECT, related_name='activations')
+    previous = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='successors')
+    published_program = models.ForeignKey(TaskMemoryProgram, null=True, blank=True, on_delete=models.SET_NULL,
+                                          related_name='rsi_activations')
+    status = models.CharField(max_length=24, choices=[('gate_passed', '通过门禁'), ('canary_active', '灰度生效'),
+                                                     ('active', '正式生效'), ('rolled_back', '已回滚'), ('rejected', '已拒绝')])
+    gate_report = models.JSONField(default=dict)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name='approved_mechanism_activations')
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rolled_back_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                       related_name='rolled_back_mechanism_activations')
+    rolled_back_at = models.DateTimeField(null=True, blank=True)
+    rollback_reason = models.CharField(max_length=500, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['kind', 'scope', 'project', 'decision_point', 'status', 'created_at'])]
+        constraints = [
+            models.UniqueConstraint(fields=['kind', 'scope', 'project', 'decision_point'],
+                condition=models.Q(project__isnull=False, status__in=('canary_active', 'active')),
+                name='rsi_active_project_slot'),
+            models.UniqueConstraint(fields=['kind', 'scope', 'decision_point'],
+                condition=models.Q(project__isnull=True, status__in=('canary_active', 'active')),
+                name='rsi_active_global_slot'),
+        ]
 
 
 class LearningMemoryGrant(models.Model):

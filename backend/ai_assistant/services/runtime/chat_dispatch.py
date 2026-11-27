@@ -71,7 +71,7 @@ def dispatch_bot_chat(
     profile = get_bot_profile(bot.bot_type if bot else 'planner')
     tool_executor = profile.executor_class(user=user, institution=institution)
     from ai_assistant.services.decision.project_learning import turn_project_context
-    turn_project_context(user, chat_context)
+    turn_project_context(user, chat_context, rank_methods=False)
     tool_executor.learning_context = chat_context
     memory_context = _memory_for_chat(user, bot, chat_context, memory_context, history)
     gated = clarification_result(bot, user, tool_executor)
@@ -128,7 +128,7 @@ def dispatch_bot_chat_sync(
     profile = get_bot_profile(bot.bot_type if bot else 'planner')
     tool_executor = profile.executor_class(user=user, institution=institution)
     from ai_assistant.services.decision.project_learning import turn_project_context
-    turn_project_context(user, chat_context)
+    turn_project_context(user, chat_context, rank_methods=False)
     tool_executor.learning_context = chat_context
     memory_context = _memory_for_chat(user, bot, chat_context, memory_context, history)
 
