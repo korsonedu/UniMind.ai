@@ -481,7 +481,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     inputRevisionRef.current = 0;
     updateInput('');
     updateCoursePosition(null);
-  }, [identity]);
+    setConversationId(options.initialConversationId || crypto.randomUUID());
+  }, [identity, options.initialConversationId, setConversationId]);
 
   useEffect(() => {
     if (!initialized || !bot || !userId) return;
@@ -863,6 +864,20 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
   // ── Handlers ──
 
+  const recoverMissingConversation = useCallback((id: string) => {
+    const scope = scopeRef.current;
+    if (!scope || useAuthStore.getState().user?.id !== userId
+        || id !== conversationIdRef.current || messagesRef.current.length) return false;
+    const draft = inputValueRef.current;
+    const nextId = crypto.randomUUID();
+    deleteRecovery(scope, id);
+    pendingSendsRef.current.delete(id);
+    setConversationId(nextId);
+    saveRecovery(scope, nextId, { projectId: projectIdRef.current });
+    setInput(draft);
+    return true;
+  }, [userId, setConversationId, setInput]);
+
   const handleReset = useCallback((notify = true) => {
     if (!bot) return;
     // 保留原会话的后台流；只清空当前视图并新建会话。
@@ -943,6 +958,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     handleDeleteSession,
     handleUpdateSession,
     handleReset,
+    recoverMissingConversation,
     handleSkillSelect,
     doSend,
     groupIntoSessions,

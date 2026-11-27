@@ -2,6 +2,7 @@ import { t, useLocale } from '@/i18n';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type RefObject } from 'react';
 import { Link } from 'react-router-dom';
 import { FileText, X } from '@phosphor-icons/react';
+import { isAxiosError } from 'axios';
 import { notesApi, notebookPath, type Notebook, type NoteSummary } from '@/lib/notes';
 import '@/styles/note-mentions.css';
 
@@ -24,8 +25,9 @@ function createReferenceSession(key: string) {
 interface Options {
   enabled: boolean; disabled: boolean; botId?: number; conversationId: string; input: string;
   setInput: (value: string) => void; textareaRef: RefObject<HTMLTextAreaElement | null>;
+  onMissingConversation: (id: string) => boolean;
 }
-export function useNoteMentions({ enabled, disabled, botId, conversationId, input, setInput, textareaRef }: Options) {
+export function useNoteMentions({ enabled, disabled, botId, conversationId, input, setInput, textareaRef, onMissingConversation }: Options) {
   useLocale();
   const key = enabled && botId ? `${botId}:${conversationId}` : '';
   const store = useMemo(() => createReferenceSession(key), [key]);
@@ -53,12 +55,16 @@ export function useNoteMentions({ enabled, disabled, botId, conversationId, inpu
         const [ids, folders] = await Promise.all([notesApi.references(botId, conversationId, controller.signal), notesApi.notebooks()]);
         const notes = ids.length ? await notesApi.lookup({ ids: ids.join(',') }, controller.signal) : [];
         if (!controller.signal.aborted && current()) { store.update({ notes, ready: true }); setBooks(folders); }
-      } catch { if (!controller.signal.aborted && current()) store.update({ error: t('笔记引用加载失败') }); }
-      finally { if (!controller.signal.aborted && current()) { store.update({ pending: undefined }); } }
+      } catch (error) {
+        if (controller.signal.aborted || !current()) return;
+        if (isAxiosError<{ detail?: string }>(error) && error.response?.status === 404
+            && error.response.data?.detail === '会话不存在。' && onMissingConversation(conversationId)) return;
+        store.update({ error: t('笔记引用加载失败') });
+      } finally { if (!controller.signal.aborted && current()) { store.update({ pending: undefined }); } }
     })();
     store.update({ pending });
     return () => controller.abort();
-  }, [key, retry, botId, conversationId, current, store]);
+  }, [key, retry, botId, conversationId, current, store, onMissingConversation]);
   const queryText = query?.text;
   const searchKey = `${key}:${queryText ?? ''}`;
   const [previousSearchKey, setPreviousSearchKey] = useState(searchKey);

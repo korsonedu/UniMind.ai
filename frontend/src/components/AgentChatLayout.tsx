@@ -204,7 +204,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     scrollRef, projectId, setProjectId,
     setInput, setSkillOpen, setSessionOpen, setIsComposition, setSessions,
     handleDragStart, handleLoadSession, handleRefreshSessions, handleDeleteSession, handleUpdateSession, handleReset,
-    handleSkillSelect, groupIntoSessions, doSend,
+    handleSkillSelect, groupIntoSessions, doSend, recoverMissingConversation,
   } = chat;
 
   useEffect(() => { activate(); }, [activate]);
@@ -245,7 +245,10 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     }
   }, [conversationId, messages, scrollRef]);
 
-  const noteMentions = useNoteMentions({ enabled: enableNoteMentions, disabled: loading, botId: bot?.id, conversationId, input, setInput, textareaRef: nativeInputRef });
+  const noteMentions = useNoteMentions({
+    enabled: enableNoteMentions, disabled: loading, botId: bot?.id, conversationId,
+    input, setInput, textareaRef: nativeInputRef, onMissingConversation: recoverMissingConversation,
+  });
   useLayoutEffect(() => { noteMentionsRef.current = noteMentions; }, [noteMentions]);
   const projectControls = useConversationProjects(appearance === 'native', projectId, setProjectId, setSessions, openProject);
   const selectedProjectName = projectControls.projects.find(project => project.id === projectId)?.name;
