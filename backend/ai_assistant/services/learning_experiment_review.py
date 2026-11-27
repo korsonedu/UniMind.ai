@@ -101,7 +101,9 @@ def review_screenshots(frames):
         result['failure_kind'] = type(error).__name__
         if isinstance(error, requests.HTTPError) and error.response is not None:
             result['http_status'] = error.response.status_code
+    metadata = {'model': model, 'frames': len(frames), 'decision': result['status'], **result.get('usage', {})}
+    if result['status'] == 'rejected':
+        metadata['issues'] = result['issues']
     record_ai_operation('assistant.experiment.visual_review', result['status'] != 'unavailable',
-        int((monotonic() - started) * 1000), error_category=result.get('failure_kind', 'none'),
-        metadata={'model': model, 'frames': len(frames), 'decision': result['status'], **result.get('usage', {})})
+        int((monotonic() - started) * 1000), error_category=result.get('failure_kind', 'none'), metadata=metadata)
     return result

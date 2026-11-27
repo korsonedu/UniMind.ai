@@ -3,6 +3,7 @@ import json
 import re
 from pathlib import Path
 import subprocess
+from time import monotonic
 from uuid import uuid4
 
 from django.conf import settings
@@ -10,6 +11,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from rest_framework.exceptions import APIException, NotFound, PermissionDenied, ValidationError
 
 from ai_assistant.models import AIChatMessage
+from ai_engine.observability import log_ai_operation
 
 
 VISUAL_DEMO_REQUEST = re.compile(r'可视化|演示|互动|交互实验|图解|示意图|画(?:一个|一张|一|个)?图|用图片|动态(?:展示|图)'
@@ -167,14 +169,29 @@ window.addEventListener('DOMContentLoaded', () => {
 def preview(html, state, checks, *, current=None):
     from .learning_worker import run
     visual = getattr(settings, 'UNIMIND_LEARNING_VISUAL_REVIEW_ENABLED', False)
+    started = monotonic()
     try:
         report = run('learning_experiment_preview.py', {
             'document': experiment_document(html, state), 'checks': checks,
             'capture_screenshots': visual}, max_output_bytes=4 * 1024 * 1024 if visual else 65536)
-    except (subprocess.TimeoutExpired, OSError, ValueError):
+    except (subprocess.TimeoutExpired, OSError, ValueError) as error:
+        log_ai_operation('assistant.experiment.browser_preview', False,
+            (monotonic() - started) * 1000, type(error).__name__)
         return {'ok': False, 'errors': ['浏览器预览不可用或超时，请缩短代码并检查运行环境。'], 'checks': []}
     frames = report.pop('screenshots', [])
-    if visual and report['ok']:
+    if not report['ok']:
+        failed_checks = [
+            {'index': index, 'action': check['action'], 'selector': check['selector'],
+                'expect_selector': check['expect_selector'], 'error': result.get('error', '').partition('\n')[0][:240]}
+            for index, (check, result) in enumerate(zip(checks, report.get('checks', [])), start=1)
+            if not result['ok']
+        ]
+        log_ai_operation('assistant.experiment.browser_preview', False, (monotonic() - started) * 1000,
+            'check_failed' if failed_checks else 'preview_failed', metadata={
+                'failed_checks': failed_checks,
+                'errors': [error.partition('\n')[0][:240] for error in report.get('errors', [])],
+            })
+    elif visual:
         from .learning_experiment_review import reserve_review, review_screenshots
         if not reserve_review(current):
             report.update(ok=False, visual_review={'status': 'budget_exhausted'})
