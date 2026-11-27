@@ -229,7 +229,7 @@ def _get_embedding_api_url() -> str:
     return f"{EMBEDDING_BASE_URL}/embeddings"
 
 
-def _call_embedding_api(texts: List[str]) -> List[List[float]]:
+def _call_embedding_api(texts: List[str], *, timeout: float = 30) -> List[List[float]]:
     """通过独立 embedding 服务获取向量，与 mem0 共用模型和维度。"""
     import httpx
     from ai_engine.config import EMBEDDING_MODEL, EMBEDDING_API_KEY, EMBEDDING_DIMENSIONS
@@ -238,7 +238,7 @@ def _call_embedding_api(texts: List[str]) -> List[List[float]]:
         api_url,
         json={"model": EMBEDDING_MODEL, "input": texts, "dimensions": EMBEDDING_DIMENSIONS},
         headers={"Authorization": f"Bearer {EMBEDDING_API_KEY}", "Content-Type": "application/json"},
-        timeout=30,
+        timeout=timeout,
     )
     resp.raise_for_status()
     data = resp.json()

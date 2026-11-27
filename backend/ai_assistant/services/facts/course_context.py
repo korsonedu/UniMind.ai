@@ -12,9 +12,10 @@ from django.conf import settings
 from rest_framework import serializers
 from rest_framework.exceptions import NotFound, ValidationError
 
-from courses.access import visible_courses
+from courses.access import private_companion_courses, visible_courses
 from courses.models import VideoTranscript
-from ai_assistant.models import AIChatMessage
+from ai_assistant.models import AIChatMessage, Conversation
+from .workbench_ingest import is_personal_space
 
 
 MAX_IMAGE_BYTES = 512 * 1024
@@ -109,8 +110,9 @@ def prepare_course_context(request, bot, conversation_id):
     previous = AIChatMessage.objects.filter(user=request.user, bot=bot,
         conversation_id=conversation_id, role='user').order_by('id').first()
     previous_course = previous.metadata.get('course_context') if previous else None
-    from ai_assistant.models import Conversation
-    project_chat = Conversation.objects.filter(user=request.user, conversation_id=conversation_id, project__user=request.user).exists()
+    conversations = Conversation.objects.filter(user=request.user, conversation_id=conversation_id)
+    project_id = conversations.filter(project__user=request.user).values_list('project_id', flat=True).first()
+    project_chat = project_id is not None
     if payload is None:
         if previous_course and not project_chat:
             raise ValidationError('课程提问需要附带本课时间戳。')
@@ -119,7 +121,17 @@ def prepare_course_context(request, bot, conversation_id):
         raise ValidationError('课程提问仅支持小宇。')
     data = CourseQuestionInput(data=payload)
     data.is_valid(raise_exception=True)
-    course = visible_courses(request).filter(pk=data.validated_data['course_id']).first()
+    course_id = data.validated_data['course_id']
+    course = visible_courses(request).filter(pk=course_id).first()
+    workbench_project = None
+    if course is None and is_personal_space(request.user):
+        # Apply the same project scope to a first turn as to an existing conversation.
+        if project_chat:
+            workbench_project = project_id
+        elif previous is None and request.data.get('project_id') is not None and not conversations.exists():
+            workbench_project = serializers.IntegerField(min_value=1).run_validation(request.data['project_id'])
+        if workbench_project:
+            course = private_companion_courses(request.user, workbench_project).filter(pk=course_id).first()
     if course is None:
         raise NotFound('课程不存在或不可访问。')
     if previous and not project_chat and (not previous_course or previous_course['course_id'] != course.pk):
@@ -138,6 +150,8 @@ def prepare_course_context(request, bot, conversation_id):
             'selected_start_seconds': selected_start, 'selected_end_seconds': selected_end,
             'start_seconds': segments[0]['start_time'], 'end_seconds': segments[-1]['end_time'],
             'segments': segments}
+    if workbench_project:
+        context['workbench_project'] = workbench_project
     if 'visual' in data.validated_data:
         context['visual'] = data.validated_data['visual']
     return context
@@ -179,7 +193,10 @@ def course_visual_messages(context) -> list[dict]:
 
 
 def course_context_text(request, context):
-    if not visible_courses(request).filter(pk=context['course_id']).exists():
+    project_id = context.get('workbench_project')
+    courses = (private_companion_courses(request.user, project_id)
+               if project_id and is_personal_space(request.user) else visible_courses(request))
+    if not courses.filter(pk=context['course_id']).exists():
         raise NotFound('课程不存在或不可访问。')
     template, _, _ = _course_prompt_parts()
     text_context = dict(context)

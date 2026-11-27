@@ -128,7 +128,7 @@ def context_memory(user, chat_context=None):
     return question_facts(user, chat_context) if active() else memory_snapshot(user)
 
 
-def build_context(user, message, recent_messages=None, chat_context=None, *, ulr=False):
+def build_context(user, message, recent_messages=None, chat_context=None, *, ulr=False, workbench_tools=()):
     from users.learning import cohort_info
     from ai_assistant.services.learning_experiments import VISUAL_DEMO_REQUEST
     cohort = cohort_info(user)
@@ -152,6 +152,7 @@ def build_context(user, message, recent_messages=None, chat_context=None, *, ulr
     external_mcp_tools = external_mcp_tools_for_user(user) if (chat_context and allowed and mcp_client_enabled()) else []
     if external_mcp_tools:
         allowed.extend(external_mcp_tools)
+    allowed.extend(workbench_tools)
     authorization = [t for t in allowed if not t['function']['name'].startswith('session_')]
     planning = planning_for_chat(user, chat_context)
     if not planning:

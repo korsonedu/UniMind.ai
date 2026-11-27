@@ -15,6 +15,10 @@ export interface TranscriptSegment {
   index: number;
 }
 
+export function activeTranscriptSegment(segments: TranscriptSegment[], seconds: number) {
+  return segments.find(({ start, end }) => seconds >= start && seconds < end);
+}
+
 interface CourseAIState {
   outlineStatus: 'idle' | 'loading' | 'available' | 'unavailable';
   outlineItems: OutlineItem[];

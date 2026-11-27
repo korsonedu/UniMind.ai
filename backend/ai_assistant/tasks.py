@@ -1258,3 +1258,10 @@ def pre_grade_single_question(session_id: str, question_id: int, user_answer: st
         logger.warning("pre_grade failed session=%s qid=%d: %s", session_id, question_id, exc)
         # 缓存错误标记，submit 时 fallback 到同步批改
         cache.set(cache_key, {'_error': str(exc)}, timeout=300)
+
+
+@shared_task(ignore_result=True, soft_time_limit=5100, time_limit=5400)
+def process_project_source_task(source_id):
+    from .services.facts.workbench_ingest import process_project_source
+
+    process_project_source(source_id)

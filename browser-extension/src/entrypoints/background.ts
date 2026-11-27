@@ -1,19 +1,27 @@
 import { defineBackground } from 'wxt/utils/define-background';
+import { parseBilibiliVideoUrl } from '../collectors/bilibili';
 import { installMediaHeaders, transcribeDashAudio, uploadAudioSnippet } from '../collectors/dash-range';
 import { clearVisual, collectVisual } from '../collectors/visual';
+import { extractWorkbenchArticle } from '../collectors/workbenchArticle';
+import { fullWorkbenchTranscript } from '../collectors/workbenchVideo';
+import { parseYouTubeVideoUrl } from '../collectors/youtube';
 import { handleAuthCookieChange, syncCookieToken } from '../lib/auth';
 import { readSession } from '../lib/storage';
 import {
   sendTabMessage,
   UNIMIND_AUTH_SYNC,
   UNIMIND_CAPTURE_CONTEXT_FOR_ASK,
+  UNIMIND_CAPTURE_SOURCE_FOR_WORKBENCH,
   UNIMIND_COLLECT_PAGE_SNAPSHOT,
+  UNIMIND_COLLECT_WORKBENCH_VIDEO,
   UNIMIND_GET_ACTIVE_VIDEO,
   UNIMIND_OPEN_SIDEPANEL,
   UNIMIND_TOGGLE_TAB_AUDIO,
   type BridgeMessage,
 } from '../shared/bridge';
-import type { CaptureContextResult, PageCollectSnapshot, TranscriptSegmentItem, TranscriptSource } from '../shared/types';
+import type {
+  CaptureContextResult, PageCollectSnapshot, TranscriptSegmentItem, TranscriptSource, WorkbenchCaptureResult,
+} from '../shared/types';
 import { collectTabAudio, installOffscreenAudioBridge, setTabAudioEnabled, stopTabAudio } from './offscreen/client';
 
 // The side panel stops waiting for the entire snapshot after four seconds.
@@ -24,6 +32,9 @@ interface TranscriptResult {
   source: TranscriptSource;
   segments: TranscriptSegmentItem[];
 }
+const bufferedTranscripts = new Map<number, {
+  videoKey: string; auth: string; segments: TranscriptSegmentItem[];
+}>();
 
 async function activeTabId() {
   return (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0]?.id;
@@ -43,6 +54,17 @@ async function collectTranscript(
   if (!session?.token || Date.now() >= deadline) return emptyTranscript;
   const { serverOrigin, token } = session;
   const { descriptor, dash_audio: track, video_seconds: targetSeconds } = snapshot;
+  const auth = `${serverOrigin}:${token}`;
+  const previous = bufferedTranscripts.get(tabId);
+  const buffer = previous?.videoKey === descriptor.video_key && previous.auth === auth
+    ? previous : { videoKey: descriptor.video_key, auth, segments: [] };
+  bufferedTranscripts.set(tabId, buffer);
+  function remember(source: TranscriptSource, segments: TranscriptSegmentItem[]): TranscriptResult {
+    if (bufferedTranscripts.get(tabId) === buffer) {
+      buffer.segments = fullWorkbenchTranscript([...buffer.segments, ...segments]);
+    }
+    return { source, segments };
+  }
 
   if (track) {
     try {
@@ -50,7 +72,7 @@ async function collectTranscript(
       if (Date.now() >= deadline) return emptyTranscript;
       const result = await transcribeDashAudio({ descriptor, track, targetSeconds, serverOrigin, token });
       warnings.push(...result.warnings);
-      if (result.segments.length) return { source: 'dash_range_asr', segments: result.segments };
+      if (result.segments.length) return remember('dash_range_asr', result.segments);
     } catch {
       warnings.push('DASH 音频切片暂时无法转写。');
     }
@@ -62,11 +84,60 @@ async function collectTranscript(
     if (!clip || Date.now() >= deadline) return emptyTranscript;
     const result = await uploadAudioSnippet({ descriptor, ...clip, serverOrigin, token });
     warnings.push(...result.warnings);
-    if (result.segments.length) return { source: 'tab_capture_asr', segments: result.segments };
+    if (result.segments.length) return remember('tab_capture_asr', result.segments);
   } catch {
     warnings.push('实时听课录音暂时无法转写。');
   }
   return emptyTranscript;
+}
+
+async function captureWorkbenchSource(windowId?: number): Promise<WorkbenchCaptureResult> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, ...(windowId === undefined ? { lastFocusedWindow: true } : { windowId }) });
+    if (tab?.id === undefined || !tab.url || !/^https?:\/\//i.test(tab.url)) {
+      return { error: '请打开一个 HTTP 或 HTTPS 网页再收入工作台。' };
+    }
+    const url = new URL(tab.url);
+    if (url.username || url.password) return { error: '当前网页链接中包含账号或密码，无法收入工作台。' };
+    url.hash = '';
+    const videoRoute = parseBilibiliVideoUrl(url) ?? parseYouTubeVideoUrl(url);
+    if (videoRoute) {
+      const snapshot = await sendTabMessage(tab.id, UNIMIND_COLLECT_WORKBENCH_VIDEO).catch(() => null);
+      if (snapshot?.descriptor.video_key !== videoRoute.video_key) {
+        return { error: '暂时无法读取当前视频，请刷新视频页面后再试。' };
+      }
+      const { descriptor } = snapshot;
+      let segments = snapshot.segments;
+      if (!segments.length) {
+        const buffer = bufferedTranscripts.get(tab.id);
+        if (buffer?.videoKey === descriptor.video_key && buffer.segments.length) {
+          const session = await readSession();
+          if (buffer.auth === `${session.serverOrigin}:${session.token}`) segments = buffer.segments;
+        }
+      }
+      if (!segments.length) return { error: '当前视频暂无可用字幕或已转写的讲稿。' };
+      return { source: {
+        kind: 'external_video',
+        platform: videoRoute.platform as 'bilibili' | 'youtube',
+        external_id: descriptor.external_id, part: descriptor.part,
+        title: Array.from(descriptor.title).slice(0, 240).join(''), url: url.href,
+        duration_seconds: descriptor.duration ?? segments.reduce((end, segment) => Math.max(end, segment.end_time), 0),
+        segments,
+      } };
+    }
+
+    const [{ result: article } = {}] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id }, func: extractWorkbenchArticle, args: [120_000],
+    });
+    if (!article || article.pageUrl !== url.href) return { error: '当前网页已切换，请重新收入工作台。' };
+    const { content } = article;
+    const title = Array.from(article.title).slice(0, 240).join('');
+    if (content) return { source: { kind: 'text', title, source_url: article.url, content } };
+    if (article.url.startsWith('https://')) return { source: { kind: 'web_url', title, url: article.url } };
+    return { error: '当前网页没有可读取的正文。' };
+  } catch {
+    return { error: '暂时无法读取当前页面，请在该标签页点击工具栏中的 UniMind 图标后再试。' };
+  }
 }
 
 async function collectTranscriptForAsk(tabId: number, snapshot: PageCollectSnapshot, deadline: number) {
@@ -168,6 +239,7 @@ export default defineBackground(() => {
   installOffscreenAudioBridge();
   const clearTab = (tabId: number) => {
     clearVisual(tabId);
+    bufferedTranscripts.delete(tabId);
     void stopTabAudio(tabId).catch(() => undefined);
   };
   chrome.tabs.onRemoved.addListener(clearTab);
@@ -195,6 +267,10 @@ export default defineBackground(() => {
     }
     if (message?.type === UNIMIND_CAPTURE_CONTEXT_FOR_ASK) {
       void captureContext(message.payload?.tabId).then(respond);
+      return true;
+    }
+    if (message?.type === UNIMIND_CAPTURE_SOURCE_FOR_WORKBENCH) {
+      void captureWorkbenchSource(message.payload?.windowId).then(respond);
       return true;
     }
     if (message?.type === UNIMIND_TOGGLE_TAB_AUDIO) {

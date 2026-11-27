@@ -8,13 +8,14 @@ from django.db.models import F, Q
 from django.db.models.functions import Substr
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from ai_assistant.models import AIChatMessage
+from ai_assistant.models import AIChatMessage, Conversation
 from courses.models import TranscriptSegment
 from quizzes.services.practice_results import practice_question_reviews
 from ai_assistant.services.course_context import current_transcript_sources, require_current_transcript_sources
 from ai_assistant.services.runtime.ulr_capabilities import (
     require_visible_course_sources, require_visible_practice_review_sources, visible_course_ids, visible_practice_review_sources,
 )
+from .workbench_grounding import current_workbench_source_versions, require_workbench_source_versions
 
 
 COURSE_LINK = re.compile(r'/course/([1-9][0-9]*)(?:\?t=(-?[0-9.]+(?:e[+-]?[0-9]+)?))?')
@@ -27,6 +28,12 @@ SOURCE_FIELDS = {
     'attachments': F('metadata__note_attachments'),
     'note_selection': F('metadata__note_selection'),
 }
+
+
+def conversation_project_id(user, conversation_id):
+    return Conversation.objects.filter(user=user, conversation_id=conversation_id, project__user=user).values_list(
+        'project_id', flat=True,
+    ).first()
 
 
 def course_card_items(cards, tools):
@@ -102,6 +109,11 @@ def require_receipt_sources(user, receipt):
     answer = messages.filter(pk=receipt['message_id'], role='assistant').values('bot_id', 'conversation_id', **SOURCE_FIELDS).first()
     if not answer:
         raise ValidationError('原答复已不可用。')
+    project_id = conversation_project_id(user, answer['conversation_id'])
+    answer_sources = answer['sources'] or {}
+    if 'workbench_sources' in answer_sources:
+        require_workbench_source_versions(user, project_id, answer_sources['workbench_project'],
+                                          answer_sources['workbench_sources'])
     history = messages.filter(bot_id=answer['bot_id'], conversation_id=answer['conversation_id'],
                               pk__lte=receipt['message_id']).order_by()
     legacy = receipt['engine'] == 'dsh' and answer['sources'] is None
@@ -134,7 +146,7 @@ def require_receipt_sources(user, receipt):
     require_current_practice_answers(user, question_answers)
     require_visible_practice_review_sources(user, practice_reviews)
     courses.update(course for course, _, _ in transcripts | excerpts)
-    require_visible_course_sources(user, courses)
+    require_visible_course_sources(user, courses, project_id=project_id)
     require_current_transcript_sources(transcripts)
     if len(match_legacy_transcript_excerpts(excerpts)) != len(excerpts):
         raise ValidationError('当前课程讲稿已更新，请重新发起提问。')
@@ -193,6 +205,9 @@ def scoped_history(user, current, note_versions):
         conversation_id=current.conversation_id).exclude(pk=current.pk).exclude(content='[Thinking...]')
     recent = list(history.order_by('-timestamp', '-id').values(
         'pk', 'timestamp', 'role', 'content', engine=F('metadata__engine'), **SOURCE_FIELDS)[:17])
+    project_id = conversation_project_id(user, current.conversation_id)
+    workbench_ids = {pk for row in recent for pk in (row['sources'] or {}).get('workbench_sources', ())}
+    workbench_versions = current_workbench_source_versions(user, project_id, workbench_ids)
     legacy = {'dsh', 'dsh_import'}
     older_engines = legacy | {'ulr'}
     infer_legacy_sources = any((row['engine'] in legacy and row['sources'] is None) or unversioned_history_courses(row)
@@ -221,6 +236,10 @@ def scoped_history(user, current, note_versions):
                 entries.append(({'role': 'user', 'content': row['content']}, set(), set(), set(), set(), set()))
             continue
         if row['role'] != 'assistant':
+            continue
+        sources = row['sources'] or {}
+        if 'workbench_sources' in sources and (sources['workbench_project'] != project_id
+                or not sources['workbench_sources'].items() <= workbench_versions.items()):
             continue
         courses, notes, selection = reply_sources(prompt, row)
         transcripts = reply_transcript_sources(prompt, row)
@@ -256,7 +275,7 @@ def scoped_history(user, current, note_versions):
             all_transcripts.update(transcripts)
             all_excerpts.update(excerpts)
             entries.append(({'role': 'assistant', 'content': row['content']}, courses, answers, reviews, transcripts, excerpts))
-    authorized = visible_course_ids(user, all_courses)
+    authorized = visible_course_ids(user, all_courses, project_id=project_id)
     protected = bound_practice_answers(user, all_answers)
     visible_reviews = visible_practice_review_sources(user, all_reviews)
     current_transcripts = current_transcript_sources(all_transcripts)

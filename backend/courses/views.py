@@ -8,6 +8,7 @@ import uuid
 
 from django.conf import settings
 from django.core.files import File
+from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -17,14 +18,18 @@ from rest_framework.permissions import IsAuthenticated
 from users.permissions import IsAdmin, HasQuota
 
 from .models import Course, Album, StartupMaterial, VideoProgress
-from .access import HasFullCourseAccess
+from .access import CanReadCourse, HasFullCourseAccess, private_companion_courses, project_station_courses
 
 from core.utils import apply_institution_filter, get_content_institution
 
 
-def _get_course_for_user(pk, user, request=None):
+def _get_course_for_user(pk, user, request=None, *, include_companion=False):
     """按机构隔离获取课程，无权限返回 None。"""
     from .access import visible_courses
+    if include_companion:
+        private = private_companion_courses(user).filter(pk=pk).first()
+        if private is not None:
+            return private
     qs = visible_courses(request)
     return qs.filter(pk=pk).first()
 
@@ -35,7 +40,7 @@ def _next_course_sort_order(institution):
 
     current = Course.objects.filter(institution=institution).aggregate(m=Max('sort_order'))['m']
     return (current or 0) + 1
-from .serializers import CourseSerializer, AlbumSerializer, StartupMaterialSerializer
+from .serializers import CourseSerializer, PersonalCourseDetailSerializer, AlbumSerializer, StartupMaterialSerializer
 from users.permissions import IsMember
 from quizzes.utils import safe_int as _safe_int
 from core.file_validation import (
@@ -634,7 +639,16 @@ class CourseListCreateView(generics.ListCreateAPIView):
         from users.workspaces.access import membership_for
         qs = visible_courses(self.request) if self.request.method == 'GET' else apply_institution_filter(Course.objects.select_related('module'), user, self.request)
         if self.request.method == 'GET' and not membership_for(user):
-            qs = qs.none()
+            project = self.request.query_params.get('workbench_project')
+            if project is None:
+                qs = qs.none()
+            else:
+                from ai_assistant.models import ConversationProject
+                from users.feature_access import has_learning_feature
+
+                get_object_or_404(ConversationProject, pk=_safe_int(project), user=user)
+                if not has_learning_feature(user, 'course.video'):
+                    qs = qs.none()
         if self.request.method == 'GET' and self.request.query_params.get('saved') == '1':
             from .models import WatchLater
             qs = qs.filter(pk__in=WatchLater.objects.filter(user=user).values('course_id'))
@@ -778,24 +792,47 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Course.objects.select_related('module')
     serializer_class = CourseSerializer
 
+    def get_serializer_class(self):
+        from users.workspaces.identity import learner_identity
+
+        if self.request.method in ('GET', 'HEAD') and learner_identity(self.request.user) is None:
+            return PersonalCourseDetailSerializer
+        return super().get_serializer_class()
+
     def get_queryset(self):
-        if self.request.method == 'GET':
+        if self.request.method in ('GET', 'HEAD'):
             from .access import visible_courses
+            user = self.request.user
+            course_id = self.kwargs['pk']
+            project = self.request.query_params.get('workbench_project')
+            if project is not None:
+                project_id = _safe_int(project)
+                if not project_id:
+                    return Course.objects.none()
+                private = private_companion_courses(user, project_id).filter(pk=course_id)
+                if private.exists():
+                    return private
+                return project_station_courses(self.request, project_id, course_id)
+            private = private_companion_courses(user).filter(pk=course_id)
+            if private.exists():
+                return private
             return visible_courses(self.request)
-        return apply_institution_filter(super().get_queryset(), self.request.user, self.request)
+        return apply_institution_filter(
+            super().get_queryset().filter(is_workbench_companion=False), self.request.user, self.request,
+        )
 
     def get_permissions(self):
         if self.request.method in ['PATCH', 'PUT', 'DELETE']:
             return [IsAdmin()]
-        return [IsMember()]
+        return [CanReadCourse()]
 
 
 class CourseOutlineView(APIView):
     def get_permissions(self):
-        return [IsMember()] if self.request.method == 'GET' else [IsMember(), HasFullCourseAccess()]
+        return [CanReadCourse()] if self.request.method in ('GET', 'HEAD') else [IsMember(), HasFullCourseAccess()]
 
     def get(self, request, pk):
-        course = _get_course_for_user(pk, request.user, request)
+        course = _get_course_for_user(pk, request.user, request, include_companion=True)
         if not course:
             return Response({'error': '课程不存在'}, status=404)
 
@@ -835,10 +872,10 @@ class CourseOutlineView(APIView):
 
 class CourseTranscriptView(APIView):
     def get_permissions(self):
-        return [IsMember()] if self.request.method == 'GET' else [IsMember(), HasFullCourseAccess()]
+        return [CanReadCourse()] if self.request.method in ('GET', 'HEAD') else [IsMember(), HasFullCourseAccess()]
 
     def get(self, request, pk):
-        course = _get_course_for_user(pk, request.user, request)
+        course = _get_course_for_user(pk, request.user, request, include_companion=True)
         if not course:
             return Response({'error': '课程不存在'}, status=404)
 

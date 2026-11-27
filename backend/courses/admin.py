@@ -27,6 +27,9 @@ class CourseAdmin(InstitutionContentAdmin):
     autocomplete_fields = ('module', 'album_obj', 'knowledge_point')
     readonly_fields = ('author', 'created_at', 'updated_at')
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(is_workbench_companion=False)
+
     def save_model(self, request, obj, form, change):
         if not change:
             obj.author = request.user

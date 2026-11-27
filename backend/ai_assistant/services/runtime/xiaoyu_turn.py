@@ -157,7 +157,10 @@ def _request_trace_id(request, *, fallback=None):
 
 
 def complete_turn(request, bot, conversation_id, message, emit, *, course_context=None, external_video_context=None, ulr=False):
-    from ai_assistant.views import _chat_request_fingerprint, _reserve_chat_request
+    from ai_assistant.views import (
+        _chat_request_fingerprint, _chat_workbench_grounding, _reserve_chat_request,
+        _workbench_source_ids, _workbench_user,
+    )
     user = request.user
     if ulr and standalone_ulr() and connection.vendor == 'sqlite' and request.data.get('request_id'):
         try:
@@ -166,7 +169,7 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
             raise ValidationError({'request_id': '请求标识必须为 UUID。'}) from None
         receipt = AIUsageReservation.objects.filter(user=user, request_id=request_id, status='succeeded').first()
         if receipt is not None:
-            if receipt.fingerprint != _chat_request_fingerprint(request.data, bot):
+            if receipt.fingerprint != _chat_request_fingerprint(user, request.data, bot):
                 raise ValidationError({'request_id': '该请求标识已用于另一条提问。'})
             if chat_receipt_deleted(receipt):
                 raise ConversationDeleted()
@@ -187,6 +190,7 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                 raise ConversationDeleted()
             return reservation.response
         current = None
+        workbench = None
         trace_id = _request_trace_id(request, fallback=reservation.request_id)
         obs_state = {
             'runtime': 'ulr' if ulr else 'dsh',
@@ -208,7 +212,14 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                     trace_id = existing_trace
                     obs_state['trace_id'] = trace_id
                 if not current:
-                    save_new_conversation_project(request, bot, conversation_id)
+                    conversation = save_new_conversation_project(request, bot, conversation_id)
+                if ulr and _workbench_user(user, bot):
+                    if current:
+                        conversation = conversations.select_related('project').get()
+                    source_ids = _workbench_source_ids(request, bot)
+                    grounding = _chat_workbench_grounding(conversation, source_ids)
+                    if grounding is not None and (source_ids is not None or grounding.sources):
+                        workbench = grounding
                 notes, sources = prepare_note_context(user, bot, conversation_id, message,
                     request.data.get('note_ids'), request.data.get('note_selection', ''))
                 metadata = {**note_message_metadata(notes, sources, request.data.get('note_selection', '')),
@@ -254,10 +265,14 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
 
                 try:
                     content, cards, task_id, project_change, artifacts, context_sources = run_turn(
-                        user, message, chat_context, emit, source=reservation.pk, check_active=check_active)
+                        user, message, chat_context, emit, source=reservation.pk, check_active=check_active,
+                        workbench=workbench)
                 except AIExecutionCancelled as exc:
                     raise exc.error from None
                 metadata = {'engine': 'ulr', 'ulr_task_id': task_id}
+                if workbench is not None:
+                    from .workbench_grounding import extract_workbench_citations
+                    metadata['workbench_citations'] = extract_workbench_citations(content, workbench.citation_registry)
                 if strategy_use_ids := context_sources.pop('strategy_use_ids', None):
                     metadata['ulr_strategy_use_ids'] = strategy_use_ids
             elif gated:
@@ -320,7 +335,12 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                     require_current_practice_answers(user, question_answers)
                     context_sources.update(courses=sorted(course_ids), question_answers=sorted(question_answers))
                 if ulr:
-                    require_visible_course_sources(user, set(context_sources.get('courses', ())))
+                    require_visible_course_sources(user, set(context_sources.get('courses', ())), project_id=conversation.project_id)
+                    if workbench is not None:
+                        from .workbench_grounding import require_workbench_source_versions
+                        versions = workbench.source_versions
+                        require_workbench_source_versions(user, conversation.project_id, workbench.project.pk, versions, lock=True)
+                        context_sources.update(workbench_project=workbench.project.pk, workbench_sources=versions)
                     require_current_practice_answers(user, set(context_sources.get('question_answers', ())))
                     require_visible_practice_review_sources(user, {tuple(ref) for ref in context_sources.get('practice_reviews', ())})
                     if practice := context_sources.get('practice'):
