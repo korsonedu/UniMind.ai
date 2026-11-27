@@ -4,9 +4,10 @@ function renderChart(host, options) {
   if (!(host instanceof HTMLElement)) throw Error('chart.host 必须是 HTML 元素。');
   if (!options || !['bar', 'line'].includes(options.type)) throw Error('chart.type 只支持 bar 或 line。');
   const {labels, series} = options;
+  const maxLabels = options.type === 'line' ? 65 : 12;
   if (!Array.isArray(labels)) throw Error('chart.labels 必须是数组。');
-  if (labels.length < 1 || labels.length > 12) {
-    throw Error(`chart.labels.length 为 ${labels.length}，须为 1 至 12。`);
+  if (labels.length < 1 || labels.length > maxLabels) {
+    throw Error(`chart.labels.length 为 ${labels.length}，须为 1 至 ${maxLabels}。`);
   }
   for (const [index, label] of labels.entries()) {
     if (typeof label !== 'string' || !label.trim() || label.length > 48) {
@@ -101,7 +102,7 @@ function renderChart(host, options) {
         const mark = config.type === 'bar'
           ? add('rect', {x: x(index) - band * .36 + seriesIndex * barWidth, y: Math.min(y(0), y(value)),
               width: barWidth, height: Math.abs(y(value) - y(0)), rx: 2, fill: colors[seriesIndex]})
-          : add('circle', {cx: x(index), cy: y(value), r: 3, fill: colors[seriesIndex]});
+          : add('circle', {cx: x(index), cy: y(value), r: Math.min(3, band / 3), fill: colors[seriesIndex]});
         const title = document.createElementNS(svg.namespaceURI, 'title');
         title.textContent = `${config.labels[index]} · ${series.label}：${value}`;
         mark.appendChild(title);
