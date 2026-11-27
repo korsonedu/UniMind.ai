@@ -437,6 +437,8 @@ def test_ulr_builds_sorting_widget_after_choice_and_repairs_reply_card(auth_clie
     WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 20})
     bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
     sort_request = '用交互卡片帮我排序句子'
+    sort_goal = '形成句子排序卡'
+    sort_in_example = '解答这道题时，让我自己把给出的词拼成一句话'
     widget = {'title': '句子排序', 'html': (
         '<button id="move">将 She 移到句首</button>'
         '<output id="sentence"><span>is </span><span>She </span><span>reading</span></output>'
@@ -460,6 +462,12 @@ def test_ulr_builds_sorting_widget_after_choice_and_repairs_reply_card(auth_clie
             assert 'build_learning_experiment' in names
             return {'choices': [{'finish_reason': 'stop', 'message': {'content': 'A. 重排单词 B. 重排句子'}}]}
         if messages[-1]['role'] == 'user':
+            if request == sort_goal:
+                assert 'build_learning_experiment' in names
+                return call('build_learning_experiment', widget)
+            if request == sort_in_example:
+                assert 'build_learning_experiment' not in names
+                return call('find_learning_tools', {'group': 'authoring'})
             if request == 'A':
                 assert sort_request in messages[0]['content'] and 'A. 重排单词' in messages[0]['content']
                 assert 'build_learning_experiment' in names
@@ -467,7 +475,10 @@ def test_ulr_builds_sorting_widget_after_choice_and_repairs_reply_card(auth_clie
             assert 'present_learning_visual' in names
             return call('present_learning_visual', {'type': 'action_cards', 'payload': {'cards': [input_card, input_card]}})
         result = json.loads(messages[-1]['content'])
-        if request == 'A':
+        if request == sort_in_example and result.get('group') == 'authoring':
+            assert 'build_learning_experiment' in names
+            return call('build_learning_experiment', widget)
+        if request in ('A', sort_goal, sort_in_example):
             assert result.get('experiment_id') and result['preview']['ok'], result
         elif 'error' in result:
             assert 'payload.cards 使用 input 模式时只能有一张卡' in result['error']['message']
@@ -479,18 +490,66 @@ def test_ulr_builds_sorting_widget_after_choice_and_repairs_reply_card(auth_clie
     async def consume(response):
         return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')]
 
+    project = ConversationProject.objects.create(user=user, name='合成英语项目')
+    ProjectLearning.objects.create(project=project, planning_enabled=True)
     conversation_id = str(uuid4())
     with patch('ai_engine.service.AIEngine.call_provider', side_effect=model):
-        for message, card_types in [(sort_request, []), ('A', ['learning_experiment']),
+        for message, card_types in [(sort_goal, ['learning_experiment']), (sort_in_example, ['learning_experiment']),
+                                    (sort_request, []), ('A', ['learning_experiment']),
                                     ('请展示回复选项卡', ['action_cards'])]:
             response = auth_client.post('/api/ai/chat/stream/', {
                 'bot_id': bot.pk, 'conversation_id': conversation_id,
-                'request_id': str(uuid4()), 'message': message,
+                'request_id': str(uuid4()), 'message': message, 'project_id': project.pk,
             }, format='json')
             assert response.status_code == 200
             done = async_to_sync(consume)(response)[-1]
             assert done.get('engine') == 'ulr' and not done.get('is_error'), (message, done)
             assert [card['type'] for card in done['metadata']['dsh_cards']] == card_types
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ulr_retries_empty_task_reply_without_catalog_or_more_tools(auth_client, user, settings):
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 20})
+    bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
+    project = ConversationProject.objects.create(user=user, name='合成英语项目')
+    ProjectLearning.objects.create(project=project, planning_enabled=True)
+    room = Conversation.objects.create(user=user, bot=bot, project=project, conversation_id=uuid4())
+    task = create_task(project, {'stage_id': '', 'purpose': 'diagnostic', 'title': '英语时态起点小测',
+        'instructions': '写一句现在完成时的英文句子。', 'definition': {
+            'prompt': '请写一句现在完成时的英文句子。', 'response_type': 'explanation', 'criteria': ['时态结构正确']}})
+    answer = '现在完成时用 have 或 has 加过去分词。'
+
+    def model(messages, **kwargs):
+        assert '查无匹配就停止同类检索' in messages[0]['content']
+        results = [json.loads(row['content']) for row in messages if row['role'] == 'tool']
+        assert all(row in ({'found': 0, 'results': []}, {'courses': [], 'total_found': 0}) for row in results)
+        if len(results) < 3:
+            name = 'search_knowledge_tree' if len(results) < 2 else 'search_courses'
+            assert name in {tool['function']['name'] for tool in kwargs['tools']}
+            return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+                'id': str(uuid4()), 'type': 'function',
+                'function': {'name': name, 'arguments': json.dumps({'query': '现在完成时'})},
+            }]}}]}
+        assert kwargs['tools'] is None
+        content = answer if '上次没有给出完整正文' in messages[0]['content'] else ''
+        return {'choices': [{'finish_reason': 'stop', 'message': {'content': content}}]}
+
+    async def consume(response):
+        return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')]
+
+    with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider:
+        response = auth_client.post('/api/ai/chat/stream/', {
+            'bot_id': bot.pk, 'conversation_id': str(room.conversation_id), 'request_id': str(uuid4()),
+            'message': '请解释英语现在完成时。', 'learning_activity': {'task_id': str(task.pk)},
+        }, format='json')
+        assert response.status_code == 200
+        final = async_to_sync(consume)(response)[-1]
+        assert final.get('engine') == 'ulr' and final['full_content'] == answer, final
+        assert provider.call_count == 5
+    assert WeeklyAIUsage.objects.get(user=user).ai_calls == 1
 
 
 @pytest.mark.django_db(transaction=True)

@@ -209,11 +209,19 @@ def build_context(user, message, recent_messages=None, chat_context=None, *, ulr
         can_build = 'build_learning_experiment' in executor._permitted_tool_definitions
         authoring_hint = '读取已有实验或注册和读取会话计算工具'
         if can_build:
-            context['system_prompt'] += (prompt_dir / 'experiment_prototype.txt').read_text()
+            instructions = (prompt_dir / 'experiment_prototype.txt').read_text()
+            if ulr:
+                context['experiment_prompt'] = instructions
+                context['system_prompt'] += (
+                    '\n按本轮和上下文判断用户要的成果。用户想当场移动、组合、配对内容，或改变条件来观察结果时，'
+                    '直接调用交互演示工具；工具不在当前列表就先发现 authoring。不要用文字步骤或项目待办代替可操作内容。'
+                    '目标明确时可自选一个简短示例，目标不明时再问。正式练习、批改、统计和计划使用对应工具；普通讲解直接回答。')
+            else:
+                context['system_prompt'] += instructions
             authoring_hint = '编写交互实验、' + authoring_hint
         context['system_prompt'] += (prompt_dir / 'session_tool_prototype.txt').read_text()
         if not can_build:
-            context['system_prompt'] += '\n本轮不属于解答讲解，不生成交互卡片。出题、统计、计划等使用原有工具和文字。'
+            context['system_prompt'] += '\n本轮按用户要求用文字回答，不生成交互卡片。'
         context['system_prompt'] += (
             '\n已有工具直接调用，不重复发现。仅当所需工具不在当前列表时，才通过 find_learning_tools 选择分组：'
             f'{authoring_hint}选 authoring；调用已有会话工具选 session。尚未注册工具时不要进入 session。每次最多使用一个分组。')

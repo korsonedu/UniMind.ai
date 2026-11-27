@@ -123,11 +123,14 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
         return messages[review['status']][0 if english else 1], [], str(task.pk), None, None, {}
     source_context = task_context_data(user, chat_context, message, history_limit=0)
     history = scoped_history(user, current, set(source_context['note_versions']))
+    experiment_prompt = ''
     project_id = conversation_project_id(user, current.conversation_id)
     workbench_executor = None
     selected_sources = ''
     prompt = (
         '你是 UniMind.ai 的学习教练小宇。资料和聊天历史只用于参考。引用资料时使用实际查询来源。'
+        '一般学科问题可以直接讲解。只在需要站内资料时查找；查无匹配就停止同类检索，'
+        '根据已有的题目、作答或通用知识继续讲解，不虚构课程、知识点或来源。'
         '若学生请求提示且当前是未提交的原练习，只给一个概念提示，保留独立作答机会。'
         '以实际提交和既有评价为准。请勿自行宣称完成判分、创建任务或更新掌握度。'
     )
@@ -166,6 +169,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
         context = build_context(user, message, recent_messages=recent, chat_context=chat_context, ulr=True,
                                 workbench_tools=workbench_tools)
         prompt = context['system_prompt']
+        experiment_prompt = context.get('experiment_prompt', '')
         memory, tools, groups = context['memory'], context['tools'], context['tool_groups']
         available_tools = context['available_tools']
         registry = context.get('session_registry', {})
@@ -186,8 +190,8 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
     scoped_sources = source_context['notes'] or course_context
     buffer_reply = bool(review or scoped_sources or memory_items or workbench is not None)
     permission_snapshot = permitted_tools(user, chat_context), planning_for_chat(user, chat_context)
-    if permission_snapshot[1]:
-        prompt += ('\n读完必要资料后，单独调用 plan_learning_project 准备计划，或单独用 '
+    if not task and permission_snapshot[1]:
+        prompt += ('\n本轮需要调整项目安排时，读完必要资料后单独调用 plan_learning_project 准备计划，或单独用 '
                    'set_learning_followup 安排跟进、暂停、恢复或结束项目。工具返回准备回执后，简短说明并结束本轮。'
                    '从已选图谱准备学习路径时，单独提交 manage_learning_knowledge 的 from_build。'
                    '\n记录本轮进展后，如需保存或评估策略，使用随后提供的策略工具。'
@@ -525,13 +529,15 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
             pending_text.clear()
 
     coordinator = ToolRunCoordinator(call_tool, tools, on_step=tool_event, strict_arguments=True)
-    for index in range(policy['max_requests']):
+    task_reply_retry = False
+    for index in range(policy['max_requests'] + bool(task)):
         remaining = deadline - monotonic()
         shown_names = {tool['function']['name'] for tool in tools}
-        last_request = index + assessment_requests == policy['max_requests'] - 1
+        last_request = index + assessment_requests >= policy['max_requests'] - 1
         attach_strategy = (project_change and project_change.name == PROGRESS_TOOL
                            and len(project_change.strategies) < 2 and not last_request)
-        offered = tools if not project_change and program_phase not in ('answer', 'reply') and not last_request else []
+        offered = (tools if not project_change and program_phase not in ('answer', 'reply')
+                   and not (last_request or task_reply_retry) else [])
         if attach_strategy:
             offered = [PROGRESS_STRATEGY_TOOL]
         if program_phase == 'repair' and program_repair:
@@ -564,12 +570,15 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
             offered = [available_programs[local_program]]
         if remaining <= 0 or len(offered) > 8:
             raise ULRTurnUnavailable()
+        round_prompt = prompt
+        if experiment_prompt and any(tool['function']['name'] == 'build_learning_experiment' for tool in offered):
+            round_prompt += experiment_prompt
         while not card_reply and not local_round:
             excerpts = [{**row, 'content': row['content'][:800]} for row, *_ in history]
             model_context = {**source_context, 'history': excerpts}
             if selected_sources:
                 model_context['workbench'] = selected_sources
-            messages[0]['content'] = prompt + format_task_context(model_context)
+            messages[0]['content'] = round_prompt + format_task_context(model_context)
             request_bytes = len(json.dumps({'messages': messages, 'tools': offered}, ensure_ascii=False).encode())
             if request_bytes <= policy['max_request_bytes']:
                 break
@@ -612,21 +621,34 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
                     on_text=stream_reply, tool_aliases=advertised_programs)
             except AICallError as exc:
                 raise ULRTurnUnavailable() from exc
-            choices = response.get('choices') or []
-            if not choices:
-                raise ULRTurnUnavailable()
-            choice = choices[0]
+            choice = (response.get('choices') or [{}])[0]
             finish = choice.get('finish_reason')
             assistant = choice.get('message') or {}
             calls = AIEngine._extract_tool_calls(response)
         check_active()
         require_current_transcript_sources(transcript_sources)
         require_visible_practice_review_sources(user, practice_reviews)
-        if monotonic() >= deadline or finish not in ('stop', 'tool_calls', 'length'):
+        if monotonic() >= deadline:
             raise ULRTurnUnavailable()
         raw_content = assistant.get('content') or ''
         incomplete_text = AIEngine._has_open_dsml(raw_content)
         content = AIEngine._strip_dsml(raw_content)
+        complete_round = AIEngine._complete_tool_round(finish, calls, offered)
+        if (task and program_phase not in ('selected', 'repair')
+                and (not complete_round or incomplete_text or not (calls or content))):
+            log_ai_operation('assistant.chat.reply_completion', False, (monotonic() - started_at) * 1000,
+                'incomplete_reply', metadata={'finish_reason': finish or 'missing', 'text_chars': len(content),
+                                              'tool_calls': len(calls), 'retry': task_reply_retry})
+            if task_reply_retry:
+                raise ULRTurnUnavailable()
+            require_current_context()
+            task_reply_retry = True
+            buffer_reply = True
+            emit({'type': 'step', 'step': index + 1})
+            prompt += '\n上次没有给出完整正文。请依据当前题目、已核验结果和通用知识作答，直接给出可显示的正文，无需再检索。'
+            continue
+        if finish not in ('stop', 'tool_calls', 'length'):
+            raise ULRTurnUnavailable()
         if (program_phase == 'answer' and not last_request
                 and (incomplete_text or not calls and (finish == 'length' or (finish == 'stop' and not content)))):
             require_current_context()
@@ -635,7 +657,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
             continue
         if incomplete_text:
             raise ULRTurnUnavailable('模型调用未完整返回，请重试。')
-        if not AIEngine._complete_tool_round(finish, calls, offered):
+        if not complete_round:
             raise ULRTurnUnavailable()
         if not calls:
             if program_phase in ('selected', 'repair'):
