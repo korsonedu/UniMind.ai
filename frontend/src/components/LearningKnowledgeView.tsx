@@ -3,15 +3,13 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowRight } from '@phosphor-icons/react';
+import { ArrowLeft, ArrowRight } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { learningKey, learningUrl, type ProjectLearning } from '@/lib/projectLearning';
 import type { LearningKnowledge } from './LearningKnowledgePanel';
 import { queryClient } from '@/lib/queryClient';
 import { normalizeApiError } from '@/lib/apiError';
 import type { LearningTask } from './LearningTasksPanel';
-import { listKnowledgeBuilds } from '@/lib/knowledgeBuilderApi';
-import { queryKeys } from '@/lib/queryKeys';
 import { MarkdownContent } from './MarkdownContent';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
@@ -19,11 +17,11 @@ import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 type Node = LearningKnowledge['nodes'][number];
 interface MapVersion { version_id: number; revision: number; title: string; nodes: Node[] }
 
-export function LearningKnowledgeView({ project, selected, tasks, tasksLoading, onSelect, onStudy, onTask }: {
+export function LearningKnowledgeView({ project, selected, tasks, tasksLoading, onSelect, onStudy, onTask, onBack }: {
   project: ProjectLearning; selected: string; tasks: LearningTask[]; tasksLoading: boolean; onSelect: (id: string) => void;
-  onStudy: (text: string, activity?: Record<string, unknown>) => void; onTask: (id: string) => void;
+  onStudy: (text: string, activity?: Record<string, unknown>) => void; onTask: (id: string) => void; onBack: () => void;
 }) {
-  useLocale();
+  const locale = useLocale();
   const userId = useAuthStore(state => state.user?.id);
   const { chat } = useXiaoYuChat();
   const [searchParams] = useSearchParams();
@@ -31,11 +29,11 @@ export function LearningKnowledgeView({ project, selected, tasks, tasksLoading, 
     || searchParams.get('conversation') || project.conversation_id || undefined;
   const knowledge = project.knowledge;
   const [allNodes, setAllNodes] = useState(false);
-  const [choosing, setChoosing] = useState(!knowledge?.path);
+  const [choosing, setChoosing] = useState(false);
   const [shownVersion, setShownVersion] = useState(knowledge?.version_id);
   if (shownVersion !== knowledge?.version_id) {
     setShownVersion(knowledge?.version_id);
-    setChoosing(!knowledge?.path);
+    setChoosing(false);
   }
   const [versionId, setVersionId] = useState('');
   const [targets, setTargets] = useState<string[]>([]);
@@ -44,14 +42,13 @@ export function LearningKnowledgeView({ project, selected, tasks, tasksLoading, 
   const [busy, setBusy] = useState(false);
   const [evidenceId, setEvidenceId] = useState<number | null>(null);
   const url = `/ai/projects/${project.project_id}/learning/knowledge/`;
-  const maps = useQuery({ queryKey: ['learning-knowledge-maps', userId, project.project_id],
+  const maps = useQuery({ queryKey: ['learning-knowledge-maps', userId, project.project_id], enabled: choosing,
     queryFn: ({ signal }) => api.get<{ maps: { id: number; title: string; versions: { id: number; revision: number }[] }[] }>(url, { signal }).then(r => r.data) });
-  const version = useQuery({ queryKey: ['learning-knowledge-version', userId, project.project_id, versionId], enabled: !!versionId,
+  const version = useQuery({ queryKey: ['learning-knowledge-version', userId, project.project_id, versionId], enabled: choosing && !!versionId,
     queryFn: ({ signal }) => api.get<MapVersion>(url, { params: { version_id: versionId }, signal }).then(r => r.data) });
-  const builds = useQuery({ queryKey: queryKeys.knowledgeBuilder.list(userId),
-    queryFn: ({ signal }) => listKnowledgeBuilds(signal) });
+  const stages = project.plan.stages || [];
   const nodes = knowledge?.nodes || [];
-  const stage = project.plan.stages?.find(item => item.id === project.current_stage);
+  const stage = stages.find(item => item.id === project.current_stage);
   const node = nodes.find(item => item.id === selected) || nodes.find(item => stage?.knowledge_nodes?.includes(item.id)) || nodes[0];
   const parents = nodes.filter(item => node?.prerequisites.includes(item.id));
   const children = nodes.filter(item => item.prerequisites.includes(node?.id || ''));
@@ -91,28 +88,34 @@ export function LearningKnowledgeView({ project, selected, tasks, tasksLoading, 
   const visit = (id: string) => { if (closure.has(id)) return; closure.add(id); version.data?.nodes.find(item => item.id === id)?.prerequisites.forEach(visit); };
   targets.forEach(visit);
   return <section className="um-work-knowledge">
-    <div className="um-work-section-heading"><div><h2>{t('知识关系')}</h2><p>{knowledge?.title || t('围绕当前学习内容，了解前置与依据')}{knowledge?.revision && t(' · 版本 {0}', { 0: knowledge.revision })}</p></div><button className="um-agent-button" onClick={() => setChoosing(value => !value)}>{t('选择学习范围')}</button></div>
-    <div className="um-work-actions">
-      <button className="um-agent-button" onClick={() => onStudy(t('帮我为这个目标制定学习路径'))}>{t('和小宇确定学习路径')}</button>
-      <Link className="um-learning-text-button" to={learningUrl(knowledge?.builder ? `/xiaoyu/knowledge-builder/${knowledge.builder.build_id}` : '/xiaoyu/knowledge-builder', project.project_id, conversationId)}>{knowledge?.builder ? t('展开完整图谱') : t('选择知识结构')}</Link>
-    </div>
-    {!!knowledge?.recommendations.length && <section className="um-work-node-evidence"><h3>{t('建议下一步')}</h3>{knowledge.recommendations.map(item => <div className="um-work-section-heading" key={item.node_id}><div><strong>{item.title}</strong><p>{t(item.reason)}</p></div><button className="um-agent-button" disabled={busy || tasksLoading || !project.planning_enabled || project.status !== 'active'} onClick={() => { onSelect(item.node_id); startNode(item.node_id, item.mode); }}>{t('继续学习')}</button></div>)}</section>}
+    <button type="button" className="um-work-knowledge-back" onClick={choosing ? () => setChoosing(false) : onBack}>
+      <ArrowLeft size={15} />{t(choosing ? '返回知识关系' : '返回学习路径')}
+    </button>
+    <header className="um-work-knowledge-heading">
+      <div><h2>{t(choosing ? '选择学习范围' : '知识关系')}</h2>
+        {!choosing && knowledge?.title && <p>{knowledge.title}{t(' · 版本 {0}', { 0: knowledge.revision })}</p>}
+      </div>
+      {!choosing && <button type="button" className="um-agent-button" onClick={() => setChoosing(true)}>{t('选择学习范围')}</button>}
+    </header>
+    {!choosing && knowledge?.builder && <Link className="um-learning-text-button" to={learningUrl(`/xiaoyu/knowledge-builder/${knowledge.builder.build_id}`, project.project_id, conversationId)}>{t('展开完整图谱')}</Link>}
+    {!choosing && !!knowledge?.recommendations.length && <section className="um-work-node-evidence"><h3>{t('建议下一步')}</h3>{knowledge.recommendations.map(item => <div className="um-work-section-heading" key={item.node_id}><div><strong>{item.title}</strong><p>{t(item.reason)}</p></div><button className="um-agent-button" disabled={busy || tasksLoading || !project.planning_enabled || project.status !== 'active'} onClick={() => { onSelect(item.node_id); startNode(item.node_id, item.mode); }}>{t('继续学习')}</button></div>)}</section>}
     {choosing ? <div className="um-work-map-picker">
-      <p>{t('地图与来源可以复用，当前表现按项目分别记录。采用新版本时，已有作答保留在原版本。')}</p>
-      <Link className="um-agent-button" to={learningUrl('/xiaoyu/knowledge-builder?create=1', project.project_id, conversationId)}>{t('和小宇生成知识结构')}</Link>
-      {builds.isError && <button className="um-learning-text-button" onClick={() => void builds.refetch()}>{t('重新读取学科结构')}</button>}
-      {!!builds.data?.some(build => build.status === 'COMPLETED') && <details><summary>{t('已有学科知识结构')}</summary>{builds.data.filter(build => build.status === 'COMPLETED').map(build => <p key={build.id}><Link to={learningUrl(`/xiaoyu/knowledge-builder/${build.id}`, project.project_id, conversationId)}>{build.subject}</Link></p>)}</details>}
       {maps.isPending && <p role="status">{t('正在读取知识地图…')}</p>}
-      {maps.isError && <button className="um-agent-button" onClick={() => void maps.refetch()}>{t('重新读取地图')}</button>}
-      {maps.data && !maps.data.maps.length && <p>{t('还没有地图，可以先让小宇从本人资料与实际引用整理。')}</p>}
-      <label>{t('知识地图版本')}<select aria-label={t('知识地图版本')} value={versionId} onChange={event => { setVersionId(event.target.value); setTargets([]); }}><option value="">{t('请选择')}</option>{maps.data?.maps.flatMap(map => map.versions.map(v => <option key={v.id} value={v.id}>{map.title} {t('· 版本')} {v.revision}</option>))}</select></label>
+      {maps.isError && <div role="alert" className="um-work-knowledge-actions">
+        <p>{t('知识地图暂时无法读取。')}</p><button className="um-agent-button" onClick={() => void maps.refetch()}>{t('重试')}</button>
+      </div>}
+      {maps.data && !maps.data.maps.some(map => map.versions.length) && <p className="um-path-muted">{t('暂无可选知识地图')}</p>}
+      {!!maps.data?.maps.some(map => map.versions.length) && <label>{t('知识地图版本')}<select aria-label={t('知识地图版本')} value={versionId} onChange={event => { setVersionId(event.target.value); setTargets([]); }}><option value="">{t('请选择')}</option>{maps.data.maps.flatMap(map => map.versions.map(v => <option key={v.id} value={v.id}>{map.title} {t('· 版本')} {v.revision}</option>))}</select></label>}
       {version.isFetching && !!versionId && <p role="status">{t('正在读取版本…')}</p>}
       {version.isError && <p role="alert">{t('地图版本无法读取，请重新选择。')}</p>}
       {version.data && <><fieldset><legend>{t('目标知识')}</legend>{version.data.nodes.map(item => <label key={item.id}><input type="checkbox" checked={targets.includes(item.id)} onChange={event => setTargets(previous => event.target.checked ? [...previous, item.id] : previous.filter(id => id !== item.id))} />{item.title}</label>)}</fieldset>
         <label>{t('学习深度')}<select aria-label={t('学习深度')} value={depth} onChange={event => setDepth(event.target.value)}><option value="apply">{t('理解与应用')}</option><option value="transfer">{t('迁移应用')}</option></select></label>
         {!!targets.length && <p>{t('本次纳入：')}{version.data.nodes.filter(item => closure.has(item.id)).map(item => item.title).join('、')}{t('。包含所选目标需要的前置知识。')}</p>}
         {project.planning_enabled ? <button className="um-agent-button um-agent-button-primary" disabled={!targets.length || busy || version.isFetching} onClick={() => void prepare()}>{busy ? t('正在准备来源…') : t('请小宇形成调整方案')}</button> : <button className="um-agent-button" disabled={!targets.length || version.isFetching} onClick={() => onStudy(t('帮我讲讲在「{0}」中选的知识点和它们的关系', { 0: version.data.title }), { version_id: version.data.version_id, targets, depth })}>{t('请小宇解释所选知识')}</button>}</>}
-      {project.planning_enabled && <button className="um-agent-button" onClick={() => onStudy(t('帮我整理一张这个项目的知识地图'))}>{t('和小宇构建地图')}</button>}
+      <div className="um-work-knowledge-actions">
+        <Link className="um-agent-button" to={learningUrl('/xiaoyu/knowledge-builder', project.project_id, conversationId)}>{t('选择知识结构')}</Link>
+        <Link className="um-agent-button" to={learningUrl('/xiaoyu/knowledge-builder?create=1', project.project_id, conversationId)}>{t('生成知识结构')}</Link>
+      </div>
       {!project.planning_enabled && <p>{t('当前是自由对话项目。采用学习范围需要')}<Link to="/xiaoyu?new=project">{t('新建规划项目')}</Link>{t('，创建时选择规划模式。')}</p>}
       {error && <p role="alert">{error}</p>}
     </div> : node ? <>
@@ -138,6 +141,13 @@ export function LearningKnowledgeView({ project, selected, tasks, tasksLoading, 
           {!observation.task_id && <button className="um-agent-button" onClick={() => onStudy(t('帮我复盘「{0}」在 {1} 的作答', { 0: node.title, 1: observation.at }), activity)}>{t('请小宇复盘这条依据')}</button>}
         </article>}
       </>}</section>
-    </> : <p>{t('当前还没有绑定知识地图。可以先通过实际任务了解起点。')}</p>}
+    </> : stages.length ? <ol className="um-work-stage-relations" aria-label={t('阶段关系')}>
+      {stages.map(item => {
+        const prerequisites = stages.filter(parent => item.prerequisites.includes(parent.id));
+        return <li key={item.id}><strong>{item.title}</strong>
+          {!!prerequisites.length && <p className="um-path-muted">{t('先修阶段：{0}', { 0: prerequisites.map(parent => parent.title).join(locale === 'en' ? ', ' : '、') })}</p>}
+        </li>;
+      })}
+    </ol> : <p className="um-path-muted">{t('暂无知识关系')}</p>}
   </section>;
 }

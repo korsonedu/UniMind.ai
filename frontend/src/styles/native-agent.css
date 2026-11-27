@@ -168,6 +168,13 @@
 .um-agent-composer .um-agent-task-trigger:hover { color: var(--um-color-text); background: var(--um-color-hover); }
 .um-agent-composer .um-agent-send { padding: 0; width: 36px; height: 36px; border-radius: 50%; }
 .um-agent-composer .um-agent-send:disabled { opacity: 1; color: var(--um-color-text-muted); background: var(--um-color-disabled); border-color: transparent; }
+.um-agent-start[data-project='true'] { gap: 18px; }
+.um-agent-start[data-project='true'] .um-agent-composer { --um-radius-composer: 12px; }
+.um-agent-start[data-project='true'] .um-agent-composer textarea { min-height: 38px; padding: 8px 12px 4px; }
+.um-agent-start[data-project='true'] .um-agent-composer footer { padding: 0 7px 6px; }
+.um-app-shell .um-agent-start[data-project='true'] .um-agent-composer footer button { min-height: 32px; min-width: 32px; }
+.um-agent-start[data-project='true'] .um-agent-composer .um-agent-task-trigger { padding: 4px 6px; }
+.um-agent-start[data-project='true'] .um-agent-composer .um-agent-send { width: 32px; height: 32px; }
 @keyframes um-agent-enter { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .um-agent-composer { animation: none; }

@@ -312,7 +312,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     resize();
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
-  }, [input, appearance, hasConversation, initialized]);
+  }, [input, appearance, hasConversation, initialized, selectedProjectName]);
 
   // 通知父组件 hasConversation 变化（用于控制外层容器宽度）
   // useLayoutEffect 确保在浏览器绘制前同步更新父组件，避免 landing→面板 的闪烁
@@ -417,7 +417,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
       <NativeAgentShell workspace={workspace} native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || t('新对话')}>
         {contextPanel?.({ bot, conversationId })}
         <div className="um-agent-landing">
-          <section className="um-agent-start" aria-label={t('开始对话')}>
+          <section className="um-agent-start" data-project={!!selectedProjectName} aria-label={t('开始对话')}>
             <h2 className="um-agent-start-title">{selectedProjectName ? <>{t('我们要在')} <Popover open={projectPickerOpen} onOpenChange={open => { setProjectPickerOpen(open); if (!open) setProjectQuery(''); }}>
               <PopoverTrigger asChild><button className="um-agent-project-picker-trigger" aria-label={t('切换项目，当前为{0}', { 0: selectedProjectName })}>{selectedProjectName}</button></PopoverTrigger>
               <PopoverContent side="top" align="center" sideOffset={12} className="um-native-agent um-native-menu um-agent-project-picker" onCloseAutoFocus={event => { event.preventDefault(); nativeInputRef.current?.focus(); }}>
@@ -430,7 +430,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             <div className="w-full max-w-[680px]">
             <div data-tour={inputTourClass} className="um-agent-composer">
               {noteMentions.panel}
-              <textarea id={composerId} ref={nativeInputRef} value={input} onChange={event => { setInput(event.target.value); noteMentions.updateQuery(event.target.value, event.target.selectionStart); }}
+              <textarea id={composerId} ref={nativeInputRef} rows={selectedProjectName ? 1 : undefined} value={input} onChange={event => { setInput(event.target.value); noteMentions.updateQuery(event.target.value, event.target.selectionStart); }}
                 onCompositionStart={() => setIsComposition(true)} onCompositionEnd={() => setIsComposition(false)}
                 onKeyDown={event => { if (noteMentions.onKeyDown(event, isComposing)) return; if (shouldSend(event) && !isComposing && !event.nativeEvent.isComposing && !loading && input.trim() && bot) { event.preventDefault(); doSend(input); } }}
                 placeholder={chatPlaceholder} aria-label={t('和{0}对话', { 0: botDisplayName })} disabled={loading || !bot} />

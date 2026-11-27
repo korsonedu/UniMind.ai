@@ -70,7 +70,7 @@ export function LearningTaskDetail({ project, task, tasks, onStudy, onSelect, re
   const workspaceActive = useContext(WorkspaceActiveContext);
   const canAnswer = project.status === 'active' || (project.status === 'preparing' && task.purpose === 'diagnostic');
   const canShowQuiz = task.status !== 'unavailable' && (!!task.exam_id || (task.is_current !== false && canAnswer));
-  const needsRepair = project.status === 'active' && failedLearningTask(task);
+  const needsRepair = task.is_current !== false && project.status === 'active' && failedLearningTask(task);
   const remedialTask = needsRepair ? findRemedialTask(tasks, task) : undefined;
   return <WorkspaceActiveContext.Provider value={workspaceActive && active}><article className="um-learning-task-detail" aria-label={t('学习任务：{0}', { 0: task.title })}><h4>{task.title}</h4>{task.status === 'unavailable' || (task.is_current === false && !task.exam_id) ? <p>{t('这项任务已停止使用，已有作答继续保留。请从当前学习安排接续。')}</p> : <MarkdownContent content={task.instructions} />}
       {task.status !== 'unavailable' && (task.is_current !== false || !!task.exam_id) && !!task.criteria?.length && <div className="um-learning-task-criteria"><h5>{t('评价标准')}{task.response_type && ` · ${responseTypes[task.response_type]}`}</h5><ol>{task.criteria.map((criterion, index) => <li key={index}><MarkdownContent content={criterion} /></li>)}</ol></div>}

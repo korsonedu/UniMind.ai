@@ -116,13 +116,20 @@ def prepare_build(project, data, state, *, message=None, prepare_change=False, p
     # Keep the existing bounded stage interface; adjacent units can share one stage.
     chunk = math.ceil(len(nodes) / 20)
     stages = []
+    stage_by_node = {}
     for offset in range(0, len(nodes), chunk):
         units = nodes[offset:offset + chunk]
-        stages.append({'id': f'kb_stage_{offset}', 'title': ' / '.join(node['title'] for node in units)[:200],
+        stage_id = f'kb_stage_{offset}'
+        prerequisites = dict.fromkeys(stage_by_node[parent] for node in units for parent in node['prerequisites']
+                                      if parent in stage_by_node)
+        focus = [next((atom['title'] for atom in node['builder_atoms'] if atom['membership'] == 'core'), node['title'])
+                 for node in units]
+        stages.append({'id': stage_id, 'title': ' / '.join(node['title'] for node in units)[:200],
             'outcome': '\n'.join(node['outcome'] for node in units),
-            'task': '结合已有表现了解起点，准备具体学习任务；完成后根据原作答决定继续、练习或回补。',
+            'task': f"围绕「{'、'.join(dict.fromkeys(focus))}」做一次小练习。",
             'knowledge_nodes': [node['id'] for node in units],
-            'prerequisites': [stages[-1]['id']] if stages else [], 'sources': list(prepared['sources'].values())})
+            'prerequisites': list(prerequisites), 'sources': list(prepared['sources'].values())})
+        stage_by_node.update((node['id'], stage_id) for node in units)
     plan = {'goal': goal,
             'deadline': state.plan.get('deadline'), 'weekly_minutes': state.plan.get('weekly_minutes', 0),
             'stages': stages, 'knowledge_path': prepared['knowledge_path']}
