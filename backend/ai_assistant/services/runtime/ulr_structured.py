@@ -25,7 +25,18 @@ class InvalidStructuredOutput(ValueError):
     pass
 
 
-class RetryableProviderFailure(ValueError):
+class StructuredOutputSchemaError(InvalidStructuredOutput):
+    def __init__(self, error):
+        path = '.'.join(map(str, error.absolute_path))[:180] or '$'
+        super().__init__(f'字段 {path} 未通过 {error.validator} 校验。')
+        self.pattern = error.validator_value if error.validator == 'pattern' else None
+
+
+class StructuredProviderFailure(ValueError):
+    pass
+
+
+class RetryableProviderFailure(StructuredProviderFailure):
     pass
 
 
@@ -92,7 +103,7 @@ def collect_messages(messages, *, operation, name, schema, max_tokens, temperatu
                 if repair and attempt == 0:
                     continue
                 raise InvalidStructuredOutput('模型未返回可解析的结构化结果。') from exc
-            failure = RetryableProviderFailure if exc.retryable else ValueError
+            failure = RetryableProviderFailure if exc.retryable else StructuredProviderFailure
             raise failure('结构化任务未完成，可重试。') from exc
         check_scope()
         choices = response.get('choices') or []
@@ -118,8 +129,7 @@ def collect_messages(messages, *, operation, name, schema, max_tokens, temperatu
                 json.dumps(result, allow_nan=False)
                 validate(result, schema)
             except SchemaError as exc:
-                path = '.'.join(map(str, exc.absolute_path))[:180] or '$'
-                raise InvalidStructuredOutput(f'字段 {path} 未通过 {exc.validator} 校验。') from None
+                raise StructuredOutputSchemaError(exc) from None
             except ValueError:
                 raise InvalidStructuredOutput('结构化结果含有非有限数值。') from None
             return result[array_key] if array_result else result

@@ -16,6 +16,7 @@ from users.learning import confirm_ai_call, release_ai_call, reserve_ai_call
 from ai_assistant.models import ProjectStudioArtifact
 from ai_assistant.services.dsh_runtime import DshUnavailable
 from .project_learning_tools import obj
+from .ulr_structured import InvalidStructuredOutput, StructuredOutputSchemaError, StructuredProviderFailure
 from .workbench_grounding import CITATION_MARKER, WorkbenchGrounding, active_sources, extract_workbench_citations, workbench_prompt
 
 logger = logging.getLogger(__name__)
@@ -111,7 +112,7 @@ def _validate_quiz(questions, include_subjective):
             raise StudioOutputError('Answer index outside options')
 
 
-def _generate(kind, grounding, excerpts, focus, include_subjective):
+def _generate(kind, grounding, excerpts, focus, include_subjective, *, citation_retry):
     context = {
         'custom_focus': focus,
         'sources': {grounding.aliases[source.pk]: source.title for source in grounding.sources.values()},
@@ -119,18 +120,21 @@ def _generate(kind, grounding, excerpts, focus, include_subjective):
     }
     if kind == Kind.QUIZ:
         context['include_subjective'] = include_subjective
+    instruction = workbench_prompt('studio_grounding.txt') + '\n\n' + workbench_prompt(f'studio_{kind}.txt')
+    if citation_retry:
+        instruction += '\n\n上一次有条目未通过原文引用格式校验。请逐条检查，原样复制 excerpts 中的引用锚点，保留半角方括号。'
     result = AIEngine.structured_output(
         messages=[
-            {'role': 'system', 'content': workbench_prompt('studio_grounding.txt') + '\n\n'
-             + workbench_prompt(f'studio_{kind}.txt')},
+            {'role': 'system', 'content': instruction},
             {'role': 'user', 'content': json.dumps(context, ensure_ascii=False)},
         ],
         schema=_SCHEMAS[kind], tool_name='submit_studio_artifact',
         operation=f'assistant.chat.planner.studio.{kind}', max_tokens=6500,
         temperature=0.25, raise_on_error=True,
     )
-    if not _VALIDATORS[kind].is_valid(result):
-        raise StudioOutputError('Invalid artifact schema')
+    schema_error = next(_VALIDATORS[kind].iter_errors(result), None)
+    if schema_error is not None:
+        raise StructuredOutputSchemaError(schema_error)
 
     markdown, payload, keys = '', result, []
     if kind == Kind.STUDY_GUIDE:
@@ -179,21 +183,28 @@ def generate_studio_artifact(project, *, kind, source_ids=None, custom_focus='',
         )
     target = artifacts.filter(pk=artifact.pk, status=Status.GENERATING)
     completed = False
+    error_message = '生成失败，请重新生成。'
     try:
-        try:
-            output = _generate(kind, grounding, excerpts, custom_focus, include_subjective)
-        except _OUTPUT_ERRORS as exc:
-            logger.warning('Studio generation failed for %s (%s)', artifact.pk, type(exc).__name__)
-        else:
-            with transaction.atomic():
-                if not target.update(**output, status=Status.READY, updated_at=timezone.now()):
-                    raise NotFound()
-                _confirm_reservation(reservation)
-            completed = True
+        for attempt in range(2):
+            try:
+                output = _generate(kind, grounding, excerpts, custom_focus, include_subjective, citation_retry=bool(attempt))
+            except (*_OUTPUT_ERRORS, InvalidStructuredOutput, StructuredProviderFailure) as exc:
+                logger.warning('Studio generation failed for %s on attempt %d (%s)', artifact.pk, attempt + 1, type(exc).__name__)
+                if (not attempt and kind == Kind.STUDY_GUIDE and isinstance(exc, StructuredOutputSchemaError)
+                        and exc.pattern == CITATION_MARKER.pattern):
+                    error_message = '资料导读的原文引用格式校验失败，自动重试一次后仍未生成。请点击「重新生成」。'
+                    continue
+            else:
+                with transaction.atomic():
+                    if not target.update(**output, status=Status.READY, updated_at=timezone.now()):
+                        raise NotFound()
+                    _confirm_reservation(reservation)
+                completed = True
+            break
     finally:
         if not completed:
             with transaction.atomic():
-                target.update(status=Status.FAILED, error_message='生成失败，请重新生成。', updated_at=timezone.now())
+                target.update(status=Status.FAILED, error_message=error_message, updated_at=timezone.now())
                 release_ai_call(reservation)
     return get_object_or_404(artifacts, pk=artifact.pk)
 

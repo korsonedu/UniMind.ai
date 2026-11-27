@@ -212,6 +212,49 @@ def test_failed_generation_is_persisted_and_releases_quota(auth_client, studio, 
     assert usage_info(project.user)['used'] == 0
 
 
+@pytest.mark.parametrize('outcome', ['recovered', 'invalid_citation', 'invalid_schema', 'provider_error'])
+def test_study_guide_retries_only_citation_format_errors(auth_client, studio, settings, monkeypatch, outcome):
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    project, _ = studio
+    valid = {
+        'main_question': '怎样理解债券定价？ [S1#C2]',
+        'source_outline': ['课本讲收益率 [S1#C2]'] * 5,
+        'key_concepts': [{'concept': '收益率', 'explanation': '现金流折现率 [S1#C2]'}],
+        'confusing_points': [], 'study_order': ['先看收益率 [S1#C2]'],
+    }
+    invalid = {**valid, 'source_outline': [*valid['source_outline'][:4], '课本讲收益率 ［S1#C2］']}
+
+    def reply(result):
+        return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+            'function': {'name': 'submit_studio_artifact', 'arguments': json.dumps(result)},
+        }]}}]}
+
+    if outcome == 'invalid_schema':
+        valid.pop('study_order')
+        replies = [reply(valid)]
+    else:
+        retry = {
+            'recovered': reply(valid), 'invalid_citation': reply(invalid),
+            'provider_error': AICallError('provider unavailable'),
+        }[outcome]
+        replies = [reply(invalid), retry]
+    provider = Mock(side_effect=replies)
+    monkeypatch.setattr(AIEngine, 'call_provider', provider)
+
+    response = auth_client.post(_url(project), {'kind': 'study_guide'}, format='json')
+
+    assert response.status_code == 201
+    assert provider.call_count == len(replies)
+    assert project.studio_artifacts.count() == 1
+    assert response.data['status'] == ('ready' if outcome == 'recovered' else 'failed')
+    if outcome in ('invalid_citation', 'provider_error'):
+        assert '引用格式' in response.data['error_message']
+        assert '自动重试' in response.data['error_message']
+    assert AIUsageReservation.objects.get(user=project.user).status == (
+        'succeeded' if outcome == 'recovered' else 'released'
+    )
+
+
 def test_deleting_a_generating_artifact_prevents_publication_and_charge(auth_client, studio, model):
     project, _ = studio
 
