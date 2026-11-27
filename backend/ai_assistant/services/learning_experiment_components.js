@@ -108,8 +108,22 @@ function renderChart(host, options) {
         mark.appendChild(title);
       });
     });
+    let labelStride = 1;
+    if (config.type === 'line' && config.labels.length > 12) {
+      const intervals = config.labels.length - 1;
+      const widestLabel = Math.max(...config.labels.map(label => measure.measureText(label).width));
+      labelStride = Math.ceil(Math.max(intervals / (width < 420 ? 4 : 8), (widestLabel * 1.5 + 10) / band));
+      // Keep both endpoints when they fit on the same tick interval.
+      for (let stride = labelStride; stride <= intervals / 2; stride++) {
+        if (intervals % stride === 0) {
+          labelStride = stride;
+          break;
+        }
+      }
+    }
     let lastRight = -Infinity;
     config.labels.forEach((label, index) => {
+      if (index % labelStride) return;
       const textWidth = measure.measureText(label).width;
       const position = Math.max(left + textWidth / 2, Math.min(right - textWidth / 2, x(index)));
       const start = position - textWidth / 2;
