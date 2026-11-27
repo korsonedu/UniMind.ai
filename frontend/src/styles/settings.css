@@ -124,6 +124,19 @@
 
 .um-settings-server { flex-wrap: wrap; }
 .um-settings-server p { min-width: 0; overflow-wrap: anywhere; }
+
+.um-mcp-first-title { margin-top: 0; }
+.um-mcp-presets-row { flex-direction: column; align-items: stretch; gap: 12px; }
+.um-mcp-presets-row > div:first-child { flex: none; }
+.um-mcp-presets { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+.um-mcp-presets button { height: 32px; padding-inline: 12px; }
+.um-settings-row .um-mcp-select { width: min(42%, 300px); flex-shrink: 0; }
+.um-mcp-submit-row { justify-content: flex-end; }
+.um-mcp-error { margin-top: 10px; }
+.um-mcp-server-row { flex-wrap: wrap; gap: 14px 24px; }
+.um-mcp-server-url { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.um-mcp-server-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; flex-shrink: 0; }
+
 @media (max-width: 767px) {
   .um-settings-workspace { padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); }
   .um-settings-back, .um-settings-legal a { display: inline-flex; align-items: center; min-height: 44px; }
@@ -135,4 +148,8 @@
   .um-settings-profile-summary { flex-wrap: wrap; }
   .um-settings-account-value { flex-wrap: wrap; gap: 8px; }
   .um-settings-value { overflow-wrap: anywhere; }
+  .um-settings-row .um-mcp-select { width: 100%; max-width: 100%; }
+  .um-mcp-presets button { min-height: 36px; }
+  .um-mcp-submit-row button { width: 100%; }
+  .um-mcp-server-actions { width: 100%; justify-content: flex-end; }
 }

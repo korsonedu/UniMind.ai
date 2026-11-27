@@ -53,6 +53,7 @@ export function ExternalMcpServers() {
   const [authHeaderName, setAuthHeaderName] = useState('Authorization');
   const [authSecret, setAuthSecret] = useState('');
   const [allowWrite, setAllowWrite] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
 
   const endpoint = '/ai/mcp-servers/';
@@ -62,6 +63,7 @@ export function ExternalMcpServers() {
   });
 
   function applyPreset(preset: McpPreset) {
+    setSelectedPreset(preset.id);
     setName(preset.id === 'custom' ? '' : preset.name);
     setUrl(preset.url || '');
     setAuthType(preset.auth_type || 'bearer');
@@ -146,14 +148,20 @@ export function ExternalMcpServers() {
       {t('添加符合 Streamable HTTP 规范的远程 MCP 服务后，小宇可在对话中按需检索 Notion、Obsidian、GitHub、网盘、Zotero、飞书或 Anki 等外部资料。默认仅开放只读工具。')}
     </p>
     <section className="um-settings-group">
-      {presets.length > 0 && <div className="um-settings-row">
+      {presets.length > 0 && <div className="um-settings-row um-mcp-presets-row">
         <div>
           <span>{t('常用预设')}</span>
           <p>{t('点击填充推荐配置，再补充你的服务地址或令牌')}</p>
         </div>
-        <div className="um-desktop-actions">
+        <div className="um-mcp-presets">
           {presets.map(preset => (
-            <Button key={preset.id} type="button" variant="outline" size="sm" onClick={() => applyPreset(preset)}>
+            <Button
+              key={preset.id}
+              type="button"
+              variant={selectedPreset === preset.id ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => applyPreset(preset)}
+            >
               {preset.name}
             </Button>
           ))}
@@ -161,30 +169,30 @@ export function ExternalMcpServers() {
       </div>}
       <form onSubmit={event => void handleCreate(event)}>
         <div className="um-settings-row">
-          <label htmlFor="ext-mcp-name">{t('工具名称')}</label>
+          <div><label htmlFor="ext-mcp-name">{t('工具名称')}</label></div>
           <Input id="ext-mcp-name" required maxLength={80} placeholder="Notion / Obsidian / GitHub" value={name}
-            onChange={event => setName(event.target.value)} />
+            onChange={event => { setName(event.target.value); setSelectedPreset(null); }} />
         </div>
         <div className="um-settings-row">
-          <label htmlFor="ext-mcp-url">{t('远程 MCP 地址')}</label>
+          <div><label htmlFor="ext-mcp-url">{t('远程 MCP 地址')}</label></div>
           <Input id="ext-mcp-url" required maxLength={500} placeholder="https://mcp.notion.com/mcp" value={url}
             onChange={event => setUrl(event.target.value)} />
         </div>
         <div className="um-settings-row">
-          <label htmlFor="ext-mcp-auth-type">{t('认证方式')}</label>
-          <SelectField id="ext-mcp-auth-type" value={authType} onValueChange={v => setAuthType(v as 'none' | 'bearer' | 'header')}>
+          <div><label htmlFor="ext-mcp-auth-type">{t('认证方式')}</label></div>
+          <SelectField className="um-mcp-select" id="ext-mcp-auth-type" value={authType} onValueChange={v => setAuthType(v as 'none' | 'bearer' | 'header')}>
             <SelectOption value="bearer">Bearer Token</SelectOption>
             <SelectOption value="header">{t('自定义请求头')}</SelectOption>
             <SelectOption value="none">{t('无认证')}</SelectOption>
           </SelectField>
         </div>
         {authType === 'header' && <div className="um-settings-row">
-          <label htmlFor="ext-mcp-header-name">{t('请求头名称')}</label>
+          <div><label htmlFor="ext-mcp-header-name">{t('请求头名称')}</label></div>
           <Input id="ext-mcp-header-name" maxLength={80} placeholder="X-API-Key" value={authHeaderName}
             onChange={event => setAuthHeaderName(event.target.value)} />
         </div>}
         {authType !== 'none' && <div className="um-settings-row">
-          <label htmlFor="ext-mcp-secret">{t('访问令牌（加密存储）')}</label>
+          <div><label htmlFor="ext-mcp-secret">{t('访问令牌（加密存储）')}</label></div>
           <Input id="ext-mcp-secret" type="password" maxLength={2000} placeholder="secret_..." value={authSecret}
             onChange={event => setAuthSecret(event.target.value)} autoComplete="off" />
         </div>}
@@ -195,22 +203,22 @@ export function ExternalMcpServers() {
           </div>
           <Switch id="ext-mcp-write" checked={allowWrite} onCheckedChange={setAllowWrite} />
         </div>
-        <div className="um-settings-row">
+        <div className="um-settings-row um-mcp-submit-row">
           <Button type="submit" disabled={!!busy || !name.trim() || !url.trim()}>{t('添加外部 MCP 工具')}</Button>
         </div>
       </form>
     </section>
 
-    {errorMessage && <p className="um-desktop-error" role="alert">{errorMessage}</p>}
+    {errorMessage && <p className="um-desktop-error um-mcp-error" role="alert">{errorMessage}</p>}
 
     {servers.length > 0 && <>
       <h3 className="um-settings-group-title">{t('已连接的外部 MCP 工具')}</h3>
       <section className="um-settings-group">
         {servers.map(server => (
-          <div className="um-settings-row" key={server.id}>
+          <div className="um-settings-row um-mcp-server-row" key={server.id}>
             <div>
               <strong>{server.name}</strong>
-              <p>{server.url}</p>
+              <p className="um-mcp-server-url">{server.url}</p>
               <p>
                 {server.enabled ? t('已启用') : t('已停用')}
                 {' · '}
@@ -220,17 +228,17 @@ export function ExternalMcpServers() {
                 {server.last_error ? ` · ${server.last_error}` : ''}
               </p>
             </div>
-            <div className="um-desktop-actions">
+            <div className="um-mcp-server-actions">
               <Switch
                 aria-label={`${server.name} ${t('启用开关')}`}
                 checked={server.enabled}
                 disabled={!!busy}
                 onCheckedChange={checked => void handleToggle(server, 'enabled', checked)}
               />
-              <Button type="button" variant="outline" disabled={!!busy} onClick={() => void handleSync(server.id)}>
+              <Button type="button" variant="outline" size="sm" disabled={!!busy} onClick={() => void handleSync(server.id)}>
                 {busy === `sync-${server.id}` ? t('同步中…') : t('同步工具')}
               </Button>
-              <Button type="button" variant="outline" disabled={!!busy} onClick={() => void handleDelete(server.id)}>
+              <Button type="button" variant="outline" size="sm" disabled={!!busy} onClick={() => void handleDelete(server.id)}>
                 {t('移除')}
               </Button>
             </div>
