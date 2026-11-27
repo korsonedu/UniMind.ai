@@ -7,6 +7,8 @@ from django.dispatch import receiver
 from django.utils import timezone
 import uuid
 
+from core.fields import EncryptedTextField
+
 class AIChatMessage(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     role = models.CharField(max_length=20) # 'user' or 'assistant'
@@ -900,3 +902,54 @@ class LearningMemoryAuthorizationCode(models.Model):
     challenge = models.CharField(max_length=43)
     scope = models.CharField(max_length=150)
     expires_at = models.DateTimeField(db_index=True)
+
+
+class LearningMemoryDynamicClient(models.Model):
+    """RFC 7591 dynamically registered public OAuth 2.1 client for Learning Memory MCP."""
+
+    client_id = models.CharField(max_length=100, unique=True)
+    client_name = models.CharField(max_length=120)
+    client_uri = models.URLField(max_length=500, blank=True, default='')
+    redirect_uris = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-id']
+
+
+class ExternalMcpServer(models.Model):
+    """User-configured external Streamable HTTP MCP server for XiaoYu (MCP Client)."""
+
+    AUTH_NONE = 'none'
+    AUTH_BEARER = 'bearer'
+    AUTH_HEADER = 'header'
+    AUTH_CHOICES = [
+        (AUTH_NONE, '无认证'),
+        (AUTH_BEARER, 'Bearer Token'),
+        (AUTH_HEADER, '自定义请求头'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='external_mcp_servers',
+    )
+    name = models.CharField(max_length=80)
+    slug = models.CharField(max_length=40)
+    url = models.URLField(max_length=500)
+    auth_type = models.CharField(max_length=16, choices=AUTH_CHOICES, default=AUTH_NONE)
+    auth_header_name = models.CharField(max_length=80, blank=True, default='Authorization')
+    auth_secret = EncryptedTextField(blank=True, default='')
+    enabled = models.BooleanField(default=True)
+    allow_write_tools = models.BooleanField(default=False)
+    cached_tools = models.JSONField(default=list, blank=True)
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=300, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-id']
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'slug'], name='external_mcp_server_user_slug'),
+        ]

@@ -1,0 +1,32 @@
+{
+  "name": "@unimind/mcp-proxy",
+  "version": "1.0.0",
+  "description": "Zero-dependency local stdio-to-Streamable-HTTP bridge for UniMind.ai Learning Memory MCP.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "unimind-mcp-proxy": "./bin/unimind-mcp-proxy.mjs"
+  },
+  "exports": {
+    ".": "./src/bridge.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "unimind",
+    "stdio",
+    "streamable-http",
+    "proxy"
+  ]
+}

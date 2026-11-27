@@ -42,7 +42,7 @@ const SECTIONS = [
   { id: 'storage', label: '存储', icon: HardDrives, keywords: '下载 离线 缓存 同步 存储', desktopOnly: true },
   { id: 'data', label: '数据管理', icon: Database, keywords: '导出 下载 注销 删除 隐私 协议 离线 缓存 同步' },
   { id: 'about', label: '关于 UniMind.ai', icon: ChatCircle, keywords: '客户端 版本 关于 更新', desktopOnly: true },
-  { id: 'agent-connections', label: '外部 Agent', icon: PlugsConnected, keywords: '高级 连接 授权 学习记忆 MCP Codex WorkBuddy' },
+  { id: 'agent-connections', label: '连接', icon: PlugsConnected, keywords: '高级 连接 外部 Agent 授权 学习记忆 MCP Codex WorkBuddy Notion Obsidian GitHub' },
 ] as const;
 const AVATAR_STYLES: Record<string, string> = {
   avataaars: '简约角色', bottts: '机器人', 'pixel-art': '像素艺术', adventurer: '冒险家',

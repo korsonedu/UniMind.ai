@@ -50,6 +50,13 @@ def grouped_tools(allowed, message, recent_messages=None, project=False):
     if 'read_session_tool' in definitions:
         groups['session'] = {'title': '当前对话的计算工具', 'description': '调用本对话已经注册的计算工具，或读取源码和版本。',
             'tools': [definitions['read_session_tool'], *[tool for name, tool in definitions.items() if name.startswith('session_')]]}
+    mcp_tools = [tool for name, tool in definitions.items() if name.startswith('mcp__')]
+    if mcp_tools:
+        groups['external_mcp'] = {
+            'title': '已连接的外部工具 (MCP)',
+            'description': '调用学生在设置中连接的外部 MCP 工具（如 Notion、Obsidian、GitHub、网盘、飞书、Zotero、Anki 等）。',
+            'tools': mcp_tools,
+        }
     intent = classify_intent_keywords(message, recent_messages, bot_type='planner')
     initial = {'resource': 'resources', 'learning_sessions': 'progress', 'analysis': 'progress',
                'planning': 'mastery', 'quiz': 'practice', 'error_review': 'practice',
@@ -75,6 +82,11 @@ def grouped_tools(allowed, message, recent_messages=None, project=False):
         initial = 'tasks'
     if 'build_learning_experiment' in definitions and not exercise_request and VISUAL_DEMO_REQUEST.search(message):
         initial = 'interactive' if '题' in message else 'authoring'
+    if 'external_mcp' in groups and not exercise_request and any(word in message.lower() for word in (
+        'notion', 'obsidian', 'github', 'google drive', 'onedrive', 'dropbox', 'zotero', 'anki',
+        '飞书', '钉钉', '语雀', 'flomo', 'readwise', '外部工具', 'mcp',
+    )):
+        initial = 'external_mcp'
     if 'recall' in groups and any(word in message.lower() for word in (
         '上次学', '上次讲', '之前学', '之前讲', '接着学', '接着上次', '学习记忆', 'continue studying', 'last session',
         '上次聊', '之前聊', '上次说', '上次提到', '对话历史', 'earlier conversation', 'previous conversation',

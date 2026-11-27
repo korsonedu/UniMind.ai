@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { ExternalMcpServers } from '@/components/ExternalMcpServers';
 import { t } from '@/i18n';
 import api from '@/lib/api';
 import { activeWorkspace } from '@/lib/activeWorkspace';
@@ -24,6 +25,7 @@ export function LearningMemoryConnections() {
   });
   const server = getServerOrigin() || window.location.origin;
   const endpoint = new URL('/api/ai/learning-memory/mcp/', server).href;
+  const stdioProxyCommand = `npx -y @unimind/mcp-proxy --url ${endpoint}`;
 
   async function create() {
     setBusy(true);
@@ -58,6 +60,7 @@ export function LearningMemoryConnections() {
   }
 
   return <>
+    <h3 className="um-settings-group-title">{t('向外部 Agent 开放学习记忆（MCP Server）')}</h3>
     <section className="um-settings-group">
       <form onSubmit={event => { event.preventDefault(); if (!busy && name.trim()) void create(); }}>
         <div className="um-settings-row">
@@ -65,8 +68,15 @@ export function LearningMemoryConnections() {
           <Input id="learning-memory-endpoint" readOnly value={endpoint} onFocus={event => event.currentTarget.select()} />
         </div>
         <div className="um-settings-row">
+          <div>
+            <label htmlFor="learning-memory-stdio-proxy">{t('本地 stdio 代理命令')}</label>
+            <p>{t('供 Claude Desktop、Raycast、Obsidian 等仅支持 stdio 的桌面客户端使用')}</p>
+          </div>
+          <Input id="learning-memory-stdio-proxy" readOnly value={stdioProxyCommand} onFocus={event => event.currentTarget.select()} />
+        </div>
+        <div className="um-settings-row">
           <label htmlFor="learning-memory-connection-name">{t('连接名称')}</label>
-          <Input id="learning-memory-connection-name" required maxLength={80} placeholder="Codex / WorkBuddy" value={name}
+          <Input id="learning-memory-connection-name" required maxLength={80} placeholder="Codex / Claude / Cursor / WorkBuddy" value={name}
             onChange={event => setName(event.target.value)} />
         </div>
         <div className="um-settings-row">
@@ -98,5 +108,6 @@ export function LearningMemoryConnections() {
         </div>)}
       </section>
     </>}
+    <ExternalMcpServers />
   </>;
 }
