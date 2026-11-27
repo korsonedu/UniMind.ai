@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.2.0 · 双向 MCP 生态与连接管理（2026-11-27）
+
+### Added
+- **OAuth 2.1 动态客户端注册（RFC 7591）**：新增 `/api/ai/learning-memory/oauth/register/` 与元数据发现广播（受 `UNIMIND_LEARNING_MEMORY_OAUTH_DCR` 门控），支持 ChatGPT、Claude.ai 等云端 AI 平台公开 PKCE 客户端一键授权接入。
+- **本地 stdio 代理包 `@unimind/mcp-proxy`**：新增零依赖 Node.js 桥接工具（`packages/unimind-mcp-proxy`），让 Claude Desktop、Raycast、Obsidian 等仅支持 stdio 的桌面端一行命令连接 UniMind Streamable HTTP MCP。
+- **扩展学习记忆 MCP 服务端工具**：新增 `get_due_reviews`（Memorix 到期复习查询）、`start_weak_point_practice`（按薄弱点/主题抽题并生成站内作答链接）与 `save_learning_note`（幂等新建/追加个人笔记，需同时具备写权限与笔记权限）。
+- **小宇 MCP Client 运行时与连接管理**：新增加密存储的 `ExternalMcpServer` 模型、SSRF 防护、默认只读沙箱、Streamable HTTP 客户端与 ULR `external_mcp` 分组自动路由，支持小宇直连 Notion、Obsidian、GitHub、Google Drive、飞书文档、Zotero、Anki 及自定义 MCP 服务。
+
+### Changed
+- 设置侧边栏「高级 → 外部 Agent」更名为「高级 → 连接」，统一承载对外开放（MCP Server + stdio 代理命令）与对内接入（外部 MCP 工具预设、同步与权限控制）。
+
+本版本更新网页、后端与数据库迁移（`ai_assistant.0053_mcp_dcr_and_external_servers`），不生成桌面安装包。
+
 ## 2.1.0 · SDTM 学习记忆（2026-11-26）
 
 ### Added

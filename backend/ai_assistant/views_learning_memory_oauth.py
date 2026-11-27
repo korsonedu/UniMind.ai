@@ -1,3 +1,4 @@
+import json
 import re
 from urllib.parse import urlencode
 
@@ -13,7 +14,16 @@ from oauthlib.common import add_params_to_uri
 from oauthlib.oauth2 import OAuth2Error
 
 from ai_assistant.services.learning_memory_oauth import (
-    READ_SCOPE, SCOPES, learner_account_active, oauth_enabled, registered_client, resource_uri, server,
+    DynamicClientRegistrationError,
+    READ_SCOPE,
+    SCOPES,
+    dcr_enabled,
+    learner_account_active,
+    oauth_enabled,
+    register_dynamic_client,
+    registered_client,
+    resource_uri,
+    server,
 )
 from core.rate_limit import rate_limit
 from users.accounts.services import platform_cookie_user
@@ -43,7 +53,7 @@ def resource_metadata(request):
 @require_GET
 def server_metadata(request):
     _require_oauth(request)
-    return JsonResponse({
+    metadata = {
         'issuer': request.build_absolute_uri('/').rstrip('/'),
         'authorization_endpoint': _endpoint(request, 'learning-memory-oauth-authorize'),
         'token_endpoint': _endpoint(request, 'learning-memory-oauth-token'),
@@ -52,7 +62,30 @@ def server_metadata(request):
         'scopes_supported': list(SCOPES),
         'code_challenge_methods_supported': ['S256'],
         'token_endpoint_auth_methods_supported': ['none', 'client_secret_basic', 'client_secret_post'],
-    })
+    }
+    if dcr_enabled(request):
+        metadata['registration_endpoint'] = _endpoint(request, 'learning-memory-oauth-register')
+    return JsonResponse(metadata)
+
+
+@csrf_exempt
+@require_POST
+@never_cache
+@rate_limit('learning_memory_oauth_dcr', 20, 300, methods={'POST'})
+def register_client(request):
+    if not dcr_enabled(request):
+        raise Http404
+    if len(request.body) > 16384:
+        return JsonResponse({'error': 'invalid_client_metadata', 'error_description': '请求体过大。'}, status=400)
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return JsonResponse({'error': 'invalid_client_metadata', 'error_description': '请求体必须为合法 JSON。'}, status=400)
+    try:
+        metadata = register_dynamic_client(payload)
+    except DynamicClientRegistrationError as error:
+        return JsonResponse({'error': error.code, 'error_description': error.description}, status=400)
+    return JsonResponse(metadata, status=201, headers={'Cache-Control': 'no-store'})
 
 
 @require_http_methods(['GET', 'POST'])

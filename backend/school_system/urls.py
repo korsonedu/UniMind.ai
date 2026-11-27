@@ -103,6 +103,8 @@ if _APP_ON('ai_assistant'):
         path("api/ai/learning-memory/oauth/authorize/",
              views_learning_memory_oauth.authorize, name="learning-memory-oauth-authorize"),
         path("api/ai/learning-memory/oauth/token/", views_learning_memory_oauth.token, name="learning-memory-oauth-token"),
+        path("api/ai/learning-memory/oauth/register/",
+             views_learning_memory_oauth.register_client, name="learning-memory-oauth-register"),
     ])
 if _APP_ON('notes'):
     urlpatterns.append(path("api/notes/", include("notes.urls")))
