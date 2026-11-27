@@ -10,6 +10,9 @@ import { StudentReportPreview } from '@/components/StudentReportPreview';
 import { PracticeResultCard } from './PracticeResultCard';
 import { PracticeQuizCard } from './PracticeQuizCard';
 import { LearningExperimentRenderer } from './LearningExperimentRenderer';
+import { ConceptDiagramRenderer } from './ConceptDiagramRenderer';
+import { ComparisonTableRenderer } from './ComparisonTableRenderer';
+import { StoryboardRenderer } from './StoryboardRenderer';
 
 export interface VisualData {
   type: string;
@@ -30,6 +33,9 @@ const RENDERERS: Record<string, React.ComponentType<{ payload: any }>> = {
   student_report: StudentReportPreview,
   practice_result: PracticeResultCard,
   practice_quiz: PracticeQuizCard,
+  concept_diagram: ConceptDiagramRenderer,
+  comparison_table: ComparisonTableRenderer,
+  storyboard: StoryboardRenderer,
 };
 
 export const getVisualRenderer = (type: string) => RENDERERS[type] || null;

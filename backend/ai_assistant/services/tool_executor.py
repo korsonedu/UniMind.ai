@@ -239,7 +239,10 @@ class BaseToolExecutor:
         payload = args.get('payload', {})
         priority = args.get('priority', 'normal')
 
-        valid_types = {'data_card', 'latex_derivation', 'step_solution', 'knowledge_map', 'action_cards', 'function_graph'}
+        valid_types = {
+            'data_card', 'latex_derivation', 'step_solution', 'knowledge_map',
+            'action_cards', 'function_graph', 'concept_diagram', 'comparison_table', 'storyboard',
+        }
         if visual_type not in valid_types:
             valid_list = ', '.join(sorted(valid_types))
             return {"error": f"可视化类型无效: '{visual_type}'。支持: {valid_list}"}

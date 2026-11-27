@@ -29,6 +29,6 @@ export function DshToolCard({ card }: { card: DshCard }) {
   }
   if (card.type === 'practice_quiz' || card.type === 'learning_experiment') return <InlineVisualCard visual={card} />;
   if (card.type === 'practice_result') return <section className="um-visual-card"><div className="um-visual-body"><PracticeResultCard payload={card.payload as unknown as PracticeResultPayload} snapshot /></div></section>;
-  if (!['data_card', 'knowledge_map', 'latex_derivation', 'step_solution', 'function_graph', 'action_cards'].includes(card.type)) return null;
+  if (!['data_card', 'knowledge_map', 'latex_derivation', 'step_solution', 'function_graph', 'action_cards', 'concept_diagram', 'comparison_table', 'storyboard'].includes(card.type)) return null;
   return <InlineVisualCard visual={card} />;
 }

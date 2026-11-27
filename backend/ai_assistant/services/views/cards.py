@@ -121,10 +121,44 @@ VISUAL_SCHEMAS = {
                 'url': _text(1000, 0), 'label': _text(120),
                 'reply_mode': {'type': 'string', 'enum': ['single', 'multi', 'acknowledge', 'input', 'rating']}},
                 ['type', 'url', 'label'])}, ['title', 'description', 'icon', 'action']), 6)}, ['cards']),
+    'concept_diagram': _object({
+        'title': _text(120),
+        'subtitle': _text(240, 0),
+        'layout': {'type': 'string', 'enum': ['flow', 'hierarchy', 'cycle', 'compare']},
+        'nodes': _array(_object({
+            'id': _text(40), 'label': _text(80), 'detail': _text(240, 0),
+            'badge': _text(40, 0), 'highlight': {'type': 'boolean'},
+        }, ['id', 'label']), 8, 2),
+        'edges': _array(_object({
+            'from': _text(40), 'to': _text(40), 'label': _text(60, 0),
+        }, ['from', 'to']), 10, 0),
+    }, ['title', 'nodes']),
+    'comparison_table': _object({
+        'title': _text(120),
+        'subtitle': _text(240, 0),
+        'columns': _array(_text(60), 5, 2),
+        'rows': _array(_object({
+            'dimension': _text(80),
+            'cells': _array(_text(240), 5, 2),
+            'pitfall': _text(200, 0),
+        }, ['dimension', 'cells']), 8, 1),
+    }, ['title', 'columns', 'rows']),
+    'storyboard': _object({
+        'title': _text(120),
+        'subtitle': _text(240, 0),
+        'frames': _array(_object({
+            'step': {'type': 'integer', 'minimum': 1, 'maximum': 10},
+            'heading': _text(100),
+            'board': _text(500),
+            'formula': _text(600, 0),
+            'takeaway': _text(240, 0),
+            'pitfall': _text(240, 0),
+        }, ['heading', 'board']), 6, 2),
+    }, ['title', 'frames']),
 }
 PRESENTATION_TOOL = {'type': 'function', 'function': {
     'name': 'present_learning_visual',
-    'description': '展示受控教学卡片：公式推导、分步解题、有限采样点函数图或回复选项与站内导航。仅展示，不执行表达式，不代学生提交、写笔记或改变成绩。函数图每条曲线只提供2到100个有限坐标点，最多3条，不接受formula；导航只允许课程、习题、诊断，以及工具返回的知识结构和小宇路径确认站内路由。reply的url是回复文字，input模式可为空；input与rating每组只能有一张卡，rating的url必须为评分：{rating}。'
+    'description': '展示受控教学卡片：公式推导、分步解题、概念流程图(concept_diagram)、辨析对比表(comparison_table)、分步板书(storyboard)、有限采样点函数图或回复选项与站内导航。仅展示，不执行表达式，不代学生提交、写笔记或改变成绩。函数图每条曲线只提供2到100个有限坐标点，最多3条，不接受formula；导航只允许课程、习题、诊断，以及工具返回的知识结构和小宇路径确认站内路由。reply的url是回复文字，input模式可为空；input与rating每组只能有一张卡，rating的url必须为评分：{rating}。'
                    '参数顶层只允许type和payload，如{"type":"latex_derivation","payload":{"title":"恒等式","steps":[{"latex":"A=L+E","note":"简短说明"}]}}。',
     'parameters': _object({'type': {'type': 'string', 'enum': list(VISUAL_SCHEMAS)},
         'payload': {'oneOf': list(VISUAL_SCHEMAS.values())}}, ['type', 'payload']),

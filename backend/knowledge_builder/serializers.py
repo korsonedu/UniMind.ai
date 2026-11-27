@@ -6,6 +6,7 @@ from . import models
 from .archetypes import PROFILES
 from .build_state import can_resume_build, lock_build_for_resume
 from .public_asset_service import compute_atom_difficulty
+from .source_parsers import clean_resource_excerpt
 
 
 def validate_json_object(value):
@@ -113,6 +114,7 @@ class StepSerializer(serializers.ModelSerializer):
 
 class BlockResourceSerializer(serializers.ModelSerializer):
     user_vote = serializers.SerializerMethodField()
+    excerpt = serializers.SerializerMethodField()
 
     def get_user_vote(self, instance):
         request = self.context.get('request')
@@ -120,6 +122,9 @@ class BlockResourceSerializer(serializers.ModelSerializer):
         if not user or not user.is_authenticated:
             return 0
         return instance.feedbacks.filter(user=user).values_list('vote', flat=True).first() or 0
+
+    def get_excerpt(self, instance):
+        return clean_resource_excerpt(instance.excerpt, max_len=600)
 
     class Meta:
         model = models.BlockResource
@@ -267,3 +272,111 @@ class FullKnowledgeTreeSerializer(BuildSummarySerializer):
 
     class Meta(BuildSummarySerializer.Meta):
         fields = (*BuildSummarySerializer.Meta.fields, 'modules', 'atoms', 'atom_edges', 'blocks', 'block_edges', 'interfaces', 'region_pref')
+
+
+class SourceAlignmentSerializer(serializers.ModelSerializer):
+    source_title = serializers.CharField(source='source_document.title', read_only=True)
+    source_kind = serializers.CharField(source='source_document.source_kind', read_only=True)
+    block_title = serializers.CharField(source='block.short_title', read_only=True)
+    atom_name = serializers.SerializerMethodField()
+    full_excerpt = serializers.SerializerMethodField()
+
+    def get_atom_name(self, instance):
+        return instance.atom.name if instance.atom_id and instance.atom else ''
+
+    def get_full_excerpt(self, instance):
+        sections = instance.source_document.raw_sections if isinstance(instance.source_document.raw_sections, dict) else {}
+        return clean_resource_excerpt(sections.get(instance.source_node_id) or instance.excerpt_quote, max_len=1600)
+
+    class Meta:
+        model = models.SourceAlignment
+        fields = (
+            'id', 'source_document', 'source_title', 'source_kind',
+            'block', 'block_title', 'atom', 'atom_name',
+            'source_node_id', 'section_title', 'locator', 'source_url',
+            'excerpt_quote', 'full_excerpt', 'alignment_role', 'match_reason',
+            'confidence', 'is_verified', 'created_at', 'updated_at',
+        )
+
+
+class TreeSourceDocumentSerializer(serializers.ModelSerializer):
+    alignment_count = serializers.SerializerMethodField()
+    aligned_block_count = serializers.SerializerMethodField()
+    aligned_atom_count = serializers.SerializerMethodField()
+    node_count = serializers.SerializerMethodField()
+    alignments = SourceAlignmentSerializer(many=True, read_only=True)
+
+    def get_alignment_count(self, instance):
+        return instance.alignments.count()
+
+    def get_aligned_block_count(self, instance):
+        return instance.alignments.values('block_id').distinct().count()
+
+    def get_aligned_atom_count(self, instance):
+        return instance.alignments.exclude(atom_id__isnull=True).values('atom_id').distinct().count()
+
+    def get_node_count(self, instance):
+        return len(instance.raw_sections or {})
+
+    class Meta:
+        model = models.TreeSourceDocument
+        fields = (
+            'id', 'build', 'source_kind', 'title', 'url', 'file_key',
+            'is_primary', 'parse_status', 'parse_error', 'toc_tree',
+            'node_count', 'alignment_count', 'aligned_block_count',
+            'aligned_atom_count', 'alignments', 'created_at', 'updated_at',
+        )
+
+
+class CreateTreeSourceSerializer(serializers.Serializer):
+    source_kind = serializers.ChoiceField(choices=models.TreeSourceDocument.SourceKind.values, default=models.TreeSourceDocument.SourceKind.MARKDOWN)
+    title = serializers.CharField(required=False, allow_blank=True, max_length=240)
+    url = serializers.URLField(required=False, allow_blank=True, max_length=1000)
+    content = serializers.CharField(required=False, allow_blank=True, max_length=300000)
+    outline_text = serializers.CharField(required=False, allow_blank=True, max_length=100000)
+    album_id = serializers.IntegerField(required=False, min_value=1)
+    is_primary = serializers.BooleanField(default=True)
+    auto_align = serializers.BooleanField(default=False)
+
+    def validate_url(self, value):
+        if value and not value.startswith('https://'):
+            raise serializers.ValidationError('请提供公开 HTTPS 链接。')
+        return value
+
+    class Meta:
+        fields = ('source_kind', 'title', 'url', 'content', 'outline_text', 'album_id', 'is_primary', 'auto_align')
+
+
+class SourceAlignmentUpdateSerializer(serializers.Serializer):
+    is_verified = serializers.BooleanField(required=True)
+
+    class Meta:
+        fields = ('is_verified',)
+
+
+class AtomMicroLessonSerializer(serializers.ModelSerializer):
+    exists = serializers.SerializerMethodField()
+    difficulty_label = serializers.SerializerMethodField()
+
+    def get_exists(self, instance):
+        return True
+
+    def get_difficulty_label(self, instance):
+        return {'L1': '基础速通', 'L2': '机制辨析', 'L3': '硬核攻坚'}.get(instance.difficulty_tier, '基础速通')
+
+    class Meta:
+        model = models.AtomMicroLesson
+        fields = (
+            'exists', 'id', 'build', 'atom', 'version', 'difficulty_tier', 'difficulty_label',
+            'style', 'is_source_grounded', 'grounded_source_ids', 'hook_summary', 'pitfalls',
+            'narration_script', 'visuals', 'quick_check', 'citations', 'status',
+            'error_message', 'created_at', 'updated_at',
+        )
+
+
+class AtomMicroLessonRequestSerializer(serializers.Serializer):
+    regenerate = serializers.BooleanField(default=False)
+    style = serializers.ChoiceField(choices=('balanced', 'intuition', 'exam', 'visual'), default='balanced')
+
+    class Meta:
+        fields = ('regenerate', 'style')
