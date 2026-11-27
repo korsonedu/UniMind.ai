@@ -96,7 +96,7 @@ def permitted_tools(user, chat_context=None, *, ulr=False):
 
 
 def prototype_executor(user, chat_context, *, artifacts=None):
-    from .learning_experiments import available_to, allows_interaction, EXPERIMENT_TOOLS
+    from .learning_experiments import available_to, interaction_request, EXPERIMENT_TOOLS
     from .session_tools import SESSION_TOOLS, refresh
     if not chat_context or not available_to(user):
         return None
@@ -107,8 +107,9 @@ def prototype_executor(user, chat_context, *, artifacts=None):
     executor = PlannerToolExecutor(user)
     executor.experiment_context = chat_context
     executor.turn_artifacts = artifacts
+    executor.interaction_request = interaction_request(current)
     experiments = [tool for tool in EXPERIMENT_TOOLS
-        if tool['function']['name'] != 'build_learning_experiment' or allows_interaction(current)]
+        if tool['function']['name'] != 'build_learning_experiment' or executor.interaction_request]
     set_permitted_tools(executor, [*experiments, *SESSION_TOOLS])
     executor._allowed_tool_names = set(executor._permitted_tool_definitions)
     refresh(executor, [])
@@ -128,6 +129,7 @@ def context_memory(user, chat_context=None):
 
 def build_context(user, message, recent_messages=None, chat_context=None, *, ulr=False):
     from users.learning import cohort_info
+    from .learning_experiments import VISUAL_DEMO_REQUEST
     cohort = cohort_info(user)
     catalog = student_catalog(user, ulr=ulr)
     candidates = route_tools(message, catalog, recent_messages=recent_messages,
@@ -150,7 +152,9 @@ def build_context(user, message, recent_messages=None, chat_context=None, *, ulr
     planning = planning_for_chat(user, chat_context)
     if not planning:
         allowed = [tool for tool in allowed if tool['function']['name'] not in PROJECT_LEARNING_NAMES]
-    selected, groups, initial = grouped_tools(allowed, message, recent_messages, project=planning)
+    visual_request = executor.interaction_request if executor else ''
+    routing_message = visual_request if VISUAL_DEMO_REQUEST.search(visual_request) else message
+    selected, groups, initial = grouped_tools(allowed, routing_message, recent_messages, project=planning)
     context = {
         'protocol': 'unimind.dsh.m0.v1',
         'student': {'id': user.pk, 'name': user.nickname or user.username, 'cohort': cohort},

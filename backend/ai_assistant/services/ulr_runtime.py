@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from time import monotonic
 from uuid import uuid4
 
-from rest_framework.exceptions import APIException, PermissionDenied
+from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 
 from ai_engine.observability import log_ai_operation
 from ai_engine.service import AICallError, AIEngine
@@ -293,10 +293,15 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
                     raise ToolReferenceError('$.strategy_use_id', '请引用本轮试用回执或此前已确认的方法试用。')
         base = artifacts
         candidate = TurnArtifacts(base)
-        result = execute_tool(user, name, arguments, memory['version'], source=source, chat_context=chat_context,
-                              tool_revision=registry.get('versions', {}).get(name),
-                              prepare_change=prepares_project_change(name, arguments), artifacts=candidate,
-                              practice_questions=set(practice_sources), recall_notes=source_context['note_versions'])
+        try:
+            result = execute_tool(user, name, arguments, memory['version'], source=source, chat_context=chat_context,
+                                  tool_revision=registry.get('versions', {}).get(name),
+                                  prepare_change=prepares_project_change(name, arguments), artifacts=candidate,
+                                  practice_questions=set(practice_sources), recall_notes=source_context['note_versions'])
+        except ValidationError as exc:
+            if name != 'present_learning_visual' or not isinstance(exc.detail, dict) or 'arguments' not in exc.detail:
+                raise
+            return json.dumps({'error': str(exc.detail['arguments'])}, ensure_ascii=False)
         if materials := result.pop('_ulr_probe_material', None):
             check_active()
             if assessment_requests or index + 2 >= policy['max_requests']:

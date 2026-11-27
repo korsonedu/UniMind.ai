@@ -12,9 +12,12 @@ from rest_framework.exceptions import APIException, NotFound, PermissionDenied, 
 from ai_assistant.models import AIChatMessage
 
 
-VISUAL_DEMO_REQUEST = re.compile(r'可视化|演示|互动|交互实验|图解|示意图|画(?:一个|一张|一|个)?图|用图片|动态(?:展示|图)')
+VISUAL_DEMO_REQUEST = re.compile(r'可视化|演示|互动|交互实验|图解|示意图|画(?:一个|一张|一|个)?图|用图片|动态(?:展示|图)'
+                                 r'|交互卡片.{0,24}(?:排序|重排)|(?:排序|重排).{0,24}交互卡片')
 EXERCISE_REQUEST = re.compile(r'出题|出(?:一|几|两|\d+)道|来(?:一|几|两|\d+)道|做(?:一|几|两|\d+)道|刷题|练一练|练练|'
                               r'给(?:我)?(?:一|几|两|\d+)道(?:练习)?题|(?:生成|抽取).{0,8}(?:题目|练习题)')
+INTERACTION_CONTINUATIONS = ('继续', '再详细一点', '再讲细一点')
+OPTION_REPLY = re.compile(r'^\s*(?:(?:我)?选\s*)?[A-Za-zＡ-Ｚａ-ｚ1-9１-９][.。！!、]?\s*$')
 
 
 class ExperimentConflict(APIException):
@@ -39,28 +42,38 @@ def available_to(user):
     return enabled() and bool(filter_tools('planner', None, EXPERIMENT_TOOLS, user=user))
 
 
-def allows_interaction(current):
+def interaction_request(current):
     text = current.content.strip()
-    if text in {'继续', '再详细一点', '再讲细一点'}:
+    option_reply = OPTION_REPLY.fullmatch(text)
+    if text in INTERACTION_CONTINUATIONS or option_reply:
         previous = AIChatMessage.objects.filter(user=current.user, bot_id=current.bot_id, conversation_id=current.conversation_id,
-            role='user', id__lt=current.pk).exclude(content__in=['继续', '再详细一点', '再讲细一点']).order_by('-id').first()
-        text = previous.content if previous else ''
+            role='user', id__lt=current.pk).exclude(content__in=INTERACTION_CONTINUATIONS).exclude(
+                content__regex=OPTION_REPLY.pattern).order_by('-id').values_list('content', flat=True).first()
+        text = previous or ''
+        if option_reply and not VISUAL_DEMO_REQUEST.search(text):
+            return ''
     if re.search(r'不要交互|不用交互|不需要交互|只用文字', text):
-        return False
+        return ''
     # A request for exercises, records or planning must not acquire an explanation widget.
     if EXERCISE_REQUEST.search(text) or re.search(r'批改|判分|评分|学习计划|复习计划|备考计划|学习规划|安排|日程|'
                  r'(?:制定|生成|调整|做个|做一份).{0,8}计划|学习统计|学习报告|成绩单|正确率|掌握率|'
                  r'统计(?!学|量|题|分布|推断|方法)|听课时长|做题时长|学习记录|专注|番茄钟|推荐课程|查找课程', text):
-        return False
+        return ''
     if (re.search(r'卡片|图|柱|滑块|控件|按钮|标签|文字|字', text)
             and re.search(r'重叠|挤|混到|混在|遮挡|显示错误|不动|没反应|修正|修改|改一下', text)
             and AIChatMessage.objects.filter(user=current.user, bot_id=current.bot_id,
                 conversation_id=current.conversation_id, role='user',
                 metadata__learning_experiments__isnull=False).exists()):
-        return True
-    return bool(VISUAL_DEMO_REQUEST.search(text) or re.search(
+        return text
+    if VISUAL_DEMO_REQUEST.search(text) or re.search(
         r'讲解|讲题|解答|求解|解释|推导|证明|为什么|如何|什么是|是什么意思|怎么做|怎么解|怎么算|怎么理解|不懂|没理解|不理解|不明白|看不懂|'
-        r'讲(?:一|这|那|讲|一下)|修正.{0,8}(?:实验|讲解|图形)|\b(?:explain|solve|derive|why)\b', text, re.I))
+        r'讲(?:一|这|那|讲|一下)|修正.{0,8}(?:实验|讲解|图形)|\b(?:explain|solve|derive|why)\b', text, re.I):
+        return text
+    return ''
+
+
+def allows_interaction(current):
+    return bool(interaction_request(current))
 
 
 def attach_to_chat(user, current, messages, tools, executor):
@@ -252,7 +265,7 @@ def conversation_experiments(user, conversation_id):
 EXPERIMENT_TOOLS = [
     {'type': 'function', 'function': {
         'name': 'build_learning_experiment',
-        'description': '仅在解答具体问题或讲解概念时编写交互卡片，出题、统计、报告、计划等不得使用。通过检查后挂载当前对话。自包含HTML/CSS/JavaScript，无外部资源；以图形、参数控件和数值为主，沿用平台CSS变量及控件样式；布局紧凑清晰、宽度自适应（高度随内容自动展开，控件建议2到4个），长解释放聊天正文。不做答题或判分。失败返回诊断；更新前先read并沿用ID和版本。用unimind.getState()/setState(object)保存演示参数，report(简短观察)准备讲解线索；不修改学习记录。checks至少检查一个真实控件与结果。',
+        'description': '为具体问题、概念讲解或明确请求的语序重排演示编写交互卡片，出题、统计、报告、计划等不得使用。通过检查后挂载当前对话。自包含HTML/CSS/JavaScript，无外部资源；沿用平台CSS变量及控件样式；布局紧凑清晰、宽度自适应（高度随内容自动展开，参数控件建议2到4个），长解释放聊天正文。不做正式答题或判分。失败返回诊断；更新前先read并沿用ID和版本。用unimind.getState()/setState(object)保存演示状态，report(简短观察)准备讲解线索；不修改学习记录。checks至少检查一个真实控件与结果。',
         'parameters': {'type': 'object', 'additionalProperties': False, 'properties': {
             'title': {'type': 'string', 'minLength': 1, 'maxLength': 100},
             'html': {'type': 'string', 'minLength': 1, 'maxLength': 24000},
