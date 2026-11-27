@@ -20,15 +20,25 @@ def course_tools(user):
     return [tool for tool in permitted_tools(user) if tool['function']['name'] in names]
 
 
-def visible_course_ids(user, course_ids):
+def visible_course_ids(user, course_ids, *, project_id=None):
     if not course_ids:
         return set()
-    courses = visible_courses(SimpleNamespace(user=user, query_params={}))
-    return set(courses.filter(pk__in=course_ids).values_list('pk', flat=True))
+    private_ids = set()
+    if project_id:
+        from .workbench_grounding import is_personal_space
+        from courses.access import private_companion_courses
+        if is_personal_space(user):
+            private_ids = set(private_companion_courses(user, project_id).filter(
+                pk__in=course_ids,
+            ).values_list('pk', flat=True))
+    if public_ids := course_ids - private_ids:
+        courses = visible_courses(SimpleNamespace(user=user, query_params={}))
+        return private_ids | set(courses.filter(pk__in=public_ids).values_list('pk', flat=True))
+    return private_ids
 
 
-def require_visible_course_sources(user, course_ids):
-    if visible_course_ids(user, course_ids) != course_ids:
+def require_visible_course_sources(user, course_ids, *, project_id=None):
+    if visible_course_ids(user, course_ids, project_id=project_id) != course_ids:
         raise PermissionDenied('引用课程已不可访问，请重新提问。')
 
 

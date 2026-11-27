@@ -1,4 +1,7 @@
-import type { ActiveVideoDescriptor, CaptureContextResult, PageCollectSnapshot, VideoPlatform } from './types';
+import type {
+  ActiveVideoDescriptor, CaptureContextResult, PageCollectSnapshot, VideoPlatform,
+  WorkbenchCaptureResult, WorkbenchVideoSnapshot,
+} from './types';
 
 export const UNIMIND_VIDEO_STATE_CHANGED = 'UNIMIND_VIDEO_STATE_CHANGED';
 export const UNIMIND_OPEN_SIDEPANEL = 'UNIMIND_OPEN_SIDEPANEL';
@@ -6,6 +9,8 @@ export const UNIMIND_GET_ACTIVE_VIDEO = 'UNIMIND_GET_ACTIVE_VIDEO';
 export const UNIMIND_COLLECT_PAGE_SNAPSHOT = 'UNIMIND_COLLECT_PAGE_SNAPSHOT';
 export const UNIMIND_SEEK_VIDEO = 'UNIMIND_SEEK_VIDEO';
 export const UNIMIND_CAPTURE_CONTEXT_FOR_ASK = 'UNIMIND_CAPTURE_CONTEXT_FOR_ASK';
+export const UNIMIND_CAPTURE_SOURCE_FOR_WORKBENCH = 'UNIMIND_CAPTURE_SOURCE_FOR_WORKBENCH';
+export const UNIMIND_COLLECT_WORKBENCH_VIDEO = 'UNIMIND_COLLECT_WORKBENCH_VIDEO';
 export const UNIMIND_AUTH_SYNC = 'UNIMIND_AUTH_SYNC';
 export const UNIMIND_TOGGLE_TAB_AUDIO = 'UNIMIND_TOGGLE_TAB_AUDIO';
 
@@ -16,6 +21,8 @@ interface MessagePayloads {
   [UNIMIND_COLLECT_PAGE_SNAPSHOT]: { windowBeforeSec?: number; windowAfterSec?: number } | undefined;
   [UNIMIND_SEEK_VIDEO]: { seconds: number };
   [UNIMIND_CAPTURE_CONTEXT_FOR_ASK]: { tabId?: number } | undefined;
+  [UNIMIND_CAPTURE_SOURCE_FOR_WORKBENCH]: { windowId?: number } | undefined;
+  [UNIMIND_COLLECT_WORKBENCH_VIDEO]: undefined;
   [UNIMIND_AUTH_SYNC]: { serverOrigin?: string } | undefined;
   [UNIMIND_TOGGLE_TAB_AUDIO]: { tabId?: number; enabled: boolean };
 }
@@ -27,6 +34,8 @@ export interface MessageResponses {
   [UNIMIND_COLLECT_PAGE_SNAPSHOT]: PageCollectSnapshot | null;
   [UNIMIND_SEEK_VIDEO]: { ok: boolean; currentTime?: number };
   [UNIMIND_CAPTURE_CONTEXT_FOR_ASK]: CaptureContextResult;
+  [UNIMIND_CAPTURE_SOURCE_FOR_WORKBENCH]: WorkbenchCaptureResult;
+  [UNIMIND_COLLECT_WORKBENCH_VIDEO]: WorkbenchVideoSnapshot | null;
   [UNIMIND_AUTH_SYNC]: { token: string | null };
   [UNIMIND_TOGGLE_TAB_AUDIO]: { enabled: boolean; error?: string };
 }
@@ -40,6 +49,7 @@ export type BridgeMessage = {
 type TabMessageType =
   | typeof UNIMIND_GET_ACTIVE_VIDEO
   | typeof UNIMIND_COLLECT_PAGE_SNAPSHOT
+  | typeof UNIMIND_COLLECT_WORKBENCH_VIDEO
   | typeof UNIMIND_SEEK_VIDEO;
 type RuntimeMessageType = Exclude<MessageType, TabMessageType>;
 type MessageArgs<Type extends MessageType> = undefined extends MessagePayloads[Type]

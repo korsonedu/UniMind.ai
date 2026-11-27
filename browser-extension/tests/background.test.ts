@@ -5,10 +5,11 @@ import { collectTabAudio, setTabAudioEnabled, stopTabAudio } from '../src/entryp
 import { syncCookieToken } from '../src/lib/auth';
 import { readSession } from '../src/lib/storage';
 import {
-  UNIMIND_AUTH_SYNC, UNIMIND_CAPTURE_CONTEXT_FOR_ASK, UNIMIND_COLLECT_PAGE_SNAPSHOT,
-  UNIMIND_OPEN_SIDEPANEL, UNIMIND_TOGGLE_TAB_AUDIO, type BridgeMessage,
+  UNIMIND_AUTH_SYNC, UNIMIND_CAPTURE_CONTEXT_FOR_ASK, UNIMIND_CAPTURE_SOURCE_FOR_WORKBENCH,
+  UNIMIND_COLLECT_PAGE_SNAPSHOT, UNIMIND_COLLECT_WORKBENCH_VIDEO, UNIMIND_OPEN_SIDEPANEL,
+  UNIMIND_TOGGLE_TAB_AUDIO, type BridgeMessage,
 } from '../src/shared/bridge';
-import type { ActiveVideoDescriptor, CaptureContextResult, PageCollectSnapshot } from '../src/shared/types';
+import type { ActiveVideoDescriptor, CaptureContextResult, PageCollectSnapshot, WorkbenchCaptureResult } from '../src/shared/types';
 
 vi.mock('../src/lib/auth', () => ({
   handleAuthCookieChange: vi.fn().mockResolvedValue(undefined),
@@ -49,6 +50,7 @@ const dashSnapshot: PageCollectSnapshot = {
 describe('Background 页面采集与录音路由', () => {
   const query = vi.fn();
   const sendMessage = vi.fn();
+  const executeScript = vi.fn();
   const setPanelBehavior = vi.fn();
   const open = vi.fn();
   const onClicked = vi.fn();
@@ -69,6 +71,7 @@ describe('Background 页面采集与录音路由', () => {
       action: { onClicked: { addListener: onClicked } },
       cookies: { onChanged: { addListener: vi.fn() } },
       sidePanel: { open, setPanelBehavior },
+      scripting: { executeScript },
       tabs: { query, sendMessage, onRemoved: { addListener: onRemoved }, onUpdated: { addListener: onUpdated } },
       runtime: {
         onInstalled: { addListener: vi.fn() },
@@ -125,6 +128,77 @@ describe('Background 页面采集与录音路由', () => {
       type: UNIMIND_CAPTURE_CONTEXT_FOR_ASK, payload: { tabId },
     }, {}, value => resolve(value as CaptureContextResult)));
   }
+
+  function clip() {
+    return new Promise<WorkbenchCaptureResult>(resolve => listener({
+      type: UNIMIND_CAPTURE_SOURCE_FOR_WORKBENCH, payload: { windowId: 2 },
+    }, {}, value => resolve(value as WorkbenchCaptureResult)));
+  }
+
+  it('采用完整视频讲稿并跳过网页脚本、截图和新转写', async () => {
+    const url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+    const segments = Array.from({ length: 1200 }, (_, index) => ({
+      start_time: index * 3, end_time: (index + 1) * 3, text: '字幕',
+    }));
+    query.mockResolvedValueOnce([{ id: 22, url }]);
+    sendMessage.mockResolvedValueOnce({ descriptor: {
+      video_key: 'youtube:dQw4w9WgXcQ', external_id: 'dQw4w9WgXcQ', part: 1, title: 'YouTube 课程',
+    }, segments });
+    expect(await clip()).toEqual({ source: {
+      kind: 'external_video', platform: 'youtube', external_id: 'dQw4w9WgXcQ', part: 1,
+      title: 'YouTube 课程', url, duration_seconds: 3600, segments,
+    } });
+    expect(query).toHaveBeenCalledWith({ windowId: 2, active: true });
+    expect(sendMessage).toHaveBeenCalledWith(22, { type: UNIMIND_COLLECT_WORKBENCH_VIDEO });
+    expect(executeScript).not.toHaveBeenCalled();
+    expect(transcribeDashAudio).not.toHaveBeenCalled();
+  });
+
+  it('无原始字幕时合并已转写片段，并按账号和视频隔离缓存', async () => {
+    const active = { ...descriptor, url: 'https://www.bilibili.com/video/BVclip?p=2',
+      video_key: 'bilibili:BVclip:p2', external_id: 'BVclip', duration: 650 };
+    query.mockResolvedValue([{ id: 23, url: active.url }]);
+    const later = [{ start_time: 640, end_time: 645, text: '稍后讲到的内容' }];
+    for (const segments of [later, transcript]) {
+      sendMessage.mockResolvedValueOnce({ ...dashSnapshot, descriptor: active });
+      vi.mocked(transcribeDashAudio).mockResolvedValueOnce({ available: true, warnings: [], segments });
+      await ask(23);
+    }
+    sendMessage.mockResolvedValue({ descriptor: active, segments: [] });
+    expect(await clip()).toMatchObject({ source: {
+      kind: 'external_video', part: 2, duration_seconds: 650, segments: [...transcript, ...later],
+    } });
+    expect(transcribeDashAudio).toHaveBeenCalledTimes(2);
+    vi.mocked(readSession).mockResolvedValueOnce({ ...session, token: 'different-account' });
+    expect(await clip()).toEqual({ error: '当前视频暂无可用字幕或已转写的讲稿。' });
+    onUpdated.mock.calls[0]?.[0](23, { status: 'loading' });
+    expect(await clip()).toEqual({ error: '当前视频暂无可用字幕或已转写的讲稿。' });
+    sendMessage.mockResolvedValueOnce({ descriptor: { ...active, video_key: 'bilibili:BVclip:p1' }, segments: transcript });
+    expect(await clip()).toEqual({ error: '暂时无法读取当前视频，请刷新视频页面后再试。' });
+  });
+
+  it('在当前网页主框架中提取文本，HTTPS 空正文可提交给服务端解析', async () => {
+    const pageUrl = 'https://example.org/article?from=feed';
+    const url = 'https://example.org/article';
+    query.mockResolvedValue([{ id: 24, url: `${pageUrl}#section` }]);
+    executeScript.mockResolvedValueOnce([{ result: { pageUrl, url, title: '网页标题', content: '## 章节\n\n正文' } }]);
+    expect(await clip()).toEqual({ source: { kind: 'text', source_url: url, title: '网页标题', content: '## 章节\n\n正文' } });
+    expect(executeScript).toHaveBeenCalledWith({ target: { tabId: 24 }, func: expect.any(Function), args: [120_000] });
+    executeScript.mockResolvedValueOnce([{ result: { pageUrl, url, title: '网页标题', content: '' } }]);
+    expect(await clip()).toEqual({ source: { kind: 'web_url', url, title: '网页标题' } });
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('拒绝扩展页面，并在采集期间切换网页时停止', async () => {
+    query.mockResolvedValueOnce([{ id: 25, url: 'chrome://extensions/' }]);
+    expect(await clip()).toMatchObject({ error: expect.stringContaining('HTTP') });
+    expect(executeScript).not.toHaveBeenCalled();
+    query.mockResolvedValueOnce([{ id: 25, url: 'http://example.org/old' }]);
+    executeScript.mockResolvedValueOnce([{ result: {
+      pageUrl: 'http://example.org/new', url: 'http://example.org/new', title: '新网页', content: '新正文',
+    } }]);
+    expect(await clip()).toMatchObject({ error: expect.stringContaining('已切换') });
+  });
 
   it('使用 DASH 转写的绝对字幕，有结果时跳过实时录音', async () => {
     const snapshot = { ...dashSnapshot, direct_visual: null, cors_fallback_rect: {

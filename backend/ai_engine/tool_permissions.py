@@ -4,6 +4,7 @@ TOOL_FEATURES = {
     **dict.fromkeys(("read_learning_project", "plan_learning_project", "record_learning_progress", "set_learning_followup", "find_learning_resources", "manage_learning_resources", "manage_learning_strategies", "manage_learning_knowledge", "manage_learning_tasks"), "ai.assistant"),
     'register_session_tool': 'ai.assistant', 'read_session_tool': 'ai.assistant',
     'build_learning_experiment': 'ai.assistant', 'read_learning_experiment': 'ai.assistant',
+    'search_workbench_sources': 'ai.assistant', 'read_workbench_source_chunks': 'ai.assistant',
     'search_knowledge_tree': 'quiz.exam', 'get_user_weak_points': 'full.report',
     'get_user_wrong_questions': 'wrong.review', 'lookup_question': 'quiz.exam',
     'search_courses': 'course.video', 'search_asr': 'course.video',

@@ -68,7 +68,7 @@ def test_xiaoyu_turn_propagates_trace_id_to_receipt_recovery_and_background_jobs
 
     observed_in_runtime = []
 
-    def fake_run_turn(u, message, chat_context, emit, source, check_active):
+    def fake_run_turn(u, message, chat_context, emit, source, check_active, *, workbench=None):
         observed_in_runtime.append(dict(runtime_observation.get()))
         log_ai_operation('assistant.chat.ulr_turn', True, 5)
         return '这是现金流折现的讲解。', [], None, None, None, {

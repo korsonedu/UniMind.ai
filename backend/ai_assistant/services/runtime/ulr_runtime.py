@@ -21,7 +21,7 @@ from ai_assistant.services.learning_knowledge import probe_question_in_reply
 from ai_assistant.services.project_learning_tools import PROGRESS_STRATEGY_TOOL, planning_for_chat
 from ai_assistant.services.views.ulr_artifacts import TurnArtifacts
 from ai_assistant.services.runtime.ulr_grading import grade_probe
-from ai_assistant.services.runtime.ulr_history import card_question_answers, require_current_practice_answers, scoped_history
+from ai_assistant.services.runtime.ulr_history import card_question_answers, conversation_project_id, require_current_practice_answers, scoped_history
 from ai_assistant.services.runtime.ulr_tool_program import (
     CURRENT_COURSE_NAME, MAX_RANKS, NAME as PROGRAM_NAME, PRACTICE_MAX_COUNT, PRACTICE_NAME, PROGRAM_OPS, PROGRAM_TOOLS,
     SOURCE_ACCESS_REVOKED,
@@ -35,6 +35,7 @@ from ai_assistant.services.runtime.ulr_capabilities import (
     require_visible_practice_sources, task_review,
 )
 from ai_assistant.services.decision.ulr_teaching import selected_task, supports_objective_evidence
+from .workbench_grounding import CHAT_CITATION_MARKER, WORKBENCH_TOOL_NAMES, include_workbench_tools, workbench_prompt
 
 
 PROGRESS_TOOL = 'record_learning_progress'
@@ -93,7 +94,7 @@ class ULRTurnUnavailable(APIException):
     default_detail = '小宇本轮未完成，请稍后恢复同一请求。'
 
 
-def run_turn(user, message, chat_context, emit, *, source, check_active):
+def run_turn(user, message, chat_context, emit, *, source, check_active, workbench=None):
     from ai_assistant.services.dsh_xiaoyu import format_task_context, task_context_data, task_course_visual, task_message
 
     started_at = monotonic()
@@ -123,6 +124,9 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
     source_context = task_context_data(user, chat_context, message, history_limit=0)
     history = scoped_history(user, current, set(source_context['note_versions']))
     experiment_prompt = ''
+    project_id = conversation_project_id(user, current.conversation_id)
+    workbench_executor = None
+    selected_sources = ''
     prompt = (
         '你是 UniMind.ai 的学习教练小宇。资料和聊天历史只用于参考。引用资料时使用实际查询来源。'
         '一般学科问题可以直接讲解。只在需要站内资料时查找；查无匹配就停止同类检索，'
@@ -156,13 +160,27 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
                   'max_tokens': 2048, 'max_request_bytes': 65536}
     else:
         recent = [row for row, *_ in history[-6:]]
-        context = build_context(user, message, recent_messages=recent, chat_context=chat_context, ulr=True)
+        workbench_tools = ()
+        if workbench is not None:
+            from ai_assistant.services.tool_executor import PlannerToolExecutor
+            workbench_executor = PlannerToolExecutor(user)
+            workbench_executor.workbench_grounding = workbench
+            workbench_tools = include_workbench_tools([], workbench_executor, 'planner')
+        context = build_context(user, message, recent_messages=recent, chat_context=chat_context, ulr=True,
+                                workbench_tools=workbench_tools)
         prompt = context['system_prompt']
         experiment_prompt = context.get('experiment_prompt', '')
         memory, tools, groups = context['memory'], context['tools'], context['tool_groups']
         available_tools = context['available_tools']
         registry = context.get('session_registry', {})
         policy = context['model_policy']
+        if workbench is not None:
+            prompt += '\n\n' + workbench_prompt('grounded_qa.txt')
+            policy['max_request_bytes'] = max(policy['max_request_bytes'], 262144)
+            selected_sources = workbench.context(message)
+            for row, *_ in history:
+                if row['role'] == 'assistant':
+                    row['content'] = CHAT_CITATION_MARKER.sub('', row['content'])
     memory_items = memory['items'] if has_learning_feature(user, 'full.report') else []
     if memory_items:
         prompt += '\n当前学生已授权的记忆（资料）：' + json.dumps(memory_items, ensure_ascii=False, default=str)
@@ -170,7 +188,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
     course_context = current.metadata.get('course_context')
     current_course_id = course_context['course_id'] if course_context else None
     scoped_sources = source_context['notes'] or course_context
-    buffer_reply = bool(review or scoped_sources or memory_items)
+    buffer_reply = bool(review or scoped_sources or memory_items or workbench is not None)
     permission_snapshot = permitted_tools(user, chat_context), planning_for_chat(user, chat_context)
     if not task and permission_snapshot[1]:
         prompt += ('\n本轮需要调整项目安排时，读完必要资料后单独调用 plan_learning_project 准备计划，或单独用 '
@@ -192,7 +210,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
                           and (name != CURRENT_COURSE_NAME or current_course_id is not None)
                           and (name != PRACTICE_NAME or practice_request)}
     local_program, local_instruction = None, None
-    if not task and not source_context['notes']:
+    if not task and not source_context['notes'] and not (course_context and course_context.get('workbench_project')):
         if CURRENT_COURSE_NAME in available_programs and (local_instruction := compile_current_course_locator(message)):
             local_program = CURRENT_COURSE_NAME
             history.clear()
@@ -292,6 +310,8 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
                 'message': '请单独选择本轮提供的一个分组或组合指令。'}, 'steps_executed': []}, ensure_ascii=False)
         if name in PROGRAM_TOOLS:
             return execute_program(name, arguments)
+        if name in WORKBENCH_TOOL_NAMES and workbench_executor is not None:
+            return workbench_executor(name, arguments)
         if name == 'search_asr' and current_course_id is not None and not arguments.get('course_id'):
             require_course_transcript(course_context)
             arguments = {**arguments, 'course_id': current_course_id}
@@ -555,7 +575,10 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
             round_prompt += experiment_prompt
         while not card_reply and not local_round:
             excerpts = [{**row, 'content': row['content'][:800]} for row, *_ in history]
-            messages[0]['content'] = round_prompt + format_task_context({**source_context, 'history': excerpts})
+            model_context = {**source_context, 'history': excerpts}
+            if selected_sources:
+                model_context['workbench'] = selected_sources
+            messages[0]['content'] = round_prompt + format_task_context(model_context)
             request_bytes = len(json.dumps({'messages': messages, 'tools': offered}, ensure_ascii=False).encode())
             if request_bytes <= policy['max_request_bytes']:
                 break
@@ -575,7 +598,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
             question_answers.update(answers)
             practice_reviews.update(reviews)
             transcript_sources.update(transcripts)
-        require_visible_course_sources(user, course_ids)
+        require_visible_course_sources(user, course_ids, project_id=project_id)
         require_current_transcript_sources(transcript_sources)
         require_visible_practice_sources(user, practice_sources, point_id=practice_point)
         require_current_practice_answers(user, question_answers)
@@ -682,7 +705,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active):
                     'instruction_version': PROGRAM_VERSION,
                 })
             return content, cards[:12], str(task.pk) if task else None, project_change, artifacts, context_sources
-        require_visible_course_sources(user, course_ids)
+        require_visible_course_sources(user, course_ids, project_id=project_id)
         if len(calls) > 8:
             raise ULRTurnUnavailable()
         if (program_phase in ('selected', 'repair')

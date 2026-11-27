@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useCourseAIStore } from '@/store/useCourseAIStore';
+import { activeTranscriptSegment, useCourseAIStore } from '@/store/useCourseAIStore';
 
 interface SubtitlesOverlayProps {
   courseId: number;
@@ -21,7 +21,7 @@ export function SubtitlesOverlay({
   }, [courseId, fetchTranscript, clearCourseTimers]);
 
   if (!visible || transcriptCourseId !== courseId) return null;
-  const segment = transcriptSegments.find(({ start, end }) => currentTime >= start && currentTime < end);
+  const segment = activeTranscriptSegment(transcriptSegments, currentTime);
   if (!segment) return null;
 
   return (
