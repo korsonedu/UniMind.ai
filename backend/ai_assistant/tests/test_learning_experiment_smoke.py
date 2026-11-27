@@ -16,7 +16,7 @@ from ai_assistant.services import learning_experiments as experiments
 
 
 @pytest.mark.django_db
-def test_interaction_is_only_offered_and_executed_for_explanation(user, settings):
+def test_interaction_is_discoverable_without_keywords_and_respects_text_only(user, settings):
     from ai_assistant.services.dsh_service import build_context
     settings.DEBUG = settings.UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE = True
     settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
@@ -27,42 +27,31 @@ def test_interaction_is_only_offered_and_executed_for_explanation(user, settings
     claims = {'message_id': current.pk, 'conversation_id': str(current.conversation_id), 'bot_id': bot.pk}
     arguments = {'title': '合成讲解', 'html': '<button id="go">观察</button>',
         'checks': [{'selector': '#go', 'action': 'click', 'expect_selector': '#go', 'expect_text': '观察'}]}
-    for text, expected in [
-        ('给我讲一道金融硕士题目，用到交互', True), ('解释统计学中的抽样分布', True),
-        ('分析这道债券题为什么错了', True), ('用交互出一道题让我做', False),
+    for text, first_round in [
+        ('把动物脚印拖到对应的动物旁边', True),
+        ('解答这道题时能不能让我拨动利率，看看价格怎么变', False),
+        ('统计本周做题情况', False),
         ('出一道高中物理大题（带图）', False),
-        ('统计本周做题情况，用交互', False), ('解释我的学习报告，用交互', False),
-        ('用交互制定学习计划', False), ('批改我的答案并解释错因', False),
-        ('你好，生成交互卡片', False), ('不要交互，解释久期', False),
     ]:
         current.content = text
         current.save(update_fields=['content'])
-        assert experiments.allows_interaction(current) is expected, text
         context = build_context(user, text, chat_context=claims)
-        names = {tool['function']['name'] for tool in context['available_tools']}
-        assert ('build_learning_experiment' in names) is expected, text
-        if not expected:
-            assert 'interactive' not in context['tool_groups']
-            assert '自主交互讲解' not in context['system_prompt']
-            assert '当前对话内动态计算工具' in context['system_prompt']
-            assert '本轮不属于解答讲解，不生成交互卡片' in context['system_prompt']
-            authoring = context['tool_groups']['authoring']['description']
-            assert '编写' not in authoring and '交互实验' not in authoring
-            with patch.object(experiments, 'preview') as preview:
-                with pytest.raises(PermissionDenied):
-                    experiments.execute(user, 'build_learning_experiment', arguments, claims)
-                preview.assert_not_called()
-    current.content = '解释久期'
+        tools = {tool['function']['name'] for tool in context['tools']}
+        assert 'find_learning_tools' in tools
+        assert ('build_learning_experiment' in tools) is first_round
+        assert 'build_learning_experiment' in {
+            tool['function']['name'] for tool in context['tool_groups']['authoring']['tools']}
+    current.content = '不要交互，解释久期'
     current.save(update_fields=['content'])
+    context = build_context(user, current.content, chat_context=claims)
+    assert 'interactive' not in context['tool_groups']
+    assert 'build_learning_experiment' not in {tool['function']['name'] for tool in context['available_tools']}
+    with patch.object(experiments, 'preview') as preview:
+        with pytest.raises(PermissionDenied):
+            experiments.execute(user, 'build_learning_experiment', arguments, claims)
+        preview.assert_not_called()
     followup = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=current.conversation_id,
         role='user', content='继续')
-    assert experiments.allows_interaction(followup)
-    followup.content = '第一根柱子下面的字混到一起了'
-    assert not experiments.allows_interaction(followup)
-    current.metadata = {'learning_experiments': {'synthetic': {}}}
-    current.save(update_fields=['metadata'])
-    assert experiments.allows_interaction(followup)
-    followup.content = '修改学习计划，用交互卡片'
     assert not experiments.allows_interaction(followup)
 
 

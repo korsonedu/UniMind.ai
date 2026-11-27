@@ -19,7 +19,7 @@ GROUPS = {
     'interactive': ('交互讲题', '取题并编写交互实验，在同一分组内完成题目讲解和可操作实验。', (
         'get_practice_questions', 'lookup_question', 'search_knowledge_tree', 'build_learning_experiment',
         'read_learning_experiment', 'register_session_tool', 'read_session_tool')),
-    'authoring': ('编写交互与计算工具', '根据学习任务编写、检查或修改交互实验，以及注册新的会话计算工具。', (
+    'authoring': ('编写交互与计算工具', '当用户想亲手操作内容、改变条件并观察结果，或修订这种演示时使用；无需用户说出工具或卡片名称。也可注册会话计算工具。', (
         'build_learning_experiment', 'read_learning_experiment', 'register_session_tool', 'read_session_tool')),
     'presentation': ('教学展示与回复选项', '展示公式推导、解题步骤、函数采样图和回复选项，不改变学生数据。', ('present_learning_visual',)),
     'resources': ('课程与知识来源', '查课程、视频讲稿及知识点。', (
@@ -95,6 +95,9 @@ def grouped_tools(allowed, message, recent_messages=None, project=False):
         initial = 'recall'
     initial = initial if initial in groups else ''
     selected = list(groups[initial]['tools']) if initial else []
+    if intent == 'general' and initial in ('', 'project') and 'build_learning_experiment' in definitions:
+        # Keep a first-round choice for open-ended goals within the eight-tool budget.
+        selected = [*selected[:6], definitions['build_learning_experiment']]
     if groups:
         selected.append({'type': 'function', 'function': {
             'name': 'find_learning_tools',
