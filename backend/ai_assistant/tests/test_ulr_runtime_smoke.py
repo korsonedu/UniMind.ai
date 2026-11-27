@@ -427,6 +427,73 @@ def test_ulr_general_chat_can_discover_tools_and_resume_with_notes(auth_client, 
 
 
 @pytest.mark.django_db(transaction=True)
+def test_ulr_builds_sorting_widget_after_choice_and_repairs_reply_card(auth_client, user, settings):
+    settings.DEBUG = True
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    settings.UNIMIND_LEARNING_EXPERIMENTS_ENABLED = True
+    settings.UNIMIND_LEARNING_VISUAL_REVIEW_ENABLED = False
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 20})
+    bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
+    sort_request = '用交互卡片帮我排序句子'
+    widget = {'title': '句子排序', 'html': (
+        '<button id="move">将 She 移到句首</button>'
+        '<output id="sentence"><span>is </span><span>She </span><span>reading</span></output>'
+        '<script>document.querySelector("#move").onclick = () => {'
+        'const sentence = document.querySelector("#sentence"); sentence.prepend(sentence.children[1]);'
+        '};</script>'),
+        'checks': [{'selector': '#move', 'action': 'click',
+                    'expect_selector': '#sentence', 'expect_text': 'She is reading'}]}
+    input_card = {'title': '写一句话', 'description': '', 'icon': 'quiz',
+                  'action': {'type': 'reply', 'url': '', 'label': '输入', 'reply_mode': 'input'}}
+
+    def call(name, arguments):
+        return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+            'id': str(uuid4()), 'type': 'function', 'function': {'name': name, 'arguments': json.dumps(arguments)},
+        }]}}]}
+
+    def model(messages, **kwargs):
+        request = messages[1]['content']
+        names = {tool['function']['name'] for tool in kwargs['tools'] or []}
+        if request == sort_request:
+            assert 'build_learning_experiment' in names
+            return {'choices': [{'finish_reason': 'stop', 'message': {'content': 'A. 重排单词 B. 重排句子'}}]}
+        if messages[-1]['role'] == 'user':
+            if request == 'A':
+                assert sort_request in messages[0]['content'] and 'A. 重排单词' in messages[0]['content']
+                assert 'build_learning_experiment' in names
+                return call('build_learning_experiment', widget)
+            assert 'present_learning_visual' in names
+            return call('present_learning_visual', {'type': 'action_cards', 'payload': {'cards': [input_card, input_card]}})
+        result = json.loads(messages[-1]['content'])
+        if request == 'A':
+            assert result.get('experiment_id') and result['preview']['ok'], result
+        elif 'error' in result:
+            assert 'payload.cards 使用 input 模式时只能有一张卡' in result['error']['message']
+            return call('present_learning_visual', {'type': 'action_cards', 'payload': {'cards': [input_card]}})
+        else:
+            assert result['presented']
+        return {'choices': [{'finish_reason': 'stop', 'message': {'content': '可以操作卡片了。'}}]}
+
+    async def consume(response):
+        return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')]
+
+    conversation_id = str(uuid4())
+    with patch('ai_engine.service.AIEngine.call_provider', side_effect=model):
+        for message, card_types in [(sort_request, []), ('A', ['learning_experiment']),
+                                    ('请展示回复选项卡', ['action_cards'])]:
+            response = auth_client.post('/api/ai/chat/stream/', {
+                'bot_id': bot.pk, 'conversation_id': conversation_id,
+                'request_id': str(uuid4()), 'message': message,
+            }, format='json')
+            assert response.status_code == 200
+            done = async_to_sync(consume)(response)[-1]
+            assert done.get('engine') == 'ulr' and not done.get('is_error'), (message, done)
+            assert [card['type'] for card in done['metadata']['dsh_cards']] == card_types
+
+
+@pytest.mark.django_db(transaction=True)
 def test_ulr_recalls_workspace_learning_sources(auth_client, user, settings, tmp_path):
     settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
     settings.UNIMIND_DSH_STATE_DIR = str(tmp_path)
