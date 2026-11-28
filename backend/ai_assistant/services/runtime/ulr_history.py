@@ -199,12 +199,15 @@ def unversioned_history_courses(row):
     return set()
 
 
-def scoped_history(user, current, note_versions):
+def scoped_history(user, current, note_versions, *, include_continuation=False):
     # The extra row supplies the corresponding question when the window starts on an assistant reply.
     history = AIChatMessage.objects.filter(user_id=current.user_id, bot_id=current.bot_id,
         conversation_id=current.conversation_id).exclude(pk=current.pk).exclude(content='[Thinking...]')
+    fields = dict(SOURCE_FIELDS)
+    if include_continuation:
+        fields['continuation'] = F('metadata__ulr_continuation')
     recent = list(history.order_by('-timestamp', '-id').values(
-        'pk', 'timestamp', 'role', 'content', engine=F('metadata__engine'), **SOURCE_FIELDS)[:17])
+        'pk', 'timestamp', 'role', 'content', engine=F('metadata__engine'), **fields)[:17])
     project_id = conversation_project_id(user, current.conversation_id)
     workbench_ids = {pk for row in recent for pk in (row['sources'] or {}).get('workbench_sources', ())}
     workbench_versions = current_workbench_source_versions(user, project_id, workbench_ids)
@@ -274,7 +277,12 @@ def scoped_history(user, current, note_versions):
             all_reviews.update(reviews)
             all_transcripts.update(transcripts)
             all_excerpts.update(excerpts)
-            entries.append(({'role': 'assistant', 'content': row['content']}, courses, answers, reviews, transcripts, excerpts))
+            visible_reply = {'role': 'assistant', 'content': row['content']}
+            if row is recent[0] and row['pk'] < current.pk and (continuation := row.get('continuation')) is not None:
+                if continuation or not any(isinstance(card, dict) and card.get('type') == 'action_cards'
+                                           for card in row['cards'] or ()):
+                    visible_reply['continuation'] = continuation
+            entries.append((visible_reply, courses, answers, reviews, transcripts, excerpts))
     authorized = visible_course_ids(user, all_courses, project_id=project_id)
     protected = bound_practice_answers(user, all_answers)
     visible_reviews = visible_practice_review_sources(user, all_reviews)

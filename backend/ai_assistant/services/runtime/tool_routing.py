@@ -2,6 +2,7 @@
 from ai_engine.tool_router import classify_intent_keywords
 
 from ai_assistant.services.learning_experiments import EXERCISE_REQUEST, VISUAL_DEMO_REQUEST
+from .ulr_continuation import SHORT_ACCEPTANCES, short_reply
 
 
 GROUPS = {
@@ -39,6 +40,11 @@ GROUPS = {
 
 
 def grouped_tools(allowed, message, recent_messages=None, project=False):
+    if (recent_messages and len(recent_messages) >= 2
+            and recent_messages[-2]['role'] == 'user' and recent_messages[-1]['role'] == 'assistant'
+            and short_reply(message) in SHORT_ACCEPTANCES):
+        # This only selects tools to show. The model still receives the actual reply and its context.
+        message = recent_messages[-2]['content']
     definitions = {t['function']['name']: t for t in allowed}
     groups = {key: {'title': title, 'description': description,
                    'tools': [definitions[name] for name in names if name in definitions]}
