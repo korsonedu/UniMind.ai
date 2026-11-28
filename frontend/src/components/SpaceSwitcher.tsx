@@ -30,7 +30,7 @@ export function SpaceSwitcher() {
 
   return <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
     <DropdownMenuTrigger asChild><button type="button" className="um-space-switcher" disabled={switching} aria-label={t('切换空间，当前为{0}', { 0: inWorkspace ? workspaceName : t('个人空间') })}>
-      {inWorkspace ? <Buildings size={18} /> : <User size={18} />}<span>{switching ? t('正在切换…') : inWorkspace ? workspaceName : t('个人空间')}</span><CaretDown size={12} />
+      <span>{switching ? t('正在切换…') : inWorkspace ? workspaceName : t('个人空间')}</span><CaretDown size={12} />
     </button></DropdownMenuTrigger>
     <DropdownMenuContent align="start" sideOffset={8} className="um-app-menu um-space-menu">
       <DropdownMenuItem disabled={switching} onSelect={() => void switchSpace(null)}>

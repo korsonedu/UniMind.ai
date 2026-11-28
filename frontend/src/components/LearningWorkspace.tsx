@@ -16,7 +16,7 @@ export const learningComposerId = 'xiaoyu-learning-composer';
 type Overview = 'path' | 'proposal' | 'knowledge' | 'report';
 type View = { kind: Overview } | { kind: 'task'; id: string; back: Overview };
 
-export function useLearningWorkspace({ studio = false }: { studio?: boolean } = {}) {
+export function useLearningWorkspace({ autoOpen = true }: { autoOpen?: boolean } = {}) {
   const locale = useLocale();
   const { chat, openingProject } = useXiaoYuChat();
   const userId = useAuthStore(state => state.user?.id);
@@ -26,10 +26,9 @@ export function useLearningWorkspace({ studio = false }: { studio?: boolean } = 
   const query = useProjectLearning(chat.projectId);
   const project = query.data;
   const stages = project?.plan.stages || [];
-  const available = !studio || stages.length > 0;
   const taskQuery = useQuery({
     queryKey: ['learning-tasks', userId, chat.projectId],
-    enabled: !!project?.planning_enabled && (!studio || (available && sidebar.visible)),
+    enabled: !!project?.planning_enabled && (autoOpen || sidebar.visible),
     queryFn: ({ signal }) => api.get<{ tasks: LearningTask[] }>(`/ai/projects/${chat.projectId}/learning/tasks/`, { signal }).then(response => response.data),
     refetchInterval: query => query.state.data?.tasks.some(task => task.status === 'processing') ? 2500 : false,
   });
@@ -54,9 +53,9 @@ export function useLearningWorkspace({ studio = false }: { studio?: boolean } = 
     || stages.find(stage => !completedStages.has(stage.id) && stage.prerequisites.every(id => completedStages.has(id)));
 
   useEffect(() => {
-    setAvailable(available);
+    setAvailable(true);
     return () => setAvailable(false);
-  }, [available, setAvailable]);
+  }, [setAvailable]);
 
   const deepTask = params.get('learning_task');
   const deepView = params.get('learning_view');
@@ -77,12 +76,12 @@ export function useLearningWorkspace({ studio = false }: { studio?: boolean } = 
   }
   const seenEvent = useRef<string | null>(null);
   useEffect(() => {
-    if (studio || !eventReady || event === seenEvent.current) return;
+    if (!autoOpen || !eventReady || event === seenEvent.current) return;
     seenEvent.current = event;
     open();
-  }, [eventReady, event, open, studio]);
+  }, [autoOpen, eventReady, event, open]);
 
-  const deepReady = available && !explicitProject && !openingProject && !!chat.projectId && (!!deepTask || !!overview);
+  const deepReady = !explicitProject && !openingProject && !!chat.projectId && (!!deepTask || !!overview);
   const deepKey = deepReady ? `${chat.projectId}:${deepTask || ''}:${deepView || ''}` : null;
   const [handledDeep, setHandledDeep] = useState<string | null>(null);
   if (deepKey !== handledDeep) {

@@ -3,6 +3,7 @@ import { useNoteMentions } from '@/pages/notes/useNoteMentions';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useSystemStore } from '@/store/useSystemStore';
 import { Button } from '@/components/ui/button';
+import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { PaperPlaneTilt, Spinner, ArrowCounterClockwise, Lightbulb, ClockCounterClockwise, Trash, Sparkle, Plus, ArrowUp, MagnifyingGlass, Folder, Check, CaretDown } from '@phosphor-icons/react';
@@ -115,9 +116,7 @@ export interface AgentChatLayoutProps {
   onHasConversation?: (hasConversation: boolean) => void;
 
   workbench?: {
-    wrapChat: (chat: React.ReactNode) => React.ReactNode;
     renderEmpty: (onSend: (text: string) => void, canSend: boolean) => React.ReactNode;
-    composerContext: React.ReactNode;
     canSend: boolean;
   };
 
@@ -197,6 +196,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   }, []);
   const [aiUsage, setAIUsage] = useState<AIUsage | null>(null);
   const [quotaError, setQuotaError] = useState(false);
+  const [quotaOpen, setQuotaOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
 
   const {
@@ -415,17 +415,40 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
   const quotaExhausted = aiUsage && !aiUsage.unlimited && aiUsage.remaining === 0;
   const quotaLow = aiUsage && !aiUsage.unlimited && aiUsage.remaining !== null && aiUsage.remaining > 0 && aiUsage.remaining <= 5;
-  const quotaHint = appearance === 'native' && <>
-    <p aria-live="polite" data-attention={!!(quotaError || quotaLow || (aiUsage && !aiUsage.configured && !aiUsage.unlimited))} className={cn('um-agent-quota-status mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 text-[11px] leading-5 text-muted-foreground', quotaLow && 'text-amber-700')}>
-      {quotaError ? <span>{t('AI 额度暂时无法读取，请稍后查看。')}</span> : !aiUsage ? <span>{t('正在读取 AI 额度…')}</span> : aiUsage.unlimited ? <span>{t('AI 问答不限次数')}</span> : <>
-        <span>{aiUsage.configured ? t('本周 AI 剩余 {0} 次', { 0: aiUsage.base_remaining }) : t('基础周额度待配置')}{aiUsage.addon_remaining > 0 && t(' · 加量剩余 {0} 次', { 0: aiUsage.addon_remaining })}{quotaLow && t(' · 额度不多了')}</span>
-        {quotaExhausted && aiUsage.configured && <span>{learningReset(aiUsage.resets_at)}{t('恢复基础额度')}</span>}
-        {(quotaExhausted || !aiUsage.configured) && <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => setContactOpen(true)}>{t('联系我们')}</button>}
-        {(quotaExhausted || quotaLow) && <Link to="/pricing" className="underline underline-offset-2 hover:text-foreground">{t('按需 AI 加量')}</Link>}
-      </>}
-    </p>
-    <ContactAdminModal open={contactOpen} onOpenChange={setContactOpen} />
+  const compactComposer = appearance === 'native';
+  const canSend = !loading && !!bot && (workbench?.canSend ?? true);
+  const compactSendButton = <button type="button" className="um-agent-compact-send" disabled={!canSend || !input.trim()}
+    onClick={() => doSend(input)} aria-label={t('发送消息')}>
+    <span aria-hidden="true">{loading ? <Spinner size={18} className="animate-spin motion-reduce:animate-none" /> : <ArrowUp size={18} weight="bold" />}</span>
+  </button>;
+  const quotaText = quotaError ? t('AI 额度暂时无法读取，请稍后查看。') : !aiUsage ? t('正在读取 AI 额度…') : aiUsage.unlimited ? t('AI 问答不限次数') : (
+    (aiUsage.configured ? t('本周 AI 剩余 {0} 次', { 0: aiUsage.base_remaining }) : t('基础周额度待配置'))
+    + (aiUsage.addon_remaining > 0 ? t(' · 加量剩余 {0} 次', { 0: aiUsage.addon_remaining }) : '')
+    + (quotaLow ? t(' · 额度不多了') : '')
+  );
+  const quotaReset = !quotaError && quotaExhausted && aiUsage?.configured && `${learningReset(aiUsage.resets_at)}${t('恢复基础额度')}`;
+  const quotaActions = !quotaError && aiUsage && !aiUsage.unlimited && <>
+    {(quotaExhausted || !aiUsage.configured) && <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => { setQuotaOpen(false); setContactOpen(true); }}>{t('联系我们')}</button>}
+    {(quotaExhausted || quotaLow) && <Link to="/pricing" className="underline underline-offset-2 hover:text-foreground">{t('按需 AI 加量')}</Link>}
   </>;
+  const quotaPercent = quotaError || !aiUsage ? 0 : aiUsage.unlimited ? 100 : aiUsage.limit && aiUsage.base_remaining !== null
+    ? Math.min(100, Math.max(0, aiUsage.base_remaining / aiUsage.limit * 100)) : 0;
+  const quotaIndicator = compactComposer && <Popover open={quotaOpen} onOpenChange={setQuotaOpen}>
+    <Tooltip>
+      <TooltipTrigger asChild><PopoverTrigger asChild>
+        <button type="button" className={cn('um-agent-quota', quotaLow && 'um-agent-quota-low')} aria-label={t('AI 额度')}>
+          <span aria-hidden="true" style={{ '--um-quota-remaining': `${quotaPercent}%` } as React.CSSProperties} />
+        </button>
+      </PopoverTrigger></TooltipTrigger>
+      {!quotaOpen && <TooltipPortal><TooltipContent side="top" className="max-w-[calc(100vw-2rem)] text-xs">{quotaText}{quotaReset && <div>{quotaReset}</div>}</TooltipContent></TooltipPortal>}
+    </Tooltip>
+    <PopoverContent side="top" align="end" aria-label={t('AI 额度')} className="w-auto max-w-[calc(100vw-2rem)] p-3 text-xs leading-5">
+      <p>{quotaText}</p>
+      {quotaReset && <p>{quotaReset}</p>}
+      <div className="flex flex-wrap gap-x-3 empty:hidden">{quotaActions}</div>
+    </PopoverContent>
+  </Popover>;
+  const quotaContact = compactComposer && <ContactAdminModal open={contactOpen} onOpenChange={setContactOpen} />;
 
   const nativeToolbarAction = toolbarAction && (
     <button type="button" className="um-agent-icon-button" onClick={toolbarAction.onClick}
@@ -433,6 +456,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
       <toolbarAction.icon size={18} aria-hidden="true" />
     </button>
   );
+  const exitProject = projectId !== null ? () => wrappedReset(false) : undefined;
 
   const fillPromptFromCard = (prompt: string) => {
     setInput(prompt);
@@ -445,30 +469,19 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     ? landingShortcuts({ fillPrompt: fillPromptFromCard })
     : landingShortcuts;
 
-  const nativeComposer = (
-    <div data-tour={inputTourClass} className="um-agent-composer">
-      {noteMentions.panel}
-      <textarea id={composerId} ref={nativeInputRef} rows={mobileLayout || selectedProjectName ? 1 : undefined} value={input} onChange={event => { setInput(event.target.value); noteMentions.updateQuery(event.target.value, event.target.selectionStart); }}
+  const nativeComposer = <>
+    {noteMentions.panel}
+    <div data-tour={inputTourClass} className="um-agent-composer um-agent-compact-composer">
+      <textarea id={composerId} ref={nativeInputRef} rows={1} value={input} className="scrollbar-none"
+        onChange={event => { setInput(event.target.value); noteMentions.updateQuery(event.target.value, event.target.selectionStart); }}
         onCompositionStart={() => setIsComposition(true)} onCompositionEnd={() => setIsComposition(false)}
-        onKeyDown={event => { if (noteMentions.onKeyDown(event, isComposing)) return; if (shouldSend(event) && !isComposing && !event.nativeEvent.isComposing && !loading && input.trim() && bot) { event.preventDefault(); doSend(input); } }}
+        onKeyDown={event => { if (noteMentions.onKeyDown(event, isComposing)) return; if (shouldSend(event) && !isComposing && !event.nativeEvent.isComposing && canSend && input.trim()) { event.preventDefault(); doSend(input); } }}
         placeholder={chatPlaceholder} aria-label={t('和{0}对话', { 0: botDisplayName })} disabled={!bot || (!mobileLayout && loading)} />
-      <footer>
-        <Popover open={skillOpen} onOpenChange={setSkillOpen}>
-          <PopoverTrigger asChild><button className="um-agent-button um-agent-task-trigger" aria-label={t('快捷任务')} disabled={loading || !bot}><Plus size={18} weight="regular" /><span>{t('快捷任务')}</span></button></PopoverTrigger>
-          <PopoverContent align="start" side="top" sideOffset={10} aria-label={t('快捷任务')} className="um-native-menu w-56 p-1 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto" onCloseAutoFocus={event => { if (!mobileLayout) { event.preventDefault(); nativeInputRef.current?.focus(); } }}>
-            {skills.map(skill => <button key={skill.label} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-muted text-left" onClick={() => { handleSkillSelect(skill.prompt); if (mobileLayout) nativeInputRef.current?.focus(); }}><skill.icon size={16} />{skill.label}</button>)}
-          </PopoverContent>
-        </Popover>
-        <button className="um-agent-button um-agent-button-primary um-agent-send" disabled={loading || !input.trim() || !bot} onClick={() => doSend(input)} aria-label={t('发送消息')} aria-busy={mobileLayout && loading ? true : undefined}>{loading && mobileLayout ? <Spinner size={17} className="animate-spin" /> : <ArrowUp size={17} weight="regular" />}</button>
-      </footer>
+      <footer>{quotaIndicator}{compactSendButton}</footer>
     </div>
-  );
-  const mobileComposer = mobileLayout && (
-    <div className="um-agent-mobile-dock">
-      {nativeComposer}
-      {quotaHint}
-    </div>
-  );
+    {quotaContact}
+  </>;
+  const mobileComposer = mobileLayout && <div className="um-agent-mobile-dock">{nativeComposer}</div>;
 
   const mobileHeaderTitle = mobileLayout ? (
     projectControls.projects.length > 0 || selectedProjectName ? (
@@ -495,11 +508,9 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     )
   ) : undefined;
 
-  const startNewConversation = mobileComposer ? () => wrappedReset(false) : wrappedReset;
-
   if (!workbench && !hasConversation && appearance === 'native') {
     return <TooltipProvider delayDuration={300}>
-      <NativeAgentShell mobileHeaderTitle={mobileHeaderTitle} composer={mobileComposer} workspace={workspace} native sidebar={sessionDirectory} onNew={startNewConversation} label={botDisplayName} action={nativeToolbarAction} title={conversationTitle || t('新对话')}>
+      <NativeAgentShell mobileHeaderTitle={mobileHeaderTitle} composer={mobileComposer} workspace={workspace} native sidebar={sessionDirectory} onExitProject={exitProject} label={botDisplayName} action={nativeToolbarAction} title={selectedProjectName || conversationTitle || t('新对话')}>
         {contextPanel?.({ bot, conversationId })}
         <div className="um-agent-landing">
           <section className="um-agent-start" data-project={!!selectedProjectName} aria-label={t('开始对话')}>
@@ -525,7 +536,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     <button className="um-agent-project-picker-none" onClick={() => selectNewProject(null)}>{t('自由对话')}</button>
                   </PopoverContent>
                 </Popover>{` ${t('中做些什么？')}`}</> : contextPanel ? landingTitle : t('我们要做些什么？')}</h2>
-                <div className="w-full max-w-[680px]">{nativeComposer}{quotaHint}</div>
+                <div className="w-full max-w-[680px]">{nativeComposer}</div>
               </>
             )}
           </section>
@@ -659,7 +670,6 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   // ── Chat state ──
 
   if (layout === 'inline') {
-    const canSend = !loading && !!bot && (workbench?.canSend ?? true);
     const useMobileDock = !!mobileComposer && !workbench;
     const inlineChat = <>
           {contextPanel?.({ bot, conversationId })}
@@ -716,7 +726,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           {/* Messages — 内联视觉卡片 */}
           <AgentReplyContext.Provider value={{ onReply: onActionReply, projectId, conversationId }}>
             <div ref={scrollRef} className="um-agent-scroll flex-1 overflow-y-auto min-h-0">
-              <div className="um-agent-message-list max-w-3xl mx-auto p-4 space-y-4">
+              <div className={cn('max-w-3xl mx-auto p-4', appearance === 'native' ? 'um-agent-message-list' : 'space-y-4')}>
                 {!messages.length && workbench?.renderEmpty(text => { void doSend(text, false, { preserveDraft: true }); }, canSend)}
                 {messages.filter(m => m.role === 'user' || m.visible !== false).map((msg, i) => {
                   // render_visual → 内联 VisualCard
@@ -729,41 +739,34 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                       {msg.content && <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} streaming={msg.streaming} markdownComponents={markdownComponents} />}
                     </React.Fragment>;
                   }
-                  const stepVisuals = msg.toolStep?.visuals?.length
-                    ? msg.toolStep.visuals
-                    : (msg.toolStep?.visual ? [msg.toolStep.visual] : []);
-                  const hasVisual = msg.toolStep?.status === 'succeeded' && stepVisuals.length > 0;
-                  if (hasVisual && msg.role !== 'user') {
+                  if (msg.toolStep) {
+                    const step = msg.toolStep;
+                    const visuals = step.visuals?.length ? step.visuals : (step.visual ? [step.visual] : []);
+                    const showVisuals = msg.role !== 'user' && step.status === 'succeeded' && visuals.length > 0;
+                    if (!showVisuals && step.status === 'succeeded' &&
+                      (step.name === 'quick_generate' || step.name === 'bulk_generate_questions' || step.name === 'render_visual' && !step.visual)) return null;
                     return (
                       <React.Fragment key={msg._id || i}>
-                        {stepVisuals.map((visual, visualIndex) => (
+                        {(!showVisuals || appearance === 'native' && step.name !== 'render_visual') && (
+                          <ToolStepMessage step={step} index={i} statusLine={appearance === 'native'} live={!!msg._id && step.run_id === taskList?.run_id} />
+                        )}
+                        {showVisuals && visuals.map((visual, visualIndex) => (
                           <InlineVisualCard
                             key={`${msg._id || i}-visual-${visualIndex}`}
                             visual={visual as VisualData}
                             index={i}
                           />
                         ))}
-                        {msg.content && (
+                        {showVisuals && msg.content && (
                           <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} streaming={msg.streaming} markdownComponents={markdownComponents} />
                         )}
                       </React.Fragment>
                     );
                   }
-                  // 其他工具步骤 → ToolStepMessage
-                  // quick_generate/bulk_generate 完成后不再展示步骤卡片，
-                  // 因为后续文字气泡已经说明了结果，避免两个气泡说同一件事
-                  // render_visual 完成但无 visual → 后端校验拒绝了无效参数，AI 会自纠正，用户无需看到
-                  if (msg.toolStep) {
-                    const step = msg.toolStep;
-                    const isGenDone = (step.name === 'quick_generate' || step.name === 'bulk_generate_questions') && step.status === 'succeeded';
-                    if (isGenDone) return null;
-                    if (step.name === 'render_visual' && step.status === 'succeeded' && !step.visual) return null;
-                    return <ToolStepMessage key={msg._id || i} step={step} index={i} />;
-                  }
                   // 普通消息 → ChatBubble
                   return <ChatBubble native={appearance === 'native'} key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} streaming={msg.streaming} markdownComponents={markdownComponents} />;
                 })}
-                {appearance === 'native' && waitingForReply && (
+                {appearance === 'native' && waitingForReply && !taskList?.items.some(task => task.status === 'running' || task.status === 'queued') && (
                   <div className="um-agent-thinking-status" role="status">
                     <ThinkingSphere />
                     <span>{t('{0}正在思考', { 0: botDisplayName })}</span>
@@ -787,10 +790,10 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
           {/* Input */}
           {!useMobileDock && <div className={cn("shrink-0 px-4 pb-4 pt-2", appearance === 'native' && 'um-agent-chat-input')}>
-            <div className="max-w-3xl mx-auto">
-              {workbench?.composerContext}
-              <div data-tour={inputTourClass} className="rounded-2xl border border-border bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)] overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
-                {noteMentions.panel}
+            <div className={cn('mx-auto', compactComposer ? 'max-w-[680px]' : 'max-w-3xl')}>
+              {compactComposer && noteMentions.panel}
+              <div data-tour={inputTourClass} className={compactComposer ? 'um-agent-composer um-agent-compact-composer' : 'rounded-2xl border border-border bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)] overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all'}>
+                {!compactComposer && noteMentions.panel}
                 <textarea id={composerId} ref={nativeInputRef} rows={1}
                   value={input}
                   onChange={e => { setInput(e.target.value); noteMentions.updateQuery(e.target.value, e.target.selectionStart); }}
@@ -800,11 +803,11 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   placeholder={chatPlaceholder}
                   aria-label={t('和{0}对话', { 0: botDisplayName })}
                   autoComplete="off"
-                  className="w-full bg-transparent border-none resize-none text-sm px-4 py-2 placeholder:text-muted-foreground/55 focus:outline-none min-h-[36px]"
+                  className={cn('w-full bg-transparent border-none resize-none text-sm px-4 py-2 placeholder:text-muted-foreground/55 focus:outline-none min-h-[36px]', compactComposer && 'scrollbar-none')}
                   disabled={loading || workbench?.canSend === false}
                 />
-                <div className="flex items-center justify-end gap-1.5 px-2.5 py-1.5">
-                  <Popover open={skillOpen} onOpenChange={setSkillOpen}>
+                <div className="um-agent-composer-actions flex items-center justify-end gap-1.5 px-2.5 py-1.5">
+                  {!compactComposer && <Popover open={skillOpen} onOpenChange={setSkillOpen}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <PopoverTrigger asChild>
@@ -826,7 +829,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                         ))}
                       </div>
                     </PopoverContent>
-                  </Popover>
+                  </Popover>}
                   {toolbarAction && appearance !== 'native' && (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -839,13 +842,14 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     </Tooltip>
                   )}
                   <div className="flex-1" />
-                  <Button aria-label={t('发送消息')} onClick={() => doSend(input)} disabled={!canSend || !input.trim()} size="icon"
+                  {quotaIndicator}
+                  {compactComposer ? compactSendButton : <Button aria-label={t('发送消息')} onClick={() => doSend(input)} disabled={!canSend || !input.trim()} size="icon"
                     className="um-agent-send rounded-full h-9 w-9 bg-primary text-primary-foreground shadow-none um-motion-control active:scale-[0.98] transition-[color,background-color,border-color,opacity,transform,scale] duration-150 shrink-0 hover:opacity-90">
                     {loading ? <Spinner className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-                  </Button>
+                  </Button>}
                 </div>
               </div>
-              {quotaHint}
+              {quotaContact}
             </div>
           </div>}
           </div>
@@ -854,10 +858,10 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
       <TooltipProvider delayDuration={300}>
         <NativeAgentShell mobileHeaderTitle={mobileHeaderTitle} composer={useMobileDock ? mobileComposer : undefined} workspace={workspace} native={appearance === 'native'} sidebar={sessionDirectory}
           directoryInitiallyCollapsed={!!workbench}
-          onNew={workbench ? () => wrappedReset(true, projectId) : startNewConversation}
+          onExitProject={exitProject}
           label={botDisplayName} action={nativeToolbarAction}
           title={workbench ? selectedProjectName || conversationTitle || t('项目') : conversationTitle || t('新对话')}>
-          {workbench ? workbench.wrapChat(inlineChat) : inlineChat}
+          {workbench ? <section className="um-wb-chat" aria-label={t('项目对话')}>{inlineChat}</section> : inlineChat}
         </NativeAgentShell>
       </TooltipProvider>
     );
