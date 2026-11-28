@@ -90,6 +90,11 @@ PLANNER_TOOLS_META = [
         body="搜索视频课程的语音转录文本。参数: query(str)=搜索关键词, course_id(int)=课程ID(可选)。返回：匹配的转录片段及时间戳。适用于：查找视频中讲到某个知识点的时间点。不适用于：查找文字课程、查找题目。",
     ),
     ToolMeta(
+        name="read_web_article",
+        description="读取用户发来的公开文章链接",
+        body="使用用户提供的公开 HTTPS 文章链接读取原文，返回可精确引用的行号和文本。",
+    ),
+    ToolMeta(
         name="search_articles",
         description="搜索深度学习文章",
         body="搜索平台文章。参数: query(str)=搜索关键词。返回：文章列表含标题、摘要、难度。适用于：推荐扩展阅读、查找学习资料。不适用于：查找题目、查找视频。",
@@ -332,7 +337,7 @@ PLANNER_INTENT_MAP = {
     "resource": {
         "keywords": ["课程", "视频", "文章", "资料", "推荐", "学习资源", "我的课程", "有什么课", "我在学什么"],
         "tools": [
-            "search_courses", "search_asr", "search_articles", "render_visual",
+            "search_courses", "search_asr", "search_articles", "read_web_article", "render_visual",
         ],
     },
     "error_review": {

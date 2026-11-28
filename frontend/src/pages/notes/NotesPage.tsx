@@ -4,6 +4,8 @@ import { SelectField, SelectOption } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useIsMobile } from '@/lib/useIsMobile';
+import { CitationLines } from '@/components/CitationLines';
+import { citationLine } from '@/lib/utils';
 import { WorkspaceToolbar } from '@/components/WorkspaceToolbar';
 import { RightSidebarLayoutContext } from '@/components/WorkspaceContext';
 import { useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
@@ -47,7 +49,10 @@ function formatNoteTimestamp(iso: string) {
 export default function NotesPage() {
   useLocale();
   const { id } = useParams();
-  const createOnOpen = new URLSearchParams(useLocation().search).get('new') === '1';
+  const params = new URLSearchParams(useLocation().search);
+  const createOnOpen = params.get('new') === '1';
+  const citedLine = citationLine(params.get('line'));
+  const citedVersion = citationLine(params.get('version'));
   const navigate = useNavigate();
   const isPhone = useIsMobile();
   const filtersId = useId();
@@ -491,7 +496,13 @@ export default function NotesPage() {
       {note && !pageError ? <>
         {error && <div className="notes-save-error" role="alert"><p>{error}</p><button aria-label={t('重试保存')} title={t('重试保存')} onClick={() => void flush().catch(() => {})}><ArrowClockwise size={18} /></button><button aria-label={t('下载本地内容')} title={t('下载本地内容')} onClick={downloadLocal}><DownloadSimple size={18} /></button><button aria-label={t('重新加载远端')} title={t('重新加载远端')} onClick={() => setDialog({ title: t('重新加载笔记？'), description: t('本地尚未保存的修改将被丢弃。'), destructive: true, confirmText: t('重新加载'), onConfirm: () => { void notesApi.get(note.id).then(load).catch(() => toast.error(t('加载失败，本地内容已保留。'))); } })}><ArrowCounterClockwise size={18} /></button></div>}
         {note.deleted_at && <p className="notes-trash-banner">{t('已移入回收站')}</p>}
-        <div className="notes-writing-surface" inert={loading || busy || undefined}><NoteEditor key={`${note.id}:${documentKey}`} note={note} notebooks={notebooks} onChange={change} onOpen={open} /></div>
+        <div className="notes-writing-surface" inert={loading || busy || undefined}>
+          {citedLine ? <>
+            <button className="inline-flex items-center gap-2 text-sm text-primary" onClick={() => navigate(`/notes/${note.id}`, { replace: true })}><PencilSimple size={16} />{t('编辑笔记')}</button>
+            {citedVersion !== note.version && <p role="status">{t('原文已更新，引用行号可能已变化。')}</p>}
+            <CitationLines content={note.content} line={citedVersion === note.version ? citedLine : null} />
+          </> : <NoteEditor key={`${note.id}:${documentKey}`} note={note} notebooks={notebooks} onChange={change} onOpen={open} />}
+        </div>
       </> : !loading && !pageError && <div className="notes-welcome"><NotebookIcon size={34} weight="thin" /><button onClick={createNote}>{t('写一篇笔记')}</button></div>}
     </main>
     <NoteAISettings onboarding />

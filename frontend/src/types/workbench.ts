@@ -73,6 +73,8 @@ export interface WorkbenchCitation extends ChunkLocator {
   chunk_id: number;
   quote: string;
   companion_url: string | null;
+  line?: number;
+  chunk_line?: number;
 }
 
 export interface WorkbenchOverview {
@@ -89,6 +91,8 @@ export interface SourceAnchor {
   slideNumber?: number | null;
   startSeconds?: number | null;
   quote?: string;
+  line?: number;
+  chunkLine?: number;
 }
 
 export type StudioMarkdownKind = 'study_guide' | 'briefing' | 'faq';

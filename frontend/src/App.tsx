@@ -54,6 +54,7 @@ const PaymentResult = lazy(() => import('./pages/PaymentResult').then(module => 
 const Checkout = lazy(() => import('./pages/Checkout').then(module => ({ default: module.Checkout })));
 const DiagnosticTest = lazy(() => import('./pages/DiagnosticTest').then(module => ({ default: module.DiagnosticTest })));
 const KnowledgeBuilder = lazy(() => import('./pages/KnowledgeBuilder'));
+const CitedArticle = lazy(() => import('./pages/CitedArticle'));
 const NotesPage = lazy(() => import('./pages/notes/NotesPage'));
 const PracticeSession = lazy(() => import('./pages/xiaoyu/PracticeSession'));
 const ProjectKnowledge = lazy(() => import('./pages/ProjectKnowledge'));
@@ -290,6 +291,7 @@ const router = createBrowserRouter([
           { path: "tests/history", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{workspacePage(ExamHistoryPage)}</FeatureGuard> },
           { path: "notes", element: workspacePage(NotesPage) },
           { path: "notes/:id", element: workspacePage(NotesPage) },
+          { path: "article/:id", element: workspacePage(CitedArticle) },
           { path: "practice", element: <RequireAuth><OfflineTrialPage /></RequireAuth> },
           { path: "calendar", element: <RequireAuth><OfflineTrialPage calendar /></RequireAuth> },
           { path: "knowledge-tree", element: <FeatureGuard feature="ai.assistant">{workspacePage(ProjectKnowledge)}</FeatureGuard> },

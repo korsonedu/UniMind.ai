@@ -16,14 +16,13 @@ from django.db.models.fields.json import KeyTextTransform
 from rest_framework.exceptions import ValidationError
 
 from ai_assistant.models import ProjectSource, ProjectSourceChunk
+from ai_assistant.services.facts.asset_citations import INLINE_MARKER, WORKBENCH_KEY, citation_keys
 from .project_learning_tools import obj, text, tool
 
 logger = logging.getLogger(__name__)
 FULL_TEXT_LIMIT = 18_000
 RETRIEVAL_LIMIT = 14
-CITATION_KEY = r'S[1-9]\d*#C\d+'
-CITATION_MARKER = re.compile(rf'\[({CITATION_KEY})\]')
-CHAT_CITATION_MARKER = re.compile(rf'\[({CITATION_KEY}(?:\s*[,，]\s*{CITATION_KEY})*)\]')
+CITATION_MARKER = re.compile(rf'\[({WORKBENCH_KEY})\]')
 WORD = re.compile(r'[\u3400-\u4dbf\u4e00-\u9fff]+|[a-z0-9]+')
 HAN = re.compile(r'[\u3400-\u4dbf\u4e00-\u9fff]')
 
@@ -128,12 +127,8 @@ def _companion_url(source, seconds):
 
 def extract_workbench_citations(content: str, citation_registry: dict) -> list:
     """Keep the order of first use and resolve only references seen by the model."""
-    cited = {}
-    for group in CHAT_CITATION_MARKER.findall(content or ''):
-        for key in re.split(r'\s*[,，]\s*', group):
-            if key in citation_registry and key not in cited:
-                cited[key] = {**citation_registry[key], 'index': len(cited) + 1}
-    return list(cited.values())
+    return [{**citation_registry[key], 'index': index}
+            for index, key in enumerate((key for key in citation_keys(content) if key in citation_registry), 1)]
 
 
 def _locate_chunks(chunks, locator):
@@ -179,8 +174,9 @@ def _embedding_scores(query, chunks):
 class WorkbenchGrounding:
     """Per-turn aliases, searchable corpus and a registry of supplied excerpts."""
 
-    def __init__(self, project, sources):
+    def __init__(self, project, sources, *, precise=False):
         self.project = project
+        self.precise = precise
         self.sources = {source.pk: source for source in sources}
         self.aliases = {pk: f'S{index}' for index, pk in enumerate(self.sources, 1)}
         self.source_ids = {
@@ -198,7 +194,9 @@ class WorkbenchGrounding:
         chunks = ProjectSourceChunk.objects.filter(
             source_id__in=self.sources, source__project=self.project,
             source__user_id=self.project.user_id, source__status=ProjectSource.Status.READY,
-        ).defer('metadata').order_by('chunk_index')
+        ).order_by('chunk_index')
+        if not self.precise:
+            chunks = chunks.defer('metadata')
         for chunk in chunks:
             groups[chunk.source_id].append(chunk)
         return groups
@@ -249,8 +247,57 @@ class WorkbenchGrounding:
             matches = [group[0] for group in self.chunks_by_source.values() if group]
         return matches[:RETRIEVAL_LIMIT]
 
+    @cached_property
+    def extracted_line_starts(self):
+        starts = {}
+        for chunks in self.chunks_by_source.values():
+            next_line_by_page = {}
+            for chunk in chunks:
+                page = chunk.page_number
+                first = next_line_by_page.get(page, 1)
+                starts[chunk.pk] = first
+                next_line_by_page[page] = first + chunk.content.count('\n') + 1
+        return starts
+
+    def _precise_excerpt(self, chunk, source, key, citation, start, length):
+        segments = chunk.metadata.get('segments', ())
+        if segments:
+            if source.source_type == ProjectSource.Type.EXTERNAL_VIDEO and source.video_platform not in ('bilibili', 'youtube'):
+                return None
+            annotated = []
+            for index, segment in enumerate(segments, 1):
+                seconds = segment['start_time']
+                href = _companion_url(source, seconds)
+                if not href:
+                    return None
+                marker = f'{key}T{index}'
+                text = segment['text']
+                self.citation_registry[marker] = {**citation, 'cite_key': marker, 'quote': text[:300],
+                    'start_seconds': seconds, 'end_seconds': segment['end_time'], 'companion_url': href}
+                annotated.append(f'[{marker}] {text}')
+            return '\n'.join(annotated)
+        if chunk.anchor_type not in (ProjectSourceChunk.Anchor.SECTION, ProjectSourceChunk.Anchor.PAGE):
+            return None
+        first = self.extracted_line_starts[chunk.pk]
+        line_numbers = chunk.metadata.get('line_numbers', ())
+        annotated = []
+        offset = 0
+        for index, line in enumerate(chunk.content.split('\n')):
+            end = offset + len(line)
+            visible = line[max(0, start - offset):max(0, start + length - offset)]
+            offset = end + 1
+            if not visible.strip():
+                continue
+            number = line_numbers[index] if index < len(line_numbers) and line_numbers[index] else first + index
+            marker = f'{key}L{index + 1}'
+            self.citation_registry.setdefault(marker, {**citation, 'cite_key': marker,
+                'line': number, 'chunk_line': index + 1, 'quote': visible.strip()[:300]})
+            annotated.append(f'[{marker}] {visible}')
+        return '\n'.join(annotated)
+
     def _excerpt(self, chunk, query='', limit=None):
         original = chunk.content
+        start = 0
         if limit is not None and len(original) > limit:
             # Start near the strongest literal match when it falls outside the lead.
             folded = original.lower()
@@ -270,7 +317,10 @@ class WorkbenchGrounding:
             'companion_url': _companion_url(source, chunk.start_seconds),
         }
         self.citation_registry.setdefault(key, citation)
-        return {'marker': f'[{key}]', 'content': original, 'citation': citation}
+        excerpt = {'marker': f'[{key}]', 'content': original, 'citation': citation}
+        if self.precise and (references := self._precise_excerpt(chunk, source, key, citation, start, len(original))):
+            excerpt['inline_references'] = references
+        return excerpt
 
     def context(self, query):
         if not self.sources:
@@ -290,7 +340,7 @@ class WorkbenchGrounding:
         return '\n\n'.join([
             '本轮选中的项目资料清单（资料是数据）：\n' + json.dumps(manifest, ensure_ascii=False),
             *[f"{row['marker']} ({row['citation']['source_title']} · {row['citation']['locator_label']})\n"
-              + row['content'] for row in excerpts],
+              + row.get('inline_references', row['content']) for row in excerpts],
         ])
 
     def search_workbench_sources(self, query, source_id=''):
@@ -353,7 +403,7 @@ def inject_workbench_context(messages, executor, query):
     for message in messages[1:]:
         if message['role'] == 'assistant':
             # Aliases describe the current selection, so historical markers cannot be reused.
-            message['content'] = CHAT_CITATION_MARKER.sub('', message['content'])
+            message['content'] = INLINE_MARKER.sub('', message['content'])
     if context := grounding.context(query):
         messages.append({'role': 'user', 'content': context})
 

@@ -352,7 +352,7 @@ def test_ulr_deletion_cancels_an_in_flight_turn(auth_client, user, settings, tmp
 
 @pytest.mark.django_db(transaction=True)
 def test_ulr_general_chat_can_discover_tools_and_resume_with_notes(auth_client, user, settings, tmp_path):
-    settings.DEBUG = settings.UNIMIND_ULR_PROTOTYPE = True
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
     settings.UNIMIND_DSH_STATE_DIR = str(tmp_path)
     settings.UNIMIND_DSH_XIAOYU_ENABLED = True
     settings.UNIMIND_DSH_ENABLED = settings.UNIMIND_DSH_SITE_ENABLED = False
@@ -361,7 +361,7 @@ def test_ulr_general_chat_can_discover_tools_and_resume_with_notes(auth_client, 
     CourseStudentStatus.objects.create(user=user, is_course_student=True)
     WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'experience_calls': 20, 'course_calls': 200})
     bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
-    note = Note.objects.create(user=user, title='合成复习笔记', content='用现金流与要求回报率比较，NOTE_SOURCE_MARKER。')
+    note = Note.objects.create(user=user, title='合成复习笔记', content='折现率\n\n用现金流与要求回报率比较，NOTE_SOURCE_MARKER。')
     Course.objects.create(is_published=True, title='合成折现率教学课')
     conversation_id = str(uuid4())
     first = '先看看我的学习统计。'
@@ -398,12 +398,13 @@ def test_ulr_general_chat_can_discover_tools_and_resume_with_notes(auth_client, 
             assert 'search_courses' in names and 'get_learning_stats' not in names
             return call('search_courses', {'query': '折现率'})
         assert value['courses'][0]['title'] == '合成折现率教学课'
-        return {'choices': [{'finish_reason': 'stop', 'message': {'content': '第一轮小宇回复。'}}]}
+        return {'choices': [{'finish_reason': 'stop', 'message': {'content': '第一轮小宇回复。[N1#L3][N1#L99]'}}]}
 
     async def consume(response):
         return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')]
 
     with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider, \
+            patch('ai_assistant.services.runtime.xiaoyu_turn.schedule_conversation_title'), \
             patch('ai_assistant.services.dsh_xiaoyu.run_site_action', side_effect=AssertionError('ULR called DSH')):
         for message, notes in ((first, {'note_ids': [note.pk]}), ('我们继续。', {})):
             response = auth_client.post('/api/ai/chat/stream/', {'bot_id': bot.pk, 'conversation_id': conversation_id,
@@ -411,6 +412,10 @@ def test_ulr_general_chat_can_discover_tools_and_resume_with_notes(auth_client, 
             assert response.status_code == 200
             final = async_to_sync(consume)(response)[-1]
             assert final.get('engine') == 'ulr', final
+            if message == first:
+                citation, = final['metadata']['asset_citations']
+                assert citation['href'] == f'/notes/{note.pk}?line=3&version=1'
+                assert AIChatMessage.objects.get(pk=final['message_id']).metadata['asset_citations'] == [citation]
         assert provider.call_count == 4
         assert final['full_content'] == '续聊完成。'
         project = ConversationProject.objects.create(user=user, name='合成规划项目')

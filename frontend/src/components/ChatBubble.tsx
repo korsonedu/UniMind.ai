@@ -10,10 +10,11 @@ import api from '@/lib/api';
 import { NoteSources } from '@/pages/notes/NoteSources';
 import { useSystemStore } from '@/store/useSystemStore';
 import type { WorkbenchCitation } from '@/types/workbench';
-import { CitationPill } from './workbench/CitationPill';
+import { CitationPill, type AssetCitation } from './workbench/CitationPill';
 import { WorkbenchCitationContext, stripStreamingCitations, workbenchCitationMarkdown } from './workbench/workbenchCitations';
 
 const noCitations: WorkbenchCitation[] = [];
+const noAssetCitations: AssetCitation[] = [];
 
 function StreamingText({ content }: { content: string }) {
   const reduceMotion = useSystemStore(state => state.reduceMotion);
@@ -92,9 +93,10 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
   const workbenchContext = useContext(WorkbenchCitationContext);
   const workbench = isUser || isThinking ? null : workbenchContext;
   const citations = Array.isArray(msg.metadata?.workbench_citations) ? msg.metadata.workbench_citations as WorkbenchCitation[] : noCitations;
-  const citedMarkdown = useMemo(() => workbench && !streaming
-    ? workbenchCitationMarkdown(citations, workbench, markdownComponents)
-    : undefined, [workbench, citations, streaming, markdownComponents]);
+  const assets = Array.isArray(msg.metadata?.asset_citations) ? msg.metadata.asset_citations as AssetCitation[] : noAssetCitations;
+  const citedMarkdown = useMemo(() => !isUser && !isThinking && !streaming
+    ? workbenchCitationMarkdown(citations, workbench, markdownComponents, assets)
+    : undefined, [isUser, isThinking, workbench, citations, assets, streaming, markdownComponents]);
 
   const showFeedback = !isUser && !isThinking && msg.content && msg.id;
 
@@ -146,7 +148,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
               "prose-[.katex-display]:my-2 prose-[.katex-display]:overflow-x-auto",
             )}>
               {streaming ? (
-                <StreamingText content={workbench ? stripStreamingCitations(msg.content) : msg.content} />
+                <StreamingText content={isUser ? msg.content : stripStreamingCitations(msg.content)} />
               ) : <MarkdownContent content={msg.content} components={markdownComponents} {...citedMarkdown} />}
             </div>
           )}

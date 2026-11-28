@@ -1,5 +1,12 @@
 // English messages keyed by their Chinese source text.
 const en: Record<string, string> = {
+  "第 {0} 行": "Line {0}",
+  "打开原网页": "Open original webpage",
+  "原文已更新，引用行号可能已变化。": "The source has changed, and the cited line may have moved.",
+  "文章": "Article",
+  "编辑笔记": "Edit note",
+  "正在读取资料…": "Loading sources…",
+  "资料读取失败": "Could not load the source.",
   "在右侧栏的「资料源」中添加课件、视频和笔记。": "Add course materials, videos, and notes in Sources in the right sidebar.",
   '全屏展开': 'Expand to workspace fullscreen',
   '恢复分屏': 'Restore split view',

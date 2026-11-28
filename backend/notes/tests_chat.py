@@ -2,6 +2,7 @@
 import json
 import uuid
 from contextlib import ExitStack
+from importlib import import_module
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -20,6 +21,8 @@ from .models import Note
 )
 class NoteChatSmoke(TransactionTestCase):
     def setUp(self):
+        # Load the native turn before patching helpers the legacy view resolves lazily.
+        import_module('ai_assistant.services.runtime.xiaoyu_turn')
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
         self.user = get_user_model().objects.create_superuser('note-chat', 'note-chat@example.test', 'smoke')

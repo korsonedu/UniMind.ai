@@ -25,8 +25,8 @@ GROUPS = {
     'authoring': ('编写交互与计算工具', '当用户想亲手操作内容、改变条件并观察结果，或修订这种演示时使用；无需用户说出工具或卡片名称。也可注册会话计算工具。', (
         'build_learning_experiment', 'read_learning_experiment', 'register_session_tool', 'read_session_tool')),
     'presentation': ('教学展示与回复选项', '展示公式推导、解题步骤、函数采样图和回复选项，不改变学生数据。', ('present_learning_visual',)),
-    'resources': ('课程与知识来源', '查课程、视频讲稿及知识点。', (
-        'search_courses', 'search_asr', 'search_knowledge_tree')),
+    'resources': ('课程与知识来源', '查课程、视频讲稿、文章及知识点。', (
+        'search_courses', 'search_asr', 'search_articles', 'read_web_article', 'search_knowledge_tree')),
     'practice': ('题目与复习', '查错题、题目、到期复习、练习题和同类题，准备首次诊断作答卡。', (
         'get_user_wrong_questions', 'lookup_question', 'get_due_reviews',
         'get_practice_questions', 'search_similar_questions', 'search_knowledge_tree', 'run_diagnostic')),
@@ -101,7 +101,9 @@ def grouped_tools(allowed, message, recent_messages=None, project=False):
         'past conversation', 'conversation history', 'what we discussed',
     )):
         initial = 'recall'
-    if 'workbench' in groups and not project and initial not in ('interactive', 'authoring', 'recall', 'external_mcp'):
+    if 'read_web_article' in definitions and 'https://' in message:
+        initial = 'resources'
+    elif 'workbench' in groups and not project and initial not in ('interactive', 'authoring', 'recall', 'external_mcp'):
         initial = 'workbench'
     initial = initial if initial in groups else ''
     selected = list(groups[initial]['tools']) if initial else []

@@ -91,8 +91,13 @@ def presentation_tool(user, chat_context):
         'parameters': {'type': 'object', 'oneOf': [function['parameters'], selection]}}}
 
 
+def _runtime_tool_names(ulr):
+    return M0_TOOLS | {'search_articles', 'read_web_article'} if ulr else M0_TOOLS
+
+
 def permitted_tools(user, chat_context=None, *, ulr=False):
-    allowed = [t for t in student_catalog(user, ulr=ulr) if t['function']['name'] in M0_TOOLS]
+    names = _runtime_tool_names(ulr)
+    allowed = [t for t in student_catalog(user, ulr=ulr) if t['function']['name'] in names]
     return [*allowed, presentation_tool(user, chat_context)] if allowed else []
 
 
@@ -135,7 +140,8 @@ def build_context(user, message, recent_messages=None, chat_context=None, *, ulr
     catalog = student_catalog(user, ulr=ulr)
     candidates = route_tools(message, catalog, recent_messages=recent_messages,
                              bot_type='planner', intent_classifier=classify_intent_keywords, use_semantic=False)
-    allowed = [t for t in catalog if t['function']['name'] in M0_TOOLS]
+    names = _runtime_tool_names(ulr)
+    allowed = [t for t in catalog if t['function']['name'] in names]
     if allowed:
         allowed.append(presentation_tool(user, chat_context))
     executor = prototype_executor(user, chat_context)

@@ -57,7 +57,9 @@ export function SourceInspectorDrawer({ projectId, activeAnchor, summary, conver
   const preview = previewAnchor === activeAnchor;
   const backButton = useRef<HTMLButtonElement>(null);
   const activeChunkRef = useRef<HTMLElement>(null);
-  const activeChunk = source && findAnchoredChunk(source.chunks, activeAnchor);
+  const activeChunk = source && (activeAnchor.chunkLine
+    ? source.chunks.find(chunk => chunk.id === activeAnchor.chunkId)
+    : findAnchoredChunk(source.chunks, activeAnchor));
   useEffect(() => { backButton.current?.focus({ preventScroll: true }); }, []);
   useEffect(() => {
     if (!preview) activeChunkRef.current?.scrollIntoView({
@@ -94,6 +96,7 @@ export function SourceInspectorDrawer({ projectId, activeAnchor, summary, conver
           {sourceIsProcessing(source) && <p className="um-wb-muted" role="status"><Spinner size={16} className="um-wb-spin" />{t('正在解析资料…')}</p>}
           {source.status === 'failed' && <p className="um-wb-error">{source.error_message}</p>}
           {source.status === 'ready' && source.chunks.length === 0 && <p className="um-wb-muted">{t('这份资料暂无可读文本。')}</p>}
+          {activeAnchor.chunkLine && !activeChunk && <p role="status">{t('原文已更新，引用行号可能已变化。')}</p>}
           {source.chunks.map(chunk => {
             const selected = chunk.id === activeChunk?.id;
             const stamp = chunk.start_seconds;
@@ -102,13 +105,21 @@ export function SourceInspectorDrawer({ projectId, activeAnchor, summary, conver
             const content = notesStart < 0 ? chunk.content : chunk.content.slice(0, notesStart);
             const notes = notesStart < 0 ? '' : chunk.content.slice(notesStart).replace(/^\s*\[讲者备注\] /, '');
             const quote = selected ? activeAnchor.quote : undefined;
-            return <article key={chunk.id} className="um-wb-chunk" data-highlight={selected || undefined} ref={selected ? activeChunkRef : undefined}>
+            const citedLine = selected ? activeAnchor.chunkLine : undefined;
+            const lines = citedLine ? content.split('\n') : [];
+            return <article key={chunk.id} className="um-wb-chunk" data-highlight={selected || undefined} ref={selected && !citedLine ? activeChunkRef : undefined}>
               <div className="um-wb-chunk-label">
-                <span>{stamp === null ? chunk.locator_label : `[${formatTimestamp(stamp)}]`}</span>
+                <span>{citedLine && activeAnchor.line
+                  ? [chunk.page_number && `P.${chunk.page_number}`, t('第 {0} 行', { 0: activeAnchor.line })].filter(Boolean).join(' · ')
+                  : stamp === null ? chunk.locator_label : `[${formatTimestamp(stamp)}]`}</span>
                 {segmentPlayback && stamp !== null && <WorkbenchPlaybackLink href={segmentPlayback}>{t('去伴学观看 ({0})', { 0: formatTimestamp(stamp) })}</WorkbenchPlaybackLink>}
               </div>
               {chunk.heading && chunk.heading !== chunk.locator_label && <h3>{chunk.heading}</h3>}
-              {content && <p>{excerpt(content, quote)}</p>}
+              {content && <p>{citedLine ? <>
+                {lines.slice(0, citedLine - 1).join('\n')}{citedLine > 1 && '\n'}
+                <mark ref={activeChunkRef} data-cited-line={activeAnchor.line}>{lines[citedLine - 1]}</mark>
+                {citedLine < lines.length && '\n'}{lines.slice(citedLine).join('\n')}
+              </> : excerpt(content, quote)}</p>}
               {notes && <aside className="um-wb-slide-notes"><strong>{t('讲者备注')}</strong><p>{excerpt(notes, quote)}</p></aside>}
             </article>;
           })}

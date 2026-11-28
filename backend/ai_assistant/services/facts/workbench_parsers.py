@@ -67,9 +67,15 @@ def parse_pdf_document(file):
                 continue
             first_line = content.splitlines()[0].strip()
             heading = first_line if len(first_line) <= 100 else ''
+            offset = 0
             for part, piece in enumerate(_split_text(content, 1800), 1):
                 label = f'P.{page_number}' if part == 1 else f'P.{page_number} ({part})'
-                chunks.append(_chunk('page', label, piece, heading, page_number=page_number))
+                offset = content.index(piece, offset)
+                first = content.count('\n', 0, offset) + 1
+                line_numbers = list(range(first, first + piece.count('\n') + 1))
+                chunks.append(_chunk('page', label, piece, heading, page_number=page_number,
+                                     metadata={'line_numbers': line_numbers}))
+                offset += len(piece)
     except PyPdfError as exc:
         raise WorkbenchParseError('无法读取该 PDF，请检查文件是否完整后重新上传。') from exc
 
@@ -117,6 +123,7 @@ def _section_chunks(blocks):
     chunks = []
     heading = ''
     paragraphs = []
+    line_numbers = []
     length = 0
 
     def flush():
@@ -125,11 +132,14 @@ def _section_chunks(blocks):
             return
         index = len(chunks) + 1
         label = f'§{index} {heading[:24]}' if heading else f'第 {index} 节'
-        chunks.append(_chunk('section', label, '\n\n'.join(paragraphs), heading))
+        anchor = {'metadata': {'line_numbers': line_numbers.copy()}} if line_numbers else {}
+        chunks.append(_chunk('section', label, '\n\n'.join(paragraphs), heading, **anchor))
         paragraphs.clear()
+        line_numbers.clear()
         length = 0
 
-    for is_heading, text in blocks:
+    for is_heading, text, *source_line in blocks:
+        first_line = source_line[0] + text[:len(text) - len(text.lstrip())].count('\n') if source_line else None
         text = text.strip()
         if not text:
             continue
@@ -140,10 +150,18 @@ def _section_chunks(blocks):
         if length >= 600 and length + separator + len(text) > 1400:
             flush()
             separator = 0
+        offset = 0
         for part, piece in enumerate(_split_text(text, 1400 - length - separator, next_limit=1400)):
             if part:
                 flush()
                 separator = 0
+            if first_line is not None:
+                offset = text.index(piece, offset)
+                start_line = first_line + text.count('\n', 0, offset)
+                if paragraphs:
+                    line_numbers.append(None)
+                line_numbers.extend(range(start_line, start_line + piece.count('\n') + 1))
+                offset += len(piece)
             paragraphs.append(piece)
             length += separator + len(piece)
     flush()
@@ -169,7 +187,11 @@ def parse_docx_file(file):
 def _markdown_blocks(content):
     paragraph = []
     fence = ''
-    for line in content.splitlines():
+    content = content.replace('\r\n', '\n').replace('\r', '\n')
+    first_line = 1
+    for number, line in enumerate(content.split('\n'), 1):
+        if not paragraph:
+            first_line = number
         marker = MARKDOWN_FENCE.match(line)
         if fence:
             paragraph.append(line)
@@ -183,14 +205,14 @@ def _markdown_blocks(content):
         heading = MARKDOWN_HEADING.match(line)
         if heading or not line.strip():
             if paragraph:
-                yield False, '\n'.join(paragraph)
+                yield False, '\n'.join(paragraph), first_line
                 paragraph.clear()
             if heading:
-                yield True, heading[1]
+                yield True, heading[1], number
         else:
             paragraph.append(line)
     if paragraph:
-        yield False, '\n'.join(paragraph)
+        yield False, '\n'.join(paragraph), first_line
 
 
 def parse_text_content(content):

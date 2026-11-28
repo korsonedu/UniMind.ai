@@ -59,6 +59,6 @@ export function NoteSources({ sources, content }: { sources: unknown; content: s
   const valid = sources.filter(isSource);
   if (!valid.length) return null;
   return <div className="mt-2 w-full" aria-label={t('笔记来源')}>
-    {valid.map(source => <SourceItem key={source.source_id} source={source} cited={content.includes(`[${source.source_id}]`)} />)}
+    {valid.map(source => <SourceItem key={source.source_id} source={source} cited={content.includes(`[${source.source_id}]`) || content.includes(`[${source.source_id}#L`)} />)}
   </div>;
 }
