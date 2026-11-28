@@ -653,9 +653,6 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
         round_prompt = prompt
         if experiment_prompt and any(tool['function']['name'] == 'build_learning_experiment' for tool in offered):
             round_prompt += experiment_prompt
-        if CONTINUATION_TOOL in offered:
-            round_prompt += ('\n需要等待学生补充必要信息、完成学生明确要求的选择，或保存尚未做完的明确步骤时，'
-                '用 save_learning_continuation 一次提交可显示的正文和待续信息。一般教学问答和已完成的请求直接答复。')
         if stopped_verifications:
             round_prompt += ('\n本轮已结束以下工具的校验：' + '、'.join(sorted(stopped_verifications))
                 + '。直接用正文和已有结果优先推进原任务。用户请求的形式无法交付时，只简短说明校验未完成，'
@@ -671,8 +668,10 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
             round_prompt += ('\n这是学生明确要求的分轮教学。提交本轮指定的一步和下一步摘要，保留原始条件。'
                 '到最后一步时沿用原要求和例子，一句收束即结束。正文严格只包含当前步，任何一步都无需确认、'
                 '另提新练习、新例子、其他主题或额外的下一轮请求。')
+        history_excerpt_chars = 800
         while not card_reply and not local_round:
-            excerpts = [{**row, 'content': row['content'][:800]} for row, *_ in history]
+            excerpts = [{**row, 'content': row['content'][:history_excerpt_chars]} for row, *_ in history[:-2]]
+            excerpts.extend({**row, 'content': row['content'][:800]} for row, *_ in history[-2:])
             model_context = {**source_context, 'history': excerpts}
             if pace:
                 model_context['paced_learning_step'] = pace
@@ -682,11 +681,20 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
                 model_context['learning_continuation'] = {**continuation, 'resolution': resolution}
             if selected_sources:
                 model_context['workbench'] = selected_sources
-            messages[0]['content'] = round_prompt + format_task_context(model_context)
+            continuation_instruction = ('\n需要等待学生补充必要信息、完成学生明确要求的选择，或保存尚未做完的明确步骤时，'
+                '用 save_learning_continuation 一次提交可显示的正文和待续信息。一般教学问答和已完成的请求直接答复。'
+                if CONTINUATION_TOOL in offered else '')
+            messages[0]['content'] = round_prompt + continuation_instruction + format_task_context(model_context)
             reply_messages = messages[:2] if stopped_verifications else messages
             request_bytes = len(json.dumps({'messages': reply_messages, 'tools': offered}, ensure_ascii=False).encode())
             if request_bytes <= policy['max_request_bytes']:
                 break
+            if not (pace or continuation) and CONTINUATION_TOOL in offered:
+                offered = [tool for tool in offered if tool != CONTINUATION_TOOL]
+                continue
+            if len(history) > 2 and history_excerpt_chars == 800:
+                history_excerpt_chars = 640
+                continue
             if not history:
                 raise ULRTurnUnavailable('本轮问题和资料超过可处理范围，请缩短问题或减少材料后重试。')
             # Keep the newest exchanges together when dropping older context.
