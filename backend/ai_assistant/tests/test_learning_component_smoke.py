@@ -78,8 +78,10 @@ def test_cross_subject_components_and_private_reuse(auth_client, user, settings)
         if message == reuse:
             template = LearningComponentTemplate.objects.get(owner=user)
             assert str(template.pk) in messages[0]['content']
-            return tool('build_learning_experiment', {'template_id': template.pk})
+            return tool('build_learning_experiment', {'template_id': template.pk,
+                'fallback_text': '想一想同一物体换到另一颗星球时，质量和重力分别怎么变。'})
         return tool('build_learning_experiment', {'title': message[:25], 'component': specs[message],
+            'fallback_text': '先用默认参数算一遍，再改变一个条件比较结果。',
             'save_template': message == examples[0][0]})
 
     async def consume(response):
@@ -146,7 +148,7 @@ def test_authoring_stays_connected_past_original_deadline(auth_client, user, set
             assert result['preview']['layout_checked'] and result['preview']['ok'], result
             return {'choices': [{'finish_reason': 'stop', 'message': {'content': '可以开始操作了。'}}]}
         assert 'build_learning_experiment' in {tool['function']['name'] for tool in kwargs['tools']}
-        arguments = {'title': '书签计数', 'component': {
+        arguments = {'title': '书签计数', 'fallback_text': '每本需要两张书签，三本一共需要六张。', 'component': {
             'sliders': [{'id': 'books', 'label': '书的数量', 'min': 1, 'max': 10, 'value': 3}],
             'outputs': [{'id': 'bookmarks', 'label': '书签数量',
                          'expression': {'op': 'mul', 'args': ['books', 2]}}],

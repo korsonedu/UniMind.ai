@@ -652,7 +652,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
         if remaining <= 0 or len(offered) > 8:
             raise ULRTurnUnavailable()
         offered = [{**tool, 'function': {**tool['function'], 'parameters': {
-            **tool['function']['parameters'], 'required': [*tool['function']['parameters']['required'], 'fallback_text'],
+            **tool['function']['parameters'], 'required': [*tool['function']['parameters'].get('required', []), 'fallback_text'],
         }}} if tool['function']['name'] == 'build_learning_experiment' else tool for tool in offered]
         round_prompt = prompt
         if experiment_prompt and any(tool['function']['name'] == 'build_learning_experiment' for tool in offered):
