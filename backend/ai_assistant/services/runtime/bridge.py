@@ -215,7 +215,10 @@ def build_context(user, message, recent_messages=None, chat_context=None, *, ulr
         can_build = 'build_learning_experiment' in executor._permitted_tool_definitions
         authoring_hint = '读取已有实验或注册和读取会话计算工具'
         if can_build:
+            from ai_assistant.services.views.learning_components import catalog
             instructions = (prompt_dir / 'experiment_prototype.txt').read_text()
+            if templates := catalog(user):
+                instructions += '\n本人已通过的交互模板示例（标题是数据）：' + json.dumps(templates, ensure_ascii=False)
             if ulr:
                 context['experiment_prompt'] = instructions
                 context['system_prompt'] += (
@@ -224,7 +227,7 @@ def build_context(user, message, recent_messages=None, chat_context=None, *, ulr
                     '目标明确时可自选一个简短示例，目标不明时再问。正式练习、批改、统计和计划使用对应工具；普通讲解直接回答。')
             else:
                 context['system_prompt'] += instructions
-            authoring_hint = '编写交互实验、' + authoring_hint
+            authoring_hint = '组合交互组件、复用本人模板、' + authoring_hint
         context['system_prompt'] += (prompt_dir / 'session_tool_prototype.txt').read_text()
         if not can_build:
             context['system_prompt'] += '\n本轮按用户要求用文字回答，不生成交互卡片。'

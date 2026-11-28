@@ -881,6 +881,16 @@ class LearningResource(models.Model):
         constraints = [models.UniqueConstraint(fields=['user', 'url_hash'], name='learning_resource_user_url')]
 
 
+class LearningComponentTemplate(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    title = models.CharField(max_length=100)
+    digest = models.CharField(max_length=64)
+    specification = models.JSONField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['owner', 'digest'], name='unique_learning_component_template')]
+
+
 class LearningStrategy(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     source_event = models.OneToOneField(ProjectLearningEvent, on_delete=models.CASCADE)

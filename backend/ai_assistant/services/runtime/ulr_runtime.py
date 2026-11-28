@@ -190,6 +190,8 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
                                 workbench_tools=workbench_tools)
         prompt = context['system_prompt']
         experiment_prompt = context.get('experiment_prompt', '')
+        if experiment_prompt and context.get('routing', {}).get('initial_group') in ('authoring', 'interactive'):
+            deadline = started_at + 120
         memory, tools, groups = context['memory'], context['tools'], context['tool_groups']
         available_tools = context['available_tools']
         registry = context.get('session_registry', {})
@@ -401,7 +403,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
         return json.dumps(result, ensure_ascii=False)
 
     def accept_tool_result(outcome, call):
-        nonlocal card_reply, buffer_reply, next_continuation, experiment_fallback
+        nonlocal card_reply, buffer_reply, deadline, next_continuation, experiment_fallback
         nonlocal artifacts, registry, pending_tools, project_change, program_phase, active_program, practice_point, program_repair
         name = outcome.call.name
         submitted = outcome.call.arguments
@@ -530,6 +532,8 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
                 active_program, program_phase = program, 'selected'
             else:
                 pending_tools = groups[result['group']]['tools']
+                if any(tool['function']['name'] == 'build_learning_experiment' for tool in pending_tools):
+                    deadline = started_at + 120
         if prepares_project_change(name, outcome.call.arguments):
             arguments = bind_task_strategy(outcome.call.arguments) if name == TASK_TOOL else outcome.call.arguments
             project_change = PreparedProjectChange(name, arguments, memory['version'], result.pop('_ulr_project_ticket', None))
@@ -654,7 +658,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
         if remaining <= 0 or len(offered) > 8:
             raise ULRTurnUnavailable()
         offered = [{**tool, 'function': {**tool['function'], 'parameters': {
-            **tool['function']['parameters'], 'required': [*tool['function']['parameters']['required'], 'fallback_text'],
+            **tool['function']['parameters'], 'required': [*tool['function']['parameters'].get('required', []), 'fallback_text'],
         }}} if tool['function']['name'] == 'build_learning_experiment' else tool for tool in offered]
         round_prompt = prompt
         if any(row['kind'] != 'note' for row in citation_rows):
@@ -739,7 +743,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
                 response = AIEngine.call_provider(request_messages, operation=policy['operation'],
                     tools=offered or None, tool_choice=('required' if forced_tool and not local_round else 'auto') if offered else None,
                     max_tokens=policy['max_tokens'],
-                    timeout_seconds=min(20, remaining), max_retries=0, raise_on_error=True,
+                    timeout_seconds=min(35 if deadline > started_at + 60 else 20, remaining), max_retries=0, raise_on_error=True,
                     on_text=stream_reply, tool_aliases=advertised_programs)
             except AICallError as exc:
                 raise ULRTurnUnavailable() from exc
@@ -747,6 +751,9 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
             finish = choice.get('finish_reason')
             assistant = choice.get('message') or {}
             calls = AIEngine._extract_tool_calls(response)
+        if (any(tool['function']['name'] == 'build_learning_experiment' for tool in offered)
+                and any(call.get('function', {}).get('name') == 'build_learning_experiment' for call in calls)):
+            deadline = started_at + 120
         check_active()
         require_current_transcript_sources(transcript_sources)
         require_visible_practice_review_sources(user, practice_reviews)

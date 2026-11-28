@@ -7,10 +7,12 @@ from time import monotonic
 from uuid import uuid4
 
 from django.conf import settings
+from django.db import transaction
 from jsonschema import Draft202012Validator, FormatChecker
 from rest_framework.exceptions import APIException, NotFound, PermissionDenied, ValidationError
 
 from ai_assistant.models import AIChatMessage
+from ai_assistant.services.views import learning_components
 from ai_engine.observability import log_ai_operation
 
 
@@ -148,19 +150,22 @@ window.addEventListener('DOMContentLoaded', () => {
         ).replace('INITIAL_STATE', initial) + html + '</body></html>'
 
 
-def preview(html, state, checks, *, current=None):
+def preview(html, state, checks, *, current=None, initial_selector=None):
     from .learning_worker import run
-    visual = getattr(settings, 'UNIMIND_LEARNING_VISUAL_REVIEW_ENABLED', False)
+    visual = initial_selector is None and getattr(settings, 'UNIMIND_LEARNING_VISUAL_REVIEW_ENABLED', False)
     started = monotonic()
     try:
         report = run('learning_experiment_preview.py', {
             'document': experiment_document(html, state), 'checks': checks,
-            'capture_screenshots': visual}, max_output_bytes=4 * 1024 * 1024 if visual else 65536)
+            'capture_screenshots': visual, **({'initial_selector': initial_selector} if initial_selector else {})},
+            max_output_bytes=4 * 1024 * 1024 if visual else 65536)
     except (subprocess.TimeoutExpired, OSError, ValueError) as error:
         log_ai_operation('assistant.experiment.browser_preview', False,
             (monotonic() - started) * 1000, type(error).__name__)
         return {'ok': False, 'errors': ['浏览器预览不可用或超时，请缩短代码并检查运行环境。'], 'checks': []}
     frames = report.pop('screenshots', [])
+    if initial_selector and report['ok'] and not report.get('layout_checked'):
+        report.update(ok=False, errors=['浏览器执行器尚未同步组件检查协议。'])
     if not report['ok']:
         failed_checks = [
             {'index': index, 'action': check['action'], 'selector': check['selector'],
@@ -208,6 +213,10 @@ def execute(user, name, arguments, chat_context, *, artifacts=None):
     anchor = anchor_for(user, current.conversation_id, artifacts=artifacts)
     experiment_id = arguments.get('experiment_id')
     if name == 'read_learning_experiment':
+        if 'template_query' in arguments:
+            return {'templates': learning_components.catalog(user, arguments['template_query'])}
+        if 'template_id' in arguments:
+            return learning_components.template_for(user, arguments['template_id'])
         return load_experiment(anchor, experiment_id)
     existing_experiments = anchor.metadata.get('learning_experiments', {})
     if not existing_experiments:
@@ -220,7 +229,18 @@ def execute(user, name, arguments, chat_context, *, artifacts=None):
         raise ExperimentConflict()
     if not previous and len(existing_experiments) >= 6:
         raise ValidationError('本原型每个对话最多创建 6 个实验，请修改已有实验。')
-    report = preview(arguments['html'], previous['state'] if previous else {}, arguments['checks'], current=current)
+    state = previous['state'] if previous else {}
+    component = arguments.get('component')
+    title = arguments.get('title')
+    if 'template_id' in arguments:
+        template = learning_components.template_for(user, arguments['template_id'])
+        component, title = template['component'], title or template['title']
+    if component is not None:
+        html, checks, initial_selector = learning_components.compile_component(component, state)
+        report = preview(html, state, checks, current=current, initial_selector=initial_selector)
+    else:
+        html, checks = arguments['html'], arguments['checks']
+        report = preview(html, state, checks, current=current)
     if not report['ok']:
         status = report.get('visual_review', {}).get('status')
         if status in {'unavailable', 'budget_exhausted'}:
@@ -238,14 +258,23 @@ def execute(user, name, arguments, chat_context, *, artifacts=None):
     latest = load_experiment(anchor, experiment_id) if previous else None
     if latest and latest['revision'] != previous['revision']:
         raise ExperimentConflict()
-    if (latest and getattr(settings, 'UNIMIND_LEARNING_VISUAL_REVIEW_ENABLED', False)
+    if (latest and (component is not None or getattr(settings, 'UNIMIND_LEARNING_VISUAL_REVIEW_ENABLED', False))
             and latest['state_version'] != previous['state_version']):
         raise ExperimentConflict('审查期间参数已变化，请重新读取并检查当前卡片。')
-    experiment = {'experiment_id': experiment_id, 'title': arguments['title'], 'html': arguments['html'],
+    experiment = {'experiment_id': experiment_id, 'title': title, 'html': html,
         'revision': previous['revision'] + 1 if previous else 1,
         'state': latest['state'] if latest else {}, 'state_version': latest['state_version'] if latest else 0,
-        'checks': arguments['checks'], 'preview': report}
-    save_experiment(anchor, experiment_id, experiment, artifacts=artifacts)
+        'checks': checks, 'preview': report}
+    if component is not None:
+        experiment.update(component=component, save_template=arguments.get('save_template', False))
+    if 'template_id' in arguments:
+        experiment['template_id'] = arguments['template_id']
+    if artifacts is None and experiment.get('save_template'):
+        with transaction.atomic():
+            save_experiment(anchor, experiment_id, experiment)
+            learning_components.persist_template(user, experiment)
+    else:
+        save_experiment(anchor, experiment_id, experiment, artifacts=artifacts)
     return {'experiment_id': experiment_id, 'revision': experiment['revision'], 'preview': report,
         'visual': {'type': 'learning_experiment', 'payload': {
             'title': experiment['title'], 'experiment_id': experiment_id,
@@ -266,9 +295,12 @@ def conversation_experiments(user, conversation_id):
 EXPERIMENT_TOOLS = [
     {'type': 'function', 'function': {
         'name': 'build_learning_experiment',
-        'description': '为当前学习目标制作可操作的演示、模拟或探索卡片。根据用户想做的操作和上下文判断；仅需文字讲解、正式作答或计分、统计、报告、计划时使用对应能力。通过检查后挂载当前对话。自包含HTML/CSS/JavaScript，无外部资源；沿用平台CSS变量及控件样式；布局紧凑清晰、宽度自适应（高度随内容自动展开，参数控件建议2到4个），长解释放聊天正文。失败返回诊断；更新前先read并沿用ID和版本。用unimind.getState()/setState(object)保存演示状态，report(简短观察)准备讲解线索；不修改学习记录。checks至少检查一个真实控件与结果。',
+        'description': '为当前目标创建可操作的演示、模拟或探索卡片。优先用 title 和 component 组合基础交互，平台负责渲染和检查。可用 template_id 调用本人已通过的规格。基础能力覆盖不到时，用 title、html、checks 写自包含的自定义实验，无外部资源。正式作答、计分、统计和计划使用对应工具。修改前读取已有实验并沿用 ID 和版本。',
         'parameters': {'type': 'object', 'additionalProperties': False, 'properties': {
             'title': {'type': 'string', 'minLength': 1, 'maxLength': 100},
+            'component': learning_components.SPEC,
+            'template_id': {'type': 'integer', 'minimum': 1, 'description': '本人模板目录提供的 ID。'},
+            'save_template': {'type': 'boolean', 'description': '仅对经验证的结构化组件生效。可复用且不含私密材料时设为 true。'},
             'html': {'type': 'string', 'minLength': 1, 'maxLength': 24000},
             'fallback_text': {'type': 'string', 'minLength': 1, 'maxLength': 5000, 'pattern': r'\S',
                 'description': '卡片无法交付时可直接显示的正文。完成当前目标可做的部分，保留已选参数和原题材，无需询问或提到内部检查。'},
@@ -286,9 +318,15 @@ EXPERIMENT_TOOLS = [
                     'expect_text': {'type': 'string', 'maxLength': 300,
                         'description': '可选。目标应包含的实际文字；空字符串检查目标文字为空。'}},
                 'required': ['selector', 'action', 'expect_selector']}}},
-            'required': ['title', 'html', 'checks']}}},
+            'oneOf': [{'required': ['title', 'html', 'checks']}, {'required': ['title', 'component']},
+                      {'required': ['template_id']}],
+            'dependentRequired': {'html': ['checks'], 'checks': ['html']},
+            'dependentSchemas': {'html': {'not': {'required': ['save_template']}}}}}},
     {'type': 'function', 'function': {'name': 'read_learning_experiment',
-        'description': '读取当前对话内实验的源代码、版本、学生操作状态和上次浏览器检查。修改已有实验前先读取，保持原 experiment_id 和已有状态字段。',
+        'description': '用 experiment_id 读取本对话实验。用 template_id 读取本人已通过的模板规格，或用 template_query 按标题查找自己的模板（空字符串列最近的模板）。',
         'parameters': {'type': 'object', 'additionalProperties': False,
-            'properties': {'experiment_id': {'type': 'string', 'format': 'uuid'}}, 'required': ['experiment_id']}}},
+            'properties': {'experiment_id': {'type': 'string', 'format': 'uuid'},
+                           'template_id': {'type': 'integer', 'minimum': 1},
+                           'template_query': {'type': 'string', 'maxLength': 100}},
+            'oneOf': [{'required': [key]} for key in ('experiment_id', 'template_id', 'template_query')]}}},
 ]

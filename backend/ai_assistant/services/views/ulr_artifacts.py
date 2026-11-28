@@ -1,6 +1,9 @@
 """Keep model-authored conversation assets private until the answer commits."""
+from django.db import transaction
+
 from ai_assistant.models import AIChatMessage
 from ai_assistant.services.learning_experiments import ExperimentConflict, anchor_for
+from ai_assistant.services.views.learning_components import persist_template
 
 
 class TurnArtifacts:
@@ -22,6 +25,7 @@ class TurnArtifacts:
         original = self.changes[key][0] if key in self.changes else anchor.metadata.get(key, {})
         self.changes[key] = original, updated
 
+    @transaction.atomic
     def commit(self, user, conversation_id):
         if not self.changes:
             return
@@ -30,3 +34,8 @@ class TurnArtifacts:
         updated = self.overlay(anchor).metadata
         if not AIChatMessage.objects.filter(pk=anchor.pk, metadata=original).update(metadata=updated):
             raise ExperimentConflict()
+        if 'learning_experiments' in self.changes:
+            before, after = self.changes['learning_experiments']
+            for key, item in after.items():
+                if item.get('save_template') and before.get(key) != item:
+                    persist_template(user, item)
