@@ -221,12 +221,12 @@ export const MainLayout: React.FC = () => {
   const sidebarAvailable = workbenchAvailable || learningPathAvailable || projectChatAvailable || notesAvailable || courseSidebarAvailable || savedCoursesAvailable;
   const sidebarVisible = notesOpen && sidebarAvailable && (!workbenchView || workbenchAvailable);
   const activeSidebarView = workbenchView ? (workbenchAvailable ? workbenchView : 'home') : sidebarView === 'learning-path' ? (learningPathAvailable ? sidebarView : 'home') : (projectChatAvailable && sidebarView === 'chat') || courseSidebarAvailable || sidebarView === 'notes' || (savedCoursesAvailable && sidebarView === 'saved-courses') ? sidebarView : 'home';
-  useEffect(() => {
-    if (workbenchView && !workbenchAvailable) {
-      closeNotes();
-      setSidebarView('home');
-    }
-  }, [closeNotes, workbenchAvailable, workbenchView]);
+  if (workbenchView && !workbenchAvailable) {
+    setNotesOpen(false);
+    setSidebarFullscreen(false);
+    setSidebarPreview(null);
+    setSidebarView('home');
+  }
   useEffect(() => {
     if (isMobile && sidebarVisible && workbenchView) document.getElementById(`sidebar-tab-${workbenchView}`)?.focus({ preventScroll: true });
   }, [isMobile, sidebarVisible, workbenchView]);
