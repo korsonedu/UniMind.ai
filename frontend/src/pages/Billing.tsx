@@ -37,7 +37,7 @@ export function BillingPage() {
       <section><h2 className="font-medium">{t('当前身份')}</h2><p className="mt-3">{access.ai_usage.unlimited ? t('管理员') : access.is_course_student ? t('课程学员') : t('注册学生')}</p><p className="mt-2 text-sm text-muted-foreground">{access.is_course_student ? t('课程访问权限与服务日期以当前授权为准。') : t('可以观看公开课并使用基础小宇问答额度，购买 AI 加量不会开通课程。')}</p>
         {access.cohort ? <div className="mt-3 space-y-1 text-sm"><p>{access.cohort.name} · {access.cohort.target_year}{t('届 ·')} {cohortStates[access.cohort.state]}</p><p>{t('服务日期：')}{access.cohort.starts_on} {t('至')} {access.cohort.ends_on}{t('（上海日期，含结束当日）')}</p><p>{t('实际考试日期：')}{access.cohort.exam_date || t('待教研设置')}</p>{!access.cohort.service_active && <p className="text-muted-foreground">{t('该批次当前未向此账号提供全权益，历史学习记录保留。')}</p>}</div> : access.is_course_student && !access.ai_usage.unlimited && <p className="mt-3 text-sm text-muted-foreground">{t('沿用原手工课程授权，尚未分配年度批次；请联系我们核对服务日期。')}</p>}
       </section>
-      {referralExpiry && Date.parse(referralExpiry) > Date.now() && <section>
+      {referralExpiry && <section>
         <h2 className="font-medium">{t('好友邀请会员')}</h2>
         <p className="mt-2 text-sm text-muted-foreground">{t('有效至 {0}', { 0: learningReset(referralExpiry) })}</p>
       </section>}
