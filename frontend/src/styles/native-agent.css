@@ -13,7 +13,6 @@
 .um-agent-directory-content { width: 100%; height: 100%; }
 .um-agent-directory-content .um-agent-sessions { width: var(--um-directory-content-width); }
 .um-agent-directory-toggle { display: inline-flex; }
-.um-agent-workspace[data-directory-hidden='true'] .um-agent-toolbar-new { display: inline-flex; }
 .um-agent-work-panels { display: flex; flex: 1; min-height: 0; min-width: 0; }
 .um-agent-conversation { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .um-agent-activity[hidden] { display: none; }
@@ -23,7 +22,6 @@
 .um-agent-toolbar > div { display: flex; align-items: center; min-width: 0; gap: 8px; }
 .um-agent-toolbar > div:first-child { flex: 1; }
 .um-agent-toolbar-actions { flex-shrink: 0; }
-.um-agent-toolbar-actions .um-agent-toolbar-new { display: none; }
 .um-agent-button { display: inline-flex; gap: 6px; align-items: center; justify-content: center; border: 1px solid var(--um-color-border); background: var(--um-color-surface); border-radius: 8px; min-height: 34px; padding: 6px 12px; cursor: pointer; transition: background-color var(--um-motion-fast), border-color var(--um-motion-fast), color var(--um-motion-fast), transform var(--um-motion-fast); }
 .um-agent-button:hover:not(:disabled) { background: var(--um-color-hover); }
 .um-agent-button:active:not(:disabled) { transform: scale(.98); }
@@ -36,6 +34,7 @@
 .um-agent-icon-button { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--um-radius-control); color: var(--um-color-text-muted); cursor: pointer; transition: background-color var(--um-motion-fast), color var(--um-motion-fast); }
 .um-agent-icon-button:hover { color: var(--um-color-text); background: var(--um-color-hover); }
 .um-agent-session-actions { display: flex; gap: 4px; padding: 0 12px 8px; }
+.um-agent-sessions > header .um-agent-session-actions { flex-shrink: 0; padding: 0; }
 .um-agent-section-label { display: flex; align-items: center; justify-content: space-between; min-height: 32px; margin-top: 8px; padding-left: 8px; color: var(--um-color-text-muted); font-size: 12px; }
 .um-agent-section-label .um-agent-icon-button { width: 26px; height: 26px; }
 .um-agent-project-heading { display: flex; align-items: center; border-radius: var(--um-radius-control); transition: background-color var(--um-motion-fast); }
@@ -164,17 +163,13 @@
 .um-agent-composer textarea::placeholder { color: var(--um-color-text-muted); }
 .um-agent-composer footer { display: flex; align-items: center; justify-content: space-between; padding: 0 10px 10px; }
 .um-agent-composer footer button { min-width: 36px; }
-.um-agent-composer .um-agent-task-trigger { border-color: transparent; background: transparent; color: var(--um-color-text-muted); }
-.um-agent-composer .um-agent-task-trigger:hover { color: var(--um-color-text); background: var(--um-color-hover); }
 .um-agent-composer .um-agent-send { padding: 0; width: 36px; height: 36px; border-radius: 50%; }
 .um-agent-composer .um-agent-send:disabled { opacity: 1; color: var(--um-color-text-muted); background: var(--um-color-disabled); border-color: transparent; }
 .um-agent-start[data-project='true'] { gap: 18px; }
-.um-agent-start[data-project='true'] .um-agent-composer { --um-radius-composer: 12px; }
-.um-agent-start[data-project='true'] .um-agent-composer textarea { min-height: 38px; padding: 8px 12px 4px; }
-.um-agent-start[data-project='true'] .um-agent-composer footer { padding: 0 7px 6px; }
-.um-app-shell .um-agent-start[data-project='true'] .um-agent-composer footer button { min-height: 32px; min-width: 32px; }
-.um-agent-start[data-project='true'] .um-agent-composer .um-agent-task-trigger { padding: 4px 6px; }
-.um-agent-start[data-project='true'] .um-agent-composer .um-agent-send { width: 32px; height: 32px; }
+.um-agent-quota { display: inline-grid; place-items: center; flex-shrink: 0; width: 32px; height: 36px; padding: 0; border-radius: 50%; color: var(--um-color-text-muted); cursor: pointer; }
+.um-agent-quota:hover { background: var(--um-color-hover); }
+.um-agent-quota-low { color: var(--um-color-warning); }
+.um-agent-quota > span { width: 12px; height: 12px; border-radius: 50%; background: conic-gradient(currentColor var(--um-quota-remaining), color-mix(in srgb, currentColor 24%, transparent) 0); mask: radial-gradient(farthest-side, transparent calc(100% - 1px), #000 calc(100% - 1px)); }
 @keyframes um-agent-enter { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .um-agent-composer { animation: none; }
@@ -191,6 +186,22 @@
 .um-agent-chat-input .um-agent-send { border-radius: 50%; background: var(--um-color-accent); color: var(--um-color-on-accent); }
 .um-agent-chat-input .um-agent-send:disabled { background: var(--um-color-disabled); color: var(--um-color-text-muted); }
 .um-agent-chat-input > div > div > div { padding: 4px 12px 10px; }
+.um-agent-composer.um-agent-compact-composer { --um-composer-control-size: 36px; display: flex; align-items: flex-end; gap: 4px; padding: 4px; border-radius: 26px; }
+.um-agent-composer.um-agent-compact-composer textarea {
+  flex: 1; min-width: 0; min-height: var(--um-composer-control-size);
+  padding-block: max(2px, calc((var(--um-composer-control-size) - 1lh) / 2));
+  padding-inline: 14px 8px; border-radius: inherit;
+}
+.um-agent-compact-composer :is(footer, .um-agent-composer-actions) { flex-shrink: 0; gap: 2px; padding: 0; }
+.um-agent-compact-composer :is(footer, .um-agent-composer-actions) > button { width: var(--um-composer-control-size); height: var(--um-composer-control-size); min-width: var(--um-composer-control-size); min-height: var(--um-composer-control-size); }
+.um-agent-compact-send { display: grid; place-items: center; flex-shrink: 0; border-radius: 50%; cursor: pointer; }
+.um-agent-compact-send > span {
+  display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
+  background: var(--um-color-accent); color: var(--um-color-on-accent);
+}
+.um-agent-compact-send:hover:not(:disabled) > span { background: var(--um-color-accent-hover); }
+.um-agent-compact-composer .um-agent-compact-send:disabled { background: transparent; }
+.um-agent-compact-send:disabled > span { background: transparent; color: var(--um-color-text-muted); }
 .um-native-agent .um-native-chat-bubble { animation: none; }
 .um-native-chat-bubble > div { max-width: 92%; }
 .um-native-chat-bubble .prose { font-size: var(--um-font-chat); line-height: var(--um-line-chat); }
@@ -208,6 +219,15 @@
 .um-native-chat-bubble [data-native-message='assistant'] { border: 0; background: transparent; padding: 6px 0; font-size: var(--um-font-chat); }
 .um-agent-thinking-status { display: flex; align-items: center; gap: 8px; padding: 6px 0; color: var(--um-color-text-muted); font-size: 13px; }
 .um-agent-thinking-icon { display: block; flex: 0 0 24px; width: 24px; height: 24px; }
+.um-agent-message-list > * + * { margin-block-start: 16px; }
+.um-agent-message-list > .um-agent-step + .um-agent-step, .um-agent-message-list > .um-agent-step + .um-agent-thinking-status { margin-block-start: 3px; }
+.um-agent-step { color: var(--um-color-text-muted); font-size: 13px; }
+.um-agent-step-row { display: flex; align-items: center; gap: 6px; min-height: 22px; }
+.um-agent-step-icon { display: grid; flex: 0 0 24px; place-items: center; }
+.um-agent-step-label { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.um-agent-step-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.um-agent-step[data-step-status='queued'] .um-agent-step-icon { opacity: .55; }
+.um-agent-step[data-step-status='failed'] .um-agent-step-icon { color: var(--um-color-danger); }
 .um-native-chat-bubble [data-native-message='user'] { font-size: var(--um-font-chat); }
 .um-native-chat-bubble [data-native-message='user'] { background: var(--um-color-accent); color: var(--um-color-on-accent); border-radius: 14px; padding: 10px 14px; }
 .um-native-chat-bubble [data-native-message='user'] .prose, .um-native-chat-bubble [data-native-message='user'] .prose :is(p,strong,li,h1,h2,h3,h4,a,code) { color: var(--um-color-on-accent); }
@@ -236,11 +256,15 @@
 .um-agent-drawer { position: fixed; z-index: 121; padding: 0; top: 0; left: 0; height: 100dvh; max-width: 320px; width: min(320px,90vw); border-radius: 0 14px 14px 0; }
 .um-agent-drawer-history { height: 100%; }
 .um-agent-drawer .um-agent-sessions { min-width: 100%; max-width: 100%; }
+.um-agent-drawer .um-agent-sessions > header:has(.um-agent-session-actions) { padding-inline-end: 48px; }
 .um-agent-drawer-close { position: absolute; right: 10px; top: 9px; z-index: 10; padding: 8px; background: var(--um-color-context); }
 .um-native-dev-banner { height: 28px; font-size: 12px; padding: 4px 16px; background: var(--um-color-context); color: var(--um-color-text-muted); border-bottom: 1px solid var(--um-color-border); }
 .um-native-dev main { height: calc(100dvh - 28px); }
-@media(max-width:900px) { .um-agent-directory, .um-agent-directory-toggle { display: none; } .um-agent-toolbar-actions .um-agent-toolbar-new { display: inline-flex; } .um-agent-history-button { display: flex; padding: 6px; border-radius: 6px; } }
-@media(max-width:767px) { .um-learning-project-disclosure { flex-basis: 28px; } }
+@media(max-width:900px) { .um-agent-directory, .um-agent-directory-toggle { display: none; } .um-agent-history-button { display: flex; padding: 6px; border-radius: 6px; } }
+@media(max-width:767px) {
+  .um-learning-project-disclosure { flex-basis: 28px; }
+  .um-agent-composer.um-agent-compact-composer { --um-composer-control-size: 44px; }
+}
 @media(max-width:600px) {
   .um-native-agent { --um-font-chat: 15px; }
   .um-agent-session-menu { opacity: 1; }
@@ -252,8 +276,6 @@
   .um-native-agent .um-agent-chat-input textarea { font-size: 16px; }
   .um-agent-toolbar { padding: 1px 12px; gap: 4px; }
   .um-agent-toolbar > div { gap: 4px; }
-  .um-agent-toolbar-new { width: 44px; height: 44px; padding: 0; border: 0; background: transparent; }
-  .um-agent-toolbar-new span { display: none; }
   .um-agent-history-button { min-width: 44px; min-height: 44px; padding: 0; justify-content: center; }
   .um-agent-start { padding: 72px 16px; }
   .um-agent-start-title { font-size: 24px; }
@@ -581,7 +603,7 @@
     opacity: 0.72;
   }
 
-  /* Floating Bottom Composer Dock — taut 48px flomo proportion, symmetrical bare icons when idle */
+  /* Keep the compact composer docked above the mobile safe area. */
   .um-agent-mobile-dock {
     position: relative;
     width: 100%;
@@ -598,10 +620,6 @@
     padding-block: 4px 8px;
   }
   .um-app-shell[data-mobile-xiaoyu] .um-agent-mobile-dock .um-agent-composer {
-    display: grid;
-    grid-template-columns: 40px minmax(0, 1fr) 40px;
-    column-gap: 2px;
-    align-items: end;
     padding: 3px 5px;
     border: 0;
     border-radius: 24px;
@@ -614,16 +632,12 @@
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--m-accent) 40%, transparent), var(--m-shadow-dock);
     background: var(--m-dock-bg);
   }
-  .um-agent-mobile-dock .note-mentions { grid-area: 1 / 1 / 2 / -1; min-width: 0; padding: 4px 8px 2px; }
+  .um-agent-mobile-dock .note-mentions { min-width: 0; padding: 4px 8px 2px; }
   .um-agent-mobile-dock .note-mention-chips { max-height: min(92px, calc(var(--um-viewport-height, 100dvh) * .18)); overflow-y: auto; overscroll-behavior-y: contain; }
   .um-agent-mobile-dock .note-mention-chip > svg { flex-shrink: 0; }
   .um-agent-mobile-dock .note-mention-menu { max-height: min(200px, calc(var(--um-viewport-height, 100dvh) * .25)); overscroll-behavior-y: contain; }
   .um-agent-mobile-dock .um-agent-composer textarea {
-    grid-area: 2 / 2;
-    min-height: 40px;
     max-height: min(160px, calc(var(--um-viewport-height, 100dvh) * .30));
-    padding: 9px 4px;
-    align-self: center;
     font-size: 16px;
     font-weight: 400;
     line-height: 22px;
@@ -635,67 +649,12 @@
     font-size: 15px;
     opacity: 1;
   }
-  .um-agent-mobile-dock .um-agent-composer footer { display: contents; }
-  .um-app-shell .um-agent-mobile-dock .um-agent-task-trigger {
-    grid-area: 2 / 1;
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
-    min-height: 40px;
-    padding: 0;
-    border: 0;
-    border-radius: 50%;
-    background: transparent;
-    color: var(--m-ink-secondary);
-  }
-  .um-app-shell .um-agent-mobile-dock .um-agent-task-trigger:active {
-    background: var(--m-surface-inset);
-    color: var(--m-ink);
-  }
-  .um-agent-mobile-dock .um-agent-task-trigger span { display: none; }
-  .um-app-shell .um-agent-mobile-dock .um-agent-composer .um-agent-send {
-    grid-area: 2 / 3;
-    position: relative;
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
-    min-height: 40px;
-    border: 0;
-    background: transparent;
-    transition: transform 120ms ease;
-  }
-  /* Idle state: bare delicate arrow symmetrical with left + (zero clunky grey circle) */
-  .um-agent-mobile-dock .um-agent-send::before {
-    content: '';
-    position: absolute;
-    inset: 4px;
-    border-radius: 50%;
-    background: transparent;
-    transform: scale(0.8);
-    opacity: 0;
-    transition: background-color 150ms ease, transform 160ms ease, opacity 150ms ease;
-  }
-  .um-agent-mobile-dock .um-agent-send:disabled {
-    background: transparent;
-    color: var(--m-ink-muted);
-    opacity: 0.65;
-  }
-  .um-agent-mobile-dock .um-agent-send:not(:disabled) {
-    color: var(--m-accent-ink);
-    opacity: 1;
-  }
-  .um-agent-mobile-dock .um-agent-send:not(:disabled)::before {
+  .um-agent-mobile-dock .um-agent-compact-send > span {
     background: var(--m-accent);
-    transform: scale(1);
-    opacity: 1;
+    color: var(--m-accent-ink);
   }
-  .um-agent-mobile-dock .um-agent-send:not(:disabled):active::before {
-    background: var(--m-accent-hover);
-    transform: scale(0.92);
-  }
-  .um-agent-mobile-dock .um-agent-send svg { position: relative; width: 17px; height: 17px; }
-  .um-agent-mobile-dock :is(.um-agent-send, .um-agent-task-trigger):focus-visible { outline-offset: -4px; }
-  .um-agent-mobile-dock .um-agent-quota-status[data-attention='false'] { display: none; }
+  .um-agent-mobile-dock .um-agent-compact-send:hover:not(:disabled) > span { background: var(--m-accent-hover); }
+  .um-agent-mobile-dock .um-agent-compact-send:disabled > span { background: transparent; color: var(--m-ink-muted); }
 
   /* Hide hero prompts cleanly when software keyboard opens on landing */
   .um-app-shell[data-mobile-xiaoyu][data-keyboard-open='true'] .um-agent-conversation:has(.um-agent-composer textarea:focus) .um-m-landing-prompts {

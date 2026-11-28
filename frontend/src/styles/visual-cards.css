@@ -40,6 +40,7 @@
 .um-visual-function-graph { min-width: 420px; height: 280px; }
 .um-visual-chart-tooltip { display: flex; gap: 4px; padding: 8px 12px; border: 1px solid var(--um-color-border); border-radius: 8px; background: var(--um-surface-1); box-shadow: var(--um-shadow-overlay); font-size: 12px; font-variant-numeric: tabular-nums; }
 .um-visual-actions button { min-height: 40px; border-radius: var(--um-radius-control); font-size: 13px; }
+.um-visual-actions .um-visual-choice { min-height: 32px; }
 .um-visual-actions button:hover:not(:disabled) { background: var(--um-color-hover); }
 .um-visual-actions [aria-pressed='true'] { background: var(--um-color-selected); border-color: transparent; color: var(--um-color-accent); }
 .um-visual-actions [aria-pressed='true'] :is(span, svg) { color: inherit; }
@@ -104,7 +105,7 @@
   .um-visual-data-value { max-width: 60%; text-align: right; }
   .um-visual-result-metrics { gap: 16px; }
   .um-visual-result-metrics dd { font-size: 24px; }
-  .um-visual-link, .um-visual-actions button { min-height: 44px; }
+  .um-visual-link, .um-visual-actions button, .um-visual-actions .um-visual-choice { min-height: 44px; }
   .um-visual-card .um-visual-body :is(input, textarea) { font-size: 16px; }
   .um-visual-card .um-inline-practice-nav button { width: 44px; height: 44px; }
   .um-visual-card .um-inline-practice-footer button { min-height: 44px; }

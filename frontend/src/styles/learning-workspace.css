@@ -68,19 +68,31 @@
 .um-work-empty { margin:auto; padding:32px; text-align:center; }
 .um-work-empty > button { display:block; margin:12px auto; }
 .um-work-mobile-chat { display:none; }
-.um-work-knowledge { display: grid; gap: 14px; min-width: 0; }
+.um-work-knowledge { display: grid; gap: 12px; min-width: 0; container-type: inline-size; }
 .um-work-knowledge-back {
   display: inline-flex; align-items: center; justify-self: start; gap: 6px;
-  color: var(--um-color-text-muted); cursor: pointer;
+  color: var(--um-color-text-muted); cursor: pointer; font-size: 12px;
 }
 .um-work-knowledge-back:hover { color: var(--um-color-text); }
 .um-work-knowledge-heading {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding-bottom: 12px; border-bottom: 1px solid var(--um-color-border);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
 }
+.um-path-canvas .um-work-knowledge-heading h2 { font-size: 20px; }
 .um-work-knowledge-heading p { color: var(--um-color-text-muted); font-size: 12px; margin-top: 3px; }
 .um-work-knowledge-heading button { flex-shrink: 0; }
+.um-work-knowledge-empty {
+  display: grid; justify-items: center; gap: 8px; padding: clamp(24px, 10cqi, 44px) 16px;
+  border: 1px solid var(--um-color-border); border-radius: var(--path-radius, 14px);
+  background: var(--um-color-surface); text-align: center;
+}
+.um-work-knowledge-empty p { max-width: 30em; color: var(--um-color-text-muted); font-size: 13px; }
+.um-work-knowledge-empty > button { margin-top: 8px; }
+.um-work-knowledge-illustration {
+  display: grid; place-items: center; width: 42px; height: 42px; margin-bottom: 4px;
+  border-radius: 12px; color: var(--um-color-accent); background: var(--um-color-accent-subtle);
+}
 .um-work-knowledge-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.um-work-knowledge .um-learning-text-button { display: inline-flex; align-items: center; gap: 5px; }
 .um-work-knowledge > :is(.um-agent-button, .um-learning-text-button) { justify-self: start; margin-top: 0; }
 .um-app-shell .um-path-canvas .um-work-knowledge :is(.um-work-knowledge-back, .um-agent-button, select) { min-height: 32px; }
 .um-work-knowledge .um-agent-button { padding: 4px 10px; line-height: 1.3; }
@@ -88,8 +100,30 @@
 .um-work-knowledge :is(.um-work-section-heading, .um-work-map-picker label, .um-work-relations, fieldset) { margin: 0; }
 .um-work-knowledge .um-work-map-picker select { padding: 4px 8px; }
 .um-work-knowledge .um-work-map-picker > button { justify-self: start; margin: 0; }
-.um-work-knowledge .um-work-node-evidence { display: grid; gap: 8px; min-width: 0; }
+.um-work-knowledge .um-work-map-picker:has(.um-work-knowledge-empty) > .um-work-knowledge-actions { justify-content: center; }
+.um-work-knowledge .um-work-node-index { gap: 6px; margin: 0; }
+.um-work-knowledge .um-work-node-index [aria-pressed='true'] { color: var(--um-color-accent); background: var(--um-color-selected); }
+.um-work-knowledge .um-work-relations {
+  align-items: stretch; gap: 8px; padding: 10px; border: 1px solid var(--um-color-border);
+  border-radius: var(--path-radius, 14px); background: var(--um-color-surface);
+}
+.um-work-knowledge .um-work-relations > div:not(.um-work-node-current) { padding: 8px 4px; }
+.um-work-knowledge .um-work-relations button { padding: 6px 8px; overflow-wrap: anywhere; }
+.um-work-knowledge .um-work-relations button:hover { background: var(--um-color-selected); }
+.um-work-knowledge .um-work-relations button svg { flex-shrink: 0; }
+.um-work-knowledge .um-work-node-current {
+  display: grid; align-content: center; justify-items: center; gap: 3px; padding: 12px 8px;
+  border-color: transparent;
+}
+.um-work-knowledge .um-work-node-current span { margin: 0; }
+.um-work-knowledge .um-work-node-evidence {
+  display: grid; gap: 8px; min-width: 0; margin: 0; padding: 12px;
+  border: 1px solid var(--um-color-border); border-radius: 10px; background: var(--um-color-surface);
+}
 .um-work-knowledge .um-work-node-evidence > .um-agent-button { justify-self: start; }
+@container (max-width: 360px) {
+ .um-work-knowledge .um-work-relations { grid-template-columns: 1fr; }
+}
 .um-work-stage-relations li { display: grid; gap: 4px; padding: 8px 0 10px; }
 .um-work-stage-relations li + li { border-top: 1px solid var(--um-color-border); }
 .um-work-stage-relations strong { font-weight: 600; }

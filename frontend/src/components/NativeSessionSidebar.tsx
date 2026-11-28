@@ -1,7 +1,7 @@
 import { getLocale, t, useLocale } from '@/i18n';
 import { useEffect, useId, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
-import { MagnifyingGlass, Plus, Trash, CaretRight, Folder, DotsThree, PencilSimple, PushPin, X } from '@phosphor-icons/react';
+import { MagnifyingGlass, Plus, Trash, CaretRight, Folder, DotsThree, PencilSimple, NotePencil, PushPin, X } from '@phosphor-icons/react';
 import { Collapse } from './ui/collapse';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
@@ -32,18 +32,19 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
   const [updating, setUpdating] = useState(false);
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const showProjectMode = !isPersonalWorkspace();
+  const personalSpace = isPersonalWorkspace();
   const newAction = searchParams.get('new');
+  const planNewProject = searchParams.get('planning') === '1' || !personalSpace;
   useEffect(() => {
     if (!['chat', 'project'].includes(newAction || '')) return;
     const timer = window.setTimeout(() => {
       if (!claimMenuRequest(location.key)) return;
       if (newAction === 'chat') onNew();
-      else setEditing({ name: '', instructions: initialInstructions || '', planning: showProjectMode });
-      setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete('new'); return next; }, { replace: true });
+      else setEditing({ name: '', instructions: initialInstructions || '', planning: planNewProject });
+      setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete('new'); next.delete('planning'); return next; }, { replace: true });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [newAction, location.key, onNew, setSearchParams, claimMenuRequest, showProjectMode]);
+  }, [newAction, location.key, onNew, setSearchParams, claimMenuRequest, planNewProject]);
   const projectsId = useId();
   const ordered = [...sessions].reverse().sort((a, b) => Number(!!b.isPinned) - Number(!!a.isPinned));
   const filtered = ordered.filter(session => [session.title, session.label, ...session.messages.map(message => message.content)].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
@@ -85,10 +86,8 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
     </DropdownMenu>
   </li></ContextMenuTrigger><ContextMenuContent className="um-native-menu" onCloseAutoFocus={event => { if (renaming) event.preventDefault(); }}>{sessionActions(session, true)}</ContextMenuContent></ContextMenu>;
   };
-  return <aside className="um-agent-sessions" aria-label={t('历史对话')}>
-    <header><h2>{t('对话')}</h2></header>
-    <div className="um-agent-session-actions">
-      <button className="um-agent-icon-button" data-session-new onClick={onNew} aria-label={t('开始新对话')} title={t('新对话')}><Plus size={18} /></button>
+  const directoryActions = <div className="um-agent-session-actions">
+      <button className="um-agent-icon-button" data-session-new onClick={onNew} aria-label={t('开始新对话')} title={t('新对话')}><NotePencil size={18} /></button>
       <Dialog.Root open={searchOpen} onOpenChange={open => { setSearchOpen(open); if (!open) setQuery(''); }}>
         <Dialog.Trigger asChild><button className="um-agent-icon-button" aria-label={t('搜索对话')} title={t('搜索对话')}><MagnifyingGlass size={18} /></button></Dialog.Trigger>
         <Dialog.Portal><Dialog.Overlay className="um-agent-search-overlay" /><Dialog.Content className="um-native-agent um-agent-search-dialog">
@@ -97,20 +96,22 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
           <nav aria-label={t('搜索结果')}><ul>{filtered.map(session => renderSession(session, true))}</ul>{!filtered.length && <p className="um-agent-empty">{query.trim() ? t('没有匹配的对话') : t('暂无对话')}</p>}</nav>
         </Dialog.Content></Dialog.Portal>
       </Dialog.Root>
-    </div>
+    </div>;
+  return <aside className="um-agent-sessions" aria-label={t('历史对话')}>
+    <header><h2>{t('对话')}</h2>{directoryActions}</header>
     <nav aria-label={t('会话列表')}>
       <>
-        <div className="um-agent-section-label"><span>{t('项目')}</span><button className="um-agent-icon-button" aria-label={t('创建项目')} title={t('创建项目')} disabled={controls.error} onClick={() => setEditing({ name: '', instructions: initialInstructions || '', planning: showProjectMode })}><Plus size={15} /></button></div>
+        <div className="um-agent-section-label"><span>{t('项目')}</span><button className="um-agent-icon-button" aria-label={t('创建项目')} title={t('创建项目')} disabled={controls.error} onClick={() => setEditing({ name: '', instructions: initialInstructions || '', planning: !personalSpace })}><Plus size={15} /></button></div>
         {controls.error && <button className="um-agent-project-retry" onClick={controls.reload}>{t('项目未加载，重试')}</button>}
         {controls.projects.map(project => {
           const closed = closedProjects.includes(project.id);
           const projectSessions = ordered.filter(session => session.projectId === project.id);
           return <section key={project.id} className="um-agent-project" aria-label={t('项目：{0}', { 0: project.name })}>
-            <div className="um-agent-project-heading group/project" data-current={controls.projectId === project.id}>
-              <button className="um-learning-project-disclosure" aria-label={t('{0}项目目录：{1}', { 0: closed ? t('展开') : t('收起'), 1: project.name })} aria-expanded={!closed} aria-controls={`${projectsId}-${project.id}`} onClick={() => setClosedProjects(previous => closed ? previous.filter(id => id !== project.id) : [...previous, project.id])}><CaretRight size={12} className="um-disclosure-chevron" /></button><button className="um-learning-project-entry" data-session-open onClick={() => controls.open(project.id)} aria-label={t('进入项目：{0}', { 0: project.name })} title={project.name}><Folder size={16} /><span>{project.name}</span></button>
-              <button className="um-agent-icon-button opacity-0 group-hover/project:opacity-100 group-focus-within/project:opacity-100 [@media(hover:none)]:opacity-100" data-session-new aria-label={t('在项目「{0}」中新建对话', { 0: project.name })} title={t('新建对话')} onClick={() => { setClosedProjects(previous => previous.filter(id => id !== project.id)); onNewInProject(project.id); }}><Plus size={17} /></button>
+            <div className="um-agent-project-heading" data-current={controls.projectId === project.id}>
+              <button className="um-learning-project-disclosure" aria-label={t('{0}项目目录：{1}', { 0: closed ? t('展开') : t('收起'), 1: project.name })} aria-expanded={!closed} aria-controls={`${projectsId}-${project.id}`} onClick={() => setClosedProjects(previous => closed ? previous.filter(id => id !== project.id) : [...previous, project.id])}><CaretRight size={12} className="um-disclosure-chevron" /></button><button className="um-learning-project-entry" data-session-open title={project.name} onClick={() => controls.open(project.id)} aria-label={t('进入项目：{0}', { 0: project.name })}><Folder size={16} /><span>{project.name}</span></button>
+              <button className="um-agent-icon-button" data-session-new aria-label={t('在项目「{0}」中新建对话', { 0: project.name })} title={t('新建对话')} onClick={() => { setClosedProjects(previous => previous.filter(id => id !== project.id)); onNewInProject(project.id); }}><NotePencil size={17} /></button>
               <DropdownMenu><DropdownMenuTrigger asChild><button className="um-agent-icon-button" aria-label={t('项目菜单：{0}', { 0: project.name })}><DotsThree size={18} /></button></DropdownMenuTrigger><DropdownMenuContent className="um-native-menu" align="start" onCloseAutoFocus={event => { if (editing) event.preventDefault(); }}>
-                <DropdownMenuItem data-session-new onSelect={() => { setClosedProjects(previous => previous.filter(id => id !== project.id)); onNewInProject(project.id); }}><Plus size={15} />{t('在项目中新建对话')}</DropdownMenuItem>
+                <DropdownMenuItem data-session-new onSelect={() => { setClosedProjects(previous => previous.filter(id => id !== project.id)); onNewInProject(project.id); }}><NotePencil size={15} />{t('在项目中新建对话')}</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setEditing({ id: project.id, name: project.name, instructions: project.instructions || '' })}><PencilSimple size={15} />{t('项目设置')}</DropdownMenuItem>
                 <DropdownMenuSeparator /><DropdownMenuItem className="um-agent-menu-danger" disabled={controls.pending} onSelect={() => setDeleting({ projectId: project.id, name: project.name })}><Trash size={15} />{t('删除项目')}</DropdownMenuItem>
               </DropdownMenuContent></DropdownMenu>
@@ -143,7 +144,7 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
         }}>
           <label>{t('项目名称')}<input autoFocus required aria-label={t('项目名称')} placeholder={t('例如：金融学考研复习')} maxLength={60} value={editing.name} disabled={controls.pending} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
           <label>{t('项目背景与要求（选填）')}<textarea aria-label={t('项目背景与要求')} maxLength={4000} rows={5} value={editing.instructions} disabled={controls.pending} onChange={event => setEditing({ ...editing, instructions: event.target.value })} /></label>
-          {showProjectMode && editing.id === undefined && <fieldset className="um-project-mode" disabled={controls.pending}>
+          {editing.id === undefined && <fieldset className="um-project-mode" disabled={controls.pending}>
             <legend>{t('项目模式')}</legend>
             <label><input type="radio" name="project-mode" checked={!editing.planning} onChange={() => setEditing({ ...editing, planning: false })} />{t('自由对话')}</label>
             <label><input type="radio" name="project-mode" checked={!!editing.planning} onChange={() => setEditing({ ...editing, planning: true })} />{t('规划模式')}</label>

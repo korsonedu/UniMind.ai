@@ -42,7 +42,7 @@ try {
     page_number: null, slide_number: null, start_seconds: 860.9, end_seconds: 880, companion_url: '/course/3?project=8&t=860',
   };
 
-  await test('个人项目进入三栏，个人自由对话和机构会话保留原布局', () => {
+  await test('仅个人项目进入工作台', () => {
     assert.equal(isPersonalWorkspace(), true);
     assert.equal(personalWorkbenchProjectId(8), 8);
     assert.equal(personalWorkbenchProjectId(null), null);
