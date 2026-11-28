@@ -164,7 +164,9 @@ def preview(html, state, checks, *, current=None):
     if not report['ok']:
         failed_checks = [
             {'index': index, 'action': check['action'], 'selector': check['selector'],
-                'expect_selector': check['expect_selector'], 'error': result.get('error', '').partition('\n')[0][:240]}
+                'expect_selector': check['expect_selector'], 'phase': result.get('phase'),
+                'matches': result.get('observed', {}).get('matches'),
+                'error': result.get('error', '').partition('\n')[0][:240]}
             for index, (check, result) in enumerate(zip(checks, report.get('checks', [])), start=1)
             if not result['ok']
         ]
@@ -277,9 +279,11 @@ EXPERIMENT_TOOLS = [
                     'selector': {'type': 'string', 'maxLength': 160},
                     'action': {'type': 'string', 'enum': ['click', 'input']},
                     'value': {'type': 'string', 'maxLength': 200},
-                    'expect_selector': {'type': 'string', 'maxLength': 160},
-                    'expect_text': {'type': 'string', 'minLength': 1, 'maxLength': 300}},
-                'required': ['selector', 'action', 'expect_selector', 'expect_text']}}},
+                    'expect_selector': {'type': 'string', 'minLength': 1, 'maxLength': 160,
+                        'description': '唯一匹配操作结果的 CSS 选择器。省略 expect_text 时，目标必须在操作后变为可见。'},
+                    'expect_text': {'type': 'string', 'maxLength': 300,
+                        'description': '可选。目标应包含的实际文字；空字符串检查目标文字为空。'}},
+                'required': ['selector', 'action', 'expect_selector']}}},
             'required': ['title', 'html', 'checks']}}},
     {'type': 'function', 'function': {'name': 'read_learning_experiment',
         'description': '读取当前对话内实验的源代码、版本、学生操作状态和上次浏览器检查。修改已有实验前先读取，保持原 experiment_id 和已有状态字段。',

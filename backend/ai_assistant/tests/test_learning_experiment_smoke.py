@@ -293,14 +293,42 @@ def test_preview_rejects_javascript_runtime_error():
     assert '运行失败' in report['errors']
 
 
-def test_preview_rejects_failed_control_check():
+@pytest.mark.parametrize('expected', ['已操作', ''])
+def test_preview_rejects_failed_control_check(expected):
     from ai_assistant.services.learning_experiment_preview import run
     report = run({'document': experiments.experiment_document('<button>操作</button>', {}), 'checks': [
-        {'selector': 'button', 'action': 'click', 'expect_selector': 'button', 'expect_text': '已操作'},
+        {'selector': 'button', 'action': 'click', 'expect_selector': 'button', 'expect_text': expected},
     ]})
     assert report['ok'] is False
     assert not report['errors']
     assert report['checks'][0]['ok'] is False
+    assert report['checks'][0]['observed'] == {'matches': 1, 'text': '操作'}
+
+
+def test_preview_checks_a_tile_moving_between_regions():
+    from ai_assistant.services.learning_experiment_preview import run
+    from ai_engine.tool_run import validate_declared_arguments
+
+    html = '''<div id="pool"><button id="first-tile">Nice to meet you!</button></div>
+    <section id="order"></section><button id="reset">重置</button>
+    <script>
+    const tile = document.querySelector('#first-tile');
+    const pool = document.querySelector('#pool');
+    const order = document.querySelector('#order');
+    tile.onclick = () => order.append(tile);
+    document.querySelector('#reset').onclick = () => pool.append(tile);
+    </script>'''
+    checks = [
+        {'selector': '#pool #first-tile', 'action': 'click', 'expect_selector': '#order #first-tile'},
+        {'selector': '#reset', 'action': 'click', 'expect_selector': '#order', 'expect_text': ''},
+    ]
+    schema = experiments.EXPERIMENT_TOOLS[0]['function']['parameters']
+    assert validate_declared_arguments(schema, {'title': '对话排序', 'html': html, 'checks': checks}) is None
+    document = experiments.experiment_document(html, {})
+    assert run({'document': document, 'checks': checks})['ok']
+    already_visible = {**checks[0], 'expect_selector': '#pool #first-tile'}
+    report = run({'document': document, 'checks': [already_visible]})
+    assert not report['ok'] and report['checks'][0]['phase'] == 'precondition'
 
 
 def test_preview_rejects_blank_render():

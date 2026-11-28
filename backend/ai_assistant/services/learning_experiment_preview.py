@@ -5,7 +5,7 @@ import json
 import subprocess
 import sys
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Error, expect, sync_playwright
 
 
 def run(data):
@@ -77,7 +77,13 @@ def run(data):
             check_render(360, phase='initial')
             check_render(700)
         for index, check in enumerate(data['checks']):
+            target = frame.locator(check['expect_selector'])
+            expected_text = check.get('expect_text')
+            phase = 'precondition'
             try:
+                if expected_text is None and target.is_visible():
+                    raise ValueError('目标在操作前已可见，请选择仅在结果状态下出现的元素。')
+                phase = 'action'
                 control = frame.locator(check['selector'])
                 if check['action'] == 'click':
                     control.click()
@@ -87,13 +93,29 @@ def run(data):
                         element.dispatchEvent(new Event('input', {bubbles:true}));
                         element.dispatchEvent(new Event('change', {bubbles:true}));
                     }''', check.get('value', ''))
-                from playwright.sync_api import expect
-                expect(frame.locator(check['expect_selector'])).to_contain_text(check['expect_text'], timeout=1200)
-                results.append({'selector': check['selector'], 'ok': True})
+                phase = 'assertion'
+                if expected_text is None:
+                    expect(target).to_be_visible(timeout=1200)
+                elif expected_text == '':
+                    expect(target).to_have_text('', timeout=1200)
+                else:
+                    expect(target).to_contain_text(expected_text, timeout=1200)
                 if capture:
+                    phase = 'render'
                     check_render(700, phase=f'check-{index + 1}')
+                results.append({'selector': check['selector'], 'ok': True})
             except Exception as error:
-                results.append({'selector': check['selector'], 'ok': False, 'error': str(error)[:600]})
+                failure = {'selector': check['selector'], 'ok': False, 'phase': phase,
+                           'expect_selector': check['expect_selector'], 'error': str(error)[:600]}
+                if phase in ('precondition', 'assertion'):
+                    try:
+                        failure['observed'] = target.evaluate_all('''elements => ({
+                            matches: elements.length,
+                            text: (elements[0]?.textContent ?? '').trim().slice(0, 300)
+                        })''')
+                    except Error:
+                        pass
+                results.append(failure)
         check_render(700)
         check_render(360, phase='final')
         messages = page.evaluate('window.experimentMessages || []')
