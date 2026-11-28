@@ -7,6 +7,7 @@ import './styles/course-workspace.css'
 import './styles/course-portal.css'
 import './styles/disclosure.css'
 import './styles/ui-refinements.css'
+import './styles/mobile-system.css'
 import { initializeSystemAppearance } from './store/useSystemStore'
 
 if (navigator.userAgent.includes('Electron/')) {

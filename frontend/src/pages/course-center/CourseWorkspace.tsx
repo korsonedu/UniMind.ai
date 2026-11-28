@@ -5,7 +5,8 @@ import { WorkspaceToolbar } from '@/components/WorkspaceToolbar';
 import { RightSidebarLayoutContext } from '@/components/WorkspaceContext';
 import { useContext, useEffect, useState, type CSSProperties } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { SidebarSimple, X } from '@phosphor-icons/react';
+import { SidebarSimple, X, CaretDown, MagnifyingGlass, ListBullets } from '@phosphor-icons/react';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import api from '@/lib/api';
 import { VideoLesson } from '@/pages/VideoLesson';
@@ -21,6 +22,7 @@ type ApiCourse = Omit<Course, 'tags'> & { album?: { id: number; name: string }; 
 export function CourseCenter() {
   useLocale();
   const { id } = useParams();
+  const isPhone = useIsMobile();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const projectId = Number(params.get('project')) || null;
@@ -113,10 +115,51 @@ export function CourseCenter() {
   };
   const directory = <CourseTree courses={courses} treeCourses={visible} selectedId={id ? Number(id) : undefined} loading={loading} error={error} query={query} grouping={grouping} filter={filter} tag={tags[0] || ''} status={status} scope={scope} filtersActive={!!(tags.length || filter || status !== 'all' || scope !== 'all' || ordering !== 'sort_order')} onResetFilters={resetFilters} onQueryChange={setQuery} onFacet={changeFacet} onFilter={(value, group) => { const next = new URLSearchParams(params); next.set('group', group || grouping); next.set('filter', value); navigate(`/courses?${next}`); setListOpen(false); }} onSelect={open} onRetry={retry}
     extraFilters={<label>{t('课程排序')}<SelectField value={ordering} onValueChange={value => setOrdering(value)}><SelectOption value="sort_order">{t('默认排序')}</SelectOption><SelectOption value="created_at">{t('时间正序')}</SelectOption><SelectOption value="-created_at">{t('时间倒序')}</SelectOption></SelectField></label>} />;
-  return <div className="um-course-workspace" data-directory-animated={directoryWidth.animated || undefined} style={{ '--um-directory-width': `${directoryWidth.width}px`, '--um-directory-content-width': `${directoryWidth.contentWidth}px` } as CSSProperties}><aside className="um-course-context" aria-label={t('课程导航')}><div className="um-course-directory-content um-directory-content" aria-hidden={directoryWidth.collapsed || undefined} inert={directoryWidth.collapsed}>{directory}</div><DirectoryResizeHandle width={directoryWidth.width} onChange={directoryWidth.previewWidth} onCommit={directoryWidth.changeWidth} label={t('调整课程导航宽度')} /></aside><section className="um-course-main" aria-label={t('课程功能区')}><WorkspaceToolbar className="um-course-header"><div className="um-course-header-title"><button className="um-course-directory-toggle" onClick={() => {
-    if (rightSidebarFullscreen) {
-      exitFullscreen();
-      if (directoryWidth.collapsed) directoryWidth.expand();
-    } else directoryWidth.toggle();
-  }} aria-label={directoryHidden ? t('展开课程导航') : t('收起课程导航')} title={directoryHidden ? t('展开课程导航') : t('收起课程导航')} aria-expanded={!directoryHidden}><SidebarSimple size={18} /></button><WorkspaceTrail title={id ? selectedCourse?.title || t('课程') : t('学习门户')} crumbs={[{ label: t('课程'), to: learningUrl('/courses', projectId, conversationId) }, ...(id ? [selectedCourse?.subject_name, selectedCourse?.module_name].filter(Boolean).map(label => ({ label: label! })) : [])]} /><Dialog.Root open={listOpen} onOpenChange={setListOpen}><Dialog.Trigger asChild><button className="um-course-button um-course-list-toggle" aria-label={t('课程导航')}><SidebarSimple size={16} />{t('课程导航')}</button></Dialog.Trigger><Dialog.Portal><Dialog.Overlay className="um-course-drawer-overlay" /><Dialog.Content className="um-course-drawer"><Dialog.Title className="sr-only">{t('课程导航')}</Dialog.Title><Dialog.Description className="sr-only">{t('搜索、筛选和选择课程')}</Dialog.Description><Dialog.Close className="um-course-drawer-close" aria-label={t('关闭课程导航')}><X size={16} /></Dialog.Close>{directory}</Dialog.Content></Dialog.Portal></Dialog.Root></div></WorkspaceToolbar><div className="um-course-main-scroll">{id ? <div className="um-course-detail-player"><VideoLesson key={id} isFavorite={!!selectedCourse && queueIds.has(selectedCourse.id)} favoritePending={queueLoading || !selectedCourse || queuePending.includes(selectedCourse.id)} onFavoriteChange={selectedCourse ? () => { void changeQueue(selectedCourse, queueIds.has(selectedCourse.id)); } : undefined} /></div> : loading || error ? <div className="um-course-state"><p>{loading ? t('正在加载课程…') : error}</p>{error && <button className="um-course-button" onClick={retry}>{t('重试')}</button>}</div> : <CoursePortal courses={visible} progress={progress} loading={false} error={progressError} activity={activity} activityError={activityError} onRetryActivity={retry} queue={queue} queueLoading={queueLoading} queueError={queueError} queuePending={queuePending} onQueueChange={changeQueue} onRetryQueue={retry} filter={[filterLabel, ...tags, status === 'all' ? '' : status === 'finished' ? t('已看完') : status === 'learning' ? t('未看完') : t('未开始')].filter(Boolean).join(' / ')} onRetry={retry} onClear={resetFilters} onOpen={open} />}</div></section></div>;
+  const directoryDrawer = (
+    <Dialog.Root open={listOpen} onOpenChange={setListOpen}>
+      {!isPhone && (
+        <Dialog.Trigger asChild>
+          <button className="um-course-button um-course-list-toggle" aria-label={t('课程导航')}><SidebarSimple size={16} />{t('课程导航')}</button>
+        </Dialog.Trigger>
+      )}
+      <Dialog.Portal>
+        <Dialog.Overlay className="um-course-drawer-overlay" />
+        <Dialog.Content className="um-course-drawer">
+          <Dialog.Title className="sr-only">{t('课程导航')}</Dialog.Title>
+          <Dialog.Description className="sr-only">{t('搜索、筛选和选择课程')}</Dialog.Description>
+          <Dialog.Close className="um-course-drawer-close" aria-label={t('关闭课程导航')}><X size={17} /></Dialog.Close>
+          {directory}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+  return <div className="um-course-workspace" data-directory-animated={directoryWidth.animated || undefined} style={{ '--um-directory-width': `${directoryWidth.width}px`, '--um-directory-content-width': `${directoryWidth.contentWidth}px` } as CSSProperties}><aside className="um-course-context" aria-label={t('课程导航')}><div className="um-course-directory-content um-directory-content" aria-hidden={directoryWidth.collapsed || undefined} inert={directoryWidth.collapsed}>{directory}</div><DirectoryResizeHandle width={directoryWidth.width} onChange={directoryWidth.previewWidth} onCommit={directoryWidth.changeWidth} label={t('调整课程导航宽度')} /></aside><section className="um-course-main" aria-label={t('课程功能区')}><WorkspaceToolbar className={`um-course-header${isPhone ? ' um-course-phone-header' : ''}`}><div className="um-course-header-title">
+    {isPhone ? (
+      id ? (
+        <>
+          <span className="um-m-lesson-toolbar-title">{selectedCourse?.title || t('课程')}</span>
+          <button type="button" className="um-agent-icon-button um-course-phone-action" aria-label={t('课程导航')} onClick={() => setListOpen(true)}><ListBullets size={18} /></button>
+        </>
+      ) : (
+        <>
+          <button type="button" className="um-mobile-header-title um-m-header-switcher um-course-phone-switcher" aria-label={t('课程导航')} onClick={() => setListOpen(true)}>
+            <span>{filterLabel || t('课程')}</span>
+            <CaretDown size={13} weight="regular" className="um-m-header-caret" />
+          </button>
+          <button type="button" className="um-agent-icon-button um-course-phone-action" aria-label={t('搜索课程')} onClick={() => setListOpen(true)}><MagnifyingGlass size={18} /></button>
+        </>
+      )
+    ) : (
+      <>
+        <button className="um-course-directory-toggle" onClick={() => {
+          if (rightSidebarFullscreen) {
+            exitFullscreen();
+            if (directoryWidth.collapsed) directoryWidth.expand();
+          } else directoryWidth.toggle();
+        }} aria-label={directoryHidden ? t('展开课程导航') : t('收起课程导航')} title={directoryHidden ? t('展开课程导航') : t('收起课程导航')} aria-expanded={!directoryHidden}><SidebarSimple size={18} /></button>
+        <WorkspaceTrail title={id ? selectedCourse?.title || t('课程') : t('学习门户')} crumbs={[{ label: t('课程'), to: learningUrl('/courses', projectId, conversationId) }, ...(id ? [selectedCourse?.subject_name, selectedCourse?.module_name].filter(Boolean).map(label => ({ label: label! })) : [])]} />
+      </>
+    )}
+    {directoryDrawer}
+  </div></WorkspaceToolbar><div className="um-course-main-scroll">{id ? <div className="um-course-detail-player"><VideoLesson key={id} isFavorite={!!selectedCourse && queueIds.has(selectedCourse.id)} favoritePending={queueLoading || !selectedCourse || queuePending.includes(selectedCourse.id)} onFavoriteChange={selectedCourse ? () => { void changeQueue(selectedCourse, queueIds.has(selectedCourse.id)); } : undefined} /></div> : loading || error ? <div className="um-course-state"><p>{loading ? t('正在加载课程…') : error}</p>{error && <button className="um-course-button" onClick={retry}>{t('重试')}</button>}</div> : <CoursePortal courses={visible} progress={progress} loading={false} error={progressError} activity={activity} activityError={activityError} onRetryActivity={retry} queue={queue} queueLoading={queueLoading} queueError={queueError} queuePending={queuePending} onQueueChange={changeQueue} onRetryQueue={retry} filter={[filterLabel, ...tags, status === 'all' ? '' : status === 'finished' ? t('已看完') : status === 'learning' ? t('未看完') : t('未开始')].filter(Boolean).join(' / ')} onRetry={retry} onClear={resetFilters} onOpen={open} />}</div></section></div>;
 }

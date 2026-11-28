@@ -4,9 +4,9 @@ import { formatApiErrorToast } from '@/lib/apiError';
 import type { QuizQuestion } from '@/types/api';
 import '@/styles/practice.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { ArrowLeft, Bell, CheckCircle, CaretLeft, CaretRight, Spinner, Star } from '@phosphor-icons/react';
-import { Button } from '@/components/ui/button';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Bell, CaretDown, CheckCircle, CaretLeft, CaretRight, Spinner, Star } from '@phosphor-icons/react';
+import { WorkspaceToolbar } from '@/components/WorkspaceToolbar';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
@@ -41,6 +41,7 @@ export const TestSessionPage: React.FC = () => {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [empty, setEmpty] = useState(false);
   const [reminderSettings, setReminderSettings] = useState<LearningReminderSettings>(getLearningReminderSettings());
   const lastTypeReminderQidRef = useRef<number | null>(null);
@@ -229,141 +230,150 @@ export const TestSessionPage: React.FC = () => {
     );
   }
 
+  const questionTypeLabel = currentQ.q_type === 'objective'
+    ? t('客观选择')
+    : currentQ.subjective_type === 'calculate'
+      ? t('主观计算')
+      : currentQ.subjective_type === 'noun'
+        ? t('名词解释')
+        : t('主观论述');
+
   return (
-    <div className="um-practice-session h-full min-h-0 bg-background text-foreground flex flex-col overflow-hidden">
-      {/* ── Header ── */}
-      <header className="h-11 shrink-0 border-b border-border px-3 flex items-center justify-between bg-card">
-        <Link to={returnPath}>
-          <Button variant="ghost" size="sm" className="h-8 px-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            {t('返回')}
-          </Button>
-        </Link>
-        <div className="flex items-center gap-2">
-          {isMobile && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label={t('提醒设置')} className="h-8 w-8 rounded-lg text-muted-foreground/60 hover:text-muted-foreground">
-                  <Bell className="h-4 w-4" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent side="bottom" align="end" className="w-64 rounded-2xl p-4 bg-card border-border">
-                <div className="space-y-3 text-left">
-                  <p className="text-[11px] font-semibold text-muted-foreground/60">{t('提醒设置')}</p>
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-medium">{t('题型提醒')}</Label>
-                    <Switch
-                      checked={reminderSettings.questionType}
-                      onCheckedChange={(enabled) => {
-                        setReminderSettings(updateLearningReminderSetting('questionType', enabled));
-                      }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-medium">{t('做题结果提醒')}</Label>
-                    <Switch
-                      checked={reminderSettings.testResult}
-                      onCheckedChange={(enabled) => {
-                        setReminderSettings(updateLearningReminderSetting('testResult', enabled));
-                      }}
-                    />
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-          )}
-          <div className="px-2.5 py-1 rounded-md bg-muted text-muted-foreground font-medium text-xs tabular-nums">
-            {currentIdx + 1} / {questions.length}
-          </div>
+    <div className="um-practice-session h-full min-h-0 flex flex-col overflow-hidden">
+      {/* ── Unified Mobile Toolbar ── */}
+      <WorkspaceToolbar className="um-practice-session-toolbar">
+        <Popover open={navOpen} onOpenChange={setNavOpen}>
+          <PopoverTrigger asChild>
+            <button type="button" className="um-practice-session-progress-trigger" aria-label={t('题目导航')}>
+              <span>{t('第 {0} / {1} 题', { 0: currentIdx + 1, 1: questions.length })}</span>
+              <CaretDown size={13} weight="regular" className="um-m-header-caret" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="bottom" align="start" sideOffset={8} className="um-practice-nav-popover">
+            <div className="um-practice-nav-popover-head">
+              <span>{t('题目导航')}</span>
+              <span>{t('已答 {0} / {1}', { 0: answeredCount, 1: totalNeedAnswer })}</span>
+            </div>
+            <div className="um-practice-nav-grid" role="navigation" aria-label={t('题目列表')}>
+              {questions.map((q, idx) => {
+                const complete = q.is_mastered || hasAnswer(answers[q.id]);
+                return (
+                  <button
+                    key={q.id}
+                    type="button"
+                    aria-current={idx === currentIdx ? 'step' : undefined}
+                    data-complete={complete ? 'true' : undefined}
+                    onClick={() => { setCurrentIdx(idx); setNavOpen(false); }}
+                  >
+                    {idx + 1}
+                  </button>
+                );
+              })}
+            </div>
+          </PopoverContent>
+        </Popover>
+        <div className="um-practice-session-toolbar-actions">
+          <Popover>
+            <PopoverTrigger asChild>
+              <button type="button" aria-label={t('提醒设置')} className="um-agent-icon-button um-practice-session-bell">
+                <Bell size={18} />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent side="bottom" align="end" sideOffset={8} className="um-practice-popover">
+              <h2>{t('提醒设置')}</h2>
+              <Label>
+                {t('题型提醒')}
+                <Switch
+                  checked={reminderSettings.questionType}
+                  onCheckedChange={(enabled) => {
+                    setReminderSettings(updateLearningReminderSetting('questionType', enabled));
+                  }}
+                />
+              </Label>
+              <Label>
+                {t('做题结果提醒')}
+                <Switch
+                  checked={reminderSettings.testResult}
+                  onCheckedChange={(enabled) => {
+                    setReminderSettings(updateLearningReminderSetting('testResult', enabled));
+                  }}
+                />
+              </Label>
+            </PopoverContent>
+          </Popover>
         </div>
-      </header>
+      </WorkspaceToolbar>
+
+      {/* ── Slim Progress Line ── */}
+      <div className="um-practice-session-bar" aria-hidden="true">
+        <div style={{ width: `${totalNeedAnswer ? (answeredCount / totalNeedAnswer) * 100 : 100}%` }} />
+      </div>
 
       {/* ── Body ── */}
       <div className="flex-1 min-h-0 flex flex-col">
-        <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
-          <div className="bg-card border border-border rounded-xl p-4 space-y-4">
-            {/* Metadata row */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                {currentQ.q_type === 'objective'
-                  ? t('客观选择')
-                  : currentQ.subjective_type === 'calculate'
-                    ? t('主观计算')
-                    : currentQ.subjective_type === 'noun'
-                      ? t('名词解释')
-                      : t('主观论述')}
-              </span>
-              <span className="text-[10px] font-medium text-muted-foreground">
-                {currentQ.difficulty_level_display || t('适当')}
-              </span>
+        <div className="um-practice-session-scroll flex-1 min-h-0 overflow-y-auto">
+          <div className="um-practice-session-paper">
+            {/* Metadata & Actions row */}
+            <div className="um-practice-session-meta-row">
+              <div className="um-practice-session-badges">
+                <span className="um-practice-session-chip">{questionTypeLabel}</span>
+                <span className="um-practice-session-chip is-muted">
+                  {currentQ.difficulty_level_display || t('适当')}
+                </span>
+              </div>
+              <div className="um-practice-session-actions">
+                <button
+                  type="button"
+                  aria-pressed={!!currentQ.is_mastered}
+                  onClick={() => toggleMastered(currentQ.id)}
+                  className="um-practice-session-chip-btn"
+                >
+                  <CheckCircle size={14} weight={currentQ.is_mastered ? 'fill' : 'regular'} />
+                  <span>{currentQ.is_mastered ? t('已掌握') : t('标记掌握')}</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={currentQ.is_favorite ? t('取消收藏') : t('收藏题目')}
+                  aria-pressed={!!currentQ.is_favorite}
+                  onClick={() => toggleFavorite(currentQ.id)}
+                  className="um-practice-session-icon-btn"
+                >
+                  <Star size={15} weight={currentQ.is_favorite ? 'fill' : 'regular'} />
+                </button>
+              </div>
             </div>
 
             {/* Question text */}
-            <div className="text-[15px] font-normal text-foreground leading-relaxed">
+            <div className="um-practice-session-stem">
               <MarkdownContent content={processMathContent(currentQ.text)} />
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-pressed={!!currentQ.is_mastered}
-                onClick={() => toggleMastered(currentQ.id)}
-                className={cn(
-                  'h-7.5 px-2.5 rounded-lg text-[11px] font-medium gap-1.5 transition-colors',
-                  currentQ.is_mastered ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:bg-muted'
-                )}
-              >
-                <CheckCircle className="h-3.5 w-3.5" />
-                {currentQ.is_mastered ? t('已掌握') : t('标记掌握')}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={currentQ.is_favorite ? t('取消收藏') : t('收藏题目')}
-                aria-pressed={!!currentQ.is_favorite}
-                onClick={() => toggleFavorite(currentQ.id)}
-                className={cn(
-                  'h-7.5 w-7.5 rounded-lg transition-colors',
-                  currentQ.is_favorite ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:bg-muted'
-                )}
-              >
-                <Star className={cn('h-3.5 w-3.5', currentQ.is_favorite && 'fill-current')} />
-              </Button>
             </div>
 
             {/* Mastered banner */}
             {currentQ.is_mastered && (
-              <div className="flex items-center gap-2 py-2 text-xs text-primary">
-                <CheckCircle className="w-3.5 h-3.5" /> {t('已掌握')}
+              <div className="um-practice-session-mastered">
+                <CheckCircle size={15} weight="fill" /> {t('该题已标记掌握，提交时将自动跳过')}
               </div>
             )}
 
             {/* Answer area */}
-            <div className={cn(currentQ.is_mastered && 'pointer-events-none')}>
+            <div className={cn('um-practice-session-answer', currentQ.is_mastered && 'pointer-events-none opacity-50')}>
               {currentQ.q_type === 'objective' ? (
-                <div className="space-y-2">
+                <div className="um-practice-session-options">
                   {currentQ.options?.map((opt: string, i: number) => {
                     const selected = answers[currentQ.id] === opt;
                     return (
                       <button
                         key={i}
+                        type="button"
                         disabled={currentQ.is_mastered || isSubmitting}
                         aria-pressed={selected}
                         onClick={() => setAnswers((prev) => ({ ...prev, [currentQ.id]: opt }))}
-                        className={cn(
-                          'w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-colors duration-150',
-                          selected
-                            ? 'bg-primary border-primary text-primary-foreground shadow-sm'
-                            : 'bg-card border-border hover:border-primary/40 active:bg-muted/50',
-                          currentQ.is_mastered && 'opacity-50'
-                        )}
+                        className="um-practice-session-option"
                       >
-                        <span className="um-practice-option-letter">
+                        <span className="um-practice-session-letter">
                           {String.fromCharCode(65 + i)}
                         </span>
-                        <div className="min-w-0 flex-1 text-[13px] leading-relaxed">
+                        <div className="um-practice-session-option-text">
                           <MarkdownContent content={processMathContent(opt)} />
                         </div>
                       </button>
@@ -376,12 +386,7 @@ export const TestSessionPage: React.FC = () => {
                   value={answers[currentQ.id] || ''}
                   disabled={currentQ.is_mastered || isSubmitting}
                   onChange={(e) => setAnswers((prev) => ({ ...prev, [currentQ.id]: e.target.value }))}
-                  className={cn(
-                    'w-full bg-muted/50 border border-border rounded-xl p-4 min-h-[180px] text-sm font-medium leading-relaxed',
-                    'focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-border',
-                    'placeholder:text-muted-foreground/60 resize-none transition-all text-foreground',
-                    currentQ.is_mastered && 'opacity-50'
-                  )}
+                  className="um-practice-session-textarea"
                   placeholder={currentQ.is_mastered ? t('该题已标记掌握，无需填写答案...') : t('在此输入你的分析或计算过程...')}
                 />
               )}
@@ -390,45 +395,35 @@ export const TestSessionPage: React.FC = () => {
         </div>
 
         {/* ── Footer ── */}
-        <footer className="shrink-0 border-t border-border bg-card px-3 pt-2.5 pb-[calc(0.5rem+env(safe-area-inset-bottom))] space-y-2.5">
-          <div className="flex justify-between items-center">
-            <span className="text-[10px] font-medium text-muted-foreground/60">{t('已答进度')}</span>
-            <span className="text-[11px] font-semibold text-foreground/80 tabular-nums">{answeredCount} / {totalNeedAnswer}</span>
-          </div>
-          <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all duration-[180ms]"
-              style={{ width: `${totalNeedAnswer ? (answeredCount / totalNeedAnswer) * 100 : 100}%` }}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              onClick={() => setCurrentIdx((prev) => Math.max(0, prev - 1))}
-              disabled={currentIdx === 0}
-              className="h-9 rounded-xl px-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted"
+        <footer className="um-practice-session-footer">
+          <button
+            type="button"
+            onClick={() => setCurrentIdx((prev) => Math.max(0, prev - 1))}
+            disabled={currentIdx === 0}
+            className="um-practice-session-prev"
+          >
+            <CaretLeft size={16} />
+            <span>{t('上一题')}</span>
+          </button>
+          {currentIdx === questions.length - 1 ? (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="um-practice-session-next"
             >
-              <CaretLeft className="h-4 w-4 mr-1" />
-              {t('上一题')}
-            </Button>
-            {currentIdx === questions.length - 1 ? (
-              <Button
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="h-9 flex-1 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold"
-              >
-                {isSubmitting ? t('提交中...') : t('提交评分')}
-              </Button>
-            ) : (
-              <Button
-                onClick={() => setCurrentIdx((prev) => Math.min(questions.length - 1, prev + 1))}
-                className="h-9 flex-1 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold"
-              >
-                {t('下一题')}
-                <CaretRight className="h-4 w-4 ml-1" />
-              </Button>
-            )}
-          </div>
+              <span>{isSubmitting ? t('提交中...') : t('提交评分')}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setCurrentIdx((prev) => Math.min(questions.length - 1, prev + 1))}
+              className="um-practice-session-next"
+            >
+              <span>{t('下一题')}</span>
+              <CaretRight size={16} />
+            </button>
+          )}
         </footer>
       </div>
     </div>

@@ -1,12 +1,15 @@
 import { isOfflineDemo, isNativeOffline } from '@/lib/offlineSession';
 import { getLocale, t, useLocale } from '@/i18n';
 import { SelectField, SelectOption } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { WorkspaceToolbar } from '@/components/WorkspaceToolbar';
 import { RightSidebarLayoutContext } from '@/components/WorkspaceContext';
-import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useBlocker, useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useBlocker, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { FilePlus, FolderPlus, Notebook as NotebookIcon, MagnifyingGlass, ArrowClockwise, ArrowCounterClockwise, ClockCounterClockwise, DownloadSimple, Export, Folders, FunnelX, NotePencil, PencilSimple, Stack, Star, Trash, SidebarSimple } from '@phosphor-icons/react';
+import { FilePlus, FolderPlus, Notebook as NotebookIcon, MagnifyingGlass, ArrowClockwise, ArrowCounterClockwise, ClockCounterClockwise, DownloadSimple, Export, Folders, FunnelX, NotePencil, PencilSimple, Stack, Star, Trash, SidebarSimple, DotsThree, Plus, CaretDown, X } from '@phosphor-icons/react';
 import { notesApi, notebookPath, type Note, type Notebook } from '@/lib/notes';
 import { cacheNote, cacheNotebooks, cacheNotes, cacheTags, flushOfflineOutbox, getCachedNote, loadOfflineCache, offlineCacheSupported } from '@/lib/offlineData';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -34,10 +37,23 @@ function filterCachedNotes(notes: Note[], filters: { query: string; folder: stri
   });
 }
 
+function formatNoteTimestamp(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export default function NotesPage() {
   useLocale();
   const { id } = useParams();
+  const createOnOpen = new URLSearchParams(useLocation().search).get('new') === '1';
   const navigate = useNavigate();
+  const isPhone = useIsMobile();
+  const filtersId = useId();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [phoneSearchOpen, setPhoneSearchOpen] = useState(false);
+  const phoneSearchInputRef = useRef<HTMLInputElement>(null);
   const userId = useAuthStore(state => state.user?.id);
   const [offlineMode, setOfflineMode] = useState(false);
   const [dialog, setDialog] = useState<NoteDialogOptions | null>(null);
@@ -48,7 +64,7 @@ export default function NotesPage() {
   const [folder, setFolder] = useState('');
   const [tag, setTag] = useState('');
   const [view, setView] = useState<'all' | 'favorite' | 'recent' | 'trash'>('all');
-  const [mobileView, setMobileView] = useState<'directory' | 'editor'>('directory');
+  const [mobileView, setMobileView] = useState<'directory' | 'editor'>(id ? 'editor' : 'directory');
   const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(!!id);
   const [listLoading, setListLoading] = useState(true);
@@ -160,6 +176,7 @@ export default function NotesPage() {
   const [previousId, setPreviousId] = useState(id);
   if (previousId !== id) {
     setPreviousId(id); setDialog(null); setPageError(''); setLoading(!!id);
+    setMobileView(id ? 'editor' : 'directory');
   }
   useEffect(() => {
     if (!id) return;
@@ -168,7 +185,7 @@ export default function NotesPage() {
       void getCachedNote(userId, Number(id)).then(cached => {
         if (controller.signal.aborted) return;
         // The cache is already on disk; applying it after the async read is the offline path.
-        if (cached) { load(cached); setOfflineMode(true); setMobileView('editor'); }
+        if (cached) { load(cached); setOfflineMode(true); }
         else { load(null); setPageError(t('离线，且没有本地缓存。')); }
       }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
       return () => controller.abort();
@@ -181,13 +198,13 @@ export default function NotesPage() {
       const local = cached?.notes.find(note => note.id === result.id);
       if (pending) result = { ...result, ...pending.draft, version: pending.baseVersion };
       else if (local && local.version > result.version) result = local;
-      load(result); setMobileView('editor');
+      load(result);
       if (userId) void cacheNote(userId, result);
     }).catch(async () => {
       if (controller.signal.aborted) return;
       const cached = userId ? await getCachedNote(userId, Number(id)) : null;
       if (controller.signal.aborted) return;
-      if (cached) { load(cached); setOfflineMode(true); setMobileView('editor'); }
+      if (cached) { load(cached); setOfflineMode(true); }
       else { load(null); setPageError(t('笔记不存在、不可访问或加载失败。')); }
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -201,19 +218,20 @@ export default function NotesPage() {
   const open = (target: number) => { navigate(`/notes/${target}`); setMobileView('editor'); };
   const createNote = () => void run(async () => {
     const created = await notesApi.create(folder && folder !== 'unfiled' ? Number(folder) : null);
-    setView('all'); reload(); navigate(`/notes/${created.id}`); setMobileView('editor');
+    setView('all'); reload(); navigate(`/notes/${created.id}`, { replace: createOnOpen }); setMobileView('editor');
   });
   const createNoteRef = useRef(createNote);
   useLayoutEffect(() => { createNoteRef.current = createNote; });
   const newNoteRequested = useRef(false);
   useEffect(() => {
-    if (newNoteRequested.current || id) return;
-    if (new URLSearchParams(window.location.search).get('new') !== '1') return;
-    newNoteRequested.current = true;
-    if (!navigator.onLine && !isOfflineDemo()) { toast.error(t('离线时暂不能新建笔记，请联网后重试。')); return; }
-    const timer = window.setTimeout(() => createNoteRef.current(), 0);
+    if (!createOnOpen || newNoteRequested.current || id) return;
+    const timer = window.setTimeout(() => {
+      newNoteRequested.current = true;
+      if (!navigator.onLine && !isOfflineDemo()) { toast.error(t('离线时暂不能新建笔记，请联网后重试。')); return; }
+      createNoteRef.current();
+    }, 0);
     return () => window.clearTimeout(timer);
-  }, [id]);
+  }, [id, createOnOpen]);
   const createNotebook = () => setDialog({ title: t('新建笔记本'), initialValue: '', confirmText: t('创建'), onConfirm: name => void run(async () => {
     const book = await notesApi.createNotebook(name, folder && folder !== 'unfiled' ? Number(folder) : null);
     setFolder(String(book.id)); setView('all'); reload();
@@ -257,11 +275,51 @@ export default function NotesPage() {
     </div>{notebooks.some(child => child.parent === book.id) && <Collapse open={!collapsed.has(book.id)}><div>{tree(book.id, depth + 1)}</div></Collapse>}
   </div>);
   const orderedItems = [...items].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-  return <div className={`notes-workspace notes-mobile-${mobileView}`} data-directory-hidden={directoryHidden}>
+  const hasFilters = Boolean(folder || tag || view !== 'all');
+  const phoneDirectoryLabel = view === 'trash'
+    ? t('回收站')
+    : view === 'favorite'
+      ? t('收藏')
+      : view === 'recent'
+        ? t('最近')
+        : folder === 'unfiled'
+          ? t('未分类')
+          : selectedNotebook?.name || t('笔记');
+  const noteActions = note && !pageError ? [
+    { label: t('导出笔记'), icon: Export, danger: false, run: () => void run(() => notesApi.export('items', note.id)) },
+    ...(note.deleted_at ? [{ label: t('恢复笔记'), icon: ArrowCounterClockwise, danger: false, run: () => void run(async () => { load(await notesApi.restore(note.id)); setView('all'); reload(); }) }] : []),
+    { label: note.deleted_at ? t('永久删除') : t('移入回收站'), icon: Trash, danger: true, run: () => removeNote() },
+  ] : [];
+  const renderCardMenuItems = (item: Note) => (
+    <>
+      <DropdownMenuItem disabled={busy} onSelect={() => open(item.id)}><NotePencil size={15} />{t('打开笔记')}</DropdownMenuItem>
+      {!item.deleted_at && <>
+        <DropdownMenuItem disabled={busy || offlineMode} onSelect={() => setDialog({ title: t('笔记名称'), initialValue: item.title, onConfirm: title => updateNote(item, { title }) })}><PencilSimple size={15} />{t('重命名')}</DropdownMenuItem>
+        <DropdownMenuItem disabled={busy || offlineMode} onSelect={() => updateNote(item, { is_favorite: !item.is_favorite })}><Star size={15} weight={item.is_favorite ? 'fill' : 'regular'} />{item.is_favorite ? t('取消收藏') : t('收藏')}</DropdownMenuItem>
+        {notebooks.length > 0 && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger disabled={busy || offlineMode}><Folders size={15} className="mr-2" />{t('移动到笔记本')}</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="um-native-menu">
+              <DropdownMenuItem disabled={item.notebook === null} onSelect={() => updateNote(item, { notebook: null })}>{t('未分类')}</DropdownMenuItem>
+              {notebooks.map(book => <DropdownMenuItem key={book.id} disabled={item.notebook === book.id} onSelect={() => updateNote(item, { notebook: book.id })}>{notebookPath(book.id, notebooks)}</DropdownMenuItem>)}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
+      </>}
+      <DropdownMenuItem disabled={busy || offlineMode} onSelect={() => void run(() => notesApi.export('items', item.id))}><Export size={15} />{t('导出笔记')}</DropdownMenuItem>
+      {item.deleted_at && <DropdownMenuItem disabled={busy || offlineMode} onSelect={() => void run(async () => { const restored = await notesApi.restore(item.id); if (note?.id === item.id) load(restored); setView('all'); reload(); })}><ArrowCounterClockwise size={15} />{t('恢复笔记')}</DropdownMenuItem>}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem disabled={busy || offlineMode} className="notes-danger" onSelect={() => removeNote(item)}><Trash size={15} />{item.deleted_at ? t('永久删除') : t('移入回收站')}</DropdownMenuItem>
+    </>
+  );
+  return <div className={`notes-workspace notes-page notes-mobile-${mobileView}`} data-directory-hidden={directoryHidden}>
     <nav className="notes-mobile-tabs" aria-label={t('笔记视图')}><button aria-label={t('目录')} title={t('目录')} aria-pressed={mobileView === 'directory'} onClick={() => { setMobileView('directory'); setDirectoryHidden(false); }}><Folders size={20} /></button><button aria-label={t('笔记')} title={t('笔记')} aria-pressed={mobileView === 'editor'} disabled={!note} onClick={() => { setMobileView('editor'); setDirectoryHidden(true); }}><NotePencil size={20} /></button></nav>
     <aside className="notes-directory" aria-label={t('笔记目录')} inert={directoryHidden || undefined}>
       <header className="notes-directory-header"><h1>{t('我的笔记')}</h1><div><button aria-label={t('新建笔记本')} title={t('新建笔记本')} disabled={busy} onClick={createNotebook}><FolderPlus size={20} /></button><button aria-label={t('新建笔记')} title={t('新建笔记')} disabled={busy} onClick={createNote}><FilePlus size={20} /></button></div></header>
-      <label className="notes-search"><MagnifyingGlass size={17} /><input aria-label={t('搜索全部笔记标题和正文')} placeholder={t('搜索标题、正文')} value={query} onChange={e => setQuery(e.target.value)} /></label>
+      <div className="notes-directory-search-row" data-phone-open={phoneSearchOpen || !!query || undefined}>
+        <label className="notes-search"><MagnifyingGlass size={16} /><input ref={phoneSearchInputRef} aria-label={t('搜索全部笔记标题和正文')} placeholder={t('搜索标题、正文')} value={query} onChange={e => setQuery(e.target.value)} />{isPhone && (phoneSearchOpen || query) && <button type="button" className="notes-phone-search-clear" aria-label={t('关闭搜索')} onClick={() => { setQuery(''); setPhoneSearchOpen(false); }}><X size={15} /></button>}</label>
+      </div>
+      <div id={filtersId} className="notes-directory-filters" hidden={isPhone}>
       <div className="notes-quickviews">{(['all', 'recent', 'favorite', 'trash'] as const).map(value => <button key={value} aria-label={({ all: t('全部'), recent: t('最近'), favorite: t('收藏'), trash: t('回收站') })[value]} title={({ all: t('全部'), recent: t('最近'), favorite: t('收藏'), trash: t('回收站') })[value]} aria-pressed={view === value} onClick={() => setView(value)}>{({ all: <Stack size={19} />, recent: <ClockCounterClockwise size={19} />, favorite: <Star size={19} />, trash: <Trash size={19} /> })[value]}</button>)}</div>
       <div className="notes-tree"><button className={`notes-tree-root ${folder === '' ? 'is-active' : ''}`} onClick={() => setFolder('')}>{t('所有笔记本')}</button><button className={`notes-tree-root ${folder === 'unfiled' ? 'is-active' : ''}`} onClick={() => setFolder('unfiled')}>{t('未分类')}</button>{tree(null)}</div>
       {selectedNotebook && <details className="notes-book-actions"><summary>{selectedNotebook.name}</summary><div className="notes-book-toolbar">
@@ -271,11 +329,42 @@ export default function NotesPage() {
         <button aria-label={t('删除笔记本')} title={t('删除笔记本')} className="notes-danger" disabled={busy} onClick={() => setDialog({ title: t('删除笔记本？'), description: t('笔记和子目录移到上一级。'), confirmText: t('删除'), destructive: true, onConfirm: () => void run(async () => { await notesApi.removeNotebook(selectedNotebook.id); setFolder(selectedNotebook.parent ? String(selectedNotebook.parent) : ''); if (note?.notebook === selectedNotebook.id) load(await notesApi.get(note.id)); reload(); }) })}><Trash size={18} /></button>
       </div></details>}
       <div className="notes-filters"><SelectField aria-label={t('按标签筛选')} value={tag} onValueChange={value => setTag(value)}><SelectOption value="">{t('所有标签')}</SelectOption>{tags.map(label => <SelectOption key={label.id} value={label.name}>{label.name}</SelectOption>)}</SelectField></div>
-      {(query || folder || tag || view !== 'all') && <button aria-label={t('清除筛选')} title={t('清除筛选')} className="notes-clear-filters" onClick={() => { setQuery(''); setFolder(''); setTag(''); setView('all'); }}><FunnelX size={16} /></button>}
-      <div className="notes-list-heading"><span>{view === 'trash' ? t('回收站') : selectedNotebook?.name || t('笔记')}</span><small>{listLoading ? t('加载中…') : t('{0} 篇', { 0: items.length })}</small></div>
+      </div>
+      {(query || hasFilters) && (
+        <div className="notes-phone-active-bar">
+          <span>{tag ? `#${tag}` : phoneDirectoryLabel} · {listLoading ? t('加载中…') : t('{0} 篇', { 0: items.length })}</span>
+          <button type="button" aria-label={t('清除筛选')} title={t('清除筛选')} className="notes-clear-filters" onClick={() => { setQuery(''); setFolder(''); setTag(''); setView('all'); setPhoneSearchOpen(false); }}><FunnelX size={14} />{isPhone && <span>{t('清除筛选')}</span>}</button>
+        </div>
+      )}
+      <div className="notes-list-heading" data-default={!query && !hasFilters && !listLoading || undefined}><span>{view === 'trash' ? t('回收站') : selectedNotebook?.name || t('笔记')}</span><small>{listLoading ? t('加载中…') : t('{0} 篇', { 0: items.length })}</small></div>
       {offlineMode && <p className="mx-4 mt-2 rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground" role="status">{t('离线模式：显示本地缓存，笔记修改会在联网后同步。')}</p>}
       {listError && <p className="notes-error" role="alert">{listError}<button onClick={reload}>{t('重试')}</button></p>}
-      <div className="notes-list" aria-busy={listLoading}>{orderedItems.map(item => <ContextMenu key={item.id}>
+      <div className="notes-list" aria-busy={listLoading}>{orderedItems.map(item => isPhone ? (
+        <article key={item.id} className={`notes-phone-card um-m-card${item.id === note?.id ? ' is-active' : ''}`}>
+          <div className="notes-phone-card-head">
+            <time className="notes-phone-card-time" dateTime={item.updated_at}>
+              {formatNoteTimestamp(item.updated_at)}
+              {item.notebook !== null && <span className="notes-phone-card-book"> · {notebookPath(item.notebook, notebooks)}</span>}
+              {item.is_favorite && <Star size={12} weight="fill" className="notes-phone-card-star" aria-label={t('收藏')} />}
+            </time>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="notes-phone-card-more" aria-label={t('笔记操作')} disabled={busy}><DotsThree size={18} weight="bold" /></button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="notes-phone-action-menu um-native-menu">{renderCardMenuItems(item)}</DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <button type="button" className="notes-phone-card-body" onClick={() => open(item.id)}>
+            {item.title && <strong>{item.title}</strong>}
+            <p>{item.content.replace(/[#*`>[\]]/g, '').trim() || t('还没有正文')}</p>
+            {item.tags.length > 0 && (
+              <div className="notes-phone-card-tags">
+                {item.tags.slice(0, 4).map(label => <span key={label}>#{label}</span>)}
+              </div>
+            )}
+          </button>
+        </article>
+      ) : <ContextMenu key={item.id}>
         <ContextMenuTrigger asChild><button className={item.id === note?.id ? 'is-active' : ''} onClick={() => open(item.id)}><strong>{item.is_favorite && '☆ '}{item.title || t('未命名笔记')}</strong><span>{item.content.replace(/[#*`>[\]]/g, '').slice(0, 60) || t('还没有正文')}</span><small>{new Date(item.updated_at).toLocaleDateString(getLocale())} · {notebookPath(item.notebook, notebooks)}</small></button></ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem disabled={busy} onSelect={() => open(item.id)}><NotePencil size={16} />{t('打开笔记')}</ContextMenuItem>
@@ -293,22 +382,109 @@ export default function NotesPage() {
           <ContextMenuItem disabled={busy || offlineMode} className="text-destructive focus:text-destructive" onSelect={() => removeNote(item)}><Trash size={16} />{item.deleted_at ? t('永久删除') : t('移入回收站')}</ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>)}{!listLoading && !items.length && !listError && <p className="notes-empty">{view === 'trash' ? t('回收站是空的。') : t('没有匹配的笔记。')}{view !== 'trash' && <button onClick={createNote}>{t('写一篇新笔记')}</button>}</p>}</div>
+      {isPhone && (
+        <div className="notes-phone-dock">
+          <button type="button" className="notes-phone-fab" disabled={busy} onClick={createNote} aria-label={t('新建笔记')}>
+            <Plus size={18} weight="regular" />
+            <span>{t('新建一条笔记…')}</span>
+          </button>
+        </div>
+      )}
     </aside>
     <main className="notes-main" aria-busy={loading}>
-      <WorkspaceToolbar className="notes-note-header">
-        <button className="um-agent-icon-button" aria-label={t('切换笔记目录')} onClick={() => {
-          if (rightSidebarFullscreen) {
-            exitFullscreen();
-            setDirectoryHidden(false);
-            setMobileView('directory');
-          } else {
-            const hidden = window.matchMedia('(max-width:900px)').matches ? mobileView === 'directory' : !directoryHidden;
-            setDirectoryHidden(hidden);
-            setMobileView(hidden ? 'editor' : 'directory');
-          }
-        }}><SidebarSimple size={18} /></button>
-        <WorkspaceTrail title={note?.title || (note ? t('未命名笔记') : t('全部笔记'))} crumbs={[{ label: t('笔记'), to: '/notes' }, ...(note ? [{ label: notebookPath(note.notebook, notebooks) }] : [])]} />
-        <div><span aria-live="polite" className="notes-save-status">{note ? `${t(status)}${dirty && status === '已保存' ? t(' · 未保存') : ''}` : ''}</span>{note && !pageError && <><button aria-label={t('导出笔记')} title={t('导出笔记')} disabled={busy} onClick={() => void run(() => notesApi.export('items', note.id))}><Export size={19} /></button>{note.deleted_at && <button aria-label={t('恢复笔记')} title={t('恢复笔记')} disabled={busy} onClick={() => void run(async () => { load(await notesApi.restore(note.id)); setView('all'); reload(); })}><ArrowCounterClockwise size={19} /></button>}<button aria-label={note.deleted_at ? t('永久删除') : t('移入回收站')} title={note.deleted_at ? t('永久删除') : t('移入回收站')} disabled={busy} className="notes-danger" onClick={() => removeNote()}><Trash size={19} /></button></>}</div>
+      <WorkspaceToolbar className={`notes-note-header${isPhone ? ' notes-phone-toolbar' : ''}`}>
+        {isPhone && mobileView === 'directory' ? <>
+          <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+            <PopoverTrigger asChild>
+              <button type="button" className="um-mobile-header-title um-m-header-switcher notes-phone-switcher" aria-label={t('筛选笔记')} aria-expanded={filtersOpen}>
+                <span>{phoneDirectoryLabel}</span>
+                <CaretDown size={13} weight="regular" className="um-m-header-caret" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" side="bottom" sideOffset={8} className="um-native-menu notes-phone-filter-popover">
+              <div className="notes-phone-filter-views" role="group" aria-label={t('笔记视图')}>
+                {([
+                  ['all', t('全部'), Stack],
+                  ['recent', t('最近'), ClockCounterClockwise],
+                  ['favorite', t('收藏'), Star],
+                  ['trash', t('回收站'), Trash],
+                ] as const).map(([value, label, Icon]) => (
+                  <button key={value} type="button" aria-pressed={view === value} onClick={() => { setView(value); setFiltersOpen(false); }}>
+                    <Icon size={15} /><span>{label}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="notes-phone-filter-section">
+                <div className="notes-phone-filter-section-head">
+                  <span>{t('所有笔记本')}</span>
+                  <button type="button" disabled={busy} onClick={() => { setFiltersOpen(false); createNotebook(); }}><FolderPlus size={14} />{t('新建笔记本')}</button>
+                </div>
+                <div className="notes-phone-filter-books">
+                  <button type="button" className={folder === '' ? 'is-active' : ''} onClick={() => { setFolder(''); setFiltersOpen(false); }}>{t('所有笔记本')}</button>
+                  <button type="button" className={folder === 'unfiled' ? 'is-active' : ''} onClick={() => { setFolder('unfiled'); setFiltersOpen(false); }}>{t('未分类')}</button>
+                  {notebooks.map(book => (
+                    <button key={book.id} type="button" className={folder === String(book.id) ? 'is-active' : ''} onClick={() => { setFolder(String(book.id)); if (view === 'trash') setView('all'); setFiltersOpen(false); }}>
+                      <NotebookIcon size={14} /><span>{notebookPath(book.id, notebooks)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {tags.length > 0 && (
+                <div className="notes-phone-filter-section">
+                  <div className="notes-phone-filter-section-head"><span>{t('所有标签')}</span></div>
+                  <div className="notes-phone-filter-tags">
+                    <button type="button" className={!tag ? 'is-active' : ''} onClick={() => { setTag(''); setFiltersOpen(false); }}>{t('全部')}</button>
+                    {tags.map(label => (
+                      <button key={label.id} type="button" className={tag === label.name ? 'is-active' : ''} onClick={() => { setTag(label.name); setFiltersOpen(false); }}>#{label.name}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+          <div className="notes-phone-toolbar-actions">
+            <button type="button" className="um-agent-icon-button" aria-label={t('搜索笔记')} aria-pressed={phoneSearchOpen} onClick={() => {
+              setPhoneSearchOpen(open => {
+                const next = !open;
+                if (next) window.setTimeout(() => phoneSearchInputRef.current?.focus(), 40);
+                else setQuery('');
+                return next;
+              });
+            }}><MagnifyingGlass size={18} /></button>
+          </div>
+        </> : isPhone ? <>
+          <span aria-live="polite" className="notes-phone-editor-status">
+            {note ? `${t(status)}${dirty && status === '已保存' ? t(' · 未保存') : ''}` : ''}
+          </span>
+          <div className="notes-phone-toolbar-actions">
+            {note && !pageError && !note.deleted_at && (
+              <button type="button" className="um-agent-icon-button" aria-label={note.is_favorite ? t('取消收藏') : t('收藏')} aria-pressed={note.is_favorite} disabled={busy} onClick={() => change({ is_favorite: !note.is_favorite })}>
+                <Star size={18} weight={note.is_favorite ? 'fill' : 'regular'} className={note.is_favorite ? 'notes-phone-star-active' : undefined} />
+              </button>
+            )}
+            {noteActions.length > 0 && <DropdownMenu>
+              <DropdownMenuTrigger asChild><button type="button" className="um-agent-icon-button" aria-label={t('笔记操作')} disabled={busy}><DotsThree size={19} weight="bold" /></button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="notes-phone-action-menu um-native-menu">{noteActions.map(action => <DropdownMenuItem key={action.label} className={action.danger ? 'notes-danger' : undefined} onSelect={action.run}><action.icon size={15} />{action.label}</DropdownMenuItem>)}</DropdownMenuContent>
+            </DropdownMenu>}
+          </div>
+        </> : <>
+          <button className="um-agent-icon-button" aria-label={t('切换笔记目录')} onClick={() => {
+            if (rightSidebarFullscreen) {
+              exitFullscreen();
+              setDirectoryHidden(false);
+              setMobileView('directory');
+            } else {
+              const hidden = window.matchMedia('(max-width:900px)').matches ? mobileView === 'directory' : !directoryHidden;
+              setDirectoryHidden(hidden);
+              setMobileView(hidden ? 'editor' : 'directory');
+            }
+          }}><SidebarSimple size={18} /></button>
+          <WorkspaceTrail title={note?.title || (note ? t('未命名笔记') : t('全部笔记'))} crumbs={[{ label: t('笔记'), to: '/notes' }, ...(note ? [{ label: notebookPath(note.notebook, notebooks) }] : [])]} />
+          <div>
+            <span aria-live="polite" className="notes-save-status">{note ? `${t(status)}${dirty && status === '已保存' ? t(' · 未保存') : ''}` : ''}</span>
+            {noteActions.map(action => <button key={action.label} type="button" aria-label={action.label} title={action.label} disabled={busy} className={action.danger ? 'notes-danger' : undefined} onClick={action.run}><action.icon size={19} /></button>)}
+          </div>
+        </>}
       </WorkspaceToolbar>
       {loading && <div className="notes-loading">{t('正在打开笔记…')}</div>}
       {pageError && <div className="notes-empty" role="alert">{pageError}<button onClick={() => navigate('/notes')}>{t('返回目录')}</button></div>}

@@ -6,17 +6,21 @@ import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ContactAdminModal } from '@/components/ContactAdminModal';
+import { useSystemStore } from '@/store/useSystemStore';
 import type { LearningAccess } from '@/types/learning';
 import { learningDate, learningPrice, learningReset } from '@/types/learning';
+import '@/styles/settings.css';
 
 interface Order { id: number; product_name: string; status: string; amount_cents: number; created_at: string; }
 
 export function BillingPage() {
-  useLocale();
+  const locale = useLocale();
+  const setPageHeader = useSystemStore(state => state.setPageHeader);
   const [access, setAccess] = useState<LearningAccess | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState('');
   const [contactOpen, setContactOpen] = useState(false);
+  useEffect(() => { setPageHeader(t('我的服务'), ''); return () => setPageHeader('', ''); }, [setPageHeader, locale]);
   const load = () => {
     void Promise.all([api.get<LearningAccess>('/users/learning/access/'), api.get<Order[]>('/payments/orders/')])
       .then(([rights, history]) => { setAccess(rights.data); setOrders(history.data); })
@@ -26,7 +30,7 @@ export function BillingPage() {
   const usagePercent = access?.ai_usage.limit ? Math.min(100, Math.round(access.ai_usage.used / access.ai_usage.limit * 100)) : 0;
   const status: Record<string, string> = { paid: t('已支付'), pending: t('待支付'), refunded: t('已退款'), expired: t('已过期'), cancelled: t('已取消') };
   const cohortStates: Record<string, string> = { active: t('服务中'), scheduled: t('尚未开始'), expired: t('已结束'), disabled: t('已停用') };
-  return <main className="max-w-4xl mx-auto py-6 space-y-8">
+  return <main className="um-billing-page max-w-4xl mx-auto py-6 space-y-8">
     <header className="flex flex-wrap justify-between items-center gap-4"><h1 className="text-2xl font-semibold">{t('我的服务')}</h1><div className="flex gap-3"><Button variant="outline" onClick={() => setContactOpen(true)}>{t('联系我们')}</Button><Button asChild variant="outline"><Link to="/pricing">{t('AI 加量')}<ArrowRight size={16} /></Link></Button></div></header>
     {error ? <div role="alert"><p>{error}</p><Button variant="outline" onClick={() => { setError(''); load(); }}>{t('重试')}</Button></div> : !access ? <p role="status">{t('正在加载…')}</p> : <>
       <section><h2 className="font-medium">{t('当前身份')}</h2><p className="mt-3">{access.ai_usage.unlimited ? t('管理员') : access.is_course_student ? t('课程学员') : t('注册学生')}</p><p className="mt-2 text-sm text-muted-foreground">{access.is_course_student ? t('课程访问权限与服务日期以当前授权为准。') : t('可以观看公开课并使用基础小宇问答额度，购买 AI 加量不会开通课程。')}</p>

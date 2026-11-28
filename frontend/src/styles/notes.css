@@ -110,15 +110,14 @@
 @keyframes um-notes-loading{to{opacity:.4}}
 @media(max-width:767px){
   .um-window-panes,.um-window-panes[data-notes-open=true]{grid-template-columns:minmax(0,1fr);--um-notes-width:min(100vw,480px)}
-  .um-notes-sidebar-host{position:fixed;top:calc(48px + var(--safe-area-inset-top,env(safe-area-inset-top,0px)));bottom:var(--um-mobile-nav-height);right:var(--safe-area-inset-right,env(safe-area-inset-right,0px));width:var(--um-notes-width);margin:0;border-radius:0;z-index:var(--z-sticky);transform:translateX(100%)}
+  .um-notes-sidebar-host{position:fixed;top:var(--um-mobile-toolbar-height);bottom:var(--um-mobile-bottom-inset);right:var(--safe-area-inset-right,env(safe-area-inset-right,0px));width:var(--um-notes-width);margin:0;border-radius:0;z-index:var(--z-sticky);transform:translateX(100%)}
   .um-notes-sidebar.notes-workspace{width:var(--um-notes-width)}
   .um-notes-sidebar-host[data-open=true]{transform:translateX(0)}
-  .um-notes-mobile-backdrop{display:block;position:fixed;inset:calc(48px + var(--safe-area-inset-top,env(safe-area-inset-top,0px))) 0 var(--um-mobile-nav-height);background:hsl(var(--foreground)/.15);z-index:var(--z-dropdown)}
+  .um-notes-mobile-backdrop{display:block;position:fixed;inset:var(--um-mobile-toolbar-height) 0 var(--um-mobile-bottom-inset);background:hsl(var(--foreground)/.15);z-index:var(--z-dropdown)}
   .um-notes-sidebar-content,.um-notes-sidebar-header,.um-notes-document-bar,.um-notes-picker,.um-notes-sidebar-footer{padding-inline:20px}
   .um-notes-sidebar .notes-save-error,.um-notes-sidebar>.um-notes-list-error{margin-inline:20px}
   .um-notes-sidebar-header button{width:38px;height:38px}
 }
-@media(max-width:600px){.um-notes-sidebar-host{top:calc(52px + var(--safe-area-inset-top,env(safe-area-inset-top,0px)))}.um-notes-mobile-backdrop{top:calc(52px + var(--safe-area-inset-top,env(safe-area-inset-top,0px)))}}
 @media(prefers-reduced-motion:reduce){
   .um-window-panes,.um-notes-sidebar-host,.um-notes-sidebar-host[data-open=true],.um-notes-sidebar button{transition:none}
   .um-notes-picker,.um-notes-skeleton i{animation:none}
@@ -144,6 +143,10 @@
 .um-right-panel-header .um-sidebar-tab [role=tab] { padding-right:30px; }
 .um-sidebar-tab-close { position:absolute; right:4px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:22px; height:28px; border-radius:5px; color:var(--um-color-text-muted); cursor:pointer; }
 .um-sidebar-tab-close:hover { background:var(--um-color-hover); color:var(--um-color-text); }
+@media(max-width:767px) {
+  .um-app-shell[data-mobile-xiaoyu] .um-right-panel-header .um-sidebar-tab [role=tab] { padding-right:8px; }
+  .um-app-shell[data-mobile-xiaoyu] .um-sidebar-tab-close { position:static; width:44px; height:44px; transform:none; }
+}
 .um-sidebar-home { flex:1; min-height:0; overflow-y:auto; padding:24px; }
 .um-sidebar-home section+section { margin-top:32px; }
 .um-sidebar-home h3 { margin:0 0 14px; font-size:14px; font-weight:var(--um-weight-semibold); }
@@ -173,6 +176,617 @@
   .notes-mobile-tabs button,.notes-note-header button,.notes-editor-toolbar button,.notes-directory-header button{min-width:44px;min-height:44px}
   .notes-editor-toolbar{flex-wrap:wrap}
   .notes-writing-surface{overflow-wrap:anywhere}
-  .um-notes-sidebar-host{max-width:calc(100vw - var(--safe-area-inset-left,env(safe-area-inset-left,0px)) - var(--safe-area-inset-right,env(safe-area-inset-right,0px)));max-height:calc(var(--um-viewport-height,100dvh) - var(--um-mobile-toolbar-height) - var(--um-mobile-nav-height))}
+  .um-notes-sidebar-host{max-width:calc(100vw - var(--safe-area-inset-left,env(safe-area-inset-left,0px)) - var(--safe-area-inset-right,env(safe-area-inset-right,0px)));max-height:calc(var(--um-viewport-height,100dvh) - var(--um-mobile-toolbar-height) - var(--um-mobile-bottom-inset))}
   .um-right-panel-header [role=tablist]{min-width:0;overflow-x:auto;overscroll-behavior-x:contain}
+}
+
+.notes-directory-search-row, .notes-directory-filters:not([hidden]) { display: contents; }
+.notes-phone-active-bar { display: contents; }
+.notes-phone-active-bar > span { display: none; }
+
+@media (max-width: 767px) {
+  .um-app-shell[data-mobile-notes] {
+    --um-font-family: var(--m-font-sans);
+    font-family: var(--m-font-sans);
+    font-variant-numeric: normal;
+  }
+  .um-app-shell[data-mobile-notes] .um-window-toolbar,
+  .um-app-shell[data-mobile-notes] .um-app-main {
+    background: var(--m-canvas);
+  }
+  .um-app-shell[data-mobile-notes]:has(.notes-mobile-editor) .um-window-toolbar,
+  .um-app-shell[data-mobile-notes]:has(.notes-mobile-editor) .um-app-main {
+    background: var(--m-chat-canvas);
+  }
+  .um-app-shell[data-mobile-notes]:has(.notes-mobile-editor) .um-window-toolbar {
+    box-shadow: inset 0 -0.5px 0 var(--m-hairline);
+  }
+  .um-app-shell[data-mobile-notes] .um-app-main { margin: 0; border: 0; border-radius: 0; }
+  .um-app-shell[data-mobile-notes] .um-window-toolbar .um-agent-icon-button {
+    color: var(--m-ink-secondary);
+    border-radius: 10px;
+  }
+  .um-app-shell[data-mobile-notes] .um-window-toolbar .um-agent-icon-button:active {
+    background: var(--m-surface-hover);
+    color: var(--m-ink);
+  }
+
+  .notes-page .notes-mobile-tabs,
+  .notes-page .notes-directory-header,
+  .notes-page .notes-list-heading { display: none; }
+
+  /* Toolbar */
+  .notes-phone-toolbar { gap: 4px; }
+  .notes-phone-toolbar .notes-phone-switcher {
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.015em;
+    color: var(--m-ink);
+    padding: 0 7px 0 3px;
+    min-width: 0;
+  }
+  .notes-phone-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .notes-phone-editor-status {
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--m-ink-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .notes-phone-star-active { color: var(--m-accent); }
+  .notes-phone-action-menu [role='menuitem'] { min-height: 42px; gap: 9px; font-size: 14px; }
+
+  /* Header Filter Popover (flomo-style dropdown from "笔记 ⌄") */
+  .notes-phone-filter-popover {
+    width: min(286px, calc(100vw - 24px));
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .notes-phone-filter-views {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .notes-phone-filter-views button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0 11px;
+    border-radius: 9px;
+    font-size: 13.5px;
+    font-weight: 400;
+    color: var(--m-ink);
+    background: var(--m-surface-inset);
+  }
+  .notes-phone-filter-views button[aria-pressed='true'] {
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+    font-weight: 500;
+  }
+  .notes-phone-filter-section {
+    border-top: 0.5px solid var(--m-hairline);
+    padding-top: 8px;
+  }
+  .notes-phone-filter-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px 6px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--m-ink-muted);
+  }
+  .notes-phone-filter-section-head button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 30px;
+    padding: 0 6px;
+    border-radius: 7px;
+    font-size: 12px;
+    color: var(--m-accent);
+  }
+  .notes-phone-filter-books {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .notes-phone-filter-books button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 10px;
+    border-radius: 9px;
+    font-size: 13.5px;
+    color: var(--m-ink);
+    text-align: left;
+  }
+  .notes-phone-filter-books button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .notes-phone-filter-books button.is-active {
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+    font-weight: 500;
+  }
+  .notes-phone-filter-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 2px;
+  }
+  .notes-phone-filter-tags button {
+    height: 30px;
+    min-height: 30px;
+    min-width: 0;
+    padding: 0 10px;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-surface-inset);
+    color: var(--m-ink-secondary);
+    font-size: 12.5px;
+  }
+  .notes-phone-filter-tags button.is-active {
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+    font-weight: 500;
+  }
+
+  /* Directory Feed — Pure flomo floating white cards */
+  .notes-page .notes-directory {
+    position: relative;
+    padding: 6px 14px 92px;
+    background: var(--m-canvas);
+  }
+  .notes-page .notes-directory-search-row {
+    display: none;
+    margin-bottom: 10px;
+    flex: none;
+  }
+  .notes-page .notes-directory-search-row[data-phone-open='true'] {
+    display: flex;
+  }
+  .notes-page .notes-search {
+    flex: 1;
+    min-width: 0;
+    height: 42px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+    padding: 0 6px 0 12px;
+    color: var(--m-ink-muted);
+  }
+  .notes-page .notes-search input {
+    font-size: 16px;
+    color: var(--m-ink);
+    padding: 8px 0;
+  }
+  .notes-page .notes-search input::placeholder { color: var(--m-ink-muted); font-size: 14.5px; }
+  .notes-page .notes-search > svg { flex-shrink: 0; }
+  .notes-page .notes-phone-search-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
+    padding: 0;
+    border-radius: 9px;
+    color: var(--m-ink-muted);
+    flex-shrink: 0;
+  }
+
+  .notes-page .notes-phone-active-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 2px 10px;
+    font-size: 12.5px;
+    color: var(--m-ink-muted);
+  }
+  .notes-page .notes-phone-active-bar > span { display: inline; }
+  .notes-page .notes-clear-filters {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    min-height: 30px;
+    min-width: 0;
+    padding: 0 9px;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-pill);
+    font-size: 12px;
+    color: var(--m-ink-secondary);
+  }
+
+  .notes-page .notes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: none;
+    min-height: 0;
+  }
+
+  .notes-phone-card {
+    display: flex;
+    flex-direction: column;
+    padding: 13px 16px 15px;
+    transition: transform 120ms ease, background-color 140ms ease;
+  }
+  .notes-phone-card:active {
+    transform: scale(0.99);
+  }
+  .notes-phone-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .notes-phone-card-time {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    color: var(--m-ink-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .notes-phone-card-book {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .notes-phone-card-star {
+    color: var(--m-accent);
+    flex-shrink: 0;
+    margin-left: 2px;
+  }
+  .notes-page .notes-phone-card-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 28px;
+    min-width: 32px;
+    min-height: 28px;
+    margin: -4px -8px -4px 0;
+    padding: 0;
+    border-radius: 8px;
+    color: var(--m-ink-muted);
+    flex-shrink: 0;
+  }
+  .notes-page .notes-phone-card-more:active {
+    background: var(--m-surface-inset);
+    color: var(--m-ink);
+  }
+
+  .notes-page .notes-phone-card-body {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    width: 100%;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    text-align: left;
+  }
+  .notes-page .notes-phone-card-body:hover { background: transparent; }
+  .notes-page .notes-phone-card-body strong {
+    font-size: 15.5px;
+    font-weight: 500;
+    line-height: 1.45;
+    color: var(--m-ink);
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .notes-page .notes-phone-card-body p {
+    margin: 0;
+    font-size: 14.5px;
+    font-weight: 400;
+    line-height: 1.66;
+    color: var(--m-ink-secondary);
+    white-space: pre-line;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+  .notes-page .notes-phone-card-body:not(:has(strong)) p {
+    color: var(--m-ink);
+    font-size: 15px;
+  }
+  .notes-phone-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .notes-phone-card-tags span {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.4;
+  }
+
+  /* Bottom flomo floating "+ 新建一条笔记…" capsule */
+  .notes-phone-dock {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 12;
+    display: flex;
+    justify-content: center;
+    padding: 12px 14px max(12px, calc(16px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))));
+    background: linear-gradient(to top, var(--m-canvas) 66%, transparent);
+    pointer-events: none;
+  }
+  .notes-page .notes-phone-fab {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    max-width: 560px;
+    height: 48px;
+    min-height: 48px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 24px;
+    background: var(--m-dock-bg);
+    box-shadow: var(--m-shadow-dock);
+    color: var(--m-ink-muted);
+    font-size: 15px;
+    font-weight: 400;
+    transition: transform 120ms ease, background-color 140ms ease;
+  }
+  .notes-page .notes-phone-fab svg {
+    color: var(--m-ink-secondary);
+    flex-shrink: 0;
+  }
+  .notes-page .notes-phone-fab:active {
+    transform: scale(0.985);
+    background: var(--m-surface-hover);
+  }
+  .notes-mobile-editor .notes-phone-dock { display: none; }
+
+  /* Calm Pure-White Writing Surface */
+  .notes-page .notes-main { background: var(--m-chat-canvas); }
+  .notes-page .notes-writing-surface {
+    padding: 14px 20px 44px;
+    background: var(--m-chat-canvas);
+  }
+  .notes-page .notes-editor-meta {
+    margin-bottom: 2px;
+    font-size: 12.5px;
+    color: var(--m-ink-muted);
+  }
+  .notes-page .notes-editor-meta > .notes-icon-button { display: none; }
+  .notes-page .notes-editor-meta .um-select-trigger {
+    width: auto;
+    max-width: 100%;
+    justify-content: flex-start;
+    gap: 5px;
+    min-height: 32px;
+    height: 32px;
+    padding: 0 4px 0 0;
+    font-size: 13px;
+    color: var(--m-ink-muted);
+  }
+  .notes-page .notes-title {
+    font-size: 22px !important;
+    font-weight: 600 !important;
+    line-height: 1.38;
+    letter-spacing: -0.015em;
+    color: var(--m-ink);
+    margin: 6px 0 6px;
+  }
+  .notes-page .notes-tags {
+    gap: 8px;
+    font-size: 13px;
+    color: var(--m-ink-muted);
+  }
+  .notes-page .notes-tags input {
+    min-height: 34px;
+    padding: 4px 0;
+    font-size: 14px;
+    color: var(--m-accent);
+  }
+  .notes-page .notes-tags input::placeholder { color: var(--m-ink-muted); }
+  .notes-page .notes-editor-toolbar {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 2px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    margin: 10px -20px 16px;
+    padding: 4px 16px;
+    border-block: 0.5px solid var(--m-hairline);
+    color: var(--m-ink-secondary);
+  }
+  .notes-page .notes-editor-toolbar::-webkit-scrollbar { display: none; }
+  .notes-page .notes-editor-toolbar > :is(button, div) { flex: none; }
+  .notes-page .notes-editor-toolbar > button {
+    min-width: 0;
+    min-height: 36px;
+    height: 36px;
+    padding: 0 10px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    color: var(--m-ink-secondary);
+  }
+  .notes-page .notes-editor-toolbar > div { flex-wrap: nowrap; gap: 2px; }
+  .notes-page .notes-editor-toolbar .notes-icon-button {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0;
+    border-radius: 8px;
+    color: var(--m-ink-secondary);
+  }
+  .notes-page .notes-editor-toolbar button[aria-pressed='true'] {
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+  }
+  .notes-page .notes-editor-toolbar button:focus-visible { outline: 2px solid var(--m-accent); outline-offset: -3px; }
+  .notes-page .notes-prose,
+  .notes-page .notes-prose p {
+    font-size: var(--um-font-notes, 16px);
+    line-height: 1.78;
+    color: var(--m-ink);
+  }
+  .notes-page .notes-prose blockquote {
+    border-left: 2px solid color-mix(in srgb, var(--m-accent) 42%, transparent);
+    padding-left: 12px;
+    color: var(--m-ink-secondary);
+  }
+  .notes-page .notes-backlinks {
+    border-top: 0.5px solid var(--m-hairline);
+    color: var(--m-ink-muted);
+    font-size: 12px;
+  }
+
+  /* ── Unified Right Slide-Over Panel (Notes / Learning Path / Saved Courses / Home) ── */
+  .um-notes-mobile-backdrop {
+    background: var(--m-backdrop);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  .um-notes-sidebar-host.um-unified-sidebar {
+    background: var(--m-chat-canvas);
+    color: var(--m-ink);
+    font-family: var(--m-font-sans);
+    border-left: 0;
+    box-shadow: var(--m-shadow-drawer);
+  }
+  .um-right-panel-header {
+    height: 48px;
+    padding: 6px 10px;
+    gap: 6px;
+    border-bottom: 0.5px solid var(--m-hairline);
+    background: var(--m-chat-canvas);
+  }
+  .um-app-shell .um-right-panel-header > .um-agent-icon-button {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
+    border-radius: 9px;
+    color: var(--m-ink-secondary);
+  }
+  .um-app-shell .um-right-panel-header > .um-agent-icon-button[aria-pressed='true'] {
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+  }
+  .um-right-panel-header [role='tablist'] {
+    gap: 4px;
+    align-items: center;
+  }
+  .um-app-shell .um-right-panel-header [role='tab'] {
+    height: 32px;
+    min-height: 32px;
+    min-width: 0;
+    padding: 0 10px;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--m-ink-secondary);
+  }
+  .um-app-shell .um-right-panel-header [role='tab'][aria-selected='true'] {
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+    font-weight: 500;
+  }
+  .um-app-shell .um-right-panel-header .um-sidebar-tab [role='tab'] { padding-right: 10px; }
+  .um-app-shell .um-sidebar-tab-close {
+    position: static;
+    transform: none;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+    border-radius: 6px;
+    margin-left: 2px;
+    color: var(--m-ink-muted);
+  }
+  .um-sidebar-home {
+    padding: 16px 14px 28px;
+    background: var(--m-canvas);
+  }
+  .um-sidebar-home section + section { margin-top: 20px; }
+  .um-sidebar-home h3 {
+    margin: 0 0 10px 2px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--m-ink-muted);
+  }
+  .um-sidebar-tools { gap: 10px; }
+  .um-sidebar-tools button {
+    padding: 14px 12px;
+    border: 0;
+    border-radius: var(--m-radius-card);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+    color: var(--m-ink);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .um-sidebar-tools button svg { color: var(--m-accent); }
+  .um-sidebar-tools .um-sidebar-add-tool {
+    background: var(--m-surface-inset);
+    box-shadow: none;
+    color: var(--m-ink-muted);
+  }
+  .um-sidebar-tools .um-sidebar-add-tool svg { color: var(--m-ink-muted); }
+  .um-sidebar-recent {
+    border-radius: var(--m-radius-card);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+    overflow: hidden;
+  }
+  .um-sidebar-recent button {
+    padding: 13px 14px;
+    border-bottom: 0.5px solid var(--m-hairline);
+    color: var(--m-ink);
+    font-size: 14px;
+  }
+  .um-sidebar-recent button:last-child { border-bottom: 0; }
+  .um-sidebar-recent button svg { color: var(--m-ink-muted); }
 }

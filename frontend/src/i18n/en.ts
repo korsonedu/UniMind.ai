@@ -511,6 +511,9 @@ const en: Record<string, string> = {
   "和小宇对话，@ 引用笔记…": "Ask XiaoYu, @ to reference notes…",
   "小宇": "XiaoYu",
   "我的笔记": "My notes",
+  "筛选笔记": "Filter notes",
+  "笔记操作": "Note actions",
+  "新建一条笔记…": "Write a new note…",
   "笔记": "Notes",
   "学习记录": "Learning history",
   "记录": "History",
@@ -545,6 +548,7 @@ const en: Record<string, string> = {
   "收起右侧栏": "Hide sidebar",
   "展开右侧栏": "Show sidebar",
   "应用导航": "App navigation",
+  "关闭侧栏": "Close sidebar",
   "功能导航": "Feature navigation",
   "· 暂未开通": "· Unavailable",
   "工具入口": "Tools",
@@ -633,6 +637,7 @@ const en: Record<string, string> = {
   "我们要做些什么？": "What would you like to learn?",
   "和{0}对话": "Talk to {0}",
   "快捷任务": "Quick actions",
+  "表格": "Table",
   "个历史对话": "past conversations",
   "条消息": "messages",
   "个对话": "conversations",
@@ -1298,6 +1303,14 @@ const en: Record<string, string> = {
   "暂无稍后观看": "Nothing saved for later",
   "这里还没有“收藏了就等于学会了”的知识。": "Save a course here to watch it later.",
   "学习快捷入口": "Learning shortcuts",
+  "今天想学什么？": "What would you like to learn today?",
+  "问问小宇": "Ask XiaoYu",
+  "提问、拆解概念，或输入 @ 引用笔记": "Ask anything, break down concepts, or type @ to cite notes",
+  "规划系统学习目标": "Build a structured study plan",
+  "把难懂的原理讲透": "Break down tough concepts clearly",
+  "按薄弱点智能出题": "Targeted practice on weak spots",
+  "随时记录灵感与总结": "Capture thoughts and takeaways",
+  "回到上次观看进度": "Resume where you left off",
   "小宇 Agent": "XiaoYu",
   "题库练习": "Question-bank practice",
   "答疑中心": "Q&A",
@@ -3427,7 +3440,11 @@ const en: Record<string, string> = {
   "⚖️ 结合实务场景帮我理解机制": "⚖️ Explain the mechanism with a practical scenario",
   "🧪 手把手带我推演/算一遍": "🧪 Guide me through a derivation or calculation",
   "📝 出一道实战计算或综合案例题": "📝 Give me a practical calculation or case question",
-  "🎯 拆解这个难点的解题步骤": "🎯 Break this challenge into solving steps"
+  "🎯 拆解这个难点的解题步骤": "🎯 Break this challenge into solving steps",
+  "第 {0} / {1} 题": "Question {0} / {1}",
+  "题目列表": "Question list",
+  "该题已标记掌握，提交时将自动跳过": "Marked as mastered. Skipped on submission.",
+  "第 {0} 题": "Question {0}"
 };
 
 export default en;

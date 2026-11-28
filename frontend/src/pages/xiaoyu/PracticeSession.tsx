@@ -1,3 +1,4 @@
+import '@/styles/practice.css';
 import { t, useLocale } from '@/i18n';
 import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -5,6 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, Spinner, CaretLeft, Target, Clock } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { MarkdownContent } from '@/components/MarkdownContent';
+import { WorkspaceToolbar } from '@/components/WorkspaceToolbar';
 import { useLearningSession } from '@/hooks/useLearningSession';
 import { cachePractice, getCachedPractice, offlineCacheSupported } from '@/lib/offlineData';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -265,25 +267,32 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
   if (phase === 'results' && submitResult) {
     const { correct_rate, correct_count, total_questions, kp_breakdown, summary_text } = submitResult;
     return (
-      <div className="h-full min-h-0 bg-white flex flex-col overflow-auto">
-        <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 max-w-md mx-auto w-full">
+      <div className="um-xy-practice-results h-full min-h-0 bg-white flex flex-col overflow-auto">
+        {isMobile && (
+          <WorkspaceToolbar className="um-practice-session-toolbar">
+            <span className="um-xy-practice-toolbar-title">{t('练习完成')}</span>
+          </WorkspaceToolbar>
+        )}
+        <div className="um-xy-practice-results-inner flex-1 flex flex-col items-center justify-center px-6 py-10 max-w-md mx-auto w-full">
           {/* Hero */}
-          <div className="text-6xl mb-4">🎯</div>
-          <h2 className="text-xl font-bold text-stone-800 mb-2">{t('练习完成')}</h2>
-          <div className="text-5xl font-extrabold text-stone-900 mb-1">
-            {correct_rate}%
-          </div>
-          <p className="text-stone-500 mb-2">
-            {t('得分率 · 达标题数（{0}/{1}）', { 0: correct_count, 1: total_questions })}
-          </p>
-          <div className="flex items-center gap-2 text-stone-400 text-sm mb-6">
-            <Clock className="w-4 h-4" />
-            <span>{questions.length ? t('用时 {0}', { 0: timeStr }) : t('已恢复已完成的练习')}</span>
+          <div className="um-xy-practice-hero-card w-full flex flex-col items-center">
+            <div className="um-xy-practice-hero-emoji text-6xl mb-4">🎯</div>
+            <h2 className="text-xl font-bold text-stone-800 mb-2">{t('练习完成')}</h2>
+            <div className="um-xy-practice-hero-rate text-5xl font-extrabold text-stone-900 mb-1">
+              {correct_rate}%
+            </div>
+            <p className="text-stone-500 mb-2">
+              {t('得分率 · 达标题数（{0}/{1}）', { 0: correct_count, 1: total_questions })}
+            </p>
+            <div className="flex items-center gap-2 text-stone-400 text-sm mb-6">
+              <Clock className="w-4 h-4" />
+              <span>{questions.length ? t('用时 {0}', { 0: timeStr }) : t('已恢复已完成的练习')}</span>
+            </div>
           </div>
 
           {/* KP breakdown */}
           {kp_breakdown.length > 0 && (
-            <div className="w-full bg-stone-50 rounded-xl p-4 mb-6">
+            <div className="um-xy-practice-card w-full bg-stone-50 rounded-xl p-4 mb-6">
               <h3 className="text-sm font-semibold text-stone-700 mb-3">{t('知识点达标情况')}</h3>
               {kp_breakdown.map((kp) => (
                 <div key={kp.kp_id} className="flex items-center justify-between py-1.5 text-sm">
@@ -306,10 +315,10 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
           )}
 
           {/* Summary */}
-          <p className="text-sm text-stone-500 text-center mb-8">{summary_text}</p>
+          <p className="um-xy-practice-summary text-sm text-stone-500 text-center mb-8">{summary_text}</p>
 
-          <div className="mb-6 w-full space-y-4">
-            {submitResult.results.map(result => <article key={result.question_id} className="rounded-xl border border-stone-200 p-4">
+          <div className="um-xy-practice-feedback-list mb-6 w-full space-y-4">
+            {submitResult.results.map(result => <article key={result.question_id} className="um-xy-practice-card rounded-xl border border-stone-200 p-4">
               <h3 className="mb-2 text-sm font-medium text-stone-800">{result.kp_name} · {result.score}/{result.max_score} {t('分')}</h3>
               <p className="whitespace-pre-wrap text-sm leading-6 text-stone-600">{result.feedback}</p>
             </article>)}
@@ -318,7 +327,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
           {/* View analysis button */}
           <button
             onClick={() => navigate('/xiaoyu?practiceDone=1')}
-            className="w-full py-3 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-colors flex items-center justify-center gap-2"
+            className="um-xy-practice-cta w-full py-3 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-colors flex items-center justify-center gap-2"
           >
             <Target className="w-4 h-4" />
             {t('查看小宇分析 →')}</button>
@@ -330,7 +339,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
   // ── Submitting Phase ─────────────────────────────────
   if (phase === 'submitting') {
     return (
-      <div className="h-full min-h-0 bg-white flex items-center justify-center">
+      <div className="um-xy-practice-shell h-full min-h-0 bg-white flex items-center justify-center">
         <div className="text-center">
           <Spinner className="w-10 h-10 animate-spin text-stone-400 mx-auto mb-4" />
           <p className="text-stone-500">{t('正在批改...')}</p>
@@ -346,23 +355,35 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
   const allAnswered = questions.every((q) => answers[q.id]?.trim()?.length > 0);
 
   return (
-    <div className="h-full min-h-0 bg-white flex flex-col overflow-hidden">
+    <div className="um-xy-practice-shell h-full min-h-0 bg-white flex flex-col overflow-hidden">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 shrink-0">
-        <button
-          onClick={() => navigate('/xiaoyu')}
-          className="flex items-center gap-1 text-stone-400 hover:text-stone-600 text-sm"
-        >
-          <CaretLeft className="w-4 h-4" />
-          {!isMobile && <span>{t('退出')}</span>}
-        </button>
-        <span className="text-sm font-medium text-stone-600">
-          {t('第 {0} 题，共 {1} 题', { 0: currentIdx + 1, 1: questions.length })}</span>
-        <div className="w-12" /> {/* spacer */}
-      </div>
+      {isMobile ? (
+        <WorkspaceToolbar className="um-practice-session-toolbar">
+          <span className="um-xy-practice-toolbar-title">
+            {t('第 {0} / {1} 题', { 0: currentIdx + 1, 1: questions.length })}
+          </span>
+          <span className="um-xy-practice-toolbar-time">
+            <Clock size={13} />
+            {timeStr}
+          </span>
+        </WorkspaceToolbar>
+      ) : (
+        <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 shrink-0">
+          <button
+            onClick={() => navigate('/xiaoyu')}
+            className="flex items-center gap-1 text-stone-400 hover:text-stone-600 text-sm"
+          >
+            <CaretLeft className="w-4 h-4" />
+            <span>{t('退出')}</span>
+          </button>
+          <span className="text-sm font-medium text-stone-600">
+            {t('第 {0} 题，共 {1} 题', { 0: currentIdx + 1, 1: questions.length })}</span>
+          <div className="w-12" /> {/* spacer */}
+        </div>
+      )}
 
       {/* Progress bar */}
-      <div className="h-1 bg-stone-100 shrink-0">
+      <div className="um-xy-practice-progress h-1 bg-stone-100 shrink-0">
         <div
           className="h-full bg-stone-800 transition-all duration-[180ms]"
           style={{ width: `${((currentIdx + 1) / questions.length) * 100}%` }}
@@ -373,44 +394,46 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
 
       {/* Question area */}
       <div
-        className="flex-1 overflow-y-auto px-4 py-6"
+        className="um-xy-practice-scroll flex-1 overflow-y-auto px-4 py-6"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
         <div className="max-w-lg mx-auto">
           {/* KP tag */}
           {current.kp_name && (
-            <div className="inline-block bg-stone-100 text-stone-500 text-xs px-2.5 py-1 rounded-full mb-4">
+            <div className="um-xy-practice-kp inline-block bg-stone-100 text-stone-500 text-xs px-2.5 py-1 rounded-full mb-4">
               {current.kp_name}
               {current.is_review && <span className="ml-1 text-amber-500">{t('· 复习')}</span>}
             </div>
           )}
 
           {/* Question text */}
-          <div className="text-stone-800 text-lg leading-relaxed mb-6 prose prose-stone max-w-none">
+          <div className="um-xy-practice-stem text-stone-800 text-lg leading-relaxed mb-6 prose prose-stone max-w-none">
             <MarkdownContent content={processMathContent(current.text)} />
           </div>
 
           {/* Answer area */}
           {current.q_type === 'objective' && current.options?.length ? (
-            <div className="space-y-3">
+            <div className="um-xy-practice-options space-y-3">
               {current.options.map((opt, i) => {
                 const isSelected = answers[current.id] === opt;
                 return (
                   <button
                     key={i}
+                    type="button"
                     disabled={offline}
+                    aria-pressed={isSelected}
                     onClick={() => selectOption(current.id, opt)}
-                    className={`w-full text-left px-4 py-3 rounded-xl border transition-all disabled:cursor-not-allowed disabled:opacity-70 ${
+                    className={`um-xy-practice-option w-full text-left px-4 py-3 rounded-xl border transition-all disabled:cursor-not-allowed disabled:opacity-70 ${
                       isSelected
                         ? 'border-stone-800 bg-stone-50 text-stone-900 font-medium'
                         : 'border-stone-200 text-stone-600 hover:border-stone-300'
                     }`}
                   >
-                    <span className="inline-block w-6 h-6 rounded-full border-2 border-current text-center leading-5 text-xs mr-3">
+                    <span className="um-xy-practice-letter inline-block w-6 h-6 rounded-full border-2 border-current text-center leading-5 text-xs mr-3">
                       {String.fromCharCode(65 + i)}
                     </span>
-                    {opt}
+                    <span className="um-xy-practice-opt-text">{opt}</span>
                   </button>
                 );
               })}
@@ -422,30 +445,35 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
               onChange={(e) => setTextAnswer(current.id, e.target.value)}
               placeholder={offline ? t('离线只读') : t('输入你的答案...')}
               rows={5}
-              className="w-full border border-stone-200 rounded-xl px-4 py-3 text-stone-800 placeholder-stone-300 focus:outline-none focus:border-stone-400 resize-none disabled:bg-stone-50 disabled:cursor-not-allowed"
+              className="um-xy-practice-textarea w-full border border-stone-200 rounded-xl px-4 py-3 text-stone-800 placeholder-stone-300 focus:outline-none focus:border-stone-400 resize-none disabled:bg-stone-50 disabled:cursor-not-allowed"
             />
           )}
         </div>
       </div>
 
       {/* Bottom nav */}
-      <div className="border-t border-stone-100 px-4 py-3 shrink-0">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
+      <div className="um-xy-practice-footer border-t border-stone-100 px-4 py-3 shrink-0">
+        <div className="max-w-lg mx-auto flex items-center justify-between gap-2">
           <button
+            type="button"
             onClick={() => setCurrentIdx(currentIdx - 1)}
             disabled={currentIdx === 0}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm text-stone-500 disabled:text-stone-300 disabled:cursor-not-allowed hover:text-stone-700"
+            className="um-xy-practice-nav-btn flex items-center gap-1.5 px-3 py-2 text-sm text-stone-500 disabled:text-stone-300 disabled:cursor-not-allowed hover:text-stone-700"
           >
             <ArrowLeft className="w-4 h-4" />
             {!isMobile && t('上一题')}
           </button>
 
-          <div className="flex gap-1">
+          <div className="um-xy-practice-dots flex gap-1.5 items-center">
             {questions.map((_, i) => (
               <button
                 key={i}
+                type="button"
+                aria-label={t('第 {0} 题', { 0: i + 1 })}
                 onClick={() => setCurrentIdx(i)}
-                className={`w-2 h-2 rounded-full transition-all ${
+                data-current={i === currentIdx ? 'true' : undefined}
+                data-answered={answers[questions[i].id]?.trim() ? 'true' : undefined}
+                className={`um-xy-practice-dot w-2 h-2 rounded-full transition-all ${
                   i === currentIdx
                     ? 'bg-stone-800 w-4'
                     : answers[questions[i].id]?.trim()
@@ -458,16 +486,18 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
 
           {isLast ? (
             <button
+              type="button"
               onClick={handleSubmit}
               disabled={offline || !allAnswered}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-stone-900 text-white rounded-lg disabled:bg-stone-300 disabled:cursor-not-allowed hover:bg-stone-800 transition-colors"
+              className="um-xy-practice-submit flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-stone-900 text-white rounded-lg disabled:bg-stone-300 disabled:cursor-not-allowed hover:bg-stone-800 transition-colors"
             >
               <Check className="w-4 h-4" />
               {t('提交')}</button>
           ) : (
             <button
+              type="button"
               onClick={() => setCurrentIdx(currentIdx + 1)}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm text-stone-500 hover:text-stone-700"
+              className="um-xy-practice-nav-btn flex items-center gap-1.5 px-3 py-2 text-sm text-stone-500 hover:text-stone-700"
             >
               {!isMobile && t('下一题')}
               <ArrowRight className="w-4 h-4" />
