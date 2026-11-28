@@ -11,8 +11,8 @@ import pytest
 from rest_framework.exceptions import ValidationError
 
 from ai_assistant.models import AIChatMessage, Bot, LearningComponentTemplate
-from ai_assistant.services.learning_components import compile_component, template_for
 from ai_assistant.services.learning_experiments import preview
+from ai_assistant.services.views.learning_components import compile_component, template_for
 from users.models import CourseStudentStatus, WeeklyAIQuotaConfig
 
 

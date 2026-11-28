@@ -12,7 +12,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from rest_framework.exceptions import APIException, NotFound, PermissionDenied, ValidationError
 
 from ai_assistant.models import AIChatMessage
-from ai_assistant.services import learning_components
+from ai_assistant.services.views import learning_components
 from ai_engine.observability import log_ai_operation
 
 

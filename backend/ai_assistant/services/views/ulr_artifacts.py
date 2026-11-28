@@ -2,8 +2,8 @@
 from django.db import transaction
 
 from ai_assistant.models import AIChatMessage
-from ai_assistant.services.learning_components import persist_template
 from ai_assistant.services.learning_experiments import ExperimentConflict, anchor_for
+from ai_assistant.services.views.learning_components import persist_template
 
 
 class TurnArtifacts:

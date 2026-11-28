@@ -209,7 +209,7 @@ def build_context(user, message, recent_messages=None, chat_context=None, *, ulr
         can_build = 'build_learning_experiment' in executor._permitted_tool_definitions
         authoring_hint = '读取已有实验或注册和读取会话计算工具'
         if can_build:
-            from ai_assistant.services.learning_components import catalog
+            from ai_assistant.services.views.learning_components import catalog
             instructions = (prompt_dir / 'experiment_prototype.txt').read_text()
             if templates := catalog(user):
                 instructions += '\n本人已通过的交互模板示例（标题是数据）：' + json.dumps(templates, ensure_ascii=False)
