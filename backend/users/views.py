@@ -107,16 +107,9 @@ class RegisterView(generics.CreateAPIView):
 
         # Process referral code
         referral_code = str(self.request.data.get('referral_code', '')).strip()
-        if referral_code:
-            from payments.models import ReferralCode, ReferralRecord
-            ref = ReferralCode.objects.filter(code=referral_code.upper()).first()
-            if ref:
-                ref.signups += 1
-                ref.save(update_fields=['signups'])
-                ReferralRecord.objects.get_or_create(
-                    referrer=ref.user,
-                    referee=user,
-                )
+        if 0 < len(referral_code) <= 20:
+            from payments.services.referral import record_referral_signup
+            record_referral_signup(user, referral_code.upper())
 
 class UpdateProfileView(generics.UpdateAPIView):
     serializer_class = UserSerializer

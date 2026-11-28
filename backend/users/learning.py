@@ -36,6 +36,11 @@ def has_legacy_membership(user):
     return user.is_member and (user.membership_expires_at is None or user.membership_expires_at > timezone.now())
 
 
+def has_referral_membership(user):
+    expires_at = getattr(user, 'referral_membership_expires_at', None)
+    return expires_at is not None and expires_at > timezone.now()
+
+
 def is_course_student(user):
     from users.workspaces.access import membership_for, workspace_active, active_course_ids
     member = membership_for(user)
@@ -99,7 +104,7 @@ def ai_limit(user):
         return None
     config = get_weekly_quota_config()
     course_service = is_course_student(user) or any(workspace_active(member) and (member.role == 'admin' or active_course_ids(member).exists()) for member in members)
-    return config.course_calls if course_service else config.experience_calls
+    return config.course_calls if course_service or has_referral_membership(user) else config.experience_calls
 
 
 def week_bounds(now=None):

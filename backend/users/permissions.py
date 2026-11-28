@@ -72,7 +72,7 @@ def get_user_capabilities(user) -> list[str]:
     if not user or not user.is_authenticated or not user.is_active:
         return []
 
-    from .learning import LEARNING_FEATURES, is_course_student
+    from .learning import LEARNING_FEATURES, has_referral_membership, is_course_student
     caps = [CAP_MEMBER_ACCESS, 'ai.assistant', 'course.video']
     if is_platform_admin(user) or is_course_student(user):
         caps = [CAP_LEARNING_ACCESS, CAP_MEMBER_ACCESS, *LEARNING_FEATURES]
@@ -84,6 +84,8 @@ def get_user_capabilities(user) -> list[str]:
         caps = [CAP_MEMBER_ACCESS, 'ai.assistant', 'course.video']
         if workspace_active(member):
             caps = [CAP_LEARNING_ACCESS, CAP_MEMBER_ACCESS, *LEARNING_FEATURES]
+    elif CAP_LEARNING_ACCESS not in caps and has_referral_membership(user):
+        caps.extend(feature for feature in LEARNING_FEATURES if not feature.startswith(('course.', 'video.')))
     allowed_caps = set(caps)
 
     # Superuser 人员管理扩展：读取用户访问档案中的权限组与自定义权限。

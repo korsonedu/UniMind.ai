@@ -36,6 +36,7 @@ class User(AbstractUser):
     account_session_version = models.PositiveIntegerField(default=0, editable=False)
     email_notifications = models.BooleanField(default=True, verbose_name="接收邮件通知")
     membership_expires_at = models.DateTimeField(null=True, blank=True, verbose_name="会员到期时间")
+    referral_membership_expires_at = models.DateTimeField(null=True, blank=True, verbose_name="邀请会员到期时间")
     membership_tier = models.CharField(max_length=20, choices=MEMBERSHIP_TIER_CHOICES, default='free', verbose_name="会员等级（已弃用，迁移至 personal_plan）")
     personal_plan = models.CharField(max_length=20, choices=MEMBERSHIP_TIER_CHOICES, default='free', verbose_name="个人方案（无机构用户）")
     MEMBERSHIP_SOURCE_CHOICES = (

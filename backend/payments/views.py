@@ -2,11 +2,14 @@
 Payment views — 通过 gateway_router 动态选择支付网关。
 """
 import logging
+import secrets
+from urllib.parse import urlencode
 
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 
@@ -135,17 +138,28 @@ class MyReferralView(APIView):
 
     def get(self, request):
         from payments.models import ReferralCode
-        import secrets
-        code_obj, created = ReferralCode.objects.get_or_create(
-            user=request.user,
+        from users.workspaces.identity import account_user
+        code_obj, _ = ReferralCode.objects.get_or_create(
+            user=account_user(request.user),
             defaults={'code': secrets.token_hex(4).upper()},
         )
         return Response({
             'code': code_obj.code,
+            'url': f"{settings.ACCOUNT_UNIMIND_ORIGIN}/register?{urlencode({'ref': code_obj.code})}",
             'clicks': code_obj.clicks,
             'signups': code_obj.signups,
             'purchases': code_obj.purchases,
         })
+
+
+class ReferralValidityView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from payments.models import ReferralCode
+        code = request.query_params.get('code', '').strip().upper()
+        valid = 0 < len(code) <= 20 and ReferralCode.objects.filter(code=code, user__is_active=True).exists()
+        return Response({'valid': valid})
 
 
 # ── Webhook (no auth — 真实支付时校验签名) ──

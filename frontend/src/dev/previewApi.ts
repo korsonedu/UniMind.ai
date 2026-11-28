@@ -213,6 +213,8 @@ api.defaults.adapter = async config => {
     case '/quizzes/memorix/optimization-history/': data = { results: Array.from({ length: 6 }, (_, index) => ({ id: index + 1, improvement_ratio: .045 - index * .004, reviews_used: reviewCount - index * 140, accepted: true, created_at: `${date(-1 - index * 14)}T08:00:00Z` })) }; break;
     case '/quizzes/wrong-questions/insights/': data = { overview: { wrong_questions: 2, wrong_attempts: 5 }, recommended_drills: [{ drill_type: 'cause', drill_key: 'concept', drill_label: '概念理解', question_count: 2, question_ids: [103, 101], recommended_questions: 2 }, { drill_type: 'knowledge_point', drill_key: '2', drill_label: '货币政策', question_count: 2, question_ids: [103, 101], recommended_questions: 2 }], cause_breakdown: [{ cause_key: 'concept', cause_label: '概念理解', question_count: 2, wrong_attempts: 5, ratio: 1 }], knowledge_point_breakdown: [{ knowledge_point_id: 2, knowledge_point_name: '货币政策', question_count: 2, avg_wrong_count: 2.5 }] }; break;
     case '/payments/orders/': data = []; break;
+    case '/payments/referral/': data = { url: `${location.origin}/register?ref=PREVIEW&preview=1&guest=1` }; break;
+    case '/payments/referral/validate/': data = { valid: params.get('code') === 'PREVIEW' }; break;
     default:
       if (/^\/notifications\/read\/\d+\/$/.test(path)) { const notification = notifications.find(item => item.id === Number(path.split('/')[3])); if (notification) notification.is_read = true; }
       else if (path === '/ai/learning-memory/grants/' && config.method === 'get') data = [];
