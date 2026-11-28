@@ -11,7 +11,7 @@ import { useInstitutionStore } from '@/store/useInstitutionStore';
 import type { CourseProgress } from './course-center/types';
 import { LearningPathCanvas } from '@/components/LearningPathCanvas';
 import { learningComposerId, useLearningWorkspace } from '@/components/LearningWorkspace';
-import { Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain, Stethoscope, WarningCircle, PlayCircle, NotePencil, CaretRight, Books } from '@phosphor-icons/react';
+import { Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain, Stethoscope, WarningCircle, PlayCircle, NotePencil, CaretRight } from '@phosphor-icons/react';
 import AgentChatLayout, { type AgentChatLayoutProps } from '@/components/AgentChatLayout';
 import NativeSessionSidebar from '@/components/NativeSessionSidebar';
 import { useNotesSidebarAvailability, WorkbenchSidebarContext } from '@/components/WorkspaceContext';
@@ -104,6 +104,7 @@ function XiaoYuProject() {
 function XiaoYuWorkbench({ projectId }: { projectId: number }) {
   const { chat } = useXiaoYuChat();
   const sidebar = useContext(WorkbenchSidebarContext);
+  const { open: openSidebar } = sidebar;
   const workspace = useLearningWorkspace({ autoOpen: false });
   const getLearningPayload = workspace.getExtraPayload;
   const query = useWorkbenchSources(projectId);
@@ -112,8 +113,8 @@ function XiaoYuWorkbench({ projectId }: { projectId: number }) {
   const [anchor, setAnchor] = useState<SourceAnchor | null>(null);
   const onSelect = useCallback((target: SourceAnchor) => {
     setAnchor(target);
-    sidebar.open('project-sources');
-  }, [sidebar.open]);
+    openSidebar('project-sources');
+  }, [openSidebar]);
   const citationContext = useMemo(() => ({ onSelect, conversationId: chat.conversationId }), [onSelect, chat.conversationId]);
   const getSources = useCallback(() => client.getQueryData<ProjectSourceList>(queryKeys.workbench.sources(projectId)), [client, projectId]);
   const getExtraPayload = useCallback(() => ({
