@@ -257,7 +257,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
                   disabled={ratingSent}
                   aria-pressed={isSelected}
                   className={cn(
-                    'w-9 h-9 rounded-lg text-sm font-bold transition-colors border',
+                    'um-visual-choice w-9 h-8 rounded-lg text-sm font-bold transition-colors border',
                     isActive && 'border-border/60 hover:border-foreground/20 hover:bg-muted/30',
                     isSelected && 'border-foreground/20 bg-muted/50',
                     ratingSent && !isSelected && 'opacity-40',
@@ -273,7 +273,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
 
       {/* ── 选项列表（single / multi / acknowledge）── */}
       {(replyMode === 'single' || replyMode === 'multi' || replyMode === 'acknowledge') && (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {cards.map((card, i) => {
             const Icon = ICON_MAP[card.icon] || TrendUp;
             const isCompleted = completedMap[card.action.url] || false;
@@ -296,7 +296,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
                     disabled={isLocked}
                     aria-pressed={isChosen}
                     className={cn(
-                      'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left',
+                      'um-visual-choice w-full flex items-center gap-2 px-3 py-1 rounded-lg text-left',
                       'border transition-colors duration-150',
                       isChosen && 'border-foreground/20 bg-muted/50',
                       isLocked && 'opacity-50 pointer-events-none',
@@ -322,7 +322,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
                     onClick={() => handleClick(card)}
                     aria-pressed={isMultiChecked}
                     className={cn(
-                      'w-full flex items-start gap-2 px-3 py-2 rounded-lg text-left',
+                      'um-visual-choice w-full flex items-start gap-2 px-3 py-1 rounded-lg text-left',
                       'border transition-colors duration-150',
                       isLocked && 'opacity-50 pointer-events-none',
                       isMultiChecked && !isLocked && 'border-foreground/20 bg-muted/50',
@@ -354,7 +354,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
                   disabled={isLocked}
                     aria-pressed={isChosen}
                   className={cn(
-                    'w-full flex items-start gap-2 px-3 py-2 rounded-lg text-left',
+                    'um-visual-choice w-full flex items-start gap-2 px-3 py-1 rounded-lg text-left',
                     'border transition-colors duration-150',
                     isChosen && 'border-foreground/20 bg-muted/50',
                     isLocked && !isChosen && 'opacity-40 pointer-events-none border-border/30',
@@ -377,13 +377,13 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
               );
             }
 
-            // 导航类型：保持现有样式
+            // 导航选项保留标题、说明和动作，缩短分隔线前的留白。
             return (
               <button
                 key={i}
                 onClick={() => handleClick(card)}
                 className={cn(
-                  'group w-full flex items-start gap-3 py-3 text-left',
+                  'um-visual-choice group w-full flex items-start gap-2.5 py-1.5 text-left',
                   'border-b border-border/40 last:border-0',
                   isCompleted && 'opacity-70',
                 )}
@@ -397,7 +397,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
                     <CheckCircle className="h-3 w-3 text-emerald-500 absolute -top-1 -right-1.5 fill-emerald-500/20" />
                   )}
                 </div>
-                <div className="flex-1 min-w-0 space-y-0.5">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className={cn(
                       'text-[13px] font-medium',
@@ -410,11 +410,11 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
                         {t('已完成')}</span>
                     )}
                   </div>
-                  <p className="text-[12px] text-foreground/40 leading-relaxed line-clamp-2">
+                  <p className="text-[12px] text-foreground/40 leading-normal line-clamp-2">
                     {card.description}
                   </p>
                   <div className={cn(
-                    'flex items-center gap-1 text-[11px] font-medium pt-0.5 transition-colors',
+                    'flex items-center gap-1 text-[11px] font-medium transition-colors',
                     isCompleted
                       ? 'text-emerald-600/50'
                       : 'text-foreground/30 group-hover:text-foreground/50',

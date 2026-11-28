@@ -371,6 +371,8 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                     if card:
                         cards.append(card)
                 stored_metadata = {**metadata, 'ulr_context_sources': context_sources} if context_sources is not None else metadata
+                if ulr:
+                    stored_metadata['ulr_continuation'] = context_sources.pop('continuation', {})
                 answer = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=conversation_id,
                     role='assistant', content=content, metadata=stored_metadata)
                 if ulr:

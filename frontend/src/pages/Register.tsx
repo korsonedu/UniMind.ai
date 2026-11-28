@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AuthLayout } from '@/components/AuthLayout';
 import { Warning } from '@phosphor-icons/react';
+import { useQuery } from '@tanstack/react-query';
 
 import api from '@/lib/api';
 import { isNativePlatform } from '@/lib/serverConfig';
@@ -57,6 +58,12 @@ export const Register: React.FC = () => {
   const institutionSlug = getInstitutionSlug();
   const institutionRole = getInstitutionRole();
   const refCode = searchParams.get('ref') || '';
+  const referral = useQuery({
+    queryKey: ['referral-validity', refCode],
+    enabled: !!refCode,
+    retry: false,
+    queryFn: ({ signal }) => api.get<{ valid: boolean }>('/payments/referral/validate/', { params: { code: refCode }, signal }).then(({ data }) => data.valid),
+  });
   const loginParams = new URLSearchParams({ next: returnTo });
   if (institutionSlug) {
     loginParams.set('institution', institutionSlug);
@@ -116,9 +123,9 @@ export const Register: React.FC = () => {
     >
       {nativePlatform && <div className="um-auth-server"><ServerConfigControl variant="pill" onOriginChanged={() => setError('')} /></div>}
       {/* Referral banner */}
-      {refCode && (
+      {referral.isSuccess && (
         <div className="rounded-xl bg-blue-50 dark:bg-blue-950/25 border border-blue-200 dark:border-blue-800/40 px-4 py-3 mb-5 text-sm text-blue-700 dark:text-blue-400">
-          {t('通过推荐链接注册，完成首次购买后你和推荐人都将获得奖励')}
+          {referral.data ? t('你收到了 UniMind.ai 好友邀请。完成注册后，你和好友各获 3 天免费会员。') : t('邀请链接已失效，可以继续注册。')}
         </div>
       )}
 

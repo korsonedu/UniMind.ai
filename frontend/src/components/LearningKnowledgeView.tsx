@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight } from '@phosphor-icons/react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, FadersHorizontal, TreeStructure } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { learningKey, learningUrl, type ProjectLearning } from '@/lib/projectLearning';
 import type { LearningKnowledge } from './LearningKnowledgePanel';
@@ -48,6 +48,7 @@ export function LearningKnowledgeView({ project, selected, tasks, tasksLoading, 
     queryFn: ({ signal }) => api.get<MapVersion>(url, { params: { version_id: versionId }, signal }).then(r => r.data) });
   const stages = project.plan.stages || [];
   const nodes = knowledge?.nodes || [];
+  const hasRelations = !!(nodes.length || stages.length);
   const stage = stages.find(item => item.id === project.current_stage);
   const node = nodes.find(item => item.id === selected) || nodes.find(item => stage?.knowledge_nodes?.includes(item.id)) || nodes[0];
   const parents = nodes.filter(item => node?.prerequisites.includes(item.id));
@@ -95,16 +96,20 @@ export function LearningKnowledgeView({ project, selected, tasks, tasksLoading, 
       <div><h2>{t(choosing ? '选择学习范围' : '知识关系')}</h2>
         {!choosing && knowledge?.title && <p>{knowledge.title}{t(' · 版本 {0}', { 0: knowledge.revision })}</p>}
       </div>
-      {!choosing && <button type="button" className="um-agent-button" onClick={() => setChoosing(true)}>{t('选择学习范围')}</button>}
+      {!choosing && hasRelations && <button type="button" className="um-agent-button" onClick={() => setChoosing(true)}><FadersHorizontal size={15} />{t('选择学习范围')}</button>}
     </header>
-    {!choosing && knowledge?.builder && <Link className="um-learning-text-button" to={learningUrl(`/xiaoyu/knowledge-builder/${knowledge.builder.build_id}`, project.project_id, conversationId)}>{t('展开完整图谱')}</Link>}
+    {!choosing && !node && knowledge?.builder && <Link className="um-learning-text-button" to={learningUrl(`/xiaoyu/knowledge-builder/${knowledge.builder.build_id}`, project.project_id, conversationId)}>{t('展开完整图谱')}<ArrowUpRight size={13} /></Link>}
     {!choosing && !!knowledge?.recommendations.length && <section className="um-work-node-evidence"><h3>{t('建议下一步')}</h3>{knowledge.recommendations.map(item => <div className="um-work-section-heading" key={item.node_id}><div><strong>{item.title}</strong><p>{t(item.reason)}</p></div><button className="um-agent-button" disabled={busy || tasksLoading || !project.planning_enabled || project.status !== 'active'} onClick={() => { onSelect(item.node_id); startNode(item.node_id, item.mode); }}>{t('继续学习')}</button></div>)}</section>}
     {choosing ? <div className="um-work-map-picker">
       {maps.isPending && <p role="status">{t('正在读取知识地图…')}</p>}
       {maps.isError && <div role="alert" className="um-work-knowledge-actions">
         <p>{t('知识地图暂时无法读取。')}</p><button className="um-agent-button" onClick={() => void maps.refetch()}>{t('重试')}</button>
       </div>}
-      {maps.data && !maps.data.maps.some(map => map.versions.length) && <p className="um-path-muted">{t('暂无可选知识地图')}</p>}
+      {maps.data && !maps.data.maps.some(map => map.versions.length) && <div className="um-work-knowledge-empty">
+        <span className="um-work-knowledge-illustration"><TreeStructure size={24} /></span>
+        <h3>{t('暂无可选知识地图')}</h3>
+        <p>{t('选择已有知识结构，或生成一份来设定学习范围。')}</p>
+      </div>}
       {!!maps.data?.maps.some(map => map.versions.length) && <label>{t('知识地图版本')}<select aria-label={t('知识地图版本')} value={versionId} onChange={event => { setVersionId(event.target.value); setTargets([]); }}><option value="">{t('请选择')}</option>{maps.data.maps.flatMap(map => map.versions.map(v => <option key={v.id} value={v.id}>{map.title} {t('· 版本')} {v.revision}</option>))}</select></label>}
       {version.isFetching && !!versionId && <p role="status">{t('正在读取版本…')}</p>}
       {version.isError && <p role="alert">{t('地图版本无法读取，请重新选择。')}</p>}
@@ -119,14 +124,18 @@ export function LearningKnowledgeView({ project, selected, tasks, tasksLoading, 
       {!project.planning_enabled && <p>{t('当前是自由对话项目。采用学习范围需要')}<Link to="/xiaoyu?new=project">{t('新建规划项目')}</Link>{t('，创建时选择规划模式。')}</p>}
       {error && <p role="alert">{error}</p>}
     </div> : node ? <>
-      <div className="um-work-section-heading"><p>{t('关系为教学建议，当前学习安排保持不变。')}</p><button className="um-learning-text-button" onClick={() => setAllNodes(value => !value)}>{allNodes ? t('收起全部节点') : t('查看全部 {0} 个节点', { 0: nodes.length })}</button></div>
+      <div className="um-work-knowledge-actions">
+        <button type="button" className="um-learning-text-button" aria-expanded={allNodes} onClick={() => setAllNodes(value => !value)}>{allNodes ? t('收起全部节点') : t('查看全部 {0} 个节点', { 0: nodes.length })}</button>
+        {knowledge?.builder && <Link className="um-learning-text-button" to={learningUrl(`/xiaoyu/knowledge-builder/${knowledge.builder.build_id}`, project.project_id, conversationId)}>{t('展开完整图谱')}<ArrowUpRight size={13} /></Link>}
+      </div>
       {allNodes && <nav className="um-work-node-index" aria-label={t('全部知识节点')}>{nodes.map(item => <button className="um-agent-button" aria-pressed={item.id === node.id} key={item.id} onClick={() => onSelect(item.id)}>{item.title}</button>)}</nav>}
       <div className="um-work-relations" aria-label={t('当前节点的局部知识关系')}>
         <div><span>{t('前置知识')}</span>{parents.length ? parents.map(item => <button key={item.id} onClick={() => onSelect(item.id)}>{item.title}<ArrowRight size={14} /></button>) : <p>{t('没有前置节点')}</p>}</div>
         <div className="um-work-node-current"><span>{t('正在查看')}</span><h3>{node.title}</h3>{(node.learning_status || stage?.knowledge_nodes?.includes(node.id)) && <small>{node.learning_status && t({ unassessed: '尚待了解', recheck: '建议再检查', review: '建议回补', supported: '已有独立支持' }[node.learning_status])}{stage?.knowledge_nodes?.includes(node.id) && `${node.learning_status ? ' · ' : ''}${t('当前阶段涉及')}`}</small>}</div>
         <div><span>{t('后续知识')}</span>{children.length ? children.map(item => <button key={item.id} onClick={() => onSelect(item.id)}>{item.title}<ArrowRight size={14} /></button>) : <p>{t('没有后续节点')}</p>}</div>
       </div>
-      <p>{node.outcome}</p>
+      {node.outcome && <p>{node.outcome}</p>}
+      <p className="um-path-muted text-xs">{t('关系为教学建议，当前学习安排保持不变。')}</p>
       {project.planning_enabled && <button className="um-agent-button um-agent-button-primary" disabled={busy || tasksLoading || project.status !== 'active'} onClick={() => startNode(node.id)}>{t('开始这个节点')}</button>}
       {!!tasks.filter(task => task.version_id === knowledge?.version_id && task.node_id === node.id).length && <section className="um-work-node-evidence"><h3>{t('节点任务')}</h3>{tasks.filter(task => task.version_id === knowledge?.version_id && task.node_id === node.id).map(task => <p key={task.id}><button className="um-learning-text-button" onClick={() => onTask(task.id)}>{task.title} · {task.status === 'completed' ? t('查看作答与评价') : t('继续任务')}</button></p>)}</section>}
       <div className="um-work-node-evidence"><h3>{t('目前了解的表现')}</h3><p>{node.beliefs?.apply.effective_count ? t('常规应用：{0} 次独立观察，包含答对与答错。', { 0: node.beliefs.apply.independent_count }) : t('常规应用：尚无可计入的作答观察。')}{node.beliefs?.transfer.effective_count ? t('迁移检查：{0} 次独立观察。', { 0: node.beliefs.transfer.independent_count }) : t('迁移应用仍需实际检查。')}</p>
@@ -148,6 +157,11 @@ export function LearningKnowledgeView({ project, selected, tasks, tasksLoading, 
           {!!prerequisites.length && <p className="um-path-muted">{t('先修阶段：{0}', { 0: prerequisites.map(parent => parent.title).join(locale === 'en' ? ', ' : '、') })}</p>}
         </li>;
       })}
-    </ol> : <p className="um-path-muted">{t('暂无知识关系')}</p>}
+    </ol> : <div className="um-work-knowledge-empty">
+      <span className="um-work-knowledge-illustration"><TreeStructure size={24} /></span>
+      <h3>{t('暂无知识关系')}</h3>
+      <p>{t('选定学习范围后，可以查看知识点之间的先修与后续关系。')}</p>
+      <button type="button" className="um-agent-button um-agent-button-primary" onClick={() => setChoosing(true)}>{t('选择学习范围')}<ArrowRight size={15} /></button>
+    </div>}
   </section>;
 }

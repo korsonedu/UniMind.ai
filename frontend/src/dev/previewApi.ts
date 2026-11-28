@@ -5,6 +5,7 @@ import { FEATURES } from '@/store/useInstitutionStore';
 import { AxiosError } from 'axios';
 import type { DashData } from '@/pages/course-center/types';
 import type { Message } from '@/hooks/useAgentConversation';
+import type { ProjectLearning } from '@/lib/projectLearning';
 import { agentDemoScenes, buildDemoHistory, demoSceneForMessage } from './agentDemoFixtures';
 
 if (!import.meta.env.DEV) throw new Error('Development fixtures only.');
@@ -101,9 +102,17 @@ history.push(...archivedConversations.flatMap((entry, index): Message[] => {
   const base = { conversation_id: `demo-archive-${index}`, conversation_title: entry[0], timestamp: `${date(entry[3])}T08:00:00Z` };
   return [{ ...base, id: 2000 + index * 2, role: 'user', content: entry[1] }, { ...base, id: 2001 + index * 2, role: 'assistant', content: entry[2] }];
 }));
-const projectFixtures: { projects: { id: number; name: string; instructions: string }[]; assignments: Record<string, number | null> } = JSON.parse(sessionStorage.getItem('unimind-preview-demo-projects') || JSON.stringify({ projects: [{ id: 1, name: '金融学系统复习', instructions: '从已有练习记录出发，连接时间价值、固定收益与货币政策。' }, { id: 2, name: '公司金融专题', instructions: '结合课程进度，巩固资本预算、资本成本与企业价值。' }], assignments: { 'demo-plan': 1, 'demo-bond': 1, 'demo-map': 1, 'demo-practice': 1, 'demo-archive-0': 2, 'demo-archive-1': 2 } }));
+const projectFixtures: { projects: { id: number; name: string; instructions: string; planning_enabled?: boolean }[]; assignments: Record<string, number | null> } = JSON.parse(sessionStorage.getItem('unimind-preview-demo-projects') || JSON.stringify({ projects: [{ id: 1, name: '金融学系统复习', instructions: '从已有练习记录出发，连接时间价值、固定收益与货币政策。' }, { id: 2, name: '公司金融专题', instructions: '结合课程进度，巩固资本预算、资本成本与企业价值。' }], assignments: { 'demo-plan': 1, 'demo-bond': 1, 'demo-map': 1, 'demo-practice': 1, 'demo-archive-0': 2, 'demo-archive-1': 2 } }));
 const cardInteractions: { id: number; card_action_url: string; completed: boolean }[] = [];
 const saveProjects = () => sessionStorage.setItem('unimind-preview-demo-projects', JSON.stringify(projectFixtures));
+const previewKnowledge = {
+  version_id: 1, revision: 1, title: '债券定价知识地图',
+  nodes: [
+    { id: 'pv', title: '现金流折现', prerequisites: [], outcome: '把未来各期现金流折算为同一时点的价值。' },
+    { id: 'price', title: '债券定价', prerequisites: ['pv'], outcome: '根据票息、面值和到期收益率计算债券价格。' },
+    { id: 'duration', title: '久期与利率风险', prerequisites: ['price'], outcome: '比较不同债券价格对收益率变化的敏感程度。' },
+  ].map(node => ({ ...node, citation: { resource_id: 1, revision: 1, quote: node.outcome, url: '', title: '金融学复习资料', read_at: '' } })),
+};
 const conversationFixtures: Record<string, { title: string; is_pinned: boolean }> = JSON.parse(sessionStorage.getItem('unimind-preview-demo-conversations') || '{}');
 history = history.map(message => ({ ...message, conversation_project: projectFixtures.assignments[message.conversation_id!] ?? null, conversation_title: conversationFixtures[message.conversation_id!]?.title || message.conversation_title, conversation_pinned: conversationFixtures[message.conversation_id!]?.is_pinned || false }));
 api.defaults.adapter = async config => {
@@ -121,6 +130,29 @@ api.defaults.adapter = async config => {
   }
   const params = new URLSearchParams(url.search);
   Object.entries(config.params || {}).forEach(([key, value]) => params.set(key, String(value)));
+  const projectRead = config.method === 'get' && path.match(/^\/ai\/projects\/(\d+)\/(learning(?:\/tasks|\/knowledge)?|sources|studio|notes)\/$/);
+  if (projectRead) {
+    const project = projectFixtures.projects.find(item => item.id === Number(projectRead[1]));
+    if (project) {
+      switch (projectRead[2]) {
+        case 'learning': data = {
+          project_id: project.id, name: project.name, instructions: project.instructions, revision: 0,
+          conversation_id: null, server_time: new Date().toISOString(), planning_enabled: !!project.planning_enabled, reminders_enabled: false,
+          status: 'preparing', plan: {}, resources: [], current_stage: '', feedback: '', next_action: '', pending_plan: {},
+          followup_at: null, followup_text: '', resume_at: null, events: [],
+          knowledge: project.id === 1 ? { ...previewKnowledge, algorithm: 'preview', path: null, recommendations: [] } : undefined,
+        } satisfies ProjectLearning; break;
+        case 'learning/tasks': data = { tasks: [] }; break;
+        case 'learning/knowledge': data = params.has('version_id') ? previewKnowledge : {
+          maps: project.id === 1 ? [{ id: 1, title: previewKnowledge.title, versions: [{ id: 1, revision: 1 }] }] : [],
+        }; break;
+        case 'sources': data = { project_id: project.id, sources: [], total_count: 0, selected_count: 0, ready_count: 0 }; break;
+        case 'studio': data = { artifacts: [] }; break;
+        case 'notes': data = { notes: [] }; break;
+      }
+      return { data, status: 200, statusText: 'OK', headers: {}, config };
+    }
+  }
   switch (path) {
     case '/users/logout/': guest = true; sessionStorage.setItem('unimind-preview-signed-out', '1'); data = { status: 'ok' }; break;
     case '/users/me/': if (guest) throw new AxiosError('Guest preview', 'PREVIEW_GUEST', config, undefined, { data: {}, status: 401, statusText: 'Unauthorized', headers: {}, config }); data = user; break;
@@ -130,8 +162,8 @@ api.defaults.adapter = async config => {
     case '/notes/references/': data = { note_ids: [] }; break;
     case '/notes/notebooks/': data = []; break;
     case '/ai/bots/': data = [{ id: 1, name: '小宇', bot_type: 'planner', avatar: null }]; break;
-    case '/ai/history/': data = history; break;
-    case '/ai/projects/': if (config.method === 'post') { const project = { id: Date.now(), name: payload.name, instructions: payload.instructions || '' }; projectFixtures.projects.push(project); saveProjects(); data = project; } else data = projectFixtures.projects; break;
+    case '/ai/history/': data = params.has('conversation_id') ? history.filter(message => message.conversation_id === params.get('conversation_id')) : history; break;
+    case '/ai/projects/': if (config.method === 'post') { const project = { id: Date.now(), name: payload.name, instructions: payload.instructions || '', planning_enabled: payload.planning_enabled === true }; projectFixtures.projects.push(project); saveProjects(); data = project; } else data = projectFixtures.projects; break;
     case '/ai/dashboard/': data = dashboard; break;
     case '/users/me/checkin/': data = { created: !dashboard.stats.today_checked_in }; if (!dashboard.stats.today_checked_in) dashboard.stats.checkin_streak++; dashboard.stats.today_checked_in = true; break;
     case '/ai/delete-conversation/': history = history.filter(message => message.conversation_id !== payload.conversation_id); delete projectFixtures.assignments[payload.conversation_id]; saveProjects(); break;
@@ -181,6 +213,8 @@ api.defaults.adapter = async config => {
     case '/quizzes/memorix/optimization-history/': data = { results: Array.from({ length: 6 }, (_, index) => ({ id: index + 1, improvement_ratio: .045 - index * .004, reviews_used: reviewCount - index * 140, accepted: true, created_at: `${date(-1 - index * 14)}T08:00:00Z` })) }; break;
     case '/quizzes/wrong-questions/insights/': data = { overview: { wrong_questions: 2, wrong_attempts: 5 }, recommended_drills: [{ drill_type: 'cause', drill_key: 'concept', drill_label: '概念理解', question_count: 2, question_ids: [103, 101], recommended_questions: 2 }, { drill_type: 'knowledge_point', drill_key: '2', drill_label: '货币政策', question_count: 2, question_ids: [103, 101], recommended_questions: 2 }], cause_breakdown: [{ cause_key: 'concept', cause_label: '概念理解', question_count: 2, wrong_attempts: 5, ratio: 1 }], knowledge_point_breakdown: [{ knowledge_point_id: 2, knowledge_point_name: '货币政策', question_count: 2, avg_wrong_count: 2.5 }] }; break;
     case '/payments/orders/': data = []; break;
+    case '/payments/referral/': data = { url: `${location.origin}/register?ref=PREVIEW&preview=1&guest=1` }; break;
+    case '/payments/referral/validate/': data = { valid: params.get('code') === 'PREVIEW' }; break;
     default:
       if (/^\/notifications\/read\/\d+\/$/.test(path)) { const notification = notifications.find(item => item.id === Number(path.split('/')[3])); if (notification) notification.is_read = true; }
       else if (path === '/ai/learning-memory/grants/' && config.method === 'get') data = [];

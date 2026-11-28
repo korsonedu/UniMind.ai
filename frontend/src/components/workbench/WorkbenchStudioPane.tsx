@@ -1,4 +1,4 @@
-import { useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useContext, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowUpRight, BookOpenText, Cards, ClipboardText, Copy, FileText, NotePencil, Plus, Sparkle, Trash } from '@phosphor-icons/react';
 import { toast } from 'sonner';
@@ -52,10 +52,9 @@ function StudioNoteEditor({ note, saving, onSave, onBack }: {
   </form>;
 }
 
-export function WorkbenchStudioPane({ projectId, selected, legacyPath }: {
+export function WorkbenchStudioPane({ projectId, selected }: {
   projectId: number;
   selected: ProjectSourceSummary[];
-  legacyPath?: ReactNode;
 }) {
   const studio = useWorkbenchStudio(projectId);
   const notes = useWorkbenchNotes(projectId);
@@ -66,7 +65,7 @@ export function WorkbenchStudioPane({ projectId, selected, legacyPath }: {
   useLayoutEffect(() => { if (scroll.current) scroll.current.scrollTop = 0; }, [view]);
   const artifact = view && 'artifactId' in view ? studio.list.data?.find(row => row.id === view.artifactId) : undefined;
   const noteView = view && 'note' in view ? view : null;
-  const generateHint = selected.length ? undefined : t('请在左侧勾选至少一份已就绪的资料。');
+  const generateHint = selected.length ? undefined : t('请在资料源中勾选至少一份已就绪的资料。');
   const error = (cause: unknown, fallback: string) => toast.error(normalizeApiError(cause, fallback).message);
   const generate = (kind: StudioKind) => {
     if (generateHint || studio.generate.isPending) return;
@@ -96,7 +95,7 @@ export function WorkbenchStudioPane({ projectId, selected, legacyPath }: {
       {view ? <button type="button" className="um-agent-button" disabled={notes.save.isPending || busy} onClick={() => navigate(null)}>
         <ArrowLeft size={16} />{t('返回 Studio')}
       </button> : <>
-        <h2><Sparkle size={18} />Studio</h2>
+        <h2>Studio</h2>
         <button type="button" className="um-agent-button um-wb-add" onClick={() => navigate({ note: null })}><Plus size={15} />{t('新建笔记')}</button>
       </>}
     </header>
@@ -188,7 +187,6 @@ export function WorkbenchStudioPane({ projectId, selected, legacyPath }: {
               <NotePencil size={15} /><span>{note.title || t('未命名笔记')}</span><ArrowUpRight size={14} />
             </button></li>)}</ul>}
         </section>
-        {legacyPath}
       </>}
     </div>
   </>;

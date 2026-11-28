@@ -24,6 +24,7 @@ export interface AIUsage {
 
 export interface LearningAccess {
   is_course_student: boolean;
+  referral_membership_expires_at?: string | null;
   cohort: { id: number; name: string; target_year: number; exam_date: string | null;
     starts_on: string; ends_on: string; state: string; service_active: boolean } | null;
   ai_usage: AIUsage;

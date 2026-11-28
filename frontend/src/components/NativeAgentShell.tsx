@@ -1,7 +1,7 @@
 import { t, useLocale } from '@/i18n';
 import { WorkspaceToolbar } from '@/components/WorkspaceToolbar';
 import { useContext, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { SidebarSimple, Plus, NotePencil, X } from '@phosphor-icons/react';
+import { SidebarSimple, X } from '@phosphor-icons/react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useDirectoryWidth } from '@/hooks/useDirectoryWidth';
 import { DirectoryResizeHandle } from './DirectoryResizeHandle';
@@ -14,10 +14,10 @@ import { ProjectChatSidebarContext, RightSidebarLayoutContext, WorkspaceActiveCo
 
 export interface AgentWorkspace { active: boolean; header: ReactNode; activity: ReactNode; chatContext?: ReactNode; }
 
-interface Props { directoryInitiallyCollapsed?: boolean; workspace?: AgentWorkspace; native?: boolean; sidebar?: ReactNode; onNew: () => void; children: ReactNode; composer?: ReactNode; mobileHeaderTitle?: ReactNode; title?: string; label?: string; action?: ReactNode; }
+interface Props { directoryInitiallyCollapsed?: boolean; workspace?: AgentWorkspace; native?: boolean; sidebar?: ReactNode; onExitProject?: () => void; children: ReactNode; composer?: ReactNode; mobileHeaderTitle?: ReactNode; title?: string; label?: string; action?: ReactNode; }
 
 /** Opt-in presentation; the existing Agent runtime and workbench keep their behavior. */
-export function NativeAgentShell({ native, sidebar, onNew, children, composer, mobileHeaderTitle, title = t('新对话'), label = t('小宇'), action, workspace, directoryInitiallyCollapsed }: Props) {
+export function NativeAgentShell({ native, sidebar, onExitProject, children, composer, mobileHeaderTitle, title = t('新对话'), label = t('小宇'), action, workspace, directoryInitiallyCollapsed }: Props) {
   useLocale();
   const [open, setOpen] = useState(false);
   const { mobileNavigation } = useOutletContext<{ mobileNavigation?: MobileNavigationSlot }>() ?? {};
@@ -67,9 +67,9 @@ export function NativeAgentShell({ native, sidebar, onNew, children, composer, m
               {mobileNavigation?.account && <div className="um-m-drawer-footer" onClick={event => { if ((event.target as HTMLElement).closest('a')) setOpen(false); }}>{mobileNavigation.account}</div>}
             </Dialog.Content></Dialog.Portal>
           </Dialog.Root>
-          {mobileNavigation ? (mobileHeaderTitle ?? <span className="um-mobile-header-title um-agent-mobile-title">{label}</span>) : <WorkspaceTrail title={title} crumbs={[{ label }]} />}
+          {mobileNavigation ? (mobileHeaderTitle ?? <span className="um-mobile-header-title um-agent-mobile-title">{label}</span>) : <WorkspaceTrail title={title} crumbs={[{ label, onClick: onExitProject }]} />}
         </div>
-        <div className="um-agent-toolbar-actions">{action}<button className="um-agent-icon-button um-agent-toolbar-new" onClick={() => { if (rightSidebarFullscreen) exitFullscreen(); onNew(); }} aria-label={t('新对话')} title={t('新对话')}>{mobileNavigation ? <NotePencil size={19} /> : <Plus size={17} />}</button></div>
+        {action && <div className="um-agent-toolbar-actions">{action}</div>}
       </WorkspaceToolbar>
       {workspace?.header}
       <div className="um-agent-work-panels">

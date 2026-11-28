@@ -316,7 +316,7 @@
     flex-shrink: 0;
   }
 
-  .um-m-drawer-footer-actions > a,
+  .um-m-drawer-footer-actions > :is(a, button),
   .um-m-drawer-footer-actions .um-app-header-actions > button {
     display: inline-flex;
     align-items: center;
@@ -328,7 +328,7 @@
     border-radius: 10px;
     color: var(--m-ink-secondary);
   }
-  .um-m-drawer-footer-actions > a:active,
+  .um-m-drawer-footer-actions > :is(a, button):active,
   .um-m-drawer-footer-actions .um-app-header-actions > button:active {
     background: var(--m-surface-inset);
     color: var(--m-ink);
