@@ -427,6 +427,127 @@ def test_ulr_general_chat_can_discover_tools_and_resume_with_notes(auth_client, 
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(('acceptance', 'status', 'attempts'), [('默认', 'rejected', 2), ('OK!', 'unavailable', 1)])
+def test_ulr_continues_after_acceptance_and_stops_failed_verification(auth_client, user, settings,
+                                                                      acceptance, status, attempts):
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    settings.UNIMIND_LEARNING_EXPERIMENTS_ENABLED = True
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 20})
+    bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
+    conversation_id = str(uuid4())
+    request = '做个复利交互演示，先给我两个参数方案让我选。'
+    proposal = '用哪个参数方案？\n\n1. 本金 1000 元、年利率 5%\n2. 本金 2000 元、年利率 3%\n\n回复「默认」会选择第 1 项。'
+    fallback = '第一年末是 1050 元，第二年用 1050 元计算利息，得到 1102.50 元。'
+    build = 'build_learning_experiment'
+
+    def call(name, arguments):
+        return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+            'id': str(uuid4()), 'type': 'function', 'function': {'name': name, 'arguments': json.dumps(arguments)},
+        }]}}]}
+
+    def model(messages, **kwargs):
+        def reply(content):
+            return {'choices': [{'finish_reason': 'stop', 'message': {'content': content}}]}
+
+        names = {tool['function']['name'] for tool in kwargs['tools'] or []}
+        if messages[1]['content'] == request:
+            assert 'save_learning_continuation' in names
+            return call('save_learning_continuation', {'goal': '复利交互演示', 'next_step': '生成复利交互演示',
+                'question': '用哪个参数方案？', 'question_reason': 'student_requested_choice',
+                'options': ['本金 1000 元、年利率 5%', '本金 2000 元、年利率 3%'],
+                'default_choice': 1})
+        assert messages[1]['content'] == acceptance
+        assert '"resolution": {"choice": "本金 1000 元、年利率 5%"}' in messages[0]['content']
+        failures = sum(row['role'] == 'tool' for row in messages)
+        if failures:
+            assert json.loads(messages[-1]['content'])['preview']['visual_review']['status'] == status
+        assert build in names and 'read_learning_experiment' in names
+        step = f'第 {failures + 1} 年'
+        return call(build, {'title': '复利演示', 'html': f'<button id="advance">{step}</button>', 'fallback_text': fallback,
+                     'checks': [{'action': 'click', 'selector': '#advance',
+                                 'expect_selector': '#advance', 'expect_text': step}]})
+
+    async def consume(response):
+        return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')]
+
+    with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider, \
+            patch('ai_assistant.services.learning_experiments.preview', return_value={
+                'ok': False, 'visual_review': {'status': status},
+            }) as preview:
+        for message, expected in ((request, proposal), ('选 3', proposal),
+                                  (acceptance, f'交互卡片本轮未能显示。\n\n{fallback}'), ('好', '好。')):
+            response = auth_client.post('/api/ai/chat/stream/', {'bot_id': bot.pk, 'conversation_id': conversation_id,
+                'request_id': str(uuid4()), 'message': message}, format='json')
+            assert response.status_code == 200
+            final = async_to_sync(consume)(response)[-1]
+            assert final.get('engine') == 'ulr' and final['full_content'] == expected, final
+        assert preview.call_count == attempts
+        assert provider.call_count == attempts + 1
+        assert not final['metadata']['dsh_cards']
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ulr_carries_confirmed_constraints_past_the_history_window(auth_client, user, settings):
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'course_calls': 30})
+    bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇'})
+    conversation_id = str(uuid4())
+    request = '分十步带我复习概率，每次只讲一步，必须只用骰子例子。'
+    goal, constraint = '分步复习概率', '只用骰子例子'
+    switch, steps = '换个主题，解释英语一般过去时。', 0
+    finish = '一般过去时描述已经发生的动作。'
+
+    def model(messages, **kwargs):
+        nonlocal steps
+        text = messages[1]['content']
+        prompt = messages[0]['content']
+        if text == switch:
+            assert 'paced_learning_step' not in prompt
+            return {'choices': [{'finish_reason': 'stop', 'message': {'content': finish}}]}
+        assert {tool['function']['name'] for tool in kwargs['tools'] or []} == {'save_learning_continuation'}
+        assert kwargs['tool_choice'] == 'required'
+        context = json.loads(prompt.splitlines()[-1])
+        assert context['paced_learning_step'] == {'step': steps + 1, 'total': 10, 'request': request}
+        if steps:
+            assert text == '继续' and '"resolution": {"continue": true}' in prompt
+            assert f'"known": ["{constraint}"]' in prompt
+        if steps == 9:
+            assert all(row['content'] != request for row in context['history'])
+        steps += 1
+        arguments = {'goal': goal, 'next_step': '推导下一种骰子事件的概率', 'reply': f'已完成第 {steps} 步。'}
+        if steps == 1:
+            arguments['known'] = [constraint]
+        return {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{
+            'id': str(uuid4()), 'type': 'function', 'function': {
+                'name': 'save_learning_continuation', 'arguments': json.dumps(arguments),
+            },
+        }]}}]}
+
+    async def consume(response):
+        return [json.loads(frame[6:]) async for frame in response.streaming_content if frame.startswith(b'data: ')][-1]
+
+    with patch('ai_engine.service.AIEngine.call_provider', side_effect=model) as provider:
+        messages = [(request, '已完成第 1 步。'), ('好', '好。'),
+                    *(('继续', f'已完成第 {step} 步。') for step in range(2, 11)), (switch, finish), ('好', '好。')]
+        for message, expected in messages:
+            response = auth_client.post('/api/ai/chat/stream/', {'bot_id': bot.pk, 'conversation_id': conversation_id,
+                'request_id': str(uuid4()), 'message': message}, format='json')
+            final = async_to_sync(consume)(response)
+            assert final.get('engine') == 'ulr' and final['full_content'] == expected, final
+        assert provider.call_count == 11
+    turns = AIChatMessage.objects.filter(conversation_id=conversation_id, role='assistant').order_by('id')
+    origin = AIChatMessage.objects.get(conversation_id=conversation_id, content=request).pk
+    latest_active = turns.get(content='已完成第 9 步。').metadata['ulr_continuation']
+    assert latest_active['origin_message_id'] == origin and latest_active['known'] == [constraint]
+    assert turns.get(content='已完成第 10 步。').metadata['ulr_continuation'] == {}
+    assert turns.get(content=finish).metadata['ulr_continuation'] == {}
+
+
+@pytest.mark.django_db(transaction=True)
 def test_ulr_builds_sorting_widget_after_choice_and_repairs_reply_card(auth_client, user, settings):
     settings.DEBUG = True
     settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
@@ -439,7 +560,7 @@ def test_ulr_builds_sorting_widget_after_choice_and_repairs_reply_card(auth_clie
     sort_request = '用交互卡片帮我排序句子'
     sort_goal = '形成句子排序卡'
     sort_in_example = '解答这道题时，让我自己把给出的词拼成一句话'
-    widget = {'title': '句子排序', 'html': (
+    widget = {'title': '句子排序', 'fallback_text': '把 She、is、reading 排成一个句子。', 'html': (
         '<button id="move">将 She 移到句首</button>'
         '<output id="sentence"><span>is </span><span>She </span><span>reading</span></output>'
         '<script>document.querySelector("#move").onclick = () => {'

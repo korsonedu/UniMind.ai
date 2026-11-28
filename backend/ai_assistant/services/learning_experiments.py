@@ -14,7 +14,7 @@ from ai_assistant.models import AIChatMessage
 from ai_engine.observability import log_ai_operation
 
 
-VISUAL_DEMO_REQUEST = re.compile(r'可视化|演示|互动|交互实验|图解|示意图|画(?:一个|一张|一|个)?图|用图片|动态(?:展示|图)'
+VISUAL_DEMO_REQUEST = re.compile(r'可视化|演示|互动|可交互|交互(?:实验|组件)|图解|示意图|画(?:一个|一张|一|个)?图|用图片|动态(?:展示|图)'
                                  r'|交互卡片.{0,24}(?:排序|重排)|(?:排序|重排).{0,24}交互卡片')
 EXERCISE_REQUEST = re.compile(r'出题|出(?:一|几|两|\d+)道|来(?:一|几|两|\d+)道|做(?:一|几|两|\d+)道|刷题|练一练|练练|'
                               r'给(?:我)?(?:一|几|两|\d+)道(?:练习)?题|(?:生成|抽取).{0,8}(?:题目|练习题)')
@@ -270,6 +270,8 @@ EXPERIMENT_TOOLS = [
         'parameters': {'type': 'object', 'additionalProperties': False, 'properties': {
             'title': {'type': 'string', 'minLength': 1, 'maxLength': 100},
             'html': {'type': 'string', 'minLength': 1, 'maxLength': 24000},
+            'fallback_text': {'type': 'string', 'minLength': 1, 'maxLength': 5000, 'pattern': r'\S',
+                'description': '卡片无法交付时可直接显示的正文。完成当前目标可做的部分，保留已选参数和原题材，无需询问或提到内部检查。'},
             'experiment_id': {'type': 'string', 'format': 'uuid',
                 'description': '仅修改已有实验时提供，必须来自本对话已有实验；新建时省略，由平台生成，不得自行编造 ID。'},
             'base_revision': {'type': 'integer', 'minimum': 1,

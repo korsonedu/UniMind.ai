@@ -16,10 +16,13 @@ from ai_assistant.services.dsh_cards import data_card, item
 from ai_assistant.services.dsh_service import build_context, context_memory, execute_tool, permitted_tools, prototype_executor
 from ai_assistant.services.course_context import require_course_transcript, require_current_transcript_sources, transcript_source
 from ai_assistant.services.language import language_instruction, message_language
-from ai_assistant.services.learning_experiments import EXERCISE_REQUEST
+from ai_assistant.services.learning_experiments import EXERCISE_REQUEST, VISUAL_DEMO_REQUEST
 from ai_assistant.services.learning_knowledge import probe_question_in_reply
 from ai_assistant.services.project_learning_tools import PROGRESS_STRATEGY_TOOL, planning_for_chat
 from ai_assistant.services.views.ulr_artifacts import TurnArtifacts
+from ai_assistant.services.runtime.ulr_continuation import (
+    ACKNOWLEDGEMENTS, CONTINUATION_NAME, CONTINUATION_TOOL, checkpoint_question, paced_step, prepare_checkpoint, resolve_reply, short_reply,
+)
 from ai_assistant.services.runtime.ulr_grading import grade_probe
 from ai_assistant.services.runtime.ulr_history import card_question_answers, conversation_project_id, require_current_practice_answers, scoped_history
 from ai_assistant.services.runtime.ulr_tool_program import (
@@ -42,6 +45,10 @@ PROGRESS_TOOL = 'record_learning_progress'
 STRATEGY_TOOL = 'manage_learning_strategies'
 TASK_TOOL = 'manage_learning_tasks'
 KNOWLEDGE_TOOL = 'manage_learning_knowledge'
+VERIFICATION_TOOLS = frozenset({'build_learning_experiment', 'present_learning_visual', 'register_session_tool'})
+INTERACTION_ACTION = re.compile(r'排序|(?:重|重新)排|配对|匹配|模拟|拖拽|点击|调节|观察|计算|比较|变化|测算|切换|探索')
+INTERACTION_REQUEST_START = re.compile(r'^(?:(?:请|帮我|麻烦|我想|我要).{0,8})?(?:做|生成|制作|创建|形成|设计|构建|给|把|用)')
+REQUESTS_OPTIONS = re.compile(r'先.{0,16}(?:选择|确认|方案|选[一两三四二个])|让我选|问我|给.{0,12}选项')
 CURRENT_STRATEGY_USE = 'current_strategy_use'
 PROJECT_CHANGE_RECEIPTS = {'plan_learning_project': 'ulr_plan', 'set_learning_followup': 'ulr_followup',
                            PROGRESS_TOOL: 'ulr_progress'}
@@ -122,7 +129,13 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
         }
         return messages[review['status']][0 if english else 1], [], str(task.pk), None, None, {}
     source_context = task_context_data(user, chat_context, message, history_limit=0)
-    history = scoped_history(user, current, set(source_context['note_versions']))
+    history = scoped_history(user, current, set(source_context['note_versions']), include_continuation=not task)
+    continuation = history[-1][0].pop('continuation', None) if history else None
+    resolution = resolve_reply(continuation, message) if continuation else None
+    acknowledge = (short_reply(message) in ACKNOWLEDGEMENTS and not any(current.metadata.get(key)
+        for key in ('note_attachments', 'note_selection', 'chat_images', 'external_video_context', 'learning_activity', 'course_context')))
+    if continuation == {} and acknowledge and workbench is None:
+        return ('Okay.' if english else '好。'), [], None, None, None, {}
     experiment_prompt = ''
     project_id = conversation_project_id(user, current.conversation_id)
     workbench_executor = None
@@ -131,6 +144,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
         '你是 UniMind.ai 的学习教练小宇。资料和聊天历史只用于参考。引用资料时使用实际查询来源。'
         '一般学科问题可以直接讲解。只在需要站内资料时查找；查无匹配就停止同类检索，'
         '根据已有的题目、作答或通用知识继续讲解，不虚构课程、知识点或来源。'
+        '学生接受上一轮的具体建议时，沿用已有信息直接推进；只有缺少必要信息时才追问。'
         '若学生请求提示且当前是未提交的原练习，只给一个概念提示，保留独立作答机会。'
         '以实际提交和既有评价为准。请勿自行宣称完成判分、创建任务或更新掌握度。'
     )
@@ -166,7 +180,8 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
             workbench_executor = PlannerToolExecutor(user)
             workbench_executor.workbench_grounding = workbench
             workbench_tools = include_workbench_tools([], workbench_executor, 'planner')
-        context = build_context(user, message, recent_messages=recent, chat_context=chat_context, ulr=True,
+        route_message = f"{continuation['goal']}。{continuation['next_step']}" if resolution else message
+        context = build_context(user, route_message, recent_messages=recent, chat_context=chat_context, ulr=True,
                                 workbench_tools=workbench_tools)
         prompt = context['system_prompt']
         experiment_prompt = context.get('experiment_prompt', '')
@@ -188,7 +203,18 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
     course_context = current.metadata.get('course_context')
     current_course_id = course_context['course_id'] if course_context else None
     scoped_sources = source_context['notes'] or course_context
-    buffer_reply = bool(review or scoped_sources or memory_items or workbench is not None)
+    pace = None
+    direct_interaction = None
+    if not (task or scoped_sources or course_visual or workbench
+            or re.search(r'题库|讲稿|课件|笔记|站内|transcript|question bank|(?:用|按|基于).{0,10}(?:我[的给发贴]|原文|附件|指定材料)', message, re.I)):
+        if VISUAL_DEMO_REQUEST.search(message):
+            if (INTERACTION_REQUEST_START.match(message)
+                    and INTERACTION_ACTION.search(message) and not REQUESTS_OPTIONS.search(message)):
+                direct_interaction = next((tool for tool in tools
+                    if tool['function']['name'] == 'build_learning_experiment'), None)
+        else:
+            pace = paced_step(message, continuation, resolution)
+    buffer_reply = bool(review or scoped_sources or memory_items or continuation or workbench is not None)
     permission_snapshot = permitted_tools(user, chat_context), planning_for_chat(user, chat_context)
     if not task and permission_snapshot[1]:
         prompt += ('\n本轮需要调整项目安排时，读完必要资料后单独调用 plan_learning_project 准备计划，或单独用 '
@@ -232,14 +258,30 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
     program_retry_of = None
     program_repair = None
     card_reply = None
+    next_continuation = None
+    if continuation and (resolution and resolution.get('missing_choice')
+                         or acknowledge and not resolution and workbench is None):
+        card_reply = checkpoint_question(continuation, english) if continuation.get('question') else (
+            'Okay.' if english else '好。')
+        next_continuation = continuation
     practice_sources = {}
     practice_point = None
     course_ids = {current_course_id} if current_course_id is not None else set()
     transcript_sources = {transcript_source(course_context)} if course_context else set()
     question_answers = set()
     practice_reviews = set()
+    if continuation:
+        _, courses, answers, reviews, transcripts = history[-1]
+        course_ids.update(courses)
+        question_answers.update(answers)
+        practice_reviews.update(reviews)
+        transcript_sources.update(transcripts)
     used_revisions = {}
     experiments = {}
+    failed_verifications = set()
+    stopped_verifications = set()
+    verified_results = []
+    experiment_fallback = ''
     artifacts = TurnArtifacts()
     staged_artifacts = {}
     assessment_requests = 0
@@ -294,13 +336,20 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
         check_active()
         if monotonic() >= deadline:
             raise ULRTurnUnavailable()
+        if name in stopped_verifications:
+            return json.dumps({'error': '本轮已结束此工具的校验。'}, ensure_ascii=False)
+        if name == CONTINUATION_NAME:
+            if len(calls) != 1 or (stopped_verifications and arguments.get('question')):
+                return json.dumps({'error': '请先用已有结果推进原任务，完成后再结束本轮。'}, ensure_ascii=False)
+            return json.dumps(prepare_checkpoint(arguments, continuation, resolution, english, current.pk, pace), ensure_ascii=False)
         if attach_strategy and name == STRATEGY_TOOL:
             if arguments['action'] in project_change.strategies:
                 return json.dumps({'error': '同一项策略动作已经准备。'}, ensure_ascii=False)
             return json.dumps({'phase': 'prepared', 'action': arguments['action'], 'event_ref': arguments['event_ref']})
         if name == 'find_learning_tools':
             if set(arguments) == {'group'} and isinstance(group := arguments['group'], str) and group in groups:
-                return json.dumps({'group': group, 'tools': [tool['function']['name'] for tool in groups[group]['tools']]})
+                names = [tool['function']['name'] for tool in groups[group]['tools']]
+                return json.dumps({'group': group, 'tools': [name for name in names if name not in stopped_verifications]})
             if program := selected_program(arguments):
                 if set(arguments) == {'program', 'instruction'}:
                     return execute_program(program, arguments['instruction'])
@@ -348,7 +397,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
         return json.dumps(result, ensure_ascii=False)
 
     def accept_tool_result(outcome, call):
-        nonlocal card_reply, buffer_reply
+        nonlocal card_reply, buffer_reply, next_continuation, experiment_fallback
         nonlocal artifacts, registry, pending_tools, project_change, program_phase, active_program, practice_point, program_repair
         name = outcome.call.name
         submitted = outcome.call.arguments
@@ -398,10 +447,26 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
                 return json.dumps(result, ensure_ascii=False)
             program_phase = 'answer'
         if outcome.failed:
+            if name in VERIFICATION_TOOLS:
+                if name == 'build_learning_experiment' and isinstance(fallback := submitted.get('fallback_text'), str):
+                    experiment_fallback = fallback.strip()[:5000] or experiment_fallback
+                result = json.loads(outcome.result)
+                visual_status = result.get('preview', {}).get('visual_review', {}).get('status')
+                if (name in failed_verifications or outcome.error['code'] == 'timeout'
+                        or visual_status in {'unavailable', 'budget_exhausted'}):
+                    stopped_verifications.add(name)
+                    if name == 'build_learning_experiment' and experiment_fallback:
+                        notice = 'The interactive card could not be displayed.' if english else '交互卡片本轮未能显示。'
+                        card_reply = f'{notice}\n\n{experiment_fallback}'
+                failed_verifications.add(name)
             if outcome.call.name == PROGRESS_TOOL and assessment_requests:
                 raise ULRTurnUnavailable('检查题评阅未完成，请恢复同一请求。')
             return outcome.result
+        failed_verifications.discard(name)
         result = json.loads(outcome.result)
+        if name == CONTINUATION_NAME:
+            card_reply, next_continuation = result['reply'], result['checkpoint']
+            return outcome.result
         transcript_sources.update(map(tuple, result.pop('_ulr_transcripts', ())))
         if name in ('recall_learning', 'read_learning_source'):
             buffer_reply = True
@@ -497,7 +562,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
         return json.dumps(result, ensure_ascii=False)
 
     def tool_event(event):
-        if event['status'] != 'queued':
+        if event['status'] != 'queued' and event['name'] != CONTINUATION_NAME:
             check_active()
             retry_of = program_retry_of if program_phase == 'repair' else event.get('retry_of')
             emit({'type': 'tool_status', 'name': event['name'], 'status': event['status'],
@@ -530,8 +595,13 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
 
     coordinator = ToolRunCoordinator(call_tool, tools, on_step=tool_event, strict_arguments=True)
     task_reply_retry = False
-    for index in range(policy['max_requests'] + bool(task)):
+    max_rounds = policy['max_requests'] + bool(task)
+    for index in range(max_rounds + 1):
+        if index == max_rounds and not card_reply:
+            break
         remaining = deadline - monotonic()
+        if stopped_verifications:
+            tools = [tool for tool in tools if tool['function']['name'] not in stopped_verifications]
         shown_names = {tool['function']['name'] for tool in tools}
         last_request = index + assessment_requests >= policy['max_requests'] - 1
         attach_strategy = (project_change and project_change.name == PROGRESS_TOOL
@@ -566,22 +636,65 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
         if len(strategy_use_ids) == 1:
             offered = [task_tool_with_strategy_ref(tool) if tool['function']['name'] == TASK_TOOL else tool for tool in offered]
         local_round = index == 0 and local_program is not None
+        forced_tool = (direct_interaction if index == 0 else None) or (CONTINUATION_TOOL if pace else None)
         if local_round:
             offered = [available_programs[local_program]]
+        elif stopped_verifications:
+            offered = []
+        elif forced_tool and not card_reply:
+            offered = [forced_tool]
+        elif not (task or project_change or program_phase or card_reply) and len(offered) < 8:
+            offered = [*offered, CONTINUATION_TOOL]
         if remaining <= 0 or len(offered) > 8:
             raise ULRTurnUnavailable()
+        offered = [{**tool, 'function': {**tool['function'], 'parameters': {
+            **tool['function']['parameters'], 'required': [*tool['function']['parameters']['required'], 'fallback_text'],
+        }}} if tool['function']['name'] == 'build_learning_experiment' else tool for tool in offered]
         round_prompt = prompt
         if experiment_prompt and any(tool['function']['name'] == 'build_learning_experiment' for tool in offered):
             round_prompt += experiment_prompt
+        if stopped_verifications:
+            round_prompt += ('\n本轮已结束以下工具的校验：' + '、'.join(sorted(stopped_verifications))
+                + '。直接用正文和已有结果优先推进原任务。用户请求的形式无法交付时，只简短说明校验未完成，'
+                  '不要猜测原因，不要再确认或建议换题。随后就把可完成的部分交给学生。')
+        if continuation:
+            round_prompt += ('\n上一轮有仍在进行的任务。若本轮提供了明确选择，执行已选下一步，勿重复询问；'
+                '若回复明确提出新目标，跟随新目标。原目标仍有下一步时，随答复保存新的进展，沿用原目标名称和已确定的信息。'
+                '若工具不可用，先用现有结果完成可做的部分。既定步骤已完成时，直接答复。')
+        if resolution and resolution.get('use_defaults'):
+            round_prompt += ('\n学生明确授权你选用合理的默认值。为可撤销的参数选值并当轮执行。'
+                '只有缺少无法自行补齐的对象、原文或必要资料时才说明具体缺口。')
+        if pace:
+            round_prompt += ('\n这是学生明确要求的分轮教学。提交本轮指定的一步和下一步摘要，保留原始条件。'
+                '到最后一步时沿用原要求和例子，一句收束即结束。正文严格只包含当前步，任何一步都无需确认、'
+                '另提新练习、新例子、其他主题或额外的下一轮请求。')
+        history_excerpt_chars = 800
         while not card_reply and not local_round:
-            excerpts = [{**row, 'content': row['content'][:800]} for row, *_ in history]
+            excerpts = [{**row, 'content': row['content'][:history_excerpt_chars]} for row, *_ in history[:-2]]
+            excerpts.extend({**row, 'content': row['content'][:800]} for row, *_ in history[-2:])
             model_context = {**source_context, 'history': excerpts}
+            if pace:
+                model_context['paced_learning_step'] = pace
+            if stopped_verifications and verified_results:
+                model_context['verified_tool_results'] = verified_results
+            if continuation:
+                model_context['learning_continuation'] = {**continuation, 'resolution': resolution}
             if selected_sources:
                 model_context['workbench'] = selected_sources
-            messages[0]['content'] = round_prompt + format_task_context(model_context)
-            request_bytes = len(json.dumps({'messages': messages, 'tools': offered}, ensure_ascii=False).encode())
+            continuation_instruction = ('\n需要等待学生补充必要信息、完成学生明确要求的选择，或保存尚未做完的明确步骤时，'
+                '用 save_learning_continuation 一次提交可显示的正文和待续信息。一般教学问答和已完成的请求直接答复。'
+                if CONTINUATION_TOOL in offered else '')
+            messages[0]['content'] = round_prompt + continuation_instruction + format_task_context(model_context)
+            reply_messages = messages[:2] if stopped_verifications else messages
+            request_bytes = len(json.dumps({'messages': reply_messages, 'tools': offered}, ensure_ascii=False).encode())
             if request_bytes <= policy['max_request_bytes']:
                 break
+            if not (pace or continuation) and CONTINUATION_TOOL in offered:
+                offered = [tool for tool in offered if tool != CONTINUATION_TOOL]
+                continue
+            if len(history) > 2 and history_excerpt_chars == 800:
+                history_excerpt_chars = 640
+                continue
             if not history:
                 raise ULRTurnUnavailable('本轮问题和资料超过可处理范围，请缩短问题或减少材料后重试。')
             # Keep the newest exchanges together when dropping older context.
@@ -590,9 +703,9 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
                 history = history[1:]
         hold_project_reply = any(tool['function']['name'] in PROJECT_CHANGE_RECEIPTS
                                  or tool['function']['name'] in (TASK_TOOL, KNOWLEDGE_TOOL, STRATEGY_TOOL) for tool in offered)
-        request_messages = messages
+        request_messages = messages[:2] if stopped_verifications else messages
         if course_visual:
-            request_messages = [messages[0], {'role': 'user', 'content': [{'type': 'text', 'text': message}, *course_visual]}, *messages[2:]]
+            request_messages = [request_messages[0], {'role': 'user', 'content': [{'type': 'text', 'text': message}, *course_visual]}, *request_messages[2:]]
         for _, courses, answers, reviews, transcripts in history:
             course_ids.update(courses)
             question_answers.update(answers)
@@ -616,7 +729,8 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
         else:
             try:
                 response = AIEngine.call_provider(request_messages, operation=policy['operation'],
-                    tools=offered or None, tool_choice='auto' if offered else None, max_tokens=policy['max_tokens'],
+                    tools=offered or None, tool_choice=('required' if forced_tool and not local_round else 'auto') if offered else None,
+                    max_tokens=policy['max_tokens'],
                     timeout_seconds=min(20, remaining), max_retries=0, raise_on_error=True,
                     on_text=stream_reply, tool_aliases=advertised_programs)
             except AICallError as exc:
@@ -699,6 +813,8 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
                 context_sources['practice'] = {'questions': list(practice_sources.items()), 'point_id': practice_point}
             if strategy_use_ids:
                 context_sources['strategy_use_ids'] = sorted(strategy_use_ids)
+            if next_continuation:
+                context_sources['continuation'] = next_continuation
             if local_program:
                 log_ai_operation('assistant.chat.instruction', True, (monotonic() - started_at) * 1000, metadata={
                     'kind': 'local_instruction', 'submitted_tools': local_program, 'attempts': 0,
@@ -731,7 +847,10 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
                 raise ULRTurnUnavailable('准备完成后，请继续处理本轮回执。')
             outcome, = coordinator.execute_batch([call], index + 1)
             outcomes.append(outcome)
-            results.append({'role': 'tool', 'tool_call_id': outcome.call.call_id, 'content': accept_tool_result(outcome, call)})
+            tool_result = accept_tool_result(outcome, call)
+            results.append({'role': 'tool', 'tool_call_id': outcome.call.call_id, 'content': tool_result})
+            if not outcome.failed and outcome.call.name not in VERIFICATION_TOOLS | {CONTINUATION_NAME, 'find_learning_tools'}:
+                verified_results.append({'tool': outcome.call.name, 'result': tool_result[:1200]})
             if program_phase == 'repair':
                 program_retry_of = outcome.call.call_id
         if local_round:

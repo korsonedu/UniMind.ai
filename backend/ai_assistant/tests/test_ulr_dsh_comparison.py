@@ -135,7 +135,7 @@ def test_ulr_and_dsh_course_source(auth_client, user, settings, tmp_path, live_s
     artifact_mode = ''
     artifact_revision_target = ''
     reject_artifact_reply = False
-    experiment = {'title': '乘法实验',
+    experiment = {'title': '乘法实验', 'fallback_text': '6 乘 7 等于 42。',
         'html': '<button id="go">计算</button><output id="out"></output><script>document.querySelector("#go").onclick=()=>document.querySelector("#out").textContent=6*7;</script>',
         'checks': [{'selector': '#go', 'action': 'click', 'expect_selector': '#out', 'expect_text': '42'}]}
     course = Course.objects.create(is_published=True, title='合成折现率课程', knowledge_point=point)
