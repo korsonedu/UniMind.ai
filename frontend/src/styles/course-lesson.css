@@ -247,10 +247,205 @@ body:has(.um-lesson[data-resizing='true']) * { cursor: col-resize !important; }
 .um-course-sidebar-content .um-lesson-outline-items { flex:1; max-height:none; }
 
 @media(max-width:767px){
-  .um-lesson-controls button{width:44px;min-width:44px;height:44px;min-height:44px}
-  .um-lesson-controls{padding-inline:8px}
-  .um-lesson-progress{height:28px}
-  .um-lesson-favorite{min-height:44px}
+  .um-course-detail-player > .um-lesson {
+    padding: 0 0 32px;
+    gap: 0;
+    background: var(--m-chat-canvas);
+    color: var(--m-ink);
+    font-family: var(--m-font-sans);
+  }
+  .um-lesson-view {
+    gap: 0;
+    width: 100%;
+  }
+  .um-lesson-stage {
+    position: sticky;
+    top: 0;
+    z-index: 15;
+    background: #0a0b0e;
+  }
+  .um-lesson-player {
+    width: 100%;
+    border-radius: 0;
+    background: #0a0b0e;
+  }
+  .um-lesson-controls {
+    padding: 18px 10px 6px;
+    background: linear-gradient(transparent, rgb(8 10 14 / 86%));
+  }
+  .um-lesson-progress {
+    height: 18px;
+    margin-bottom: 2px;
+  }
+  .um-lesson-controls button {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    border-radius: 8px;
+  }
+  .um-course-detail-player .um-lesson-heading {
+    padding: 14px 18px 12px;
+    gap: 10px;
+    align-items: center;
+    background: var(--m-chat-canvas);
+  }
+  .um-course-detail-player .um-lesson-module {
+    margin: 0 0 3px;
+    font-size: 12px;
+    color: var(--m-ink-muted);
+  }
+  .um-lesson-heading h1 {
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: -0.015em;
+    color: var(--m-ink);
+  }
+  .um-lesson-favorite {
+    height: 34px;
+    min-height: 34px;
+    min-width: 0;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-surface-inset);
+    color: var(--m-ink-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    gap: 5px;
+  }
+  .um-lesson-favorite[aria-pressed='true'] {
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+  }
+
+  /* Inline Mobile Segmented Tabs (简介 / 大纲 / 资料 / 小宇) */
+  .um-lesson-phone-panels {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--m-chat-canvas);
+  }
+  .um-lesson-phone-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 14px;
+    border-bottom: 0.5px solid var(--m-hairline);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .um-lesson-phone-tabs::-webkit-scrollbar { display: none; }
+  .um-lesson-phone-tabs button {
+    position: relative;
+    flex: none;
+    height: 40px;
+    min-height: 40px;
+    min-width: 0;
+    padding: 0 10px;
+    border: 0;
+    background: transparent;
+    color: var(--m-ink-muted);
+    font-size: 14px;
+    font-weight: 400;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 140ms ease;
+  }
+  .um-lesson-phone-tabs button[aria-selected='true'] {
+    color: var(--m-ink);
+    font-weight: 500;
+  }
+  .um-lesson-phone-tabs button[aria-selected='true']::after {
+    content: '';
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 0;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--m-accent);
+  }
+  .um-lesson-phone-body {
+    padding: 16px 18px 28px;
+    min-width: 0;
+  }
+  .um-lesson-phone-body .um-lesson-intro {
+    padding-top: 0;
+    border-top: 0;
+  }
+  .um-lesson-phone-body .um-lesson-description p {
+    font-size: 15px;
+    line-height: 1.74;
+    color: var(--m-ink);
+  }
+  .um-lesson-phone-body .um-lesson-outline-count {
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: var(--m-ink-muted);
+  }
+  .um-lesson-phone-body .um-lesson-outline-items {
+    max-height: none;
+    padding: 0;
+  }
+  .um-lesson-phone-body .um-lesson-outline-items button {
+    padding: 11px 10px;
+    border-radius: 10px;
+    font-size: 14px;
+    color: var(--m-ink);
+  }
+  .um-lesson-phone-body .um-lesson-outline-items button:active {
+    background: var(--m-surface-inset);
+  }
+  .um-lesson-phone-body .um-lesson-outline-items time {
+    color: var(--m-accent);
+    font-weight: 500;
+  }
+  .um-lesson-phone-body .um-lesson-resources {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .um-lesson-phone-body .um-lesson-resources a {
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--m-surface-inset);
+    color: var(--m-ink);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .um-lesson-phone-body .um-lesson-resources a > svg { color: var(--m-accent); }
+  .um-lesson-phone-chat {
+    display: flex;
+    flex-direction: column;
+    min-height: 340px;
+  }
+  .um-lesson-phone-chat .um-course-assistant {
+    position: static;
+    width: 100%;
+    max-height: none;
+    pointer-events: auto;
+  }
+  .um-lesson-phone-chat .um-course-chat {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    max-height: none;
+  }
+  .um-lesson-phone-chat .um-course-chat-field {
+    border-radius: 18px;
+    background: var(--m-surface-inset);
+  }
+  .um-lesson-phone-chat .um-course-chat-send-row button {
+    flex-basis: 34px;
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
+  }
 }
 
 .um-personal-course-detail { display: flex; flex: 1; min-height: 0; height: 100%; }

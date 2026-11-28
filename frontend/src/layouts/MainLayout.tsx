@@ -7,7 +7,8 @@ import React, { useState, useEffect, useLayoutEffect, useSyncExternalStore, useC
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Link, useLocation, Outlet, useNavigate, useNavigationType } from 'react-router-dom';
 
-import { User as UserIcon, SignOut, CreditCard, ArrowLeft, ArrowRight, ArrowsOutSimple, ArrowsInSimple, SidebarSimple, ChatCircle, ListBullets, Files, NotePencil, BookOpen, SquaresFour, TreeStructure, X } from '@phosphor-icons/react';
+import { User as UserIcon, SignOut, CreditCard, ArrowLeft, ArrowRight, ArrowsOutSimple, ArrowsInSimple, SidebarSimple, Gear, ChatCircle, ListBullets, ListChecks, Files, NotePencil, BookOpen, SquaresFour, TreeStructure, Sparkle, X } from '@phosphor-icons/react';
+import { GlobalMobileDrawer, type MobileNavigationSlot } from '@/components/MobileNavPrimitives';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { queryClient } from '@/lib/queryClient';
@@ -143,7 +144,7 @@ export const MainLayout: React.FC = () => {
     setSidebarFullscreen(false);
     setSidebarPreview(null);
     document.getElementById('um-notes-toggle')?.focus({ preventScroll: true });
-  }, []);
+  }, [setSidebarFullscreen]);
   const inNotesPage = location.pathname === '/notes' || location.pathname.startsWith('/notes/');
   useDesktopRuntime(user?.id);
   const pendingLearningRecords = useDesktopStore(state => state.state?.learningSync?.pending ?? 0);
@@ -152,27 +153,36 @@ export const MainLayout: React.FC = () => {
   const { primaryColor, pageTitle } = useSystemStore();
   const { fetchFeatures, hasFeature, loading: featuresLoading, hasCourseCatalog, exitPreview } = useInstitutionStore();
   const isMobile = useIsMobile();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [pendingTourDismiss, setPendingTourDismiss] = useState(false);
-  const hasWorkspaceToolbar = ['/xiaoyu', '/courses', '/notes'].includes(location.pathname) || location.pathname.startsWith('/notes/') || /^\/course\/\d+/.test(location.pathname);
   const isPersonalVideo = activeWorkspace() === 'personal' && /^\/course\/\d+/.test(location.pathname);
+  const isMobileImmersivePage = isMobile && ((location.pathname.startsWith('/tests/session') && hasFeature('quiz.exam')) || (location.pathname.startsWith('/xiaoyu/practice') && hasFeature('ai.assistant')));
+  const hasWorkspaceToolbar = ['/xiaoyu', '/courses', '/notes'].includes(location.pathname) || location.pathname.startsWith('/notes/') || /^\/course\/\d+/.test(location.pathname) || isMobileImmersivePage;
   const isIntegratedWorkspace = isPersonalVideo || location.pathname.startsWith('/settings') || location.pathname === '/notes' || location.pathname.startsWith('/notes/')
     || (location.pathname === '/xiaoyu' && hasFeature('ai.assistant'))
     || ((location.pathname === '/xiaoyu/knowledge-builder' || location.pathname.startsWith('/xiaoyu/knowledge-builder/')) && hasFeature('ai.assistant'))
     || ((location.pathname === '/courses' || /^\/course\/\d+/.test(location.pathname)) && hasFeature('course.video'));
-  const isMobileImmersivePage = isMobile && ((location.pathname.startsWith('/tests/session') && hasFeature('quiz.exam')) || (location.pathname.startsWith('/xiaoyu/practice') && hasFeature('ai.assistant')));
   const isMobileVideoPage = isMobile && (isPersonalVideo || (location.pathname.startsWith('/course/') && hasFeature('course.video')));
-  const hideMobileBottomNav = isMobile && (isMobileImmersivePage || isMobileVideoPage);
+  const isMobilePracticeCanvas = isMobile && (
+    location.pathname === '/tests'
+    || (location.pathname.startsWith('/tests/') && !location.pathname.startsWith('/tests/session'))
+    || location.pathname.startsWith('/settings')
+    || location.pathname.startsWith('/billing')
+  );
   const shellRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!isMobile || !window.visualViewport) return;
     const viewport = window.visualViewport;
     const shell = shellRef.current;
+    const root = document.documentElement;
     const syncViewport = () => {
       // The visual viewport shrinks for the browser keyboard before layout dvh does.
       if (!shell || viewport.scale !== 1) return;
-      shell.style.setProperty('--um-viewport-height', `${viewport.height}px`);
+      const height = `${viewport.height}px`;
+      shell.style.setProperty('--um-viewport-height', height);
+      root.style.setProperty('--um-mobile-visual-height', height);
       const editing = document.activeElement?.matches('input, textarea, [contenteditable="true"]');
       shell.dataset.keyboardOpen = String(Boolean(editing && window.innerHeight - viewport.height > 150));
     };
@@ -185,12 +195,14 @@ export const MainLayout: React.FC = () => {
       document.removeEventListener('focusin', syncViewport);
       document.removeEventListener('focusout', syncViewport);
       shell?.style.removeProperty('--um-viewport-height');
+      root.style.removeProperty('--um-mobile-visual-height');
       if (shell) delete shell.dataset.keyboardOpen;
     };
   }, [isMobile]);
   const isTourPage = location.pathname === '/xiaoyu' && activeWorkspace() === 'personal';
   if (showTour && !isTourPage) { setShowTour(false); setPendingTourDismiss(true); }
   const xiaoyuVisible = location.pathname === '/xiaoyu';
+  const mobileXiaoyu = isMobile && xiaoyuVisible && hasFeature('ai.assistant');
   const [notesPageAvailability, setNotesPageAvailability] = useState({ key: '', available: false });
   const setNotesAvailable = useCallback((available: boolean) => { setNotesPageAvailability({ key: location.key, available }); }, [location.key]);
   const notesAvailable = notesPageAvailability.key === location.key && notesPageAvailability.available;
@@ -301,16 +313,90 @@ export const MainLayout: React.FC = () => {
     </DropdownMenu>
   </div> : null;
 
+  const isMobileTopLevel = isMobile && (
+    location.pathname === '/xiaoyu'
+    || location.pathname === '/notes'
+    || location.pathname === '/courses'
+    || location.pathname === '/tests'
+  );
+  const sessionSearchParams = location.pathname.startsWith('/tests/session') ? new URLSearchParams(location.search) : null;
+  const mobileBackTarget = location.pathname.startsWith('/notes/')
+    ? '/notes'
+    : location.pathname.startsWith('/course/')
+      ? '/courses'
+      : location.pathname.startsWith('/tests/session')
+        ? (sessionSearchParams?.get('source') === 'xiaoyu' ? '/xiaoyu' : sessionSearchParams?.has('ids') ? '/tests/review' : '/tests')
+        : location.pathname.startsWith('/tests/')
+          ? '/tests'
+          : '/xiaoyu';
+  const mobileDrawerOrder = ['/xiaoyu', '/notes', '/courses', '/tests'];
+  const mobileNavItems = isMobile
+    ? mobileDrawerOrder
+      .map(path => navItems.find(item => item.to === path))
+      .filter((item): item is NavItem => !!item && canEnter(item) && !(personalSpace && item.to === '/courses'))
+    : [];
+  const mobileNavLinks = (
+    <nav className="um-m-drawer-nav" aria-label={t('功能导航')}>
+      {mobileNavItems.map(item => {
+        const active = isActive(item);
+        const Icon = item.to === '/xiaoyu' ? Sparkle : item.to === '/notes' ? NotePencil : item.to === '/courses' ? BookOpen : ListChecks;
+        return (
+          <Link key={item.to} to={routeFor(item.to)} aria-current={active ? 'page' : undefined}>
+            <Icon size={17} weight={active ? 'duotone' : 'regular'} />
+            <span>{item.mobileLabel}</span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+  const mobileDrawerAccount = (
+    <>
+      {user && (
+        <Link to="/settings" className="um-m-drawer-user">
+          <Avatar className="h-7 w-7 shrink-0">
+            <AvatarImage src={user.avatar_url} />
+            <AvatarFallback className="text-[11px] font-semibold bg-[var(--m-accent-soft)] text-[var(--m-accent)]">
+              {(user.nickname || user.username)?.[0]}
+            </AvatarFallback>
+          </Avatar>
+          <span className="um-m-drawer-user-name">{user.nickname || user.username}</span>
+        </Link>
+      )}
+      <div className="um-m-drawer-footer-actions">
+        {user && <div className="um-app-header-actions"><NotificationBell /></div>}
+        <Link to="/settings" aria-label={t('设置')} title={t('设置')}><Gear size={17} /></Link>
+      </div>
+    </>
+  );
+  const mobileNavigation: MobileNavigationSlot | undefined = mobileXiaoyu ? {
+    onOpen: () => { if (sidebarVisible) closeNotes(); },
+    links: mobileNavLinks,
+    account: mobileDrawerAccount,
+  } : undefined;
+
   const nativeOffline = useSyncExternalStore(subscribeOffline, isNativeOffline);
   const demoActive = useAuthStore(state => state.demoActive);
   return <TooltipProvider delayDuration={0}>
-    <div ref={shellRef} data-mobile-nav-hidden={hideMobileBottomNav} className="um-app-shell flex flex-col h-dvh bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground" data-nav-history={historyIndex > 0 || historyIndex < historyEnd ? 'true' : undefined}>
+    <div ref={shellRef} data-mobile-xiaoyu={mobileXiaoyu || undefined} data-mobile-notes={(isMobile && inNotesPage) || undefined} data-mobile-canvas={isMobilePracticeCanvas || undefined} data-mobile-immersive={isMobileImmersivePage || undefined} className="um-app-shell flex flex-col h-dvh bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground" data-nav-history={historyIndex > 0 || historyIndex < historyEnd ? 'true' : undefined}>
       <header className="um-window-toolbar" aria-label={t('工作区功能区')}>
-        <SpaceSwitcher />
+        {!isMobile && <SpaceSwitcher />}
+        {isMobile && !mobileXiaoyu && isMobileTopLevel && (
+          <GlobalMobileDrawer
+            open={mobileMenuOpen}
+            onOpenChange={open => { if (open && sidebarVisible) closeNotes(); setMobileMenuOpen(open); }}
+            links={mobileNavLinks}
+            account={mobileDrawerAccount}
+          />
+        )}
+        {isMobile && !isMobileTopLevel && (
+          <Link className="um-mobile-back-button" to={mobileBackTarget} aria-label={t('返回')}>
+            <ArrowLeft size={20} />
+          </Link>
+        )}
         <div className="um-window-navigation"><button aria-label={t('返回')} title={t('返回')} disabled={historyIndex <= 0} onClick={() => navigate(-1)}><ArrowLeft size={17} /></button><button aria-label={t('前进')} title={t('前进')} disabled={historyIndex >= historyEnd} onClick={() => navigate(1)}><ArrowRight size={17} /></button></div>
-        <div className="um-window-workspace" ref={setToolbarHost}>{!hasWorkspaceToolbar && <><button className="um-agent-icon-button hidden md:inline-flex" aria-label={t('切换导航栏')} onClick={() => setRailHidden(old => !old)}><SidebarSimple size={18} /></button><WorkspaceTrail title={pageTitle || t('学习空间')} crumbs={[]} /></>}</div>
-        {workspaceHeader}
-        {sidebarAvailable && <button id="um-notes-toggle" data-native-back-close={sidebarVisible ? true : undefined} type="button" className="um-right-sidebar-toggle um-agent-icon-button" aria-label={t('切换右侧栏')} title={sidebarVisible ? t('收起右侧栏') : t('展开右侧栏')} aria-expanded={sidebarVisible} aria-controls="um-right-panel" onClick={() => { if (sidebarVisible) closeNotes(); else setNotesOpen(true); }}><SidebarSimple size={19} style={{ transform: 'scaleX(-1)' }} /></button>}
+        <div className="um-window-workspace" ref={setToolbarHost}>{!hasWorkspaceToolbar && <>{!isMobile && <button className="um-agent-icon-button hidden md:inline-flex" aria-label={t('切换导航栏')} onClick={() => setRailHidden(old => !old)}><SidebarSimple size={18} /></button>}<WorkspaceTrail title={pageTitle || t('学习空间')} crumbs={[]} /></>}</div>
+        {!isMobile && workspaceHeader}
+        {sidebarAvailable && (!mobileXiaoyu || projectChat.hasConversation || projectChat.projectId || sidebarVisible) && <button id="um-notes-toggle" data-native-back-close={sidebarVisible ? true : undefined} type="button" className="um-right-sidebar-toggle um-agent-icon-button" aria-label={t('切换右侧栏')} title={sidebarVisible ? t('收起右侧栏') : t('展开右侧栏')} aria-expanded={sidebarVisible} aria-controls="um-right-panel" onClick={() => { if (sidebarVisible) closeNotes(); else setNotesOpen(true); }}><SidebarSimple size={19} style={{ transform: 'scaleX(-1)' }} /></button>}
       </header>
       {(nativeOffline || demoActive) && <div role="status" className="flex shrink-0 items-center justify-between gap-2 bg-amber-50 text-amber-950 px-3 py-1 text-xs"><span>{demoActive ? t('离线试用 · 数据仅保存在本机') : t('离线缓存 · 已使用本地离线缓存')}</span><button type="button" className="min-h-11 underline shrink-0" onClick={() => { if (demoActive) { void useAuthStore.getState().exitDemo().then(() => { queryClient.clear(); navigate('/login', { replace: true }); }); } else { setNativeOffline(false); navigate('/settings'); void queryClient.invalidateQueries(); } }}>{demoActive ? t('连接服务器 / 退出试用') : t('重新连接 / 服务器设置')}</button></div>}
       <div className="um-window-body flex flex-1 min-h-0 overflow-hidden">
@@ -332,7 +418,7 @@ export const MainLayout: React.FC = () => {
       </aside>
       <div ref={panesRef} className="um-window-panes" data-notes-open={sidebarVisible} data-fullscreen={workspaceFullscreen} data-resizing={!!sidebarPreview} data-snap={sidebarPreview?.snap ?? undefined} style={{ '--um-notes-width': `${rightSidebarWidth}px` } as React.CSSProperties}>
       <main inert={(isMobile && sidebarVisible) || workspaceFullscreen} aria-hidden={workspaceFullscreen || undefined} className={cn('um-app-main flex-1 min-w-0 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background',
-        isMobileImmersivePage ? 'overflow-hidden pb-0' : isIntegratedWorkspace ? hideMobileBottomNav ? 'overflow-hidden pb-0' : 'overflow-hidden pb-[calc(61px+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] md:pb-0' : 'overflow-y-auto pb-[calc(61px+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] md:pb-0')}>
+        isMobileImmersivePage || isIntegratedWorkspace ? 'overflow-hidden' : 'overflow-y-auto')}>
         <ExamActivityBar />
         <div className={cn('um-app-page-content flex-1 w-full relative min-h-0', isMobileImmersivePage ? 'px-0 py-0 h-full overflow-hidden' : isMobileVideoPage ? 'px-0 py-0' : !isIntegratedWorkspace && 'px-4 py-4 md:px-8 md:py-6')}>
           <RightSidebarLayoutContext.Provider value={{ fullscreen: workspaceFullscreen, exitFullscreen: () => { setSidebarPreview(null); setSidebarFullscreen(false); } }}>
@@ -342,7 +428,7 @@ export const MainLayout: React.FC = () => {
                   <CourseSidebarContext.Provider value={{ host: courseSidebarHost, view: activeSidebarView, visible: sidebarVisible, recordRecent: recordSidebarRecent, setAvailable: setCourseSidebarAvailable }}>
                     <ProjectChatSidebarContext.Provider value={{ host: projectChatHost, visible: sidebarVisible && activeSidebarView === 'chat', open: openProjectChat, close: closeNotes, setAvailable: setProjectChatAvailable }}>
                       <LearningPathSidebarContext.Provider value={{ host: learningPathHost, visible: sidebarVisible && activeSidebarView === 'learning-path', open: openLearningPath, openNotes: openSidebarNotes, close: closeNotes, setAvailable: setLearningPathAvailability }}>
-                        <Outlet context={{ toolbarHost }} />
+                        <Outlet context={{ toolbarHost, mobileNavigation }} />
                       </LearningPathSidebarContext.Provider>
                     </ProjectChatSidebarContext.Provider>
                   </CourseSidebarContext.Provider>
@@ -385,9 +471,6 @@ export const MainLayout: React.FC = () => {
       </div>
       </div>
       </div>
-      <nav className={cn('um-app-mobile-nav md:hidden fixed bottom-0 inset-x-0 z-[var(--z-dropdown)] border-t border-border bg-card/95 backdrop-blur-xl pb-[var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px))]', hideMobileBottomNav && 'hidden')}>
-        <div className="um-app-mobile-links flex items-center justify-start px-1 py-2">{visibleNavItems.map(item => canEnter(item) ? <Link key={item.to} to={routeFor(item.to)} aria-current={isActive(item) ? 'page' : undefined} className={cn('relative flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-lg transition-colors min-h-[44px] min-w-[44px] whitespace-nowrap shrink-0', isActive(item) ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}>{isActive(item) && <span className="absolute top-0 inset-x-3 h-0.5 bg-primary rounded-full" />}{<NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></Link> : <span key={item.to} role="link" aria-disabled="true" aria-label={t('{0}，暂未开通', { 0: item.label })} className="flex flex-col items-center justify-center gap-0.5 py-1 px-1 min-h-[44px] min-w-[44px] whitespace-nowrap shrink-0 text-muted-foreground opacity-40 cursor-not-allowed">{<NavIcon position={item.icon} />}<span className="text-[10px] font-bold">{item.mobileLabel}</span></span>)}</div>
-      </nav>
       <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}><AlertDialogContent className="rounded-lg border-border bg-card"><AlertDialogHeader><AlertDialogTitle>{t('确认退出登录？')}</AlertDialogTitle><AlertDialogDescription>{t('退出后需要重新登录才能访问学习记录和课程。')}{pendingLearningRecords > 0 && t(' 当前还有 {0} 条离线学习记录未同步，退出会清除这些记录，建议先返回桌面设置联网同步。', { 0: pendingLearningRecords })}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t('返回')}</AlertDialogCancel><AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch { /* Local logout remains available. */ } await queryClient.cancelQueries(); queryClient.clear(); logout(); navigate('/login', { replace: true }); }}>{t('确认退出')}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       {showTour && isTourPage && <GuidedTour steps={tourSteps} onDismiss={handleTourDismiss} />}
     </div>

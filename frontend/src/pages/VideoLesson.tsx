@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { shouldTogglePlayback } from './videoLessonKeyboard';
 import { useLearningSession } from '@/hooks/useLearningSession';
 import { useDesktopStore } from '@/lib/desktop';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { CourseSidebarContext, ProjectChatSidebarContext, useNotesSidebarAvailability } from '@/components/WorkspaceContext';
 import '@/styles/course-lesson.css';
 
@@ -43,6 +44,8 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({
   workbenchVideo = false, missingCourse, isFavorite = false, favoritePending = false, onFavoriteChange,
 }) => {
   useLocale();
+  const isPhone = useIsMobile();
+  const [mobileTab, setMobileTab] = useState<'intro' | 'outline' | 'materials' | 'chat'>('intro');
   const hasCourseCatalog = useInstitutionStore(state => state.hasCourseCatalog);
   const { id } = useParams();
   const { key: locationKey } = useLocation();
@@ -119,9 +122,9 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({
   useNotesSidebarAvailability(!loading && course?.id === courseId);
   const sidebarReady = !loading && course?.id === courseId;
   useEffect(() => {
-    setSidebarAvailable(sidebarReady);
+    setSidebarAvailable(!isPhone && sidebarReady);
     return () => setSidebarAvailable(false);
-  }, [sidebarReady, courseId, setSidebarAvailable]);
+  }, [isPhone, sidebarReady, courseId, setSidebarAvailable]);
   useEffect(() => {
     if (projectId && sidebarReady && !window.matchMedia('(max-width: 767px)').matches) openProjectChat();
   }, [projectId, sidebarReady, openProjectChat]);
@@ -478,12 +481,65 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({
             <button className="um-lesson-favorite" disabled={favoritePending || !onFavoriteChange} onClick={onFavoriteChange} aria-pressed={isFavorite}><Star size={18} weight={isFavorite ? 'fill' : 'regular'} />{hasCourseCatalog ? (isFavorite ? t('已收藏') : t('收藏')) : (isFavorite ? t('已保存') : t('保存课程'))}</button>
           </div>}
         </header>
-        {!privateCompanion && <section className="um-lesson-intro" aria-labelledby="lesson-intro-heading">
-          <h2 id="lesson-intro-heading">{t('课程简介')}</h2>
-          <div className="um-lesson-description"><p>{course.description || t('暂无课程简介')}</p></div>
-        </section>}
+        {isPhone ? (
+          <div className="um-lesson-phone-panels">
+            <div className="um-lesson-phone-tabs" role="tablist" aria-label={t('课程内容')}>
+              {([
+                ...(!privateCompanion ? [['intro', t('课程简介')] as const] : []),
+                ['outline', t('课程大纲')] as const,
+                ['materials', t('资料')] as const,
+                ['chat', t('小宇')] as const,
+              ]).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={(privateCompanion && mobileTab === 'intro' ? 'outline' : mobileTab) === key}
+                  onClick={() => setMobileTab(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="um-lesson-phone-body">
+              {!privateCompanion && mobileTab === 'intro' && (
+                <section className="um-lesson-intro" aria-label={t('课程简介')}>
+                  <div className="um-lesson-description"><p>{course.description || t('暂无课程简介')}</p></div>
+                </section>
+              )}
+              {(mobileTab === 'outline' || (privateCompanion && mobileTab === 'intro')) && (
+                <section className="um-lesson-outline-section" aria-label={t('课程大纲')}>
+                  {course.ai_outline_enabled !== false || (personal && linkedSeconds !== null)
+                    ? <OutlinePanel courseId={courseId} videoRef={videoRef} enabled={course.ai_outline_enabled !== false}
+                        currentTime={personal && linkedSeconds !== null ? currentTime : undefined} />
+                    : <p className="um-lesson-empty">{t('本课程暂无大纲')}</p>}
+                </section>
+              )}
+              {mobileTab === 'materials' && (
+                <section className="um-lesson-resources" aria-label={t('课程资料')}>
+                  {course.courseware && <ProtectedMediaLink href={course.courseware} download target="_blank" rel="noopener noreferrer"><FileText size={17} /><span>{t('教学课件')}</span><Download size={15} /></ProtectedMediaLink>}
+                  {course.reference_materials && <ProtectedMediaLink href={course.reference_materials} download target="_blank" rel="noopener noreferrer"><FileText size={17} /><span>{t('参考资料')}</span><Download size={15} /></ProtectedMediaLink>}
+                  {!course.courseware && !course.reference_materials && <p className="um-lesson-empty">{t('暂无课程资料')}</p>}
+                </section>
+              )}
+              {mobileTab === 'chat' && (
+                <div className="um-lesson-phone-chat">
+                  {projectId ? <ProjectCourseChat key={`${projectId}:${linkedConversation || ''}`} projectId={projectId} linkedConversation={linkedConversation}
+                    courseId={courseId} videoRef={videoRef} mode="sidebar" visible={mobileTab === 'chat'} onSeek={seekTo} workbench={personal} />
+                    : <CourseChatPanel key={`${userId}:${courseId}`} courseId={courseId} videoRef={videoRef}
+                      mode="sidebar" visible={mobileTab === 'chat'} onSeek={seekTo} />}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          !privateCompanion && <section className="um-lesson-intro" aria-labelledby="lesson-intro-heading">
+            <h2 id="lesson-intro-heading">{t('课程简介')}</h2>
+            <div className="um-lesson-description"><p>{course.description || t('暂无课程简介')}</p></div>
+          </section>
+        )}
       </section>
-      {sidebarReady && sidebarHost && createPortal(<aside className="um-course-sidebar-content" aria-label={t('课程侧栏')}>
+      {!isPhone && sidebarReady && sidebarHost && createPortal(<aside className="um-course-sidebar-content" aria-label={t('课程侧栏')}>
         <div id="sidebar-panel-chat" role="tabpanel" aria-labelledby="sidebar-tab-chat" className="um-course-sidebar-chat" hidden={sidebarView !== 'chat'}>
           {projectId ? <ProjectCourseChat key={`${projectId}:${linkedConversation || ''}`} projectId={projectId} linkedConversation={linkedConversation}
             courseId={courseId} videoRef={videoRef} mode="sidebar" visible={sidebarVisible && sidebarView === 'chat'} onSeek={seekTo} workbench={personal} />

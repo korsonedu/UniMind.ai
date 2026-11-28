@@ -133,44 +133,821 @@
 .um-practice-session textarea { font-size: 16px; font-weight: 400; background: var(--um-color-context); color: var(--um-color-text); }
 .um-practice-session .um-practice-option-letter { padding-top: 2px; }
 @media(max-width:767px) {
-  .um-practice-home { padding: 0 0 24px; }
-  .um-practice-setup { padding: 18px; }
-  .um-practice-setup .um-practice-heading { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; align-items: center; }
-  .um-practice-setup .um-practice-heading > div:first-child { display: contents; }
-  .um-practice-setup .um-practice-heading h2 { grid-column: 1; grid-row: 1; white-space: nowrap; }
-  .um-practice-setup .um-practice-heading p { grid-column: 1 / -1; grid-row: 2; margin: 0; }
-  .um-practice-setup .um-practice-heading-actions { grid-column: 2; grid-row: 1; margin-left: 0; }
-  .um-practice-heading { padding-right: 0; flex-wrap: wrap; gap: 12px; }
-  .um-memorix-intro { grid-template-columns: minmax(0,1fr); gap: 20px; padding: 18px; }
-  .um-practice-home .um-memorix-copy h1 { font-size: clamp(24px,5.5vw,32px); letter-spacing: -.7px; }
-  .um-memorix-stats { display: flex; gap: 12px; padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--um-color-border); }
-  .um-memorix-stats > div { flex: 1; display: block; min-width: 0; }
-  .um-memorix-stats dt { font-size: 11px; }
-  .um-memorix-stats dd { margin-top: 4px; font-size: 22px; }
-  .um-memorix-explanation { padding: 20px; }
-  .um-practice-heading-actions { margin-left: auto; }
-  .um-practice-controls { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
-  .um-practice-controls > label { min-width: 0; }
+  /* ── Shared Mobile Practice Surface & Typography ── */
+  .um-practice-home, .um-practice-session {
+    font-family: var(--m-font-sans);
+    color: var(--m-ink);
+  }
+  .um-practice-home {
+    padding: 4px 0 28px;
+    max-width: 600px;
+  }
+
+  /* ── Memorix Hero & Status Floating Card ── */
+  .um-memorix-intro {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    padding: 16px;
+    border: 0;
+    border-radius: var(--m-radius-card);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+  }
+  .um-practice-home .um-memorix-copy h1 {
+    margin: 0 0 12px;
+    font-size: 19px;
+    font-weight: 500;
+    line-height: 1.45;
+    letter-spacing: -0.02em;
+    color: var(--m-ink);
+  }
+  .um-memorix-copy h1 span { color: var(--m-accent); }
+  .um-memorix-copy h1 .um-memorix-drive { color: var(--m-ink); }
+  .um-practice-home .um-memorix-about {
+    height: 30px;
+    min-height: 30px;
+    min-width: 0;
+    padding: 0 11px;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+    font-size: 12.5px;
+    font-weight: 500;
+    gap: 5px;
+  }
+  .um-practice-home .um-memorix-about:active { opacity: 0.85; }
+  .um-memorix-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    padding: 14px 0 0;
+    border-left: 0;
+    border-top: 0.5px solid var(--m-hairline);
+  }
+  .um-memorix-stats > div {
+    display: block;
+    min-width: 0;
+    padding: 0 10px;
+    border-left: 0.5px solid var(--m-hairline);
+  }
+  .um-memorix-stats > div:first-child { padding-left: 0; border-left: 0; }
+  .um-memorix-stats dt { font-size: 11.5px; color: var(--m-ink-muted); white-space: nowrap; }
+  .um-memorix-stats dd { margin-top: 5px; font-size: 20px; font-weight: 600; line-height: 1.2; color: var(--m-ink); }
+  .um-memorix-stats small { font-size: 11px; color: var(--m-ink-muted); }
+  .um-memorix-explanation {
+    padding: 20px;
+    border: 0;
+    border-radius: 18px;
+    background: var(--m-surface);
+    color: var(--m-ink);
+    box-shadow: var(--m-shadow-drawer);
+    font-family: var(--m-font-sans);
+  }
+
+  /* ── Session Setup Card ── */
+  .um-practice-setup {
+    margin-top: 10px;
+    padding: 16px;
+    border: 0;
+    border-radius: var(--m-radius-card);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+  }
+  .um-practice-setup .um-practice-heading {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding-right: 0;
+  }
+  .um-practice-setup .um-practice-heading > div:first-child { display: block; }
+  .um-practice-setup h2 {
+    font-size: 15.5px;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+    color: var(--m-ink);
+  }
+  .um-practice-setup .um-practice-heading p {
+    margin: 4px 0 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--m-ink-muted);
+  }
+  .um-practice-setup .um-practice-heading-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-left: 0;
+  }
+  .um-practice-setup .um-practice-heading-actions button {
+    height: 30px;
+    min-height: 30px;
+    min-width: 0;
+    padding: 0 11px;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-surface-inset);
+    color: var(--m-ink-secondary);
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+  .um-practice-setup .um-practice-heading-actions button:last-child:has(svg:only-child) {
+    width: 30px;
+    padding: 0;
+    margin-left: auto;
+  }
+
+  .um-practice-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .um-practice-controls > label,
+  .um-practice-controls > div {
+    min-width: 0;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--m-ink-muted);
+  }
   .um-practice-controls > div { grid-column: 1 / -1; }
   .um-practice-controls > .um-practice-count:has(input) { grid-column: 1 / -1; width: auto; }
   .um-practice-controls:has(.um-practice-count input) > label { grid-column: 1 / -1; }
-  .um-practice-controls :is(.um-select-trigger,input), .um-practice-controls .um-practice-subject > button { width: 100%; height: 44px; font-size: 16px; }
-  .um-practice-preference button { flex: 1; }
-  .um-practice-home button, .um-practice-popover label { min-height: 44px; }
-  .um-practice-start { flex-direction: column; align-items: stretch; gap: 16px; }
-  .um-practice-home .um-practice-start > .um-practice-primary { width: 100%; min-height: 44px; }
-  .um-practice-summary > div { padding: 0 12px; }
-  .um-practice-summary dd { font-size: 24px; }
-  .um-practice-review .um-practice-summary { padding: 16px; }
-  .um-practice-review .um-practice-summary > div { padding: 0 8px; }
-  .um-practice-review .um-practice-summary > div:first-child { padding-left: 0; }
-  .um-practice-review .um-practice-summary dt { font-size: 11px; }
-  .um-practice-review .um-practice-summary dd { font-size: 22px; }
-  .um-review-drill-groups { grid-template-columns: minmax(0,1fr); padding: 16px; gap: 16px; }
-  .um-review-drill-groups > section + section { border-left: 0; border-top: 1px solid var(--um-color-border); padding: 16px 0 0; }
-  .um-practice-breakdowns { grid-template-columns: minmax(0,1fr); gap: 20px; }
-  .um-practice-breakdowns > section + section { border-top: 1px solid var(--um-color-border); padding-top: 20px; }
-  .um-practice-session button { min-height: 44px; }
-  .um-practice-session .text-\[10px\], .um-practice-session .text-\[11px\] { font-size: 12px; }
+  .um-practice-controls :is(.um-select-trigger, input),
+  .um-practice-controls .um-practice-subject > button {
+    width: 100%;
+    height: 38px;
+    min-height: 38px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--m-surface-inset);
+    color: var(--m-ink);
+    font-size: 14px;
+    font-weight: 400;
+    box-shadow: none;
+  }
+  .um-practice-start {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 0.5px solid var(--m-hairline);
+  }
+  .um-practice-start > div {
+    gap: 6px;
+    font-size: 12px;
+    color: var(--m-ink-muted);
+  }
+  .um-practice-preference {
+    padding: 3px;
+    gap: 2px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--m-surface-inset);
+  }
+  .um-practice-preference button {
+    flex: 1;
+    height: 32px;
+    min-height: 32px;
+    min-width: 0;
+    padding: 0 8px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--m-ink-secondary);
+  }
+  .um-practice-preference button[aria-pressed='true'] {
+    background: var(--m-surface);
+    color: var(--m-ink);
+    font-weight: 500;
+    box-shadow: var(--m-shadow-pill);
+  }
+  .um-practice-home .um-practice-start > .um-practice-primary {
+    width: 100%;
+    height: 44px;
+    min-height: 44px;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-accent);
+    color: var(--m-accent-ink);
+    font-size: 14.5px;
+    font-weight: 500;
+  }
+  .um-practice-home .um-practice-start > .um-practice-primary:active {
+    background: var(--m-accent-hover);
+  }
+  .um-practice-popover {
+    border: 0;
+    border-radius: 14px;
+    background: var(--m-surface);
+    color: var(--m-ink);
+    box-shadow: var(--m-shadow-drawer);
+    padding: 14px;
+    font-family: var(--m-font-sans);
+  }
+  .um-practice-popover label { min-height: 36px; font-size: 13.5px; color: var(--m-ink); }
+
+  /* ── Wrong Question Review Page (/tests/review) ── */
+  .um-practice-review .um-practice-back { display: none; }
+  .um-practice-review .um-practice-heading {
+    margin-bottom: 10px;
+    padding: 0 2px;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .um-practice-review .um-practice-heading h1 { display: none; }
+  .um-practice-review .um-practice-heading button {
+    height: 30px;
+    min-height: 30px;
+    min-width: 0;
+    padding: 0 10px;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-pill);
+    color: var(--m-ink-secondary);
+    font-size: 12.5px;
+  }
+  .um-practice-review .um-practice-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 15px 16px;
+    border: 0;
+    border-radius: var(--m-radius-card);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+  }
+  .um-practice-review .um-practice-summary > div {
+    padding: 0 10px;
+    border-left: 0.5px solid var(--m-hairline);
+  }
+  .um-practice-review .um-practice-summary > div:first-child { padding-left: 0; border-left: 0; }
+  .um-practice-review .um-practice-summary dt { font-size: 11.5px; color: var(--m-ink-muted); white-space: nowrap; }
+  .um-practice-review .um-practice-summary dd { margin-top: 5px; font-size: 20px; font-weight: 600; color: var(--m-ink); }
+  .um-practice-review .um-practice-summary small { font-size: 11px; color: var(--m-ink-muted); }
+
+  .um-practice-drills { margin-top: 10px; }
+  .um-practice-drills > h2 {
+    margin: 0 0 8px 2px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--m-ink-muted);
+  }
+  .um-review-drill-groups {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px 16px;
+    gap: 14px;
+    border: 0;
+    border-radius: var(--m-radius-card);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+  }
+  .um-review-drill-groups > section + section {
+    border-left: 0;
+    border-top: 0.5px solid var(--m-hairline);
+    padding: 14px 0 0;
+  }
+  .um-practice-review .um-review-group-title {
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--m-ink-muted);
+  }
+  .um-practice-review li {
+    padding: 11px 0;
+    gap: 12px;
+    border-top: 0.5px solid var(--m-hairline);
+  }
+  .um-practice-review li h3 { font-size: 14.5px; font-weight: 500; color: var(--m-ink); }
+  .um-practice-review li p { font-size: 12px; color: var(--m-ink-muted); margin-top: 2px; }
+  .um-practice-review li button {
+    height: 30px;
+    min-height: 30px;
+    min-width: 0;
+    padding: 0 11px;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+  .um-review-empty {
+    padding: 20px 16px;
+    border: 0;
+    border-radius: var(--m-radius-card);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+    color: var(--m-ink-secondary);
+  }
+  .um-review-empty a { color: var(--m-accent); font-weight: 500; }
+
+  .um-practice-breakdowns {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px 0 0;
+  }
+  .um-practice-breakdowns > section {
+    padding: 15px 16px;
+    border: 0;
+    border-radius: var(--m-radius-card);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+  }
+  .um-practice-breakdowns > section + section {
+    border-top: 0;
+    padding-top: 15px;
+  }
+  .um-practice-breakdowns > section > header { margin-bottom: 6px; }
+  .um-practice-breakdowns > section > header h2 { font-size: 14.5px; font-weight: 500; color: var(--m-ink); }
+  .um-practice-breakdowns header > span { font-size: 11.5px; color: var(--m-ink-muted); }
+  .um-review-cause-heading { margin-bottom: 7px; }
+  .um-review-cause-heading > span { color: var(--m-accent); font-weight: 500; font-size: 13px; }
+  .um-review-cause progress { height: 4px; background: var(--m-surface-inset); }
+  .um-review-cause progress::-webkit-progress-bar { background: var(--m-surface-inset); }
+  .um-review-cause progress::-webkit-progress-value { background: var(--m-accent); }
+  .um-review-cause progress::-moz-progress-bar { background: var(--m-accent); }
+  .um-review-kp-count { font-size: 18px; font-weight: 600; color: var(--m-ink); }
+
+  /* ── Immersive Test Session (/tests/session) ── */
+  .um-practice-session {
+    background: var(--m-chat-canvas);
+    color: var(--m-ink);
+  }
+  .um-practice-session-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-width: 0;
+    gap: 8px;
+  }
+  .um-practice-session-progress-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 36px;
+    min-height: 36px;
+    min-width: 0;
+    padding: 0 8px 0 4px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--m-ink);
+    font-family: var(--m-font-sans);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+  .um-practice-session-progress-trigger:active { background: var(--m-surface-hover); }
+  .um-practice-session-toolbar-actions {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    gap: 2px;
+  }
+  .um-practice-session-bell {
+    color: var(--m-ink-secondary);
+    border-radius: 10px;
+  }
+  .um-practice-nav-popover {
+    width: min(280px, calc(100vw - 28px));
+    padding: 14px;
+    border: 0;
+    border-radius: 16px;
+    background: var(--m-surface);
+    color: var(--m-ink);
+    box-shadow: var(--m-shadow-drawer);
+    font-family: var(--m-font-sans);
+    z-index: 142;
+  }
+  .um-practice-nav-popover-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    font-size: 12.5px;
+    color: var(--m-ink-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .um-practice-nav-popover-head > span:first-child {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--m-ink);
+  }
+  .um-practice-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .um-practice-nav-grid button {
+    height: 36px;
+    min-height: 36px;
+    min-width: 0;
+    border: 0;
+    border-radius: 10px;
+    background: var(--m-surface-inset);
+    color: var(--m-ink-secondary);
+    font-size: 13.5px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+  .um-practice-nav-grid button[data-complete='true'] {
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+  }
+  .um-practice-nav-grid button[aria-current='step'] {
+    background: var(--m-accent);
+    color: var(--m-accent-ink);
+  }
+
+  .um-practice-session-bar {
+    height: 2px;
+    flex-shrink: 0;
+    background: var(--m-surface-inset);
+    overflow: hidden;
+  }
+  .um-practice-session-bar > div {
+    height: 100%;
+    background: var(--m-accent);
+    transition: width 180ms ease-out;
+  }
+  .um-practice-session-scroll {
+    padding: 14px 18px 24px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .um-practice-session-paper {
+    max-width: 580px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .um-practice-session-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .um-practice-session-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .um-practice-session-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 9px;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .um-practice-session-chip.is-muted {
+    background: var(--m-surface-inset);
+    color: var(--m-ink-muted);
+    font-weight: 400;
+  }
+  .um-practice-session-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .um-practice-session-chip-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 30px;
+    min-height: 30px;
+    min-width: 0;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-surface-inset);
+    color: var(--m-ink-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .um-practice-session-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    min-height: 30px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--m-surface-inset);
+    color: var(--m-ink-secondary);
+    cursor: pointer;
+  }
+  .um-practice-session :is(.um-practice-session-chip-btn, .um-practice-session-icon-btn)[aria-pressed='true'] {
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+  }
+  .um-practice-session-stem {
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.72;
+    color: var(--m-ink);
+  }
+  .um-practice-session-stem p { margin: 0 0 8px; }
+  .um-practice-session-stem p:last-child { margin-bottom: 0; }
+  .um-practice-session-mastered {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+  .um-practice-session-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .um-practice-session .um-practice-session-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    width: 100%;
+    min-height: 50px;
+    padding: 13px 14px;
+    border: 0;
+    border-radius: 13px;
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+    color: var(--m-ink);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 140ms ease, box-shadow 140ms ease;
+  }
+  .um-practice-session .um-practice-session-option:active:not(:disabled) {
+    background: var(--m-surface-hover);
+  }
+  .um-practice-session .um-practice-session-option[aria-pressed='true'] {
+    background: var(--m-accent-wash);
+    box-shadow: inset 0 0 0 1.5px var(--m-accent);
+    color: var(--m-ink);
+  }
+  .um-practice-session-letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    margin-top: 1px;
+    border-radius: 50%;
+    background: var(--m-surface-inset);
+    color: var(--m-ink-secondary);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .um-practice-session .um-practice-session-option[aria-pressed='true'] .um-practice-session-letter {
+    background: var(--m-accent);
+    color: var(--m-accent-ink);
+  }
+  .um-practice-session-option-text {
+    min-width: 0;
+    flex: 1;
+    font-size: 14.5px;
+    line-height: 1.62;
+    color: var(--m-ink);
+  }
+  .um-practice-session-option-text p { margin: 0; }
+  .um-practice-session-textarea {
+    width: 100%;
+    min-height: 180px;
+    padding: 14px 16px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--m-surface-inset);
+    color: var(--m-ink);
+    font-family: var(--m-font-sans);
+    font-size: 15.5px;
+    line-height: 1.7;
+    resize: none;
+  }
+  .um-practice-session-textarea:focus {
+    outline: none;
+    box-shadow: inset 0 0 0 1.5px var(--m-accent);
+  }
+  .um-practice-session-textarea::placeholder { color: var(--m-ink-muted); }
+
+  .um-practice-session-footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    padding: 10px 16px max(12px, var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+    background: var(--m-chat-canvas);
+    border-top: 0.5px solid var(--m-hairline);
+  }
+  .um-practice-session-prev {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 42px;
+    min-height: 42px;
+    padding: 0 15px;
+    border: 0;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-surface-inset);
+    color: var(--m-ink-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .um-practice-session-prev:disabled { opacity: 0.38; cursor: default; }
+  .um-practice-session-next {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 42px;
+    min-height: 42px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-accent);
+    color: var(--m-accent-ink);
+    font-size: 14.5px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .um-practice-session-next:active { background: var(--m-accent-hover); }
+  .um-practice-session-next:disabled { opacity: 0.5; cursor: default; }
+
+  /* ── XiaoYu Practice Session (/xiaoyu/practice/:sessionId) ── */
+  .um-xy-practice-shell {
+    background: var(--m-chat-canvas);
+    color: var(--m-ink);
+    font-family: var(--m-font-sans);
+  }
+  .um-xy-practice-toolbar-title {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--m-ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .um-xy-practice-toolbar-time {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    font-size: 12.5px;
+    color: var(--m-ink-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .um-xy-practice-progress {
+    height: 2px;
+    background: var(--m-surface-inset);
+  }
+  .um-xy-practice-progress > div { background: var(--m-accent); }
+  .um-xy-practice-scroll { padding: 16px 18px 24px; }
+  .um-xy-practice-kp {
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 10px;
+    margin-bottom: 14px;
+  }
+  .um-xy-practice-stem {
+    font-size: 16px;
+    line-height: 1.72;
+    color: var(--m-ink);
+    margin-bottom: 20px;
+  }
+  .um-xy-practice-options { display: flex; flex-direction: column; gap: 10px; }
+  .um-xy-practice-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 13px 14px;
+    border: 0;
+    border-radius: 13px;
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+    color: var(--m-ink);
+    font-size: 14.5px;
+    line-height: 1.6;
+  }
+  .um-xy-practice-option[aria-pressed='true'] {
+    background: var(--m-accent-wash);
+    box-shadow: inset 0 0 0 1.5px var(--m-accent);
+    color: var(--m-ink);
+    font-weight: 400;
+  }
+  .um-xy-practice-letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    margin: 1px 0 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--m-surface-inset);
+    color: var(--m-ink-secondary);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .um-xy-practice-option[aria-pressed='true'] .um-xy-practice-letter {
+    background: var(--m-accent);
+    color: var(--m-accent-ink);
+  }
+  .um-xy-practice-textarea {
+    border: 0;
+    border-radius: 14px;
+    background: var(--m-surface-inset);
+    color: var(--m-ink);
+    padding: 14px 16px;
+    font-size: 15.5px;
+    line-height: 1.7;
+  }
+  .um-xy-practice-textarea:focus { box-shadow: inset 0 0 0 1.5px var(--m-accent); }
+  .um-xy-practice-footer {
+    border-top: 0.5px solid var(--m-hairline);
+    background: var(--m-chat-canvas);
+    padding: 10px 16px max(12px, var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  }
+  .um-xy-practice-nav-btn {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--m-surface-inset);
+    color: var(--m-ink-secondary);
+  }
+  .um-xy-practice-dot {
+    min-width: 0;
+    min-height: 0;
+    width: 7px;
+    height: 7px;
+    padding: 0;
+    background: var(--m-surface-inset);
+  }
+  .um-xy-practice-dot[data-answered='true'] { background: var(--m-accent-soft); }
+  .um-xy-practice-dot[data-current='true'] { width: 18px; background: var(--m-accent); }
+  .um-xy-practice-submit {
+    height: 40px;
+    min-height: 40px;
+    padding: 0 18px;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-accent);
+    color: var(--m-accent-ink);
+  }
+  .um-xy-practice-results {
+    background: var(--m-canvas);
+    color: var(--m-ink);
+    font-family: var(--m-font-sans);
+  }
+  .um-xy-practice-results-inner {
+    padding: 10px 14px 32px;
+    justify-content: flex-start;
+  }
+  .um-xy-practice-hero-card,
+  .um-xy-practice-card {
+    border: 0;
+    border-radius: var(--m-radius-card);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+    padding: 16px;
+    margin-bottom: 10px;
+    color: var(--m-ink);
+  }
+  .um-xy-practice-hero-card h2,
+  .um-xy-practice-card h3 { color: var(--m-ink); font-weight: 500; }
+  .um-xy-practice-hero-rate { color: var(--m-accent); font-size: 40px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .um-xy-practice-hero-card p,
+  .um-xy-practice-card p,
+  .um-xy-practice-summary { color: var(--m-ink-secondary); }
+  .um-xy-practice-cta {
+    height: 44px;
+    min-height: 44px;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-accent);
+    color: var(--m-accent-ink);
+    font-weight: 500;
+  }
 }
 @media(prefers-reduced-motion:reduce) { .um-practice-options button { transition: none; } }

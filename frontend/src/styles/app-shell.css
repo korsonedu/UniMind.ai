@@ -34,10 +34,7 @@ body:has(.um-app-shell) { scrollbar-gutter: auto; }
 .um-app-notifications { background: var(--um-color-surface); border-radius: var(--um-radius-dialog); border-color: var(--um-color-border); box-shadow: var(--um-shadow-overlay); max-width: calc(100vw - 32px); }
 .um-app-notification-button { border-radius: var(--um-radius-control); }
 @media (max-width: 767px) {
-  .um-app-shell .um-app-main { border-radius: 12px; }
-  .um-app-mobile-links { overflow-x: auto; justify-content: flex-start; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
-  .um-app-mobile-links::-webkit-scrollbar { display: none; }
-  .um-app-mobile-links > :is(a, span) { flex: 1 0 44px; min-width: 44px; white-space: nowrap; }
+  .um-app-shell .um-app-main { margin: 0; border: 0; border-radius: 0; }
 }
 @media (max-width: 600px) {
   .um-app-preview-indicator { display: none; }
@@ -51,7 +48,6 @@ body:has(.um-app-shell) { scrollbar-gutter: auto; }
 .um-nav-icon { display: inline-block; width: 24px; height: 24px; flex-shrink: 0; background: currentColor; mask-image: url('/assets/navigation/unimind-nav-generated-v1.png'); mask-size: 300% 200%; mask-repeat: no-repeat; -webkit-mask-image: url('/assets/navigation/unimind-nav-generated-v1.png'); -webkit-mask-size: 300% 200%; -webkit-mask-repeat: no-repeat; }
 .um-desktop :is(.um-course-header, .um-agent-toolbar, .notes-note-header, .um-app-global-header, .um-agent-sessions > header, .um-course-tree-header, .notes-directory-header) { -webkit-app-region: drag; }
 .um-desktop :is(button, a, input, textarea, select, [role='separator']) { -webkit-app-region: no-drag; }
-@media (max-width: 767px) { .um-app-mobile-links .um-nav-icon { width: 24px; height: 24px; } }
 
 .um-workspace-trail { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
 .um-workspace-trail nav { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; font-size: 13px; white-space: nowrap; }
@@ -113,14 +109,71 @@ html:has(.um-app-shell), body:has(.um-app-shell) { overscroll-behavior: none; }
 }
 
 @media (max-width: 767px) {
-  .um-app-shell { --um-mobile-toolbar-height: calc(48px + var(--safe-area-inset-top,env(safe-area-inset-top,0px))); --um-mobile-nav-height: calc(61px + var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px))); height: var(--um-viewport-height, 100dvh); }
+  .um-app-shell { --um-mobile-toolbar-height: var(--m-toolbar-h, calc(54px + var(--safe-area-inset-top,env(safe-area-inset-top,0px)))); --um-mobile-bottom-inset: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); height: var(--um-viewport-height, 100dvh); }
   .um-window-body { padding-inline: var(--safe-area-inset-left,env(safe-area-inset-left,0px)) var(--safe-area-inset-right,env(safe-area-inset-right,0px)); }
-  .um-app-shell[data-mobile-nav-hidden='true'], .um-app-shell[data-keyboard-open='true'] { --um-mobile-nav-height: 0px; }
-  .um-app-shell[data-keyboard-open='true'] .um-app-mobile-nav { display: none; }
-  .um-app-shell[data-keyboard-open='true'] .um-app-main { padding-bottom: 0; }
-  .um-app-mobile-nav { padding-inline: var(--safe-area-inset-left,env(safe-area-inset-left,0px)) var(--safe-area-inset-right,env(safe-area-inset-right,0px)); }
-  .um-window-navigation button { width: 44px; height: 44px; flex-shrink: 0; }
-  .um-window-navigation button:disabled { display: none; }
+  .um-app-shell[data-keyboard-open='true'] { --um-mobile-bottom-inset: 0px; }
+  .um-app-main { margin: 0; border: 0; border-radius: 0; padding-bottom: var(--um-mobile-bottom-inset); }
+  .um-mobile-home-link { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; }
+  .um-window-navigation { display: none; }
+  .um-app-shell[data-mobile-xiaoyu] {
+    --um-font-family: var(--m-font-sans);
+    font-variant-numeric: normal;
+    --um-mobile-canvas: var(--m-canvas);
+    --um-mobile-hairline: var(--m-hairline);
+    --um-mobile-gutter: var(--m-gutter);
+    --um-mobile-toolbar-height: var(--m-toolbar-h);
+    --um-mobile-reading-width: 580px;
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-window-toolbar {
+    --um-toolbar-control-size: 42px;
+    height: var(--m-toolbar-h);
+    min-height: var(--m-toolbar-h);
+    padding-inline: max(8px, var(--safe-area-inset-left, env(safe-area-inset-left, 0px))) max(8px, var(--safe-area-inset-right, env(safe-area-inset-right, 0px)));
+    background: var(--m-canvas);
+  }
+  .um-app-shell[data-mobile-xiaoyu] :is(.um-window-toolbar, .um-app-main) { background: var(--m-canvas); }
+  .um-app-shell[data-mobile-xiaoyu]:has(.um-agent-message-list) :is(.um-window-toolbar, .um-app-main) {
+    background: var(--m-chat-canvas);
+  }
+  .um-app-shell[data-mobile-xiaoyu]:has(.um-agent-message-list) .um-window-toolbar {
+    box-shadow: inset 0 -0.5px 0 var(--m-hairline);
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-app-main { margin: 0; border: 0; border-radius: 0; }
+  .um-app-shell[data-mobile-xiaoyu] .um-agent-toolbar > div:first-child { gap: 2px; min-width: 0; }
+  .um-app-shell[data-mobile-xiaoyu] .um-agent-toolbar-actions { gap: 0; }
+  .um-app-shell[data-mobile-xiaoyu] .um-window-toolbar :is(.um-agent-icon-button, .um-agent-history-button) {
+    border: 0;
+    border-radius: 10px;
+    color: var(--m-ink-secondary);
+    background: transparent;
+    transition: background-color 140ms ease, color 140ms ease, transform 120ms ease;
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-window-toolbar :is(.um-agent-icon-button, .um-agent-history-button):hover { background-color: transparent; }
+  .um-app-shell[data-mobile-xiaoyu] .um-window-toolbar :is(.um-agent-icon-button, .um-agent-history-button):is(:active, [aria-expanded='true']) {
+    background-color: var(--m-surface-hover);
+    color: var(--m-ink);
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-window-toolbar :is(.um-agent-icon-button, .um-agent-history-button):focus-visible {
+    outline: 2px solid var(--m-accent);
+    outline-offset: -3px;
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-window-toolbar :is(.um-agent-icon-button, .um-agent-history-button) svg { width: 18px; height: 18px; }
+  .um-app-shell[data-mobile-canvas] :is(.um-window-toolbar, .um-app-main) { background: var(--m-canvas); }
+  .um-app-shell[data-mobile-immersive] :is(.um-window-toolbar, .um-app-main) { background: var(--m-chat-canvas); }
+  .um-app-shell:is([data-mobile-canvas], [data-mobile-immersive]) .um-window-toolbar {
+    --um-toolbar-control-size: 40px;
+    height: var(--m-toolbar-h);
+    min-height: var(--m-toolbar-h);
+    padding-inline: max(8px, var(--safe-area-inset-left, env(safe-area-inset-left, 0px))) max(8px, var(--safe-area-inset-right, env(safe-area-inset-right, 0px)));
+  }
+  .um-app-shell[data-mobile-canvas] .um-app-page-content { padding: 6px 14px 32px; }
+  .um-app-shell .um-window-toolbar .um-workspace-trail strong {
+    font-family: var(--m-font-sans);
+    font-size: 17.5px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--m-ink);
+  }
   .um-app-page-content { min-width: 0; }
   .um-window-workspace { overflow: hidden; }
   .um-window-toolbar .um-workspace-trail nav { min-width: 0; }
@@ -130,11 +183,11 @@ html:has(.um-app-shell), body:has(.um-app-shell) { overscroll-behavior: none; }
   body:has(.um-app-shell) :is([role='dialog'], [role='alertdialog']) { max-height: calc(100dvh - var(--safe-area-inset-top,env(safe-area-inset-top,0px)) - var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)) - 32px); overflow-y: auto; overflow-wrap: anywhere; }
 }
 
-@media(max-width:600px){.um-app-shell{--um-mobile-toolbar-height:calc(52px + var(--safe-area-inset-top,env(safe-area-inset-top,0px)))}}
+@media(max-width:600px){.um-app-shell:not([data-mobile-xiaoyu]){--um-mobile-toolbar-height:calc(52px + var(--safe-area-inset-top,env(safe-area-inset-top,0px)))}}
 
 @media (max-width: 767px) {
-  .um-app-shell :is(button, a[role='button'], input:not([type='checkbox']):not([type='radio']), select) { min-height: 44px; }
-  .um-app-shell :is(button, [role='tab']) { min-width: 44px; }
+  :where(.um-app-shell) :where(button:not([role='switch']), a[role='button'], input:not([type='checkbox']):not([type='radio']), select) { min-height: 44px; }
+  :where(.um-app-shell) :where(button:not([role='switch']), [role='tab']) { min-width: 44px; }
   .um-app-shell :is(.um-app-avatar-button, .um-app-notification-button, .um-app-elo) { min-width: 44px; }
   .um-app-shell :is(.um-course-main, .um-native-agent, .um-study, .um-qa, .notes-workspace) { min-width: 0; max-width: 100%; }
   .um-app-shell :is(input, textarea, [contenteditable='true']) { scroll-margin-block: 64px; }

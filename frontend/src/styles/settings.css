@@ -65,31 +65,319 @@
   .um-settings-row { gap: 16px; }
 }
 @media (max-width: 767px) {
-  .um-settings-workspace { flex-direction: column; }
-  .um-settings-sidebar { width: 100%; padding: 16px 16px 10px; flex-shrink: 0; overflow: visible; }
-  .um-settings-sidebar h1 { font-size: 18px; margin: 12px 0; }
-  .um-settings-sidebar nav { display: flex; gap: 4px; overflow-x: auto; overscroll-behavior-x: contain; padding-top: 8px; }
-  .um-settings-sidebar nav button { width: auto; min-height: 44px; padding-inline: 10px; flex-shrink: 0; font-size: 12px; }
-  .um-settings-sidebar nav svg { display: none; }
+  /* ── Settings Mobile Craftsman v2 (flomo floating grouped cards) ── */
+  .um-app-shell[data-mobile-canvas]:has(.um-settings-workspace) .um-app-page-content {
+    padding: 0;
+  }
+  .um-settings-workspace,
+  .dark .um-settings-workspace {
+    flex-direction: column;
+    background: var(--m-canvas);
+    color: var(--m-ink);
+    font-family: var(--m-font-sans);
+    padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  }
+  .um-settings-sidebar,
+  .dark .um-settings-sidebar {
+    width: 100%;
+    padding: 4px 14px 10px;
+    flex-shrink: 0;
+    overflow: visible;
+    background: var(--m-canvas);
+    gap: 10px;
+  }
+  .um-settings-back,
+  .um-settings-sidebar h1,
   .um-settings-nav-label { display: none; }
-  .um-settings-content { padding: 24px 16px 32px; }
-  .um-settings-heading { margin-bottom: 24px; }
-  .um-settings-heading h2 { font-size: 24px; }
-  .um-settings-group { padding-inline: 14px; }
-  .um-settings-group-title { margin-top: 24px; }
-  .um-settings-appearance { flex-direction: column; align-items: flex-start; gap: 20px; padding: 20px 14px; }
+
+  .um-settings-search {
+    height: 38px;
+    min-height: 38px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 11px;
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+    color: var(--m-ink-muted);
+  }
+  .um-settings-search input {
+    min-height: 36px;
+    height: 36px;
+    font-size: 15px;
+    color: var(--m-ink);
+  }
+  .um-settings-search input::placeholder { color: var(--m-ink-muted); font-size: 14px; }
+  .um-settings-search button {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    min-height: 30px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .um-settings-sidebar nav {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    padding: 2px 0;
+  }
+  .um-settings-sidebar nav::-webkit-scrollbar { display: none; }
+  .um-settings-sidebar nav button {
+    width: auto;
+    height: 32px;
+    min-height: 32px;
+    min-width: 0;
+    padding: 0 13px;
+    flex-shrink: 0;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-surface-inset);
+    color: var(--m-ink-secondary);
+    font-size: 13px;
+    font-weight: 400;
+  }
+  .um-settings-sidebar nav button:hover { background: var(--m-surface-inset); }
+  .um-settings-sidebar nav button[aria-current='page'] {
+    background: var(--m-surface);
+    color: var(--m-accent);
+    font-weight: 500;
+    box-shadow: var(--m-shadow-pill);
+  }
+  .um-settings-sidebar nav svg { display: none; }
+
+  .um-settings-content {
+    padding: 6px 14px 36px;
+    background: var(--m-canvas);
+  }
+  .um-settings-reading { max-width: 600px; }
+  .um-settings-heading { margin-bottom: 12px; padding-left: 2px; }
+  .um-settings-heading h2 {
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    color: var(--m-ink);
+  }
+  .um-settings-group-title {
+    margin: 16px 0 7px 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--m-ink-muted);
+  }
+  .um-settings-group,
+  .dark .um-settings-group {
+    padding: 0 16px;
+    border: 0;
+    border-radius: var(--m-radius-card);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+  }
+  .um-settings-appearance,
+  .dark .um-settings-appearance {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 16px;
+    margin-top: 10px;
+    border: 0;
+    border-radius: var(--m-radius-card);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+  }
+  .um-settings-appearance h3 {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--m-ink);
+  }
   .um-settings-appearance .um-theme-switch { align-self: center; flex-basis: auto; }
-  .um-settings-row { gap: 12px; }
+
+  .um-settings-row {
+    gap: 12px;
+    padding-block: 13px;
+    border-bottom: 0.5px solid var(--m-hairline);
+    min-width: 0;
+  }
+  .um-settings-row label,
+  .um-settings-row > div > span:first-child,
+  .um-settings-row > span:first-child,
+  .um-settings-row > div > strong {
+    font-size: 14.5px;
+    font-weight: 400;
+    color: var(--m-ink);
+  }
+  .um-settings-row > div > strong { font-weight: 500; font-size: 15.5px; }
+  .um-settings-row p { color: var(--m-ink-muted); font-size: 12px; }
+  .um-settings-value { color: var(--m-ink-muted); font-size: 13.5px; overflow-wrap: anywhere; }
+
   .um-settings-row:has(> :is(input, textarea, .um-settings-control, .um-desktop-actions)) { flex-wrap: wrap; }
   .um-settings-row:has(> :is(input, textarea, .um-settings-control)) > div:first-child { flex-basis: 100%; }
   .um-settings-row > :is(input, textarea), .um-settings-control { width: 100%; }
   .um-settings-profile-summary { flex-wrap: nowrap; }
   .um-settings-profile-summary > div:first-child { flex-basis: auto; }
+  .um-settings-account-value { min-width: 0; flex-wrap: wrap; gap: 8px; }
+
+  .um-settings-row :is(input, textarea, .um-select-trigger) {
+    background: var(--m-surface-inset);
+    border: 0;
+    border-radius: 10px;
+    color: var(--m-ink);
+  }
+  .um-settings-row .um-select-trigger {
+    height: 34px;
+    min-height: 34px;
+    padding: 0 11px;
+    flex-shrink: 0;
+    max-width: 65%;
+    font-size: 13.5px;
+  }
   .um-settings-workspace :is(input:not([type='radio']), textarea) { font-size: 16px; }
-  .um-settings-row input:not([type='radio']), .um-settings-row .um-select-trigger, .um-settings-workspace button:not([role='switch']) { min-height: 44px; }
-  .um-settings-row .um-select-trigger { flex-shrink: 0; max-width: 65%; }
-  .um-settings-footer button { width: 100%; }
-  .um-settings-row > button { max-width: 100%; }
+  .um-settings-row input:not([type='radio']) { min-height: 40px; height: 40px; }
+  .um-settings-row [role='switch'] { min-height: 0; min-width: 0; }
+  .um-settings-row button:not([role='switch']):not(.um-select-trigger),
+  .um-settings-row a {
+    height: 32px;
+    min-height: 32px;
+    min-width: 0;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-surface-inset);
+    color: var(--m-ink-secondary);
+    font-size: 12.5px;
+    font-weight: 500;
+    box-shadow: none;
+  }
+  .um-settings-row .um-settings-danger {
+    background: rgb(220 38 38 / 10%);
+    color: #dc2626;
+  }
+  .dark .um-settings-row .um-settings-danger {
+    background: rgb(248 113 113 / 14%);
+    color: #f87171;
+  }
+  .um-settings-footer { margin-top: 14px; }
+  .um-settings-footer button {
+    width: 100%;
+    height: 40px;
+    min-height: 40px;
+    border: 0;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-pill);
+    color: var(--m-ink-secondary);
+    font-size: 13.5px;
+    font-weight: 500;
+  }
+  .um-settings-legal {
+    margin-top: 18px;
+    padding-left: 4px;
+    gap: 16px;
+    color: var(--m-ink-muted);
+  }
+  .um-settings-legal a { display: inline-flex; align-items: center; min-height: 32px; }
+  .um-settings-edit-dialog {
+    max-height: calc(var(--um-viewport-height, 100dvh) - 32px);
+    scroll-padding-block: 16px;
+    border: 0;
+    border-radius: 18px;
+    background: var(--m-surface);
+    color: var(--m-ink);
+    box-shadow: var(--m-shadow-drawer);
+    font-family: var(--m-font-sans);
+  }
+  .um-settings-edit-dialog .um-settings-row { flex-wrap: wrap; }
+  .um-settings-edit-dialog .um-settings-row > :is(input, textarea),
+  .um-settings-edit-dialog .um-settings-control { width: 100%; }
+
+  /* ── Billing / My Services (/billing) ── */
+  .um-billing-page {
+    padding: 4px 0 32px !important;
+    max-width: 600px;
+    font-family: var(--m-font-sans);
+    color: var(--m-ink);
+  }
+  .um-billing-page > * + * { margin-top: 10px !important; }
+  .um-billing-page > header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 0 2px 2px;
+  }
+  .um-billing-page > header > h1 { display: none; }
+  .um-billing-page > header > div { display: flex; gap: 8px; }
+  .um-billing-page > header button,
+  .um-billing-page > header a {
+    height: 32px;
+    min-height: 32px;
+    min-width: 0;
+    padding: 0 13px;
+    border: 0;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-pill);
+    color: var(--m-ink-secondary);
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+  .um-billing-page > header a {
+    background: var(--m-accent-wash);
+    box-shadow: none;
+    color: var(--m-accent);
+  }
+  .um-billing-page > section {
+    padding: 16px !important;
+    border: 0 !important;
+    border-radius: var(--m-radius-card);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+  }
+  .um-billing-page > section > h2 {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--m-ink-muted);
+    margin-bottom: 8px;
+  }
+  .um-billing-page > section p {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--m-ink-secondary);
+  }
+  .um-billing-page > section p.text-muted-foreground {
+    font-size: 12.5px;
+    color: var(--m-ink-muted);
+  }
+  .um-billing-page > section:first-of-type > p:first-of-type {
+    margin-top: 2px;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--m-ink);
+  }
+  .um-billing-page > section > p.text-2xl {
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--m-ink);
+  }
+  .um-billing-page > section > p.text-2xl span {
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--m-ink-muted);
+  }
+  .um-billing-page [role='progressbar'] {
+    height: 5px;
+    background: var(--m-surface-inset);
+  }
+  .um-billing-page [role='progressbar'] > div {
+    background: var(--m-accent);
+  }
+  .um-billing-page ul > li {
+    padding: 11px 0;
+    border-color: var(--m-hairline);
+  }
+  .um-billing-page ul > li:first-child { padding-top: 4px; }
+  .um-billing-page ul > li:last-child { padding-bottom: 2px; }
 }
 @media (max-width: 767px) and (max-height: 500px) and (orientation: landscape) {
   .um-settings-workspace { flex-direction: row; }
@@ -124,7 +412,6 @@
 
 .um-settings-server { flex-wrap: wrap; }
 .um-settings-server p { min-width: 0; overflow-wrap: anywhere; }
-
 .um-mcp-first-title { margin-top: 0; }
 .um-mcp-presets-row { flex-direction: column; align-items: stretch; gap: 12px; }
 .um-mcp-presets-row > div:first-child { flex: none; }
@@ -145,18 +432,8 @@
 .um-mcp-copy-row button { flex-shrink: 0; gap: 6px; }
 
 @media (max-width: 767px) {
-  .um-settings-workspace { padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); }
-  .um-settings-back, .um-settings-legal a { display: inline-flex; align-items: center; min-height: 44px; }
-  .um-settings-search button { min-width: 44px; }
-  .um-settings-edit-dialog { max-height: calc(var(--um-viewport-height, 100dvh) - 32px); scroll-padding-block: 16px; }
-  .um-settings-edit-dialog .um-settings-row { flex-wrap: wrap; }
-  .um-settings-edit-dialog .um-settings-row > :is(input, textarea), .um-settings-edit-dialog .um-settings-control { width: 100%; }
-  .um-settings-row, .um-settings-account-value { min-width: 0; }
-  .um-settings-profile-summary { flex-wrap: wrap; }
-  .um-settings-account-value { flex-wrap: wrap; gap: 8px; }
-  .um-settings-value { overflow-wrap: anywhere; }
   .um-settings-row .um-mcp-select { width: 100%; max-width: 100%; }
-  .um-mcp-presets button { min-height: 36px; }
+  .um-mcp-presets button { min-height: 32px; height: 32px; }
   .um-mcp-submit-row button { width: 100%; }
   .um-mcp-server-actions { width: 100%; justify-content: flex-end; }
 }

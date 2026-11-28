@@ -234,7 +234,7 @@
 .um-agent-search-dialog .um-agent-session-menu { opacity: 1; }
 .um-checkin-fireworks { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 130; }
 .um-agent-drawer { position: fixed; z-index: 121; padding: 0; top: 0; left: 0; height: 100dvh; max-width: 320px; width: min(320px,90vw); border-radius: 0 14px 14px 0; }
-.um-agent-drawer > div { height: 100%; }
+.um-agent-drawer-history { height: 100%; }
 .um-agent-drawer .um-agent-sessions { min-width: 100%; max-width: 100%; }
 .um-agent-drawer-close { position: absolute; right: 10px; top: 9px; z-index: 10; padding: 8px; background: var(--um-color-context); }
 .um-native-dev-banner { height: 28px; font-size: 12px; padding: 4px 16px; background: var(--um-color-context); color: var(--um-color-text-muted); border-bottom: 1px solid var(--um-color-border); }
@@ -283,3 +283,563 @@
 .um-full-preview-bar select { background: transparent; font: inherit; }
 .um-full-preview-bar a { color: var(--um-color-accent); }
 @media(max-width:600px) { .um-full-preview-bar { bottom: 75px; gap: 8px; max-width: calc(100% - 16px); flex-wrap: wrap; justify-content: center; white-space: normal; } .um-full-preview-bar .um-preview-name { display: none; } }
+
+@media (max-width: 767px) {
+  .um-app-shell[data-mobile-xiaoyu] .um-native-agent,
+  .um-agent-drawer[data-mobile-menu='true'],
+  body:has(.um-app-shell[data-mobile-xiaoyu]) :is(.um-app-menu, .um-native-menu, .um-agent-search-dialog) {
+    --um-font-family: var(--m-font-sans);
+    font-family: var(--m-font-sans);
+    font-variant-numeric: normal;
+  }
+
+  .um-app-shell[data-mobile-xiaoyu] :is(.um-agent-workspace, .um-agent-landing) {
+    background: var(--m-canvas);
+    color: var(--m-ink);
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-agent-chat-body {
+    background: var(--m-chat-canvas);
+    color: var(--m-ink);
+  }
+
+  /* Header project switcher (flomo-style crisp title + whisper caret) */
+  .um-m-header-switcher {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 40px;
+    padding: 0 7px 0 3px;
+    border-radius: 9px;
+    text-align: left;
+    transition: background-color 140ms ease;
+  }
+  .um-m-header-switcher > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .um-m-header-switcher .um-m-header-caret {
+    flex-shrink: 0;
+    color: var(--m-ink-muted);
+    transition: transform 160ms ease;
+  }
+  .um-m-header-switcher[data-state='open'] .um-m-header-caret {
+    transform: rotate(180deg);
+  }
+  .um-m-header-switcher:active,
+  .um-m-header-switcher[data-state='open'] {
+    background: var(--m-surface-hover);
+  }
+
+  /* XiaoYu Landing — Quiet, optically centered, zero template bloat */
+  .um-app-shell[data-mobile-xiaoyu] .um-agent-start {
+    min-height: 100%;
+    justify-content: center;
+    align-items: center;
+    gap: 0;
+    padding: 24px 20px clamp(44px, 11dvh, 96px);
+  }
+
+  .um-m-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 100%;
+    max-width: 344px;
+    margin: 0 auto;
+  }
+
+  .um-m-project-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 100%;
+    padding: 4px 10px;
+    margin-bottom: 12px;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.35;
+  }
+  .um-m-project-badge > svg { flex-shrink: 0; }
+  .um-m-project-badge > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .um-app-shell[data-mobile-xiaoyu] .um-agent-start-title {
+    margin: 0;
+    max-inline-size: none;
+    text-align: center;
+    font-size: 22px;
+    font-weight: 500;
+    line-height: 1.35;
+    letter-spacing: -0.015em;
+    color: var(--m-ink);
+  }
+
+  /* Whisper-quiet die-cut suggestion pills */
+  .um-m-landing-prompts {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    margin-top: 22px;
+  }
+
+  .um-m-prompt-pills {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+    max-width: 296px;
+  }
+
+  .um-app-shell .um-m-prompt-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    height: 36px;
+    min-height: 36px;
+    min-width: 0;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-pill);
+    color: var(--m-ink-secondary);
+    font-size: 13.5px;
+    font-weight: 400;
+    line-height: 1;
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 140ms ease, color 140ms ease, transform 120ms ease;
+  }
+  .um-app-shell .um-m-prompt-pill svg {
+    flex-shrink: 0;
+    color: var(--m-ink-muted);
+  }
+  .um-app-shell .um-m-prompt-pill:active {
+    background: var(--m-surface-hover);
+    color: var(--m-ink);
+    transform: scale(0.97);
+  }
+
+  .um-app-shell .um-m-resume-strip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0 13px 0 11px;
+    border-radius: var(--m-radius-pill);
+    text-decoration: none;
+    font-size: 13.5px;
+    font-weight: 400;
+    color: var(--m-ink);
+    transition: transform 120ms ease, background-color 140ms ease;
+  }
+  .um-app-shell .um-m-resume-strip:active {
+    transform: scale(0.97);
+    background: var(--m-surface-hover);
+  }
+  .um-m-resume-play { color: var(--m-accent); flex-shrink: 0; }
+  .um-m-resume-arrow { color: var(--m-ink-muted); flex-shrink: 0; }
+
+  /* Conversation Message Stream — Pure unboxed reading paper + quiet user bubble */
+  .um-app-shell[data-mobile-xiaoyu] .um-agent-message-list {
+    width: 100%;
+    max-width: var(--um-mobile-reading-width);
+    padding: 16px 20px 28px;
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-agent-message-list > .um-native-chat-bubble + .um-native-chat-bubble {
+    margin-top: 20px;
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-native-chat-bubble > div:has(> [data-native-message='assistant']) {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-native-chat-bubble [data-native-message='assistant'] {
+    width: 100%;
+    max-width: 100%;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--m-ink);
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-native-chat-bubble [data-native-message='user'] {
+    background: var(--m-user-bubble-bg);
+    border-radius: 18px 18px 5px 18px;
+    padding: 9px 14px;
+    box-shadow: none;
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-native-chat-bubble [data-native-message='user'] :is(.prose, p, strong, li, a, code) {
+    color: var(--m-ink);
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 1.55;
+  }
+
+  .um-app-shell[data-mobile-xiaoyu] .um-native-chat-bubble .prose {
+    font-size: var(--m-prose-size);
+    font-weight: 400;
+    line-height: 1.74;
+    letter-spacing: 0.005em;
+    line-break: strict;
+    overflow-wrap: anywhere;
+    color: var(--m-ink);
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-native-chat-bubble .prose p {
+    margin-block: 0.55em;
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-native-chat-bubble .prose p:first-child { margin-top: 0; }
+  .um-app-shell[data-mobile-xiaoyu] .um-native-chat-bubble .prose p:last-child { margin-bottom: 0; }
+  .um-app-shell[data-mobile-xiaoyu] .um-native-chat-bubble .prose :is(h1, h2, h3, h4) {
+    font-size: 1.03em;
+    font-weight: 600;
+    line-height: 1.45;
+    margin-block: 1.3em 0.45em;
+    color: var(--m-ink);
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-native-chat-bubble .prose strong { font-weight: 600; color: var(--m-ink); }
+  .um-agent-message-table {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    margin-block: 0.85em;
+    border-radius: var(--m-radius-inset);
+    background: var(--m-surface-inset);
+    padding: 4px;
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-agent-message-table > table { margin-block: 0; }
+  .um-app-shell[data-mobile-xiaoyu] [data-native-message='assistant'] .prose :is(ul, ol) {
+    padding-inline-start: 1.25em;
+    margin-block: 0.5em 0.85em;
+  }
+  .um-app-shell[data-mobile-xiaoyu] [data-native-message='assistant'] .prose li { margin-block: 0.24em; }
+  /* Clean single-layer editorial blockquote — zero nested grey box */
+  .um-app-shell[data-mobile-xiaoyu] [data-native-message='assistant'] .prose blockquote {
+    border-inline-start: 2px solid color-mix(in srgb, var(--m-accent) 42%, transparent);
+    background: transparent;
+    border-radius: 0;
+    padding: 1px 0 1px 12px;
+    margin-block: 0.95em;
+    font-style: normal;
+    color: var(--m-ink-secondary);
+  }
+  .um-app-shell[data-mobile-xiaoyu] [data-native-message='assistant'] .prose blockquote p { color: inherit; }
+  .um-app-shell[data-mobile-xiaoyu] [data-native-message='assistant'] .prose blockquote p:is(:first-child, :last-child)::before,
+  .um-app-shell[data-mobile-xiaoyu] [data-native-message='assistant'] .prose blockquote p:is(:first-child, :last-child)::after { content: none; }
+  .um-app-shell[data-mobile-xiaoyu] [data-native-message='assistant'] .prose a {
+    color: var(--m-accent);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+  .um-app-shell[data-mobile-xiaoyu] [data-native-message='assistant'] .prose pre {
+    background: var(--m-surface-inset);
+    border: 0;
+    border-radius: var(--m-radius-inset);
+  }
+  .um-app-shell[data-mobile-xiaoyu] [data-native-message='assistant'] .prose :not(pre) > code {
+    background: var(--m-surface-inset);
+    color: var(--m-ink);
+    padding: 1.5px 5px;
+    border-radius: 5px;
+    font-size: 0.88em;
+    font-weight: 450;
+  }
+  .um-app-shell[data-mobile-xiaoyu] [data-native-message='assistant'] .prose code::before,
+  .um-app-shell[data-mobile-xiaoyu] [data-native-message='assistant'] .prose code::after {
+    content: none;
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-native-chat-bubble .um-agent-feedback {
+    height: 32px;
+    margin-top: 4px;
+    padding-left: 0;
+    gap: 2px;
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-native-chat-bubble .um-agent-feedback button {
+    min-width: 32px;
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    color: var(--m-ink-muted);
+    opacity: 0.72;
+  }
+
+  /* Floating Bottom Composer Dock — taut 48px flomo proportion, symmetrical bare icons when idle */
+  .um-agent-mobile-dock {
+    position: relative;
+    width: 100%;
+    max-width: var(--um-mobile-reading-width);
+    padding: 6px 14px max(12px, calc(16px - var(--um-mobile-bottom-inset, 0px)));
+    align-self: center;
+    flex-shrink: 0;
+    background: linear-gradient(to top, var(--m-canvas) 70%, transparent);
+  }
+  .um-app-shell[data-mobile-xiaoyu]:has(.um-agent-message-list) .um-agent-mobile-dock {
+    background: linear-gradient(to top, var(--m-chat-canvas) 74%, transparent);
+  }
+  .um-app-shell[data-keyboard-open='true'] .um-agent-mobile-dock {
+    padding-block: 4px 8px;
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-agent-mobile-dock .um-agent-composer {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    column-gap: 2px;
+    align-items: end;
+    padding: 3px 5px;
+    border: 0;
+    border-radius: 24px;
+    background: var(--m-dock-bg);
+    box-shadow: var(--m-shadow-dock);
+    animation: none;
+    transition: box-shadow 180ms ease;
+  }
+  .um-app-shell[data-mobile-xiaoyu] .um-agent-mobile-dock .um-agent-composer:focus-within {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--m-accent) 40%, transparent), var(--m-shadow-dock);
+    background: var(--m-dock-bg);
+  }
+  .um-agent-mobile-dock .note-mentions { grid-area: 1 / 1 / 2 / -1; min-width: 0; padding: 4px 8px 2px; }
+  .um-agent-mobile-dock .note-mention-chips { max-height: min(92px, calc(var(--um-viewport-height, 100dvh) * .18)); overflow-y: auto; overscroll-behavior-y: contain; }
+  .um-agent-mobile-dock .note-mention-chip > svg { flex-shrink: 0; }
+  .um-agent-mobile-dock .note-mention-menu { max-height: min(200px, calc(var(--um-viewport-height, 100dvh) * .25)); overscroll-behavior-y: contain; }
+  .um-agent-mobile-dock .um-agent-composer textarea {
+    grid-area: 2 / 2;
+    min-height: 40px;
+    max-height: min(160px, calc(var(--um-viewport-height, 100dvh) * .30));
+    padding: 9px 4px;
+    align-self: center;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 22px;
+    color: var(--m-ink);
+    caret-color: var(--m-accent);
+  }
+  .um-agent-mobile-dock .um-agent-composer textarea::placeholder {
+    color: var(--m-ink-muted);
+    font-size: 15px;
+    opacity: 1;
+  }
+  .um-agent-mobile-dock .um-agent-composer footer { display: contents; }
+  .um-app-shell .um-agent-mobile-dock .um-agent-task-trigger {
+    grid-area: 2 / 1;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--m-ink-secondary);
+  }
+  .um-app-shell .um-agent-mobile-dock .um-agent-task-trigger:active {
+    background: var(--m-surface-inset);
+    color: var(--m-ink);
+  }
+  .um-agent-mobile-dock .um-agent-task-trigger span { display: none; }
+  .um-app-shell .um-agent-mobile-dock .um-agent-composer .um-agent-send {
+    grid-area: 2 / 3;
+    position: relative;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    border: 0;
+    background: transparent;
+    transition: transform 120ms ease;
+  }
+  /* Idle state: bare delicate arrow symmetrical with left + (zero clunky grey circle) */
+  .um-agent-mobile-dock .um-agent-send::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    background: transparent;
+    transform: scale(0.8);
+    opacity: 0;
+    transition: background-color 150ms ease, transform 160ms ease, opacity 150ms ease;
+  }
+  .um-agent-mobile-dock .um-agent-send:disabled {
+    background: transparent;
+    color: var(--m-ink-muted);
+    opacity: 0.65;
+  }
+  .um-agent-mobile-dock .um-agent-send:not(:disabled) {
+    color: var(--m-accent-ink);
+    opacity: 1;
+  }
+  .um-agent-mobile-dock .um-agent-send:not(:disabled)::before {
+    background: var(--m-accent);
+    transform: scale(1);
+    opacity: 1;
+  }
+  .um-agent-mobile-dock .um-agent-send:not(:disabled):active::before {
+    background: var(--m-accent-hover);
+    transform: scale(0.92);
+  }
+  .um-agent-mobile-dock .um-agent-send svg { position: relative; width: 17px; height: 17px; }
+  .um-agent-mobile-dock :is(.um-agent-send, .um-agent-task-trigger):focus-visible { outline-offset: -4px; }
+  .um-agent-mobile-dock .um-agent-quota-status[data-attention='false'] { display: none; }
+
+  /* Hide hero prompts cleanly when software keyboard opens on landing */
+  .um-app-shell[data-mobile-xiaoyu][data-keyboard-open='true'] .um-agent-conversation:has(.um-agent-composer textarea:focus) .um-m-landing-prompts {
+    display: none;
+  }
+
+  /* Project picker & Search dialog on mobile */
+  body:has(.um-app-shell[data-mobile-xiaoyu]) .um-agent-project-picker {
+    max-height: var(--radix-popover-content-available-height);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+  body:has(.um-app-shell[data-mobile-xiaoyu]) .um-agent-search-dialog {
+    --um-mobile-search-top: max(12px, calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) + 8px), min(11dvh, 72px));
+    top: var(--um-mobile-search-top);
+    max-height: min(480px, calc(var(--um-mobile-visual-height, 100dvh) - var(--um-mobile-search-top) - 16px));
+    overflow: hidden;
+    border: 0;
+    border-radius: 16px;
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-dock);
+  }
+  body:has(.um-app-shell[data-mobile-xiaoyu]) .um-agent-search-dialog .um-agent-search {
+    padding-block: 4px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--m-surface-inset);
+  }
+  body:has(.um-app-shell[data-mobile-xiaoyu]) .um-agent-search-dialog .um-agent-search > button { min-width: 40px; min-height: 40px; }
+  body:has(.um-app-shell[data-mobile-xiaoyu]) .um-agent-search-dialog nav { overscroll-behavior-y: contain; }
+  body:has(.um-app-shell[data-mobile-xiaoyu]) .um-agent-search-dialog li > button:first-child { min-height: 42px; }
+
+  /* Unified Left Drawer History Section — strict x=22px optical rail */
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-sessions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: var(--m-ink);
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-sessions > header {
+    min-height: 36px;
+    padding: 8px 8px 0 22px;
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-sessions h2 {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--m-ink-muted);
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-session-actions {
+    padding: 8px 10px 0 0;
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-sessions .um-agent-icon-button {
+    min-width: 34px;
+    min-height: 34px;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    color: var(--m-ink-muted);
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-sessions > nav {
+    grid-column: 1 / -1;
+    align-self: stretch;
+    padding: 2px 12px 12px;
+    overscroll-behavior-y: contain;
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-section-label {
+    min-height: 30px;
+    margin-top: 8px;
+    padding: 0 0 0 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--m-ink-muted);
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-section-label:first-child {
+    margin-top: 2px;
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-session-name,
+  .um-agent-drawer[data-mobile-menu='true'] .um-learning-project-entry {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--m-ink);
+  }
+  .um-agent-drawer[data-mobile-menu='true'] :is(.um-agent-sessions li, .um-agent-project-heading) {
+    min-height: 40px;
+    border-radius: 10px;
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-sessions li > button:first-child {
+    padding: 7px 6px 7px 10px;
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-sessions li[data-active='true'] {
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-sessions li[data-active='true'] .um-agent-session-name {
+    color: var(--m-accent);
+    font-weight: 500;
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-project-heading {
+    padding-left: 4px;
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-project-heading[data-current='true'] .um-learning-project-entry {
+    color: var(--m-accent);
+    font-weight: 500;
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-project-heading > .um-learning-project-disclosure {
+    flex: 0 0 24px;
+    width: 24px;
+    min-width: 24px;
+    min-height: 40px;
+    justify-content: center;
+    padding: 0;
+    color: var(--m-ink-muted);
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-project-heading > .um-learning-project-entry {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 4px 0 0;
+    text-align: left;
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-learning-project-entry svg { flex-shrink: 0; color: var(--m-ink-secondary); }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-project-heading[data-current='true'] .um-learning-project-entry svg { color: var(--m-accent); }
+  .um-agent-drawer[data-mobile-menu='true'] .um-learning-project-entry span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-project-sessions {
+    padding-left: 24px;
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-project-empty {
+    min-height: 34px;
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-project-empty button {
+    font-size: 13px;
+    color: var(--m-ink-muted);
+    padding: 4px 10px;
+  }
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-session-menu,
+  .um-agent-drawer[data-mobile-menu='true'] .um-agent-project-heading > .um-agent-icon-button {
+    opacity: 0.45;
+  }
+  .um-agent-drawer[data-mobile-menu='true'] :is(.um-agent-session-actions > [data-session-new], .um-agent-project-heading > [data-session-new], [data-empty-free]) { display: none; }
+}

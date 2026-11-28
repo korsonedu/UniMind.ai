@@ -84,9 +84,129 @@
 .um-auth-server { display: grid; gap: 12px; margin-bottom: 24px; min-width: 0; }
 .um-auth-server > button { min-height: 44px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 767px) {
-  .um-auth-shell :is(button, a) { min-height: 44px; }
-  .um-auth-shell a { display: inline-flex; align-items: center; }
-  .um-auth-tabs button { min-height: 48px; }
+  .um-auth-shell,
+  .um-auth-login,
+  .dark .um-auth-shell,
+  .dark .um-auth-login {
+    --auth-bg: var(--m-canvas);
+    --auth-surface: var(--m-surface);
+    --auth-ink: var(--m-ink);
+    --auth-muted: var(--m-ink-muted);
+    --auth-line: var(--m-hairline);
+    --auth-field: var(--m-surface-inset);
+    --auth-accent: var(--m-accent);
+    background: var(--m-canvas);
+    font-family: var(--m-font-sans);
+  }
+  .um-auth-shell::before,
+  .um-auth-shell::after { display: none; }
+  .um-auth-topbar {
+    padding: 14px 18px 8px;
+    gap: 10px;
+  }
+  .um-auth-wordmark {
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    color: var(--m-ink);
+  }
+  .um-auth-home { font-size: 13px; color: var(--m-ink-secondary); }
+  .um-auth-main { padding: 12px 14px 28px; align-content: center; }
+  .um-auth-panel,
+  .um-auth-login .um-auth-panel {
+    width: 100%;
+    max-width: 420px;
+    padding: 26px 20px 24px;
+    border: 0;
+    border-radius: 20px;
+    background: var(--m-surface);
+    box-shadow: var(--m-shadow-card);
+  }
+  .um-auth-mark { margin-bottom: 14px; }
+  .um-auth-mark img { width: 46px; height: 46px; border-radius: 13px; }
+  .um-auth-panel h1 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    color: var(--m-ink);
+  }
+  .um-auth-subtitle { font-size: 13.5px; color: var(--m-ink-muted); margin-top: 8px; }
+  .um-auth-fields { margin-top: 22px; }
+  .um-auth-tabs {
+    padding: 3px;
+    gap: 2px;
+    border-bottom: 0;
+    border-radius: 11px;
+    background: var(--m-surface-inset);
+    margin-bottom: 20px;
+  }
+  .um-auth-tabs button {
+    height: 36px;
+    min-height: 36px;
+    padding: 0 8px;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--m-ink-secondary);
+  }
+  .um-auth-tabs button[aria-pressed='true'] {
+    background: var(--m-surface);
+    color: var(--m-ink);
+    font-weight: 500;
+    box-shadow: var(--m-shadow-pill);
+  }
+  .um-auth-tabs button[aria-pressed='true']::after { display: none; }
+  .um-auth-shell .um-auth-fields label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--m-ink-secondary);
+  }
+  .um-auth-shell .um-auth-fields .um-focus-field {
+    height: 46px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--m-surface-inset);
+    color: var(--m-ink);
+    font-size: 16px;
+    padding-inline: 14px;
+  }
+  .um-auth-shell .um-auth-fields .um-focus-field:focus-visible {
+    box-shadow: inset 0 0 0 1.5px var(--m-accent);
+  }
+  .um-auth-shell .um-auth-code-button {
+    height: 46px;
+    min-height: 46px;
+    padding-inline: 14px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--m-accent-wash);
+    color: var(--m-accent);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .um-auth-shell .um-auth-submit {
+    height: 46px;
+    min-height: 46px;
+    margin-top: 10px;
+    border: 0;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-accent);
+    color: var(--m-accent-ink);
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .um-auth-shell .um-auth-submit:hover:not(:disabled),
+  .um-auth-shell .um-auth-submit:active:not(:disabled) {
+    background: var(--m-accent-hover);
+  }
+  .um-auth-footer {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 0.5px solid var(--m-hairline);
+  }
+  .um-auth-shell .um-auth-footer a { color: var(--m-accent); font-weight: 500; }
+  .um-auth-legal { align-items: center; padding-bottom: 20px; color: var(--m-ink-muted); }
+  .um-auth-shell a { display: inline-flex; align-items: center; min-height: 36px; }
   .um-auth-shell .um-auth-fields [role='checkbox'] { position: relative; min-height: 20px; }
   .um-auth-shell .um-auth-fields [role='checkbox']::after { content: ''; position: absolute; inset: -12px; }
   .um-auth-main, .um-auth-panel, .um-auth-fields { min-width: 0; }

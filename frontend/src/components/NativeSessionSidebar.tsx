@@ -94,7 +94,7 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
         <Dialog.Portal><Dialog.Overlay className="um-agent-search-overlay" /><Dialog.Content className="um-native-agent um-agent-search-dialog">
           <Dialog.Title className="sr-only">{t('搜索对话')}</Dialog.Title><Dialog.Description className="sr-only">{t('按标题或对话内容搜索所有项目。')}</Dialog.Description>
           <label className="um-agent-search"><MagnifyingGlass size={18} /><input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder={t('搜索标题或对话内容…')} aria-label={t('搜索标题或对话内容')} /><Dialog.Close asChild><button className="um-agent-icon-button" aria-label={t('关闭搜索')}><X size={16} /></button></Dialog.Close></label>
-          <nav aria-label={t('搜索结果')}><ul>{filtered.map(session => renderSession(session, true))}</ul>{!filtered.length && <p className="um-agent-empty">{t('没有匹配的对话')}</p>}</nav>
+          <nav aria-label={t('搜索结果')}><ul>{filtered.map(session => renderSession(session, true))}</ul>{!filtered.length && <p className="um-agent-empty">{query.trim() ? t('没有匹配的对话') : t('暂无对话')}</p>}</nav>
         </Dialog.Content></Dialog.Portal>
       </Dialog.Root>
     </div>
@@ -107,7 +107,7 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
           const projectSessions = ordered.filter(session => session.projectId === project.id);
           return <section key={project.id} className="um-agent-project" aria-label={t('项目：{0}', { 0: project.name })}>
             <div className="um-agent-project-heading group/project" data-current={controls.projectId === project.id}>
-              <button className="um-learning-project-disclosure" aria-label={t('{0}项目目录：{1}', { 0: closed ? t('展开') : t('收起'), 1: project.name })} aria-expanded={!closed} aria-controls={`${projectsId}-${project.id}`} onClick={() => setClosedProjects(previous => closed ? previous.filter(id => id !== project.id) : [...previous, project.id])}><CaretRight size={12} className="um-disclosure-chevron" /></button><button className="um-learning-project-entry" onClick={() => controls.open(project.id)} aria-label={t('进入项目：{0}', { 0: project.name })}><Folder size={16} /><span>{project.name}</span></button>
+              <button className="um-learning-project-disclosure" aria-label={t('{0}项目目录：{1}', { 0: closed ? t('展开') : t('收起'), 1: project.name })} aria-expanded={!closed} aria-controls={`${projectsId}-${project.id}`} onClick={() => setClosedProjects(previous => closed ? previous.filter(id => id !== project.id) : [...previous, project.id])}><CaretRight size={12} className="um-disclosure-chevron" /></button><button className="um-learning-project-entry" data-session-open onClick={() => controls.open(project.id)} aria-label={t('进入项目：{0}', { 0: project.name })} title={project.name}><Folder size={16} /><span>{project.name}</span></button>
               <button className="um-agent-icon-button opacity-0 group-hover/project:opacity-100 group-focus-within/project:opacity-100 [@media(hover:none)]:opacity-100" data-session-new aria-label={t('在项目「{0}」中新建对话', { 0: project.name })} title={t('新建对话')} onClick={() => { setClosedProjects(previous => previous.filter(id => id !== project.id)); onNewInProject(project.id); }}><Plus size={17} /></button>
               <DropdownMenu><DropdownMenuTrigger asChild><button className="um-agent-icon-button" aria-label={t('项目菜单：{0}', { 0: project.name })}><DotsThree size={18} /></button></DropdownMenuTrigger><DropdownMenuContent className="um-native-menu" align="start" onCloseAutoFocus={event => { if (editing) event.preventDefault(); }}>
                 <DropdownMenuItem data-session-new onSelect={() => { setClosedProjects(previous => previous.filter(id => id !== project.id)); onNewInProject(project.id); }}><Plus size={15} />{t('在项目中新建对话')}</DropdownMenuItem>
@@ -118,10 +118,10 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
             <Collapse open={!closed} id={`${projectsId}-${project.id}`}><ul className="um-agent-project-sessions">{projectSessions.map(session => renderSession(session))}{!projectSessions.length && <li className="um-agent-project-empty"><button data-session-new onClick={() => onNewInProject(project.id)}>{t('开始对话')}</button></li>}</ul></Collapse>
           </section>;
         })}
-        <div className="um-agent-section-label"><span>{t('自由对话')}</span></div>
+        <div className="um-agent-section-label" data-empty-free={uncategorized.length === 0 || undefined}><span>{t('自由对话')}</span></div>
       </>
       <ul>{uncategorized.map(session => renderSession(session))}</ul>
-      {!uncategorized.length && <p className="um-agent-project-hint">{t('暂无对话')}</p>}
+      {!uncategorized.length && <p className="um-agent-project-hint" data-empty-free={controls.projects.length > 0 || undefined}>{t('暂无对话')}</p>}
     </nav>
     <Dialog.Root open={renaming !== null} onOpenChange={open => { if (!open && !updating) setRenaming(null); }}>
       <Dialog.Portal><Dialog.Overlay className="um-agent-project-overlay" /><Dialog.Content className="um-native-agent um-agent-project-dialog">
