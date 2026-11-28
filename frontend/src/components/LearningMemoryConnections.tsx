@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Check, Copy } from '@phosphor-icons/react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { ExternalMcpServers } from '@/components/ExternalMcpServers';
@@ -10,13 +13,36 @@ import { activeWorkspace } from '@/lib/activeWorkspace';
 import { getServerOrigin } from '@/lib/serverConfig';
 
 type Connection = { id: number; name: string; can_write: boolean; share_notes: boolean; project_name: string | null };
+type IssuedCredential = { name: string; token: string };
+
+async function copyText(value: string): Promise<boolean> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      // Fallback below for restricted clipboard contexts.
+    }
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const ok = document.execCommand('copy');
+  document.body.removeChild(textarea);
+  return ok;
+}
 
 export function LearningMemoryConnections() {
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState('');
   const [canWrite, setCanWrite] = useState(false);
   const [shareNotes, setShareNotes] = useState(false);
-  const [token, setToken] = useState('');
+  const [issuedCredential, setIssuedCredential] = useState<IssuedCredential | null>(null);
+  const [copiedField, setCopiedField] = useState<'token' | 'endpoint' | null>(null);
   const [error, setError] = useState(false);
   const url = '/ai/learning-memory/grants/';
   const connections = useQuery({
@@ -27,13 +53,27 @@ export function LearningMemoryConnections() {
   const endpoint = new URL('/api/ai/learning-memory/mcp/', server).href;
   const stdioProxyCommand = `npx -y @unimind/mcp-proxy --url ${endpoint}`;
 
+  async function handleCopy(field: 'token' | 'endpoint', value: string) {
+    const ok = await copyText(value);
+    if (ok) {
+      setCopiedField(field);
+      toast.success(field === 'token' ? t('已复制 Bearer 凭证') : t('已复制 MCP 地址'));
+      window.setTimeout(() => {
+        setCopiedField(current => (current === field ? null : current));
+      }, 2000);
+    } else {
+      toast.error(t('复制失败，请手动选中复制。'));
+    }
+  }
+
   async function create() {
     setBusy(true);
     setError(false);
-    setToken('');
+    const createdName = name.trim();
     try {
-      const response = await api.post<{ token: string }>(url, { name, can_write: canWrite, share_notes: shareNotes });
-      setToken(response.data.token);
+      const response = await api.post<{ token: string }>(url, { name: createdName, can_write: canWrite, share_notes: shareNotes });
+      setIssuedCredential({ name: createdName, token: response.data.token });
+      setCopiedField(null);
       setName('');
       setCanWrite(false);
       setShareNotes(false);
@@ -50,7 +90,6 @@ export function LearningMemoryConnections() {
     setError(false);
     try {
       await api.delete(`${url}${id}/`);
-      setToken('');
       void connections.refetch();
     } catch {
       setError(true);
@@ -91,12 +130,8 @@ export function LearningMemoryConnections() {
           <Button type="submit" disabled={busy || !name.trim()}>{t('创建连接凭证')}</Button>
         </div>
       </form>
-      {token && <div className="um-settings-row border-t">
-        <div><label htmlFor="learning-memory-token">{t('Bearer 凭证，只显示一次')}</label></div>
-        <Input id="learning-memory-token" readOnly value={token} onFocus={event => event.currentTarget.select()} />
-      </div>}
     </section>
-    {(error || connections.isError) && <p role="alert">{t('连接操作未完成，请重试。')}</p>}
+    {(error || connections.isError) && <p className="um-desktop-error um-mcp-error" role="alert">{t('连接操作未完成，请重试。')}</p>}
     {!!connections.data?.length && <>
       <h3 className="um-settings-group-title">{t('已授权连接')}</h3>
       <section className="um-settings-group">
@@ -109,5 +144,82 @@ export function LearningMemoryConnections() {
       </section>
     </>}
     <ExternalMcpServers />
+
+    <Dialog
+      open={!!issuedCredential}
+      onOpenChange={open => {
+        if (!open) {
+          setIssuedCredential(null);
+          setCopiedField(null);
+        }
+      }}
+    >
+      <DialogContent
+        className="um-settings-edit-dialog um-mcp-token-dialog"
+        onInteractOutside={event => event.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle>{t('连接凭证已创建')}</DialogTitle>
+          <DialogDescription>
+            {t('此 Bearer 凭证仅显示这一次，关闭后将无法再次查看，请先复制并妥善保存。')}
+          </DialogDescription>
+        </DialogHeader>
+        {issuedCredential && <div className="um-mcp-token-body">
+          <div className="um-mcp-token-field">
+            <label htmlFor="learning-memory-token-modal">
+              {t('Bearer 凭证')} · {issuedCredential.name}
+            </label>
+            <div className="um-mcp-copy-row">
+              <Input
+                id="learning-memory-token-modal"
+                className="font-mono"
+                readOnly
+                value={issuedCredential.token}
+                onFocus={event => event.currentTarget.select()}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleCopy('token', issuedCredential.token)}
+              >
+                {copiedField === 'token' ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
+                {copiedField === 'token' ? t('已复制') : t('复制')}
+              </Button>
+            </div>
+          </div>
+          <div className="um-mcp-token-field">
+            <label htmlFor="learning-memory-endpoint-modal">{t('MCP 地址')}</label>
+            <div className="um-mcp-copy-row">
+              <Input
+                id="learning-memory-endpoint-modal"
+                className="font-mono"
+                readOnly
+                value={endpoint}
+                onFocus={event => event.currentTarget.select()}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleCopy('endpoint', endpoint)}
+              >
+                {copiedField === 'endpoint' ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
+                {copiedField === 'endpoint' ? t('已复制') : t('复制')}
+              </Button>
+            </div>
+          </div>
+        </div>}
+        <footer className="um-settings-footer">
+          <Button
+            type="button"
+            onClick={() => {
+              setIssuedCredential(null);
+              setCopiedField(null);
+            }}
+          >
+            {t('我已保存，关闭')}
+          </Button>
+        </footer>
+      </DialogContent>
+    </Dialog>
   </>;
 }
