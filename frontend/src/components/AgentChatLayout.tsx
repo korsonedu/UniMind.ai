@@ -436,7 +436,10 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
   const fillPromptFromCard = (prompt: string) => {
     setInput(prompt);
-    nativeInputRef.current?.focus();
+    if (composerId) {
+      const el = document.getElementById(composerId);
+      if (el instanceof HTMLElement) el.focus();
+    }
   };
   const renderedLandingShortcuts = typeof landingShortcuts === 'function'
     ? landingShortcuts({ fillPrompt: fillPromptFromCard })

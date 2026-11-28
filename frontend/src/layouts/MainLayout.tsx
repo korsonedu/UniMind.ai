@@ -144,7 +144,7 @@ export const MainLayout: React.FC = () => {
     setSidebarFullscreen(false);
     setSidebarPreview(null);
     document.getElementById('um-notes-toggle')?.focus({ preventScroll: true });
-  }, []);
+  }, [setSidebarFullscreen]);
   const inNotesPage = location.pathname === '/notes' || location.pathname.startsWith('/notes/');
   useDesktopRuntime(user?.id);
   const pendingLearningRecords = useDesktopStore(state => state.state?.learningSync?.pending ?? 0);
