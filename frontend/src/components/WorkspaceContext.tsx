@@ -10,7 +10,8 @@ export const RightSidebarLayoutContext = createContext<{ fullscreen: boolean; ex
 export const WorkspaceActiveContext = createContext(true);
 export const NotesSidebarContext = createContext<{ open: boolean; close: () => void; setAvailable: (available: boolean) => void }>({ open: false, close: () => {}, setAvailable: () => {} });
 
-export type SidebarView = 'home' | 'chat' | 'outline' | 'materials' | 'notes' | 'saved-courses' | 'learning-path';
+export type WorkbenchSidebarView = 'project-sources' | 'studio';
+export type SidebarView = 'home' | 'chat' | 'outline' | 'materials' | 'notes' | 'saved-courses' | 'learning-path' | WorkbenchSidebarView;
 export interface SidebarRecentItem { key: string; view: 'chat' | 'notes'; title: string; courseId?: number; conversationId?: string; noteId?: number }
 export const CourseSidebarContext = createContext<{
   host: HTMLDivElement | null;
@@ -36,6 +37,13 @@ export const LearningPathSidebarContext = createContext<{
   close: () => void;
   setAvailable: (available: boolean) => void;
 }>({ host: null, visible: false, open: () => {}, openNotes: () => {}, close: () => {}, setAvailable: () => {} });
+
+export const WorkbenchSidebarContext = createContext<{
+  host: HTMLDivElement | null;
+  view: WorkbenchSidebarView | null;
+  open: (view: WorkbenchSidebarView) => void;
+  close: () => void;
+}>({ host: null, view: null, open: () => {}, close: () => {} });
 
 export function useNotesSidebarAvailability(available: boolean) {
   const { setAvailable } = useContext(NotesSidebarContext);

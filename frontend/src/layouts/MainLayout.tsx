@@ -3,12 +3,15 @@ import { activeWorkspace, spaceStorageKey } from '@/lib/activeWorkspace';
 import { t, useLocale } from '@/i18n';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { learningUrl } from '@/lib/projectLearning';
+import { personalWorkbenchProjectId } from '@/lib/workbenchMode';
 import React, { useState, useEffect, useLayoutEffect, useSyncExternalStore, useCallback, useRef } from 'react';
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Link, useLocation, Outlet, useNavigate, useNavigationType } from 'react-router-dom';
 
-import { User as UserIcon, SignOut, CreditCard, ArrowLeft, ArrowRight, ArrowsOutSimple, ArrowsInSimple, SidebarSimple, Gear, ChatCircle, ListBullets, ListChecks, Files, NotePencil, BookOpen, SquaresFour, TreeStructure, Sparkle, X } from '@phosphor-icons/react';
+import { User as UserIcon, SignOut, CreditCard, ArrowLeft, ArrowRight, ArrowsOutSimple, ArrowsInSimple, SidebarSimple, Gear, ChatCircle, ListBullets, Files, NotePencil, BookOpen, SquaresFour, TreeStructure, Sparkle, Exam, X, UserPlus, Copy, CaretRight, type Icon } from '@phosphor-icons/react';
 import { GlobalMobileDrawer, type MobileNavigationSlot } from '@/components/MobileNavPrimitives';
+import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { queryClient } from '@/lib/queryClient';
@@ -19,13 +22,15 @@ import { useSystemStore } from '@/store/useSystemStore';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useIsMobile } from '@/lib/useIsMobile';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useWorkspace } from '@/lib/workspace';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import GuidedTour, { type TourStep } from '@/components/GuidedTour';
 import { ExamActivityBar } from '@/components/ExamActivityBar';
 import { WorkspaceTrail } from '@/components/WorkspaceTrail';
-import { LearningPathSidebarContext, ProjectChatSidebarContext, CourseSidebarContext, type SidebarView, type SidebarRecentItem, NotesSidebarContext, RightSidebarLayoutContext, WorkspaceActiveContext, WorkspaceToolbarHostContext } from '@/components/WorkspaceContext';
+import { LearningPathSidebarContext, ProjectChatSidebarContext, CourseSidebarContext, type SidebarView, type SidebarRecentItem, NotesSidebarContext, RightSidebarLayoutContext, WorkbenchSidebarContext, WorkspaceActiveContext, WorkspaceToolbarHostContext } from '@/components/WorkspaceContext';
 import { useExamActivity } from '@/hooks/useExamActivity';
 import '@/styles/app-shell.css';
 import NotesSidebar from '@/pages/notes/NotesSidebar';
@@ -37,24 +42,25 @@ import { clampSidebarWidth, MIN_SIDEBAR_WIDTH, type SidebarDragPreview } from '@
 import { useDesktopStore } from '@/lib/desktop';
 import { useDesktopRuntime } from '@/hooks/useDesktopRuntime';
 
-type NavItem = { to: string; icon: string; label: string; mobileLabel: string; feature?: string };
+type NavItem = { to: string; icon: string | Icon; label: string; mobileLabel: string; feature?: string };
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/notes', icon: '0% 0%', label: '我的笔记', mobileLabel: '笔记' },
   { to: '/xiaoyu', icon: '50% 0%', label: '小宇', mobileLabel: '小宇', feature: 'ai.assistant' },
   { to: '/courses', icon: '0% 100%', label: '课程中心', mobileLabel: '课程', feature: 'course.video' },
-  { to: '/tests', icon: '50% 100%', label: '习题训练', mobileLabel: '做题', feature: 'quiz.exam' },
+  { to: '/tests', icon: Exam, label: '习题训练', mobileLabel: '做题', feature: 'quiz.exam' },
 ];
 
-function NavIcon({ position }: { position: string }) {
+function NavIcon({ icon: Icon }: { icon: NavItem['icon'] }) {
   useLocale();
-  return <span aria-hidden="true" className="um-nav-icon" style={{ maskPosition: position, WebkitMaskPosition: position }} />;
+  if (typeof Icon !== 'string') return <Icon size={23} aria-hidden="true" />;
+  return <span aria-hidden="true" className="um-nav-icon" style={{ maskPosition: Icon, WebkitMaskPosition: Icon }} />;
 }
 
 const TOUR_STEPS: TourStep[] = [
   { target: '[data-tour="xiaoyu-input"]', title: '跟小宇对话', content: '问知识点、刷题、看分析。试试「帮我复习一下三角函数」', placement: 'bottom' },
-  { target: '[data-tour="sidebar"]', title: '你的学习空间', content: '从这里打开笔记、课程和习题训练。', placement: 'right' },
-  { target: '[data-tour="header-right"]', title: '账号和消息', content: '修改资料和查看系统通知', placement: 'bottom' },
+  { target: '[data-tour="sidebar"]', title: '你的学习空间', content: '从这里打开笔记和习题训练。', placement: 'right' },
+  { target: '#avatar-btn', title: '账户菜单', content: '修改资料', placement: 'right' },
 ];
 
 export const MainLayout: React.FC = () => {
@@ -75,7 +81,7 @@ export const MainLayout: React.FC = () => {
   const [sidebarView, setSidebarView] = useState<SidebarView>('home');
   const [sidebarLocationKey, setSidebarLocationKey] = useState('');
   const [openedSidebarTools, setOpenedSidebarTools] = useState<SidebarView[]>([]);
-  const [addedSidebarTools, setAddedSidebarTools] = useState<SidebarView[]>(['chat', 'outline', 'notes', 'saved-courses']);
+  const [addedSidebarTools, setAddedSidebarTools] = useState<SidebarView[]>(['chat', 'outline', 'notes', 'saved-courses', 'learning-path', 'studio']);
   const [sidebarRecent, setSidebarRecent] = useState<SidebarRecentItem[]>([]);
   const recordSidebarRecent = useCallback((item: SidebarRecentItem) => {
     setSidebarRecent(previous => [item, ...previous.filter(entry => entry.key !== item.key)].slice(0, 8));
@@ -109,11 +115,12 @@ export const MainLayout: React.FC = () => {
   const [courseSidebarAvailability, setCourseSidebarAvailability] = useState({ key: '', available: false });
   const setCourseSidebarAvailable = useCallback((available: boolean) => { setCourseSidebarAvailability({ key: location.key, available }); }, [location.key]);
   const [learningPathHost, setLearningPathHost] = useState<HTMLDivElement | null>(null);
+  const [workbenchSidebarHost, setWorkbenchSidebarHost] = useState<HTMLDivElement | null>(null);
   const [learningPathAvailability, setLearningPathAvailability] = useState(false);
   const [learningPathWidth, setLearningPathWidth] = useState(480);
   const selectSidebarView = useCallback((view: SidebarView) => {
     setSidebarView(view); setNotesOpen(true);
-    if (view !== 'home') {
+    if (view !== 'home' && view !== 'studio') {
       setOpenedSidebarTools(previous => previous.includes(view) ? previous : [...previous, view]);
       setAddedSidebarTools(previous => previous.includes(view) ? previous : [...previous, view]);
     }
@@ -129,6 +136,17 @@ export const MainLayout: React.FC = () => {
   }
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
+  const { data: workspace } = useWorkspace();
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const invite = useQuery({
+    queryKey: ['friend-invitation', user?.account_id ?? user?.id],
+    enabled: inviteOpen && !!user,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<{ url: string }>('/payments/referral/', { signal });
+      if (!data.url) throw new Error('Missing invitation URL');
+      return data.url;
+    },
+  });
   const [noteSession, setNoteSession] = useState<{ userId?: number; id: number | null }>({ id: null });
   const rememberNote = useCallback((id: number | null, title?: string) => {
     setNoteSession({ userId: user?.id, id });
@@ -210,9 +228,21 @@ export const MainLayout: React.FC = () => {
   const savedCoursesAvailable = !hasCourseCatalog && hasFeature('course.video') && (xiaoyuVisible || location.pathname === '/courses' || /^\/course\/\d+/.test(location.pathname));
   const projectChatAvailable = xiaoyuVisible && projectChatAvailability.key === location.key && projectChatAvailability.available;
   const learningPathAvailable = xiaoyuVisible && learningPathAvailability;
-  const sidebarAvailable = learningPathAvailable || projectChatAvailable || notesAvailable || courseSidebarAvailable || savedCoursesAvailable;
-  const sidebarVisible = notesOpen && sidebarAvailable;
-  const activeSidebarView = sidebarView === 'learning-path' ? (learningPathAvailable ? sidebarView : 'home') : (projectChatAvailable && sidebarView === 'chat') || courseSidebarAvailable || sidebarView === 'notes' || (savedCoursesAvailable && sidebarView === 'saved-courses') ? sidebarView : 'home';
+  const inProjectChat = xiaoyuVisible && projectChat.projectId !== null;
+  const workbenchAvailable = inProjectChat && personalWorkbenchProjectId(projectChat.projectId) !== null;
+  const workbenchView = sidebarView === 'project-sources' || sidebarView === 'studio' ? sidebarView : null;
+  const sidebarAvailable = workbenchAvailable || learningPathAvailable || projectChatAvailable || notesAvailable || courseSidebarAvailable || savedCoursesAvailable;
+  const sidebarVisible = notesOpen && sidebarAvailable && (!workbenchView || workbenchAvailable);
+  const activeSidebarView = workbenchView ? (workbenchAvailable ? workbenchView : 'home') : sidebarView === 'learning-path' ? (learningPathAvailable ? sidebarView : 'home') : (projectChatAvailable && sidebarView === 'chat') || courseSidebarAvailable || sidebarView === 'notes' || (savedCoursesAvailable && sidebarView === 'saved-courses') ? sidebarView : 'home';
+  if (workbenchView && !workbenchAvailable) {
+    setNotesOpen(false);
+    setSidebarFullscreen(false);
+    setSidebarPreview(null);
+    setSidebarView('home');
+  }
+  useEffect(() => {
+    if (isMobile && sidebarVisible && workbenchView) document.getElementById(`sidebar-tab-${workbenchView}`)?.focus({ preventScroll: true });
+  }, [isMobile, sidebarVisible, workbenchView]);
   const notesVisible = sidebarVisible && activeSidebarView === 'notes';
   const sidebarTools: { id: SidebarView; label: string; icon: typeof NotePencil }[] = [...(courseSidebarAvailable ? [
     { id: 'chat' as const, label: t('小宇'), icon: ChatCircle },
@@ -232,7 +262,13 @@ export const MainLayout: React.FC = () => {
     setSidebarFullscreen(fullscreen);
   };
   if (learningPathAvailable) sidebarTools.push({ id: 'learning-path', label: t('学习路径'), icon: TreeStructure });
-  const visibleTabIds = learningPathAvailable ? [...new Set<SidebarView>(['notes', 'learning-path', ...openedSidebarTools])] : openedSidebarTools;
+  if (workbenchAvailable) sidebarTools.push({ id: 'project-sources', label: t('资料源'), icon: Files }, { id: 'studio', label: 'Studio', icon: Sparkle });
+  const visibleTabIds = [...new Set<SidebarView>([
+    ...(workbenchAvailable ? ['project-sources'] as const : []),
+    ...(workbenchAvailable && workbenchView === 'studio' ? ['studio'] as const : []),
+    ...(learningPathAvailable ? ['notes', 'learning-path'] as const : []),
+    ...openedSidebarTools,
+  ])];
   const sidebarTabs = visibleTabIds.map(id => sidebarTools.find(tool => tool.id === id)).filter(tool => !!tool);
   if (!featuresLoading && sidebarLocationKey !== location.key) {
     setSidebarLocationKey(location.key);
@@ -286,10 +322,10 @@ export const MainLayout: React.FC = () => {
     }).catch(() => {}).finally(() => setPendingTourDismiss(false));
   }, [pendingTourDismiss, updateUser]);
 
-  const visibleNavItems = navItems;
   const personalSpace = activeWorkspace() === 'personal';
+  const visibleNavItems = personalSpace ? navItems.filter(item => item.to !== '/courses') : navItems;
   const canEnter = (item: NavItem) => {
-    return (personalSpace && item.to === '/courses') || !item.feature || (!featuresLoading && hasFeature(item.feature));
+    return !item.feature || (!featuresLoading && hasFeature(item.feature));
   };
   const isActive = (item: NavItem) => {
     const path = location.pathname;
@@ -297,21 +333,36 @@ export const MainLayout: React.FC = () => {
     return path === item.to || path.startsWith(`${item.to}/`);
   };
 
-  const workspaceHeader = user ? <div data-tour="header-right" className="um-app-header-actions">
-    <NotificationBell />
+  const accountInRail = !isMobile && !railHidden;
+  const managesInstitution = !!workspace?.enterprise || workspace?.workspaces?.some(item => item.role === 'admin');
+  const isLearner = !!workspace?.workspaces?.some(item => item.role === 'student') || !!(user?.is_member && !user.is_admin);
+  const accountType = managesInstitution ? t('机构主用户') : isLearner ? t('学员用户') : t('个人用户');
+  const accountSection = activeWorkspace() !== 'personal' && workspace?.role === 'admin' && workspace.workspace?.service_active
+    ? '/settings/institution'
+    : managesInstitution || isLearner ? '/settings?section=institution' : '/settings?section=account';
+  const accountName = user?.nickname || user?.username || '';
+  const accountMenu = user && (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild><button id="avatar-btn" aria-label={t('账户菜单')} className="um-app-avatar-button"><Avatar className="h-7 w-7"><AvatarImage src={user.avatar_url} /><AvatarFallback className="text-[10px] font-bold">{user.username?.[0]}</AvatarFallback></Avatar></button></DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="bottom" className="um-app-menu w-52 p-1">
-        <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-muted-foreground">{user.nickname || user.username}</DropdownMenuLabel>
+      <DropdownMenuContent align="end" side={accountInRail ? 'right' : 'bottom'} sideOffset={accountInRail ? 8 : 4} className="um-app-menu um-account-menu">
+        <DropdownMenuItem className="um-account-menu-profile" asChild>
+          <Link to={accountSection}>
+            <Avatar className="h-8 w-8 shrink-0"><AvatarImage src={user.avatar_url} /><AvatarFallback>{accountName[0]}</AvatarFallback></Avatar>
+            <span className="um-account-menu-identity"><strong>{accountName}</strong><small>{accountType}</small></span>
+            <CaretRight size={13} aria-hidden="true" />
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         {[
-          { to: '/settings', icon: UserIcon, label: t('个人设置') },
+          { to: '/settings?section=account', icon: UserIcon, label: t('个人设置') },
           { to: '/billing', icon: CreditCard, label: t('我的服务') },
-        ].map(item => <DropdownMenuItem key={item.to} onClick={() => navigate(item.to)} className="rounded-lg px-3 py-2 gap-3 cursor-pointer"><item.icon className="h-3.5 w-3.5" /><span className="font-medium text-[13px]">{item.label}</span></DropdownMenuItem>)}
-        <DropdownMenuSeparator className="my-2 bg-border" />
-        <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-lg px-3 py-2 gap-3 cursor-pointer text-[var(--um-color-danger)] focus:bg-[var(--um-color-danger)] focus:text-[var(--um-color-on-danger)]"><SignOut className="h-3.5 w-3.5" /><span className="font-medium text-[13px]">{t('退出登录')}</span></DropdownMenuItem>
+        ].map(item => <DropdownMenuItem key={item.to} asChild><Link to={item.to}><item.icon size={15} />{item.label}</Link></DropdownMenuItem>)}
+        <DropdownMenuItem onSelect={() => setInviteOpen(true)}><UserPlus size={15} />{t('邀请好友')}</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => setShowLogoutAlert(true)} className="text-[var(--um-color-danger)] focus:bg-[var(--um-color-danger)] focus:text-[var(--um-color-on-danger)]"><SignOut size={15} />{t('退出登录')}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  </div> : null;
+  );
 
   const isMobileTopLevel = isMobile && (
     location.pathname === '/xiaoyu'
@@ -339,7 +390,7 @@ export const MainLayout: React.FC = () => {
     <nav className="um-m-drawer-nav" aria-label={t('功能导航')}>
       {mobileNavItems.map(item => {
         const active = isActive(item);
-        const Icon = item.to === '/xiaoyu' ? Sparkle : item.to === '/notes' ? NotePencil : item.to === '/courses' ? BookOpen : ListChecks;
+        const Icon = item.to === '/xiaoyu' ? Sparkle : item.to === '/notes' ? NotePencil : item.to === '/courses' ? BookOpen : Exam;
         return (
           <Link key={item.to} to={routeFor(item.to)} aria-current={active ? 'page' : undefined}>
             <Icon size={17} weight={active ? 'duotone' : 'regular'} />
@@ -352,17 +403,18 @@ export const MainLayout: React.FC = () => {
   const mobileDrawerAccount = (
     <>
       {user && (
-        <Link to="/settings" className="um-m-drawer-user">
+        <Link to={accountSection} className="um-m-drawer-user">
           <Avatar className="h-7 w-7 shrink-0">
             <AvatarImage src={user.avatar_url} />
             <AvatarFallback className="text-[11px] font-semibold bg-[var(--m-accent-soft)] text-[var(--m-accent)]">
               {(user.nickname || user.username)?.[0]}
             </AvatarFallback>
           </Avatar>
-          <span className="um-m-drawer-user-name">{user.nickname || user.username}</span>
+          <span className="um-account-menu-identity"><strong>{accountName}</strong><small>{accountType}</small></span>
         </Link>
       )}
       <div className="um-m-drawer-footer-actions">
+        {user && <button type="button" id="mobile-invite-friend" aria-label={t('邀请好友')} title={t('邀请好友')} onClick={() => setInviteOpen(true)}><UserPlus size={17} /></button>}
         {user && <div className="um-app-header-actions"><NotificationBell /></div>}
         <Link to="/settings" aria-label={t('设置')} title={t('设置')}><Gear size={17} /></Link>
       </div>
@@ -395,15 +447,15 @@ export const MainLayout: React.FC = () => {
         )}
         <div className="um-window-navigation"><button aria-label={t('返回')} title={t('返回')} disabled={historyIndex <= 0} onClick={() => navigate(-1)}><ArrowLeft size={17} /></button><button aria-label={t('前进')} title={t('前进')} disabled={historyIndex >= historyEnd} onClick={() => navigate(1)}><ArrowRight size={17} /></button></div>
         <div className="um-window-workspace" ref={setToolbarHost}>{!hasWorkspaceToolbar && <>{!isMobile && <button className="um-agent-icon-button hidden md:inline-flex" aria-label={t('切换导航栏')} onClick={() => setRailHidden(old => !old)}><SidebarSimple size={18} /></button>}<WorkspaceTrail title={pageTitle || t('学习空间')} crumbs={[]} /></>}</div>
-        {!isMobile && workspaceHeader}
-        {sidebarAvailable && (!mobileXiaoyu || projectChat.hasConversation || projectChat.projectId || sidebarVisible) && <button id="um-notes-toggle" data-native-back-close={sidebarVisible ? true : undefined} type="button" className="um-right-sidebar-toggle um-agent-icon-button" aria-label={t('切换右侧栏')} title={sidebarVisible ? t('收起右侧栏') : t('展开右侧栏')} aria-expanded={sidebarVisible} aria-controls="um-right-panel" onClick={() => { if (sidebarVisible) closeNotes(); else setNotesOpen(true); }}><SidebarSimple size={19} style={{ transform: 'scaleX(-1)' }} /></button>}
+        {!isMobile && user && <div data-tour="header-right" className="um-app-header-actions"><NotificationBell />{!accountInRail && accountMenu}</div>}
+        {sidebarAvailable && (!mobileXiaoyu || projectChat.hasConversation || projectChat.projectId || sidebarVisible) && <button id="um-notes-toggle" data-native-back-close={sidebarVisible ? true : undefined} type="button" className="um-right-sidebar-toggle um-agent-icon-button" aria-label={t('切换右侧栏')} title={sidebarVisible ? t('收起右侧栏') : t('展开右侧栏')} aria-expanded={sidebarVisible} aria-controls="um-right-panel" onClick={() => { if (sidebarVisible) closeNotes(); else if (inProjectChat) selectSidebarView('home'); else setNotesOpen(true); }}><SidebarSimple size={19} style={{ transform: 'scaleX(-1)' }} /></button>}
       </header>
       {(nativeOffline || demoActive) && <div role="status" className="flex shrink-0 items-center justify-between gap-2 bg-amber-50 text-amber-950 px-3 py-1 text-xs"><span>{demoActive ? t('离线试用 · 数据仅保存在本机') : t('离线缓存 · 已使用本地离线缓存')}</span><button type="button" className="min-h-11 underline shrink-0" onClick={() => { if (demoActive) { void useAuthStore.getState().exitDemo().then(() => { queryClient.clear(); navigate('/login', { replace: true }); }); } else { setNativeOffline(false); navigate('/settings'); void queryClient.invalidateQueries(); } }}>{demoActive ? t('连接服务器 / 退出试用') : t('重新连接 / 服务器设置')}</button></div>}
       <div className="um-window-body flex flex-1 min-h-0 overflow-hidden">
       <aside data-tour="sidebar" aria-label={t('应用导航')} className={cn('um-app-rail relative flex-col p-1.5 z-0 shrink-0 hidden md:flex w-[58px]', railHidden && 'md:hidden')}>
-        <div className="um-app-brand flex justify-center"><Link to="/xiaoyu" className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', location.pathname.startsWith('/xiaoyu') && 'bg-primary/10')} aria-label={t('小宇')} title={t('小宇')} aria-current={location.pathname.startsWith('/xiaoyu') ? 'page' : undefined}>
-          <svg viewBox="0 0 100 100" className="h-8 w-8" aria-hidden="true" focusable="false">
-            <defs><linearGradient id="um-sidebar-brand-gradient" gradientUnits="userSpaceOnUse" x1="15" y1="90" x2="90" y2="10"><stop stopColor="#2f6cea" /><stop offset=".5" stopColor="#535fe7" /><stop offset="1" stopColor="#9252d8" /></linearGradient></defs>
+        <div className="um-app-brand flex justify-center"><Link to="/xiaoyu" className="um-app-brand-link flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" aria-label={t('小宇')} title={t('小宇')} aria-current={location.pathname.startsWith('/xiaoyu') ? 'page' : undefined}>
+          <svg viewBox="-2 4 100 100" className="h-8 w-8" aria-hidden="true" focusable="false">
+            <defs><linearGradient id="um-sidebar-brand-gradient" gradientUnits="userSpaceOnUse" x1="15" y1="90" x2="90" y2="10"><stop stopColor="var(--um-sidebar-brand-start, #2f6cea)" /><stop offset=".5" stopColor="var(--um-sidebar-brand-middle, #535fe7)" /><stop offset="1" stopColor="var(--um-sidebar-brand-end, #9252d8)" /></linearGradient></defs>
             <g fill="url(#um-sidebar-brand-gradient)">
               <path d="M18 36C18 13 48 13 48 36C48 13 78 13 78 36V61C78 79 67 89 48 89S18 79 18 61Z" fill="none" stroke="url(#um-sidebar-brand-gradient)" strokeWidth="12" strokeLinejoin="round" />
               <rect x="33" y="48" width="8" height="13" rx="4" />
@@ -413,8 +465,9 @@ export const MainLayout: React.FC = () => {
           </svg>
         </Link></div>
         <nav aria-label={t('功能导航')} className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
-          {visibleNavItems.filter(item => item.to !== '/xiaoyu').map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-9 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={routeFor(item.to)} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}>{<NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true">{<NavIcon position={item.icon} />}<span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{personalSpace && item.to === '/courses' ? t(' · 请切换到课程空间') : !canEnter(item) && t(' · 暂未开通')}</TooltipContent></TooltipPortal></Tooltip></div>)}
+          {visibleNavItems.filter(item => item.to !== '/xiaoyu').map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-9 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={routeFor(item.to)} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}>{<NavIcon icon={item.icon} />}<span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true">{<NavIcon icon={item.icon} />}<span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{!canEnter(item) && t(' · 暂未开通')}</TooltipContent></TooltipPortal></Tooltip></div>)}
         </nav>
+        {accountInRail && accountMenu}
       </aside>
       <div ref={panesRef} className="um-window-panes" data-notes-open={sidebarVisible} data-fullscreen={workspaceFullscreen} data-resizing={!!sidebarPreview} data-snap={sidebarPreview?.snap ?? undefined} style={{ '--um-notes-width': `${rightSidebarWidth}px` } as React.CSSProperties}>
       <main inert={(isMobile && sidebarVisible) || workspaceFullscreen} aria-hidden={workspaceFullscreen || undefined} className={cn('um-app-main flex-1 min-w-0 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background',
@@ -428,7 +481,9 @@ export const MainLayout: React.FC = () => {
                   <CourseSidebarContext.Provider value={{ host: courseSidebarHost, view: activeSidebarView, visible: sidebarVisible, recordRecent: recordSidebarRecent, setAvailable: setCourseSidebarAvailable }}>
                     <ProjectChatSidebarContext.Provider value={{ host: projectChatHost, visible: sidebarVisible && activeSidebarView === 'chat', open: openProjectChat, close: closeNotes, setAvailable: setProjectChatAvailable }}>
                       <LearningPathSidebarContext.Provider value={{ host: learningPathHost, visible: sidebarVisible && activeSidebarView === 'learning-path', open: openLearningPath, openNotes: openSidebarNotes, close: closeNotes, setAvailable: setLearningPathAvailability }}>
-                        <Outlet context={{ toolbarHost, mobileNavigation }} />
+                        <WorkbenchSidebarContext.Provider value={{ host: workbenchSidebarHost, view: sidebarVisible ? workbenchView : null, open: selectSidebarView, close: closeNotes }}>
+                          <Outlet context={{ toolbarHost, mobileNavigation }} />
+                        </WorkbenchSidebarContext.Provider>
                       </LearningPathSidebarContext.Provider>
                     </ProjectChatSidebarContext.Provider>
                   </CourseSidebarContext.Provider>
@@ -451,14 +506,15 @@ export const MainLayout: React.FC = () => {
             const next = event.key === 'Home' ? 0 : event.key === 'End' ? sidebarTabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + sidebarTabs.length) % sidebarTabs.length;
             selectSidebarView(sidebarTabs[next].id);
             document.getElementById(`sidebar-tab-${sidebarTabs[next].id}`)?.focus();
-          }}><tab.icon size={16} /><span>{tab.label}</span></button>{!(learningPathAvailable && (tab.id === 'learning-path' || tab.id === 'notes')) && <button type="button" className="um-sidebar-tab-close" aria-label={t('关闭{0}标签', { 0: tab.label })} onClick={() => {
+          }}>{tab.id !== 'project-sources' && tab.id !== 'studio' && <tab.icon size={16} />}<span>{tab.label}</span></button>{tab.id !== 'project-sources' && tab.id !== 'studio' && !(learningPathAvailable && (tab.id === 'learning-path' || tab.id === 'notes')) && <button type="button" className="um-sidebar-tab-close" aria-label={t('关闭{0}标签', { 0: tab.label })} onClick={() => {
             setOpenedSidebarTools(previous => previous.filter(id => id !== tab.id));
             if (activeSidebarView === tab.id) setSidebarView('home');
           }}><X size={12} /></button>}</div>)}</div>
           {!isMobile && <button type="button" className="um-agent-icon-button" aria-label={sidebarFullscreen ? t('恢复分屏') : t('全屏展开')} title={sidebarFullscreen ? t('恢复分屏') : t('全屏展开')} aria-pressed={sidebarFullscreen} onClick={() => setSidebarFullscreen(value => !value)}>{sidebarFullscreen ? <ArrowsInSimple size={17} /> : <ArrowsOutSimple size={17} />}</button>}
-          <button type="button" className="um-agent-icon-button" aria-label={t('关闭右侧栏')} onClick={closeNotes}><X size={17} /></button>
+          <button type="button" className="um-agent-icon-button" aria-label={t('关闭右侧栏')} data-native-back-close={sidebarVisible ? true : undefined} onClick={closeNotes}><X size={17} /></button>
         </header>
         {activeSidebarView === 'home' && <SidebarHome tools={sidebarTools} added={addedSidebarTools} recent={sidebarRecent} onSelect={selectSidebarView} onOpenRecent={openSidebarRecent} />}
+        <div ref={setWorkbenchSidebarHost} className="um-right-panel-content um-native-agent" hidden={!workbenchAvailable || !workbenchView} />
         <div ref={setLearningPathHost} id="sidebar-panel-learning-path" role="tabpanel" aria-labelledby="sidebar-tab-learning-path" className="um-right-panel-content um-native-agent" hidden={activeSidebarView !== 'learning-path'} />
         <div ref={setProjectChatHost} id={projectChatAvailable ? 'sidebar-panel-chat' : undefined} role="tabpanel" aria-labelledby="sidebar-tab-chat" className="um-right-panel-content um-native-agent" hidden={!projectChatAvailable || activeSidebarView !== 'chat'} />
         <div ref={setCourseSidebarHost} className="um-course-sidebar-host" hidden={!courseSidebarAvailable || activeSidebarView === 'notes' || activeSidebarView === 'home' || activeSidebarView === 'saved-courses'} />
@@ -471,6 +527,36 @@ export const MainLayout: React.FC = () => {
       </div>
       </div>
       </div>
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent className="um-friend-invitation" onCloseAutoFocus={event => {
+          event.preventDefault();
+          (document.getElementById('avatar-btn') ?? document.getElementById('mobile-invite-friend'))?.focus();
+        }}>
+          <div className="um-friend-invitation-art">
+            <span aria-hidden="true" /><span aria-hidden="true" />
+            <img src="/unimind_logo_small.png" alt="UniMind.ai" width={80} height={80} />
+          </div>
+          <div className="um-friend-invitation-body">
+            <DialogHeader>
+              <DialogTitle>{t('邀请好友加入 UniMind.ai')}</DialogTitle>
+              <DialogDescription>{t('好友通过你的链接完成注册，你们各获 3 天免费会员。')}</DialogDescription>
+            </DialogHeader>
+            {invite.data ? <div className="um-friend-invitation-link">
+              <a href={invite.data} target="_blank" rel="noreferrer" title={invite.data}>{invite.data}</a>
+              <Button size="sm" onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(invite.data);
+                  toast.success(t('邀请链接已复制'));
+                } catch {
+                  toast.error(t('复制失败，请手动复制邀请链接'));
+                }
+              }}><Copy size={15} />{t('复制链接')}</Button>
+            </div> : invite.isError ? <div className="um-friend-invitation-link" role="alert">
+              <span>{t('暂时无法获取邀请链接。')}</span><Button size="sm" variant="outline" onClick={() => void invite.refetch()}>{t('重试')}</Button>
+            </div> : <p className="text-sm text-muted-foreground" role="status">{t('正在获取邀请链接…')}</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
       <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}><AlertDialogContent className="rounded-lg border-border bg-card"><AlertDialogHeader><AlertDialogTitle>{t('确认退出登录？')}</AlertDialogTitle><AlertDialogDescription>{t('退出后需要重新登录才能访问学习记录和课程。')}{pendingLearningRecords > 0 && t(' 当前还有 {0} 条离线学习记录未同步，退出会清除这些记录，建议先返回桌面设置联网同步。', { 0: pendingLearningRecords })}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t('返回')}</AlertDialogCancel><AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch { /* Local logout remains available. */ } await queryClient.cancelQueries(); queryClient.clear(); logout(); navigate('/login', { replace: true }); }}>{t('确认退出')}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       {showTour && isTourPage && <GuidedTour steps={tourSteps} onDismiss={handleTourDismiss} />}
     </div>

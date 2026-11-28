@@ -1,15 +1,14 @@
-import { ArrowUpRight, Books, Plus, Sparkle, Spinner } from '@phosphor-icons/react';
+import { ArrowUpRight, Books, Sparkle, Spinner } from '@phosphor-icons/react';
 import { t } from '@/i18n';
 import { useWorkbenchOverview } from '@/lib/workbenchApi';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import type { ProjectSourceSummary } from '@/types/workbench';
 
-export function WorkbenchOverviewBanner({ projectId, totalCount, selected, canSend, onAdd, onSend }: {
+export function WorkbenchOverviewBanner({ projectId, totalCount, selected, canSend, onSend }: {
   projectId: number;
   totalCount: number;
   selected: ProjectSourceSummary[];
   canSend: boolean;
-  onAdd: () => void;
   onSend: (text: string) => void;
 }) {
   const { overview, pending, error, regenerate } = useWorkbenchOverview(projectId, selected);
@@ -17,8 +16,7 @@ export function WorkbenchOverviewBanner({ projectId, totalCount, selected, canSe
   if (!totalCount) return <section className="um-wb-overview um-wb-overview-empty">
     <div className="um-wb-overview-icon"><Books size={25} weight="duotone" /></div>
     <h2>{t('把学习资料放进同一个项目')}</h2>
-    <p>{t('上传课件 PDF、PPT、课程视频，或通过浏览器插件导入 B站 / YouTube 网课，开始跨资料伴学问答。')}</p>
-    <button className="um-agent-button um-agent-button-primary" type="button" onClick={onAdd}><Plus size={16} />{t('上传第一份资料')}</button>
+    <p>{t('在右侧栏的「资料源」中添加课件、视频和笔记。')}</p>
   </section>;
 
   if (!selected.length) return <section className="um-wb-overview um-wb-overview-empty">

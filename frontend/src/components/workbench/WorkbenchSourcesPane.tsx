@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Books, DotsThree, PencilSimple, Plus, Spinner, Trash, UploadSimple } from '@phosphor-icons/react';
+import { DotsThree, PencilSimple, Plus, Spinner, Trash, UploadSimple } from '@phosphor-icons/react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from '@/components/ui/context-menu';
 import { t } from '@/i18n';
@@ -12,19 +12,18 @@ import { AddSourceDialog } from './AddSourceDialog';
 import { SourceInspectorDrawer } from './SourceInspectorDrawer';
 import { sourceTypeLabel, sourceUnitLabel } from './workbenchSourcePresentation';
 
-export function WorkbenchSourcesPane({ projectId, query, activeAnchor, onSelect, onBack, addOpen, setAddOpen, conversationId }: {
+export function WorkbenchSourcesPane({ projectId, query, activeAnchor, onSelect, onBack, conversationId }: {
   projectId: number;
   query: ReturnType<typeof useWorkbenchSources>;
   activeAnchor: SourceAnchor | null;
   onSelect: (anchor: SourceAnchor) => void;
   onBack: () => void;
-  addOpen: boolean;
-  setAddOpen: (open: boolean) => void;
   conversationId: string;
 }) {
   const sources = query.data?.sources ?? [];
   const selectedCount = sources.filter(source => source.is_selected).length;
   const allSelected = sources.length > 0 && selectedCount === sources.length;
+  const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<{ source: ProjectSourceSummary; title: string } | null>(null);
   const [deleting, setDeleting] = useState<ProjectSourceSummary | null>(null);
   const [error, setError] = useState('');
@@ -67,7 +66,7 @@ export function WorkbenchSourcesPane({ projectId, query, activeAnchor, onSelect,
       summary={sources.find(source => source.id === activeAnchor.sourceId)} />
     : <>
       <header className="um-wb-pane-header">
-        <h2><Books size={18} />{t('资料源')}</h2>
+        <h2>{t('资料源')}</h2>
         <button className="um-agent-button um-wb-add" type="button" onClick={() => setAdd(true)} disabled={pending}>
           <Plus size={15} />{t('添加')}
         </button>

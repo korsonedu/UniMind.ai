@@ -15,8 +15,9 @@
 .um-inline-practice-nav button[data-answered="true"]::after { content: ""; position: absolute; top: 5px; right: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--um-color-accent); box-shadow: 0 0 0 1px var(--um-color-surface); }
 .um-inline-practice-question { min-width: 0; overflow-wrap: anywhere; }
 .um-inline-practice-question > .um-inline-practice-caption { margin-bottom: 10px; }
-.um-inline-practice-options { display: grid; gap: 8px; margin-top: 18px; }
-.um-inline-practice-options button { display: flex; align-items: baseline; gap: 12px; padding: 11px 14px; text-align: left; border-radius: 10px; background: var(--um-color-context); }
+.um-inline-practice-options { display: grid; gap: 4px; margin-top: 12px; }
+.um-inline-practice-options button { display: flex; align-items: baseline; gap: 8px; min-height: 32px; padding: 5px 12px; text-align: left; border-radius: 10px; background: var(--um-color-context); }
+@media (max-width: 640px) { .um-inline-practice-options button { min-height: 44px; } }
 .um-inline-practice-options button > span { flex-shrink: 0; font-weight: 600; color: var(--um-color-text-muted); }
 .um-inline-practice-options button[aria-pressed="true"] { background: var(--um-color-selected); box-shadow: inset 0 0 0 1px var(--um-color-accent); }
 .um-inline-practice-options button:disabled { cursor: default; }

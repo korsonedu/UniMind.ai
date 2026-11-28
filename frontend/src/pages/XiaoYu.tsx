@@ -1,5 +1,5 @@
 import { t, useLocale } from '@/i18n';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useContext, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,13 +11,13 @@ import { useInstitutionStore } from '@/store/useInstitutionStore';
 import type { CourseProgress } from './course-center/types';
 import { LearningPathCanvas } from '@/components/LearningPathCanvas';
 import { learningComposerId, useLearningWorkspace } from '@/components/LearningWorkspace';
-import { Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain, Stethoscope, WarningCircle, PlayCircle, NotePencil, CaretRight, Books } from '@phosphor-icons/react';
+import { Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain, Stethoscope, WarningCircle, PlayCircle, NotePencil, CaretRight } from '@phosphor-icons/react';
 import AgentChatLayout, { type AgentChatLayoutProps } from '@/components/AgentChatLayout';
 import NativeSessionSidebar from '@/components/NativeSessionSidebar';
-import { useNotesSidebarAvailability } from '@/components/WorkspaceContext';
+import { useNotesSidebarAvailability, WorkbenchSidebarContext } from '@/components/WorkspaceContext';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useXiaoYuChat } from './xiaoyu/xiaoYuChatContext';
-import { WorkbenchLayout, type WorkbenchTab } from '@/components/workbench/WorkbenchLayout';
+import '@/components/workbench/workbench.css';
 import { WorkbenchOverviewBanner } from '@/components/workbench/WorkbenchOverviewBanner';
 import { WorkbenchSourcesPane } from '@/components/workbench/WorkbenchSourcesPane';
 import { WorkbenchStudioPane } from '@/components/workbench/WorkbenchStudioPane';
@@ -103,24 +103,18 @@ function XiaoYuProject() {
 
 function XiaoYuWorkbench({ projectId }: { projectId: number }) {
   const { chat } = useXiaoYuChat();
-  const workspace = useLearningWorkspace({ studio: true });
+  const sidebar = useContext(WorkbenchSidebarContext);
+  const { open: openSidebar } = sidebar;
+  const workspace = useLearningWorkspace({ autoOpen: false });
   const getLearningPayload = workspace.getExtraPayload;
-  const stageCount = workspace.project?.plan.stages?.length ?? 0;
   const query = useWorkbenchSources(projectId);
   const client = useQueryClient();
   const selected = selectedReadySources(query.data?.sources ?? []);
-  const noReadySources = query.data?.selected_count
-    ? t('已选资料尚未就绪，当前仅使用通用知识')
-    : t('未勾选任何资料，当前仅使用通用知识');
   const [anchor, setAnchor] = useState<SourceAnchor | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
-  const [leftOpen, setLeftOpen] = useState(true);
-  const [mobileTab, setMobileTab] = useState<WorkbenchTab>('chat');
   const onSelect = useCallback((target: SourceAnchor) => {
     setAnchor(target);
-    setLeftOpen(true);
-    setMobileTab('sources');
-  }, [setAnchor, setLeftOpen, setMobileTab]);
+    openSidebar('project-sources');
+  }, [openSidebar]);
   const citationContext = useMemo(() => ({ onSelect, conversationId: chat.conversationId }), [onSelect, chat.conversationId]);
   const getSources = useCallback(() => client.getQueryData<ProjectSourceList>(queryKeys.workbench.sources(projectId)), [client, projectId]);
   const getExtraPayload = useCallback(() => ({
@@ -130,34 +124,25 @@ function XiaoYuWorkbench({ projectId }: { projectId: number }) {
   const beforeSend = useCallback(async () => {
     if (!getSources()) throw new Error(t('请先加载项目资料，再发送消息。'));
   }, [getSources]);
-  const openAdd = () => { setAnchor(null); setLeftOpen(true); setMobileTab('sources'); setAddOpen(true); };
-
   return <WorkbenchCitationContext.Provider value={citationContext}>
-    {!!stageCount && workspace.sidebar.visible && workspace.sidebar.host && createPortal(
+    {workspace.sidebar.host && createPortal(
       <LearningPathCanvas workspace={workspace} messages={chat.messages} conversationId={chat.conversationId} />, workspace.sidebar.host,
     )}
+    {sidebar.host && createPortal(<>
+      <section id="sidebar-panel-project-sources" aria-labelledby="sidebar-tab-project-sources" role="tabpanel" className="um-right-panel-content um-wb-sidebar" hidden={sidebar.view !== 'project-sources'}>
+        <WorkbenchSourcesPane projectId={projectId} query={query} activeAnchor={anchor}
+          onSelect={onSelect} onBack={() => setAnchor(null)}
+          conversationId={chat.conversationId} />
+      </section>
+      <section id="sidebar-panel-studio" aria-labelledby="sidebar-tab-studio" role="tabpanel" className="um-right-panel-content um-wb-sidebar" hidden={sidebar.view !== 'studio'}>
+        <WorkbenchStudioPane projectId={projectId} selected={selected} />
+      </section>
+    </>, sidebar.host)}
     <XiaoYuConversation getExtraPayload={getExtraPayload} beforeSend={beforeSend} workbench={{
       canSend: !!query.data,
-      composerContext: <div className="um-wb-grounding" role="status">
-        <span data-warning={!!query.data && selected.length === 0}>
-          <Books size={14} />{!query.data
-            ? query.isError ? t('资料加载失败，请在资料面板重试') : t('正在读取项目资料…')
-            : selected.length > 0 ? t('基于已选 {0} 份资料回答', { 0: selected.length }) : noReadySources}
-        </span>
-      </div>,
       renderEmpty: (onSend, canSend) => query.data && <WorkbenchOverviewBanner
         projectId={projectId} totalCount={query.data.total_count} selected={selected}
-        canSend={canSend} onAdd={openAdd} onSend={onSend} />,
-      wrapChat: children => <WorkbenchLayout
-        sourceCount={query.data?.total_count ?? 0} reading={!!anchor}
-        mobileTab={mobileTab} setMobileTab={setMobileTab} leftOpen={leftOpen} setLeftOpen={setLeftOpen}
-        sources={<WorkbenchSourcesPane projectId={projectId} query={query} activeAnchor={anchor}
-          onSelect={onSelect} onBack={() => setAnchor(null)} addOpen={addOpen} setAddOpen={setAddOpen}
-          conversationId={chat.conversationId} />}
-        studio={<WorkbenchStudioPane projectId={projectId} selected={selected} legacyPath={stageCount > 0 &&
-          <button className="um-agent-button" onClick={() => { workspace.show('path'); workspace.openLearning(); }}>
-            <BookOpen size={16} />{t('查看阶段计划 ({0})', { 0: stageCount })}
-          </button>} />}>{children}</WorkbenchLayout>,
+        canSend={canSend} onSend={onSend} />,
     }} />
   </WorkbenchCitationContext.Provider>;
 }

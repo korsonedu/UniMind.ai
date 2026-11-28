@@ -131,8 +131,8 @@ export function LearningPathCanvas({ workspace, messages, conversationId }: {
   if (query.isError && !project) return <p className="um-path-loading" role="alert">{t('学习安排暂时无法读取。')} <button className="um-agent-button" onClick={() => void query.refetch()}>{t('重试')}</button></p>;
   if (!project || (!project.planning_enabled && view.kind !== 'knowledge')) return <div className="um-path-empty">
     <TreeStructure size={28} /><h2>{t('在项目中制定学习路径')}</h2>
-    <p>{t('新建学习项目后，在对话里告诉小宇你想学什么。')}</p>
-    <Link className="um-agent-button um-agent-button-primary" to="/xiaoyu?new=project">{t('新建学习项目')}</Link>
+    <p>{project && <>{t('当前项目使用自由对话。')} </>}{t('新建学习项目后，在对话里告诉小宇你想学什么。')}</p>
+    <Link className="um-agent-button um-agent-button-primary" to="/xiaoyu?new=project&planning=1">{t('新建学习项目')}</Link>
     {project && <button className="um-agent-button" onClick={() => show('knowledge')}>{t('查看知识关系')}</button>}
     {project?.memory_connectors &&
       <LearningMemorySources key={`sources:${project.project_id}`} projectId={project.project_id} />
