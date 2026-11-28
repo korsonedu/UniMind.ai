@@ -4,7 +4,7 @@ from payments.views import (
     CreateCheckoutSessionView, OrderStatusView, OrderHistoryView,
     WebhookView, SimulatePaymentView,
     RetiredCouponView,
-    MyReferralView,
+    MyReferralView, ReferralValidityView,
 )
 
 urlpatterns = [
@@ -16,5 +16,6 @@ urlpatterns = [
     path('coupons/', RetiredCouponView.as_view(), name='coupon-list'),
     path('coupons/<int:pk>/', RetiredCouponView.as_view(), name='coupon-detail'),
     path('referral/', MyReferralView.as_view(), name='my-referral'),
+    path('referral/validate/', ReferralValidityView.as_view(), name='referral-validity'),
     path('webhook/', WebhookView.as_view(), name='payment-webhook'),
 ]

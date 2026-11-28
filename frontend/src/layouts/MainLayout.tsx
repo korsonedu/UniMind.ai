@@ -8,8 +8,10 @@ import React, { useState, useEffect, useLayoutEffect, useSyncExternalStore, useC
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Link, useLocation, Outlet, useNavigate, useNavigationType } from 'react-router-dom';
 
-import { User as UserIcon, SignOut, CreditCard, ArrowLeft, ArrowRight, ArrowsOutSimple, ArrowsInSimple, SidebarSimple, Gear, ChatCircle, ListBullets, Files, NotePencil, BookOpen, SquaresFour, TreeStructure, Sparkle, Exam, X, CaretRight, type Icon } from '@phosphor-icons/react';
+import { User as UserIcon, SignOut, CreditCard, ArrowLeft, ArrowRight, ArrowsOutSimple, ArrowsInSimple, SidebarSimple, Gear, ChatCircle, ListBullets, Files, NotePencil, BookOpen, SquaresFour, TreeStructure, Sparkle, Exam, X, UserPlus, Copy, CaretRight, type Icon } from '@phosphor-icons/react';
 import { GlobalMobileDrawer, type MobileNavigationSlot } from '@/components/MobileNavPrimitives';
+import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { queryClient } from '@/lib/queryClient';
@@ -21,6 +23,7 @@ import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useWorkspace } from '@/lib/workspace';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -134,6 +137,16 @@ export const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
   const { data: workspace } = useWorkspace();
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const invite = useQuery({
+    queryKey: ['friend-invitation', user?.account_id ?? user?.id],
+    enabled: inviteOpen && !!user,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<{ url: string }>('/payments/referral/', { signal });
+      if (!data.url) throw new Error('Missing invitation URL');
+      return data.url;
+    },
+  });
   const [noteSession, setNoteSession] = useState<{ userId?: number; id: number | null }>({ id: null });
   const rememberNote = useCallback((id: number | null, title?: string) => {
     setNoteSession({ userId: user?.id, id });
@@ -344,6 +357,7 @@ export const MainLayout: React.FC = () => {
           { to: '/settings?section=account', icon: UserIcon, label: t('个人设置') },
           { to: '/billing', icon: CreditCard, label: t('我的服务') },
         ].map(item => <DropdownMenuItem key={item.to} asChild><Link to={item.to}><item.icon size={15} />{item.label}</Link></DropdownMenuItem>)}
+        <DropdownMenuItem onSelect={() => setInviteOpen(true)}><UserPlus size={15} />{t('邀请好友')}</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => setShowLogoutAlert(true)} className="text-[var(--um-color-danger)] focus:bg-[var(--um-color-danger)] focus:text-[var(--um-color-on-danger)]"><SignOut size={15} />{t('退出登录')}</DropdownMenuItem>
       </DropdownMenuContent>
@@ -400,6 +414,7 @@ export const MainLayout: React.FC = () => {
         </Link>
       )}
       <div className="um-m-drawer-footer-actions">
+        {user && <button type="button" id="mobile-invite-friend" aria-label={t('邀请好友')} title={t('邀请好友')} onClick={() => setInviteOpen(true)}><UserPlus size={17} /></button>}
         {user && <div className="um-app-header-actions"><NotificationBell /></div>}
         <Link to="/settings" aria-label={t('设置')} title={t('设置')}><Gear size={17} /></Link>
       </div>
@@ -512,6 +527,36 @@ export const MainLayout: React.FC = () => {
       </div>
       </div>
       </div>
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent className="um-friend-invitation" onCloseAutoFocus={event => {
+          event.preventDefault();
+          (document.getElementById('avatar-btn') ?? document.getElementById('mobile-invite-friend'))?.focus();
+        }}>
+          <div className="um-friend-invitation-art">
+            <span aria-hidden="true" /><span aria-hidden="true" />
+            <img src="/unimind_logo_small.png" alt="UniMind.ai" width={80} height={80} />
+          </div>
+          <div className="um-friend-invitation-body">
+            <DialogHeader>
+              <DialogTitle>{t('邀请好友加入 UniMind.ai')}</DialogTitle>
+              <DialogDescription>{t('好友通过你的链接完成注册，你们各获 3 天免费会员。')}</DialogDescription>
+            </DialogHeader>
+            {invite.data ? <div className="um-friend-invitation-link">
+              <a href={invite.data} target="_blank" rel="noreferrer" title={invite.data}>{invite.data}</a>
+              <Button size="sm" onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(invite.data);
+                  toast.success(t('邀请链接已复制'));
+                } catch {
+                  toast.error(t('复制失败，请手动复制邀请链接'));
+                }
+              }}><Copy size={15} />{t('复制链接')}</Button>
+            </div> : invite.isError ? <div className="um-friend-invitation-link" role="alert">
+              <span>{t('暂时无法获取邀请链接。')}</span><Button size="sm" variant="outline" onClick={() => void invite.refetch()}>{t('重试')}</Button>
+            </div> : <p className="text-sm text-muted-foreground" role="status">{t('正在获取邀请链接…')}</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
       <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}><AlertDialogContent className="rounded-lg border-border bg-card"><AlertDialogHeader><AlertDialogTitle>{t('确认退出登录？')}</AlertDialogTitle><AlertDialogDescription>{t('退出后需要重新登录才能访问学习记录和课程。')}{pendingLearningRecords > 0 && t(' 当前还有 {0} 条离线学习记录未同步，退出会清除这些记录，建议先返回桌面设置联网同步。', { 0: pendingLearningRecords })}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t('返回')}</AlertDialogCancel><AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch { /* Local logout remains available. */ } await queryClient.cancelQueries(); queryClient.clear(); logout(); navigate('/login', { replace: true }); }}>{t('确认退出')}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       {showTour && isTourPage && <GuidedTour steps={tourSteps} onDismiss={handleTourDismiss} />}
     </div>

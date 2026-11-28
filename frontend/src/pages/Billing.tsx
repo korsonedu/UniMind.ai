@@ -28,6 +28,7 @@ export function BillingPage() {
   };
   useEffect(load, []);
   const usagePercent = access?.ai_usage.limit ? Math.min(100, Math.round(access.ai_usage.used / access.ai_usage.limit * 100)) : 0;
+  const referralExpiry = access?.referral_membership_expires_at;
   const status: Record<string, string> = { paid: t('已支付'), pending: t('待支付'), refunded: t('已退款'), expired: t('已过期'), cancelled: t('已取消') };
   const cohortStates: Record<string, string> = { active: t('服务中'), scheduled: t('尚未开始'), expired: t('已结束'), disabled: t('已停用') };
   return <main className="um-billing-page max-w-4xl mx-auto py-6 space-y-8">
@@ -36,6 +37,10 @@ export function BillingPage() {
       <section><h2 className="font-medium">{t('当前身份')}</h2><p className="mt-3">{access.ai_usage.unlimited ? t('管理员') : access.is_course_student ? t('课程学员') : t('注册学生')}</p><p className="mt-2 text-sm text-muted-foreground">{access.is_course_student ? t('课程访问权限与服务日期以当前授权为准。') : t('可以观看公开课并使用基础小宇问答额度，购买 AI 加量不会开通课程。')}</p>
         {access.cohort ? <div className="mt-3 space-y-1 text-sm"><p>{access.cohort.name} · {access.cohort.target_year}{t('届 ·')} {cohortStates[access.cohort.state]}</p><p>{t('服务日期：')}{access.cohort.starts_on} {t('至')} {access.cohort.ends_on}{t('（上海日期，含结束当日）')}</p><p>{t('实际考试日期：')}{access.cohort.exam_date || t('待教研设置')}</p>{!access.cohort.service_active && <p className="text-muted-foreground">{t('该批次当前未向此账号提供全权益，历史学习记录保留。')}</p>}</div> : access.is_course_student && !access.ai_usage.unlimited && <p className="mt-3 text-sm text-muted-foreground">{t('沿用原手工课程授权，尚未分配年度批次；请联系我们核对服务日期。')}</p>}
       </section>
+      {referralExpiry && Date.parse(referralExpiry) > Date.now() && <section>
+        <h2 className="font-medium">{t('好友邀请会员')}</h2>
+        <p className="mt-2 text-sm text-muted-foreground">{t('有效至 {0}', { 0: learningReset(referralExpiry) })}</p>
+      </section>}
       <section className="border-y py-6"><h2 className="font-medium">{t('本周 AI 问答')}</h2>
         <p className="mt-2 text-sm text-muted-foreground">{t('个人空间与机构 Workspace 的学习内容独立，仅共用以下账号 AI 额度。')}</p>
         <p className="mt-3 text-2xl tabular-nums">{access.ai_usage.used}<span className="text-sm text-muted-foreground"> / {access.ai_usage.unlimited ? t('不限') : access.ai_usage.configured ? access.ai_usage.limit : t('待配置')} {t('次基础额度')}</span></p>

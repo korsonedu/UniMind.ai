@@ -88,9 +88,11 @@ class MyLearningAccessView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        from .workspaces.identity import account_user
         addons = active_addons(request.user)
         return Response({'ai_usage': usage_info(request.user),
                          'is_course_student': is_course_student(request.user),
+                         'referral_membership_expires_at': account_user(request.user).referral_membership_expires_at,
                          'cohort': cohort_info(request.user),
                          'addons': [{'id': grant.id, 'name': grant.snapshot.get('name', ''),
                                      'ai_calls': grant.ai_calls, 'used_calls': grant.used_calls,
