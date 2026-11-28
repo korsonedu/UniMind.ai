@@ -37,7 +37,8 @@ def has_legacy_membership(user):
 
 
 def has_referral_membership(user):
-    return bool(user.referral_membership_expires_at and user.referral_membership_expires_at > timezone.now())
+    expires_at = getattr(user, 'referral_membership_expires_at', None)
+    return expires_at is not None and expires_at > timezone.now()
 
 
 def is_course_student(user):
