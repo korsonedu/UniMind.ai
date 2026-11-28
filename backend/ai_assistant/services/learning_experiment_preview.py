@@ -10,6 +10,7 @@ from playwright.sync_api import Error, expect, sync_playwright
 
 def run(data):
     capture = data.get('capture_screenshots', False)
+    initial_selector = data.get('initial_selector')
     if capture and sys.platform.startswith('linux'):
         fonts = subprocess.run(['/usr/bin/fc-match', '-f', '%{lang}', ':lang=zh-cn'],
             capture_output=True, text=True, timeout=1)
@@ -59,6 +60,10 @@ def run(data):
                 if error not in errors:
                     errors.append(error)
                 return
+            if initial_selector and body.evaluate('body => body.scrollWidth > innerWidth + 2'):
+                error = f'组件在 {width}px 宽度下发生横向溢出。'
+                if error not in errors:
+                    errors.append(error)
             height = max(180, min(800, height))
             page.locator('iframe').evaluate('(element, height) => element.style.height = `${height}px`', height)
             if capture and phase and not errors:
@@ -73,6 +78,9 @@ def run(data):
                         'png': base64.b64encode(png).decode('ascii')})
 
         check_render(700, phase='initial')
+        if initial_selector:
+            check_render(360)
+            expect(frame.locator(initial_selector)).to_be_visible(timeout=1200)
         if capture:
             check_render(360, phase='initial')
             check_render(700)
@@ -103,6 +111,8 @@ def run(data):
                 if capture:
                     phase = 'render'
                     check_render(700, phase=f'check-{index + 1}')
+                elif initial_selector:
+                    check_render(360)
                 results.append({'selector': check['selector'], 'ok': True})
             except Exception as error:
                 failure = {'selector': check['selector'], 'ok': False, 'phase': phase,
@@ -126,6 +136,7 @@ def run(data):
         'errors': errors[:5], 'checks': results, 'text': text,
         'document_sha256': hashlib.sha256(data['document'].encode()).hexdigest(),
         'note': '仅核验浏览器运行及指定交互，不证明教学内容或公式正确。',
+        **({'layout_checked': True} if initial_selector else {}),
         **({'screenshots': screenshots} if capture else {})}
 
 
