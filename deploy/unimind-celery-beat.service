@@ -1,0 +1,16 @@
+[Unit]
+Description=UniMind Celery Beat Scheduler
+After=network-online.target unimind-celery.service
+Wants=unimind-celery.service
+
+[Service]
+User=unimind
+Group=unimind
+WorkingDirectory=/opt/unimind/backend
+EnvironmentFile=/opt/unimind/backend/.env
+ExecStart=/opt/unimind/backend/venv/bin/celery -A school_system beat -l info
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

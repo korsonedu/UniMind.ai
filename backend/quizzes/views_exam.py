@@ -4,18 +4,23 @@ import logging
 
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework import serializers
 from rest_framework.views import APIView
 
+from ai_assistant.services.ulr_config import ulr_enabled
 from core.analytics import record_event
-from quizzes.ai_workflow import validate_exam_answers
+from quizzes.ai_workflow import exam_answer_question_ids, validate_exam_answers
 from quizzes.models import ExamQuestionResult, PracticeSubmission, QuizExam
+from quizzes.services.exam_grading_state import can_resume_grading, exam_submission_complete, lock_grading_for_recovery
 from quizzes.services.practice_results import (
     exam_history_items,
     exam_result_payload,
     exam_status_payload,
     question_snapshot,
+    validate_practice_card,
+    versioned_question_snapshot,
 )
 from quizzes.services.task_dispatcher import dispatch_exam_grading
 from users.views import IsMember
@@ -34,18 +39,20 @@ class SubmitExamView(APIView):
         task_id = request.data.get('learning_task_id')
         assistance = serializers.ChoiceField(choices=['independent', 'hint', 'guided', 'unknown']).run_validation(
             request.data.get('assistance', 'unknown'))
+        questions = None
+        requested_task = None
         if task_id:
             task_id = serializers.UUIDField().run_validation(task_id)
             if not submission_id:
                 raise serializers.ValidationError('学习任务必须提供原始提交编号。')
             from ai_assistant.models import ProjectLearningTask
-            from ai_assistant.services.learning_tasks import personal_answers
             requested_task = get_object_or_404(ProjectLearningTask, pk=task_id, project__user=request.user)
-            if requested_task.definition:
-                questions_data = personal_answers(questions_data)
-                questions = {}
-            else:
-                questions = validate_exam_answers(request.user, questions_data, request=request)
+        if requested_task and requested_task.definition:
+            from ai_assistant.services.learning_tasks import personal_answers
+            questions_data = personal_answers(questions_data)
+        elif submission_id:
+            # A saved receipt depends on the original answers, not the current question bank.
+            exam_answer_question_ids(questions_data)
         else:
             questions = validate_exam_answers(request.user, questions_data, request=request)
         answers_hash = hashlib.sha256(json.dumps({
@@ -57,34 +64,54 @@ class SubmitExamView(APIView):
 
         with transaction.atomic():
             task = None
+            prepared = None
             if submission_id:
                 request.user.__class__.objects.select_for_update().get(pk=request.user.pk)
                 from ai_assistant.models import ProjectLearningTask
                 from ai_assistant.services.learning_tasks import validate_task_submission
                 if task_id:
                     task, questions = validate_task_submission(request.user, task_id, submission_id,
-                                                               questions_data, assistance)
+                                                               questions_data, assistance, request=request)
                 elif ProjectLearningTask.objects.filter(pk=submission_id).exists():
                     raise serializers.ValidationError('请从原学习任务提交。')
                 prior = PracticeSubmission.objects.filter(session_id=submission_id).first()
                 if prior:
-                    if prior.user_id != request.user.pk or prior.answers_hash != answers_hash:
+                    if prior.user_id != request.user.pk:
                         return Response({'error': '这组练习已提交，不能更换答案。'}, status=409)
-                    if task and task.exam_id != prior.response.get('exam_id'):
-                        return Response({'error': '已有提交不能关联到另一个学习任务。'}, status=409)
-                    return Response(prior.response, status=202)
+                    binding = prior.response.get('ulr_practice') if isinstance(prior.response, dict) else None
+                    if binding:
+                        if task:
+                            raise serializers.ValidationError('请从原练习卡提交。')
+                        prepared = prior
+                        questions = validate_practice_card(request.user, binding, questions_data, request)
+                    else:
+                        if prior.answers_hash != answers_hash:
+                            return Response({'error': '这组练习已提交，不能更换答案。'}, status=409)
+                        if task and task.exam_id != prior.response.get('exam_id'):
+                            return Response({'error': '已有提交不能关联到另一个学习任务。'}, status=409)
+                        return Response(prior.response, status=202)
                 if task and task.exam_id:
                     return Response({'error': '学习任务已经提交。'}, status=409)
+            if questions is None:
+                questions = validate_exam_answers(request.user, questions_data, request=request, lock=ulr_enabled())
             from ai_assistant.services.language import request_language
             exam = QuizExam.objects.create(
                 ui_language=request_language(request),
                 user=request.user,
                 status='pending',
+                grading_queued_at=timezone.now(),
+                requires_ulr=bool(prepared) or ulr_enabled(),
                 total_questions=len(questions_data),
             )
             results = []
             for position, item in enumerate(questions_data, start=1):
                 question = questions[int(item['question_id'])]
+                if task:
+                    snapshot = task.question_snapshot[str(item['question_id'])]
+                elif exam.requires_ulr:
+                    snapshot = versioned_question_snapshot(question, practice_card=bool(prepared))
+                else:
+                    snapshot = question_snapshot(question) | {'rubric': question.rubric}
                 results.append(ExamQuestionResult(
                     exam=exam,
                     question=question if question.pk else None,
@@ -93,11 +120,15 @@ class SubmitExamView(APIView):
                     score=0,
                     max_score=question.get_max_score(),
                     status='pending',
-                    question_snapshot=task.question_snapshot[str(item['question_id'])] if task else question_snapshot(question),
+                    question_snapshot=snapshot,
                 ))
             ExamQuestionResult.objects.bulk_create(results)
             response = {'status': 'processing', 'exam_id': exam.id, 'total_questions': len(questions_data)}
-            if submission_id:
+            if prepared:
+                prepared.answers_hash = answers_hash
+                prepared.response = response
+                prepared.save(update_fields=['answers_hash', 'response'])
+            elif submission_id:
                 PracticeSubmission.objects.create(user=request.user, session_id=submission_id,
                     answers_hash=answers_hash, response=response)
             if task:
@@ -105,7 +136,7 @@ class SubmitExamView(APIView):
                 task.assistance = assistance
                 task.save(update_fields=['exam', 'assistance'])
             transaction.on_commit(
-                lambda: dispatch_exam_grading(request.user.id, exam.id, questions_data)
+                lambda: dispatch_exam_grading(request.user.id, exam.id)
             )
 
         record_event('quiz_attempt', user=request.user, properties={
@@ -159,12 +190,17 @@ class ExamListView(APIView):
 class ExamRetryView(APIView):
     permission_classes = [IsMember]
 
+    @transaction.atomic
     def post(self, request, pk):
-        exam = get_object_or_404(QuizExam, pk=pk, user=request.user)
+        exam = get_object_or_404(QuizExam.objects.select_for_update(), pk=pk, user=request.user)
         if exam.status in ('pending', 'grading'):
-            return Response(exam_status_payload(exam))
+            if not can_resume_grading(exam) or not lock_grading_for_recovery(exam):
+                return Response(exam_status_payload(exam))
+            # Continue the interrupted attempt, preserving both settled and explicitly failed results.
+            return self._enqueue(exam)
 
-        failed = exam.results.filter(status='failed')
+        ulr_terminal = exam.requires_ulr and exam.status in ('failed', 'partial')
+        retryable = exam.results.filter(status='failed')
         question_id = request.data.get('question_id')
         if question_id not in (None, ''):
             try:
@@ -172,26 +208,30 @@ class ExamRetryView(APIView):
             except (TypeError, ValueError):
                 return Response({'error': '题目 ID 无效'}, status=400)
             task = getattr(exam, 'learning_task', None)
-            failed = failed.filter(question__isnull=True) if question_id == 0 and task and task.definition else failed.filter(question_id=question_id)
+            retryable = (retryable.filter(question__isnull=True) if question_id == 0 and task and task.definition
+                         else retryable.filter(question_id=question_id))
+        elif ulr_terminal:
+            retryable = exam.results.filter(status__in=('failed', 'pending'))
 
-        failed_items = list(failed.select_related('question'))
-        if not failed_items:
+        if ulr_terminal and not exam_submission_complete(exam.total_questions, exam.results.count()):
+            return Response(exam_status_payload(exam))
+        if not retryable.exists():
             return Response(exam_status_payload(exam))
 
-        task = getattr(exam, 'learning_task', None)
-        retry_data = [
-            {'question_id': item.question_id if item.question_id is not None else 0, 'answer': item.user_answer or ''}
-            for item in failed_items if item.question_id is not None or (task and task.definition)
-        ]
-        with transaction.atomic():
-            failed.update(status='pending', error_metadata={}, graded_at=None)
-            exam.status = 'grading'
-            exam.last_error = ''
-            exam.grading_completed_at = None
-            exam.notified_at = None
-            exam.save(update_fields=['status', 'last_error', 'grading_completed_at', 'notified_at'])
-            transaction.on_commit(
-                lambda: dispatch_exam_grading(request.user.id, exam.id, retry_data)
-            )
+        retryable.filter(status='failed').update(status='pending', error_metadata={}, graded_at=None)
+        return self._enqueue(exam)
+
+    @staticmethod
+    def _enqueue(exam):
+        exam.status = 'grading'
+        exam.grading_queued_at = timezone.now()
+        exam.started_at = None
+        exam.last_error = ''
+        exam.grading_completed_at = None
+        exam.notified_at = None
+        exam.save(update_fields=['status', 'grading_queued_at', 'started_at', 'last_error', 'grading_completed_at', 'notified_at'])
+        transaction.on_commit(
+            lambda: dispatch_exam_grading(exam.user_id, exam.id)
+        )
 
         return Response(exam_status_payload(exam), status=202)

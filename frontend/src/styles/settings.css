@@ -8,8 +8,8 @@
 .um-settings-search > button { display: flex; flex-shrink: 0; color: var(--um-color-text-muted); }
 .um-settings-search:focus-within { box-shadow: var(--um-focus-shadow); }
 .um-settings-nav-label { margin: 18px 8px 6px; color: var(--um-color-text-muted); font-size: 12px; }
-.um-settings-sidebar nav { display: grid; gap: 8px; }
-.um-settings-sidebar nav button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px; padding: 8px 10px; border-radius: 8px; color: var(--um-color-text-muted); text-align: left; transition: background-color 150ms, color 150ms; cursor: pointer; }
+.um-settings-sidebar nav { display: grid; gap: 4px; }
+.um-settings-sidebar nav button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 32px; padding: 5px 10px; border-radius: 8px; color: var(--um-color-text-muted); text-align: left; transition: background-color 150ms, color 150ms; cursor: pointer; }
 .um-settings-sidebar nav button:hover { background: var(--um-color-hover); color: var(--um-color-text); }
 .um-settings-sidebar nav button[aria-current='page'] { background: var(--um-color-hover); color: var(--um-color-text); font-weight: var(--um-weight-medium); }
 .um-settings-sidebar svg { flex-shrink: 0; }
@@ -412,3 +412,28 @@
 
 .um-settings-server { flex-wrap: wrap; }
 .um-settings-server p { min-width: 0; overflow-wrap: anywhere; }
+.um-mcp-first-title { margin-top: 0; }
+.um-mcp-presets-row { flex-direction: column; align-items: stretch; gap: 12px; }
+.um-mcp-presets-row > div:first-child { flex: none; }
+.um-mcp-presets { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+.um-mcp-presets button { height: 32px; padding-inline: 12px; }
+.um-settings-row .um-mcp-select { width: min(42%, 300px); flex-shrink: 0; }
+.um-mcp-submit-row { justify-content: flex-end; }
+.um-mcp-error { margin-top: 10px; }
+.um-mcp-server-row { flex-wrap: wrap; gap: 14px 24px; }
+.um-mcp-server-url { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.um-mcp-server-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; flex-shrink: 0; }
+.um-mcp-token-dialog { max-width: 540px; }
+.um-mcp-token-body { display: grid; gap: 16px; margin-top: 8px; }
+.um-mcp-token-field { display: grid; gap: 8px; }
+.um-mcp-token-field label { font-size: 13px; font-weight: var(--um-weight-medium); color: var(--um-color-text); }
+.um-mcp-copy-row { display: flex; align-items: center; gap: 8px; }
+.um-mcp-copy-row input { flex: 1; min-width: 0; font-size: 12px; }
+.um-mcp-copy-row button { flex-shrink: 0; gap: 6px; }
+
+@media (max-width: 767px) {
+  .um-settings-row .um-mcp-select { width: 100%; max-width: 100%; }
+  .um-mcp-presets button { min-height: 32px; height: 32px; }
+  .um-mcp-submit-row button { width: 100%; }
+  .um-mcp-server-actions { width: 100%; justify-content: flex-end; }
+}

@@ -1,6 +1,11 @@
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from threading import Event
+from time import monotonic, sleep
 from unittest.mock import patch
+import pytest
+from django.db import connection, transaction
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -11,7 +16,7 @@ from ai_assistant.services.dsh_service import build_context, execute_tool, memor
 from ai_assistant.services.learning_resources import find_resources, public_text
 from ai_assistant.tasks_learning import send_project_learning_followups
 from notifications.models import Notification
-from users.models import User, CourseStudentStatus
+from users.models import AIUsageReservation, User, CourseStudentStatus
 
 
 @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}},
@@ -139,6 +144,77 @@ class ProjectLearningSmoke(APITestCase):
         self.assertIsNone(ProjectLearning.objects.get(pk=self.state.pk).followup_at)
         self.assertEqual(send_project_learning_followups()['sent'], 0)
 
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr')
+    def test_switch_requires_successful_reply_for_old_model_plan_and_reminder(self):
+        CourseStudentStatus.objects.create(user=self.user, is_course_student=True)
+        self.make_plan()
+        request_id = uuid.uuid4()
+        self.message.metadata = {'runtime_request_id': str(request_id)}
+        self.message.save(update_fields=['metadata'])
+        receipt = AIUsageReservation.objects.create(user=self.user, request_id=request_id, attempt_id=uuid.uuid4(),
+            week=timezone.now().date(), status='released', response={'done': True, 'is_error': True})
+        with override_settings(UNIMIND_LEARNING_RUNTIME='legacy', UNIMIND_ULR_PROTOTYPE=False):
+            proposed = change_learning(self.project, {'action': 'plan', 'revision': 1,
+                'plan': {**self.plan, 'goal': '旧模型提出的新目标'}, 'require_confirmation': True},
+                model=True, message=self.message)
+        self.assertTrue(proposed['pending_plan'])
+        self.assertFalse(self.client.get(self.url).data['pending_plan'])
+        response = self.client.patch(self.url, {'action': 'accept', 'revision': 2}, format='json')
+        self.assertEqual(response.status_code, 409)
+        receipt.response = {}
+        receipt.save(update_fields=['response'])
+        ProjectLearning.objects.filter(pk=self.state.pk).update(reminders_enabled=True)
+        change_learning(self.project, {'action': 'schedule', 'revision': 2, 'followup_text': '失败答复留下的提醒'},
+                        model=True, message=self.message)
+        ProjectLearning.objects.filter(pk=self.state.pk).update(followup_at=timezone.now())
+        self.assertEqual(send_project_learning_followups()['sent'], 0)
+        self.assertFalse(Notification.objects.filter(recipient=self.user).exists())
+
+        for response in ({'engine': 'dsh', 'deleted': True}, {'engine': 'dsh', 'done': True, 'message_id': 0}, None):
+            if response is None:
+                receipt.delete()
+            else:
+                receipt.status, receipt.response = 'succeeded', response
+                receipt.save(update_fields=['status', 'response'])
+            ProjectLearning.objects.filter(pk=self.state.pk).update(followup_at=timezone.now(), followup_text='待核对的旧提醒')
+            self.assertEqual(send_project_learning_followups()['sent'], 0)
+            self.assertFalse(Notification.objects.filter(recipient=self.user).exists())
+            self.assertFalse(self.project.learning_events.filter(kind='followup').exists())
+            self.state.refresh_from_db()
+            self.assertIsNone(self.state.followup_at)
+
+    @override_settings(UNIMIND_LEARNING_RUNTIME='ulr')
+    def test_switch_hides_a_pending_legacy_proposal_until_its_reply_succeeds(self):
+        self.make_plan()
+        request_id = uuid.uuid4()
+        self.message.metadata = {'runtime_request_id': str(request_id)}
+        self.message.save(update_fields=['metadata'])
+        receipt = AIUsageReservation.objects.create(user=self.user, request_id=request_id, attempt_id=uuid.uuid4(),
+            week=timezone.now().date(), status='pending')
+        goal = '旧模型正在准备的新目标'
+        with override_settings(UNIMIND_LEARNING_RUNTIME='legacy', UNIMIND_ULR_PROTOTYPE=False):
+            proposed = change_learning(self.project, {'action': 'plan', 'revision': 1,
+                'plan': {**self.plan, 'goal': goal}, 'require_confirmation': True}, model=True, message=self.message)
+        event_id = proposed['events'][0]['id']
+        current = self.client.get(self.url).data
+        self.assertEqual(current['plan']['goal'], self.plan['goal'])
+        self.assertEqual(current['pending_plan'], {})
+        self.assertNotIn(event_id, [event['id'] for event in current['events']])
+        for action in ('accept', 'reject'):
+            self.assertEqual(self.client.patch(self.url, {'action': action, 'revision': 2}, format='json').status_code, 409)
+        receipt.status, receipt.response = 'succeeded', {'engine': 'ulr', 'metadata': {
+            'ulr_plan': {'pending_plan': True, 'event_id': event_id + 1}}}
+        receipt.save(update_fields=['status', 'response'])
+        self.assertEqual(self.client.get(self.url).data['pending_plan'], {})
+        receipt.status, receipt.response = 'succeeded', {'engine': 'dsh', 'done': True}
+        receipt.save(update_fields=['status', 'response'])
+        current = self.client.get(self.url).data
+        self.assertEqual(current['pending_plan']['plan']['goal'], goal)
+        self.assertIn(event_id, [event['id'] for event in current['events']])
+        accepted = self.client.patch(self.url, {'action': 'accept', 'revision': 2}, format='json')
+        self.assertEqual(accepted.status_code, 200, accepted.data)
+        self.assertEqual(accepted.data['plan']['goal'], goal)
+
     def test_sources_must_be_read_and_private_hosts_are_blocked(self):
         bad = {**self.plan, 'stages': [{**self.plan['stages'][0], 'sources': ['invented']}]}
         with self.assertRaises(ValidationError):
@@ -245,3 +321,64 @@ class ProjectLearningSmoke(APITestCase):
         with self.assertRaises(LearningConflict):
             change_learning(self.project, {'action': 'plan', 'revision': 2, 'plan': self.plan}, message=newer, model=True)
         self.assertEqual(ProjectLearning.objects.get(pk=self.state.pk).status, 'paused')
+
+
+@pytest.mark.django_db(transaction=True)
+def test_followup_yields_to_concurrent_project_turn(auth_client, user, settings):
+    if connection.vendor != 'postgresql':
+        pytest.skip('Requires PostgreSQL row locks.')
+    settings.UNIMIND_LEARNING_RUNTIME = 'ulr'
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    bot, _ = Bot.objects.get_or_create(is_xiaoyu=True, defaults={'name': '小宇', 'bot_type': 'planner'})
+    project = ConversationProject.objects.create(user=user, name='合成并发提醒')
+    conversation = Conversation.objects.create(user=user, bot=bot, project=project, conversation_id=uuid.uuid4())
+    state = ProjectLearning.objects.create(project=project, last_conversation=conversation, status='active',
+        planning_enabled=True, reminders_enabled=True, followup_at=timezone.now(), followup_text='复习折现率。',
+        current_stage='discount', next_action='复习折现率。', plan={'goal': '复习折现率', 'stages': [
+            {'id': 'discount', 'title': '折现率', 'task': '复习折现率。', 'outcome': '解释折现率'}]})
+    ready = Event()
+    worker_pid = None
+
+    def deliver():
+        nonlocal worker_pid
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute('SELECT pg_backend_pid()')
+                worker_pid, = cursor.fetchone()
+            ready.set()
+            return send_project_learning_followups()
+        finally:
+            connection.close()
+
+    url = f'/api/ai/projects/{project.pk}/learning/'
+    with ThreadPoolExecutor(max_workers=1) as worker:
+        with transaction.atomic(), connection.cursor() as cursor:
+            # XiaoYu holds the conversation row before it writes a project change.
+            Conversation.objects.select_for_update().get(pk=conversation.pk)
+            delivery = worker.submit(deliver)
+            assert ready.wait(timeout=10)
+            deadline = monotonic() + 5
+            while not delivery.done() and monotonic() < deadline:
+                cursor.execute('SELECT pg_backend_pid() = ANY(pg_blocking_pids(%s))', [worker_pid])
+                if cursor.fetchone()[0]:
+                    break
+                sleep(0.02)
+            else:
+                pytest.fail('The reminder worker did not wait for the conversation.')
+            paused = auth_client.patch(url, {'action': 'pause', 'revision': state.revision}, format='json')
+            assert paused.status_code == 200, paused.data
+        assert delivery.result(timeout=10) == {'sent': 0}
+
+    state.refresh_from_db()
+    assert state.status == 'paused' and state.followup_at is None
+    assert not Notification.objects.filter(recipient=user, ntype='learning_followup').exists()
+    assert not project.learning_events.filter(kind='followup').exists()
+    assert not AIChatMessage.objects.filter(conversation_id=conversation.conversation_id).exists()
+    resumed = auth_client.patch(url, {'action': 'resume', 'revision': state.revision}, format='json')
+    assert resumed.status_code == 200, resumed.data
+    ProjectLearning.objects.filter(pk=state.pk).update(followup_at=timezone.now())
+    assert send_project_learning_followups() == {'sent': 1}
+    assert send_project_learning_followups() == {'sent': 0}
+    assert Notification.objects.filter(recipient=user, ntype='learning_followup').count() == 1
+    assert project.learning_events.filter(kind='followup').count() == 1
+    assert AIChatMessage.objects.filter(conversation_id=conversation.conversation_id, role='assistant').count() == 1

@@ -2,10 +2,13 @@ import json
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from knowledge_builder import models, serializers
+from knowledge_builder.build_state import BUILD_RECOVERY_DELAY
 
 pytestmark = pytest.mark.django_db
 
@@ -29,6 +32,9 @@ def test_serializers_explicit_fields():
         serializers.AttachBlockResourceSerializer, serializers.BlockQuizRequestSerializer,
         serializers.BlockResourceInputSerializer, serializers.BlockResourceUpdateSerializer,
         serializers.PublicAssetCatalogSerializer, serializers.TreePublicAssetImportSerializer,
+        serializers.SourceAlignmentSerializer, serializers.TreeSourceDocumentSerializer,
+        serializers.CreateTreeSourceSerializer, serializers.SourceAlignmentUpdateSerializer,
+        serializers.AtomMicroLessonSerializer, serializers.AtomMicroLessonRequestSerializer,
     ):
         assert isinstance(serializer.Meta.fields, tuple)
         assert set(serializer().fields) == set(serializer.Meta.fields)
@@ -65,9 +71,48 @@ def test_requires_authentication():
 @override_settings(ROOT_URLCONF='knowledge_builder.urls')
 def test_owner_only(client):
     other = get_user_model().objects.create_user(username='other', email='other@example.com')
-    build = models.KnowledgeTreeBuild.objects.create(subject='主题', created_by=other)
+    build = models.KnowledgeTreeBuild.objects.create(subject='主题', created_by=other, status='FAILED', requires_ulr=True)
     assert client.get(f'/{build.pk}/').status_code == 404
     assert client.get(f'/{build.pk}/status/').status_code == 404
+    assert client.post(f'/{build.pk}/resume/').status_code == 404
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_LEARNING_RUNTIME='ulr')
+@pytest.mark.parametrize('state, pinned', [('PENDING', True), ('RUNNING', True), ('PENDING', False), ('RUNNING', False)])
+def test_only_expired_build_safe_for_ulr_can_be_requeued(client, user, monkeypatch, state, pinned):
+    build = models.KnowledgeTreeBuild.objects.create(subject='主题', status=state, requires_ulr=pinned, created_by=user)
+    status_url, resume_url = f'/{build.pk}/status/', f'/{build.pk}/resume/'
+    submissions = []
+    monkeypatch.setattr('knowledge_builder.views.build_knowledge_tree.delay', submissions.append)
+    assert not client.get(status_url).data['can_resume']
+    assert client.post(resume_url).status_code == 409
+
+    models.KnowledgeTreeBuild.objects.filter(pk=build.pk).update(updated_at=timezone.now() - BUILD_RECOVERY_DELAY)
+    supported = connection.vendor == 'postgresql' and (pinned or state == 'PENDING')
+    assert client.get(status_url).data['can_resume'] is supported
+    resumed = client.post(resume_url)
+    assert resumed.status_code == (202 if supported else 409)
+    assert submissions == ([str(build.pk)] if supported else [])
+    if supported:
+        assert resumed.data['id'] == str(build.pk) and resumed.data['status'] == 'PENDING'
+        assert not resumed.data['can_resume'] and client.post(resume_url).status_code == 409
+
+
+@override_settings(ROOT_URLCONF='knowledge_builder.urls', UNIMIND_ULR_PROTOTYPE=False)
+def test_ulr_can_requeue_an_original_failed_legacy_build(client, user, monkeypatch):
+    build = models.KnowledgeTreeBuild.objects.create(
+        subject='主题', status='FAILED', requirements={'learning_goal': '沿用原要求'}, created_by=user,
+    )
+    status_url, resume_url = f'/{build.pk}/status/', f'/{build.pk}/resume/'
+    submissions = []
+    monkeypatch.setattr('knowledge_builder.views.build_knowledge_tree.delay', submissions.append)
+    with override_settings(UNIMIND_LEARNING_RUNTIME='legacy'):
+        assert not client.get(status_url).data['can_resume'] and client.post(resume_url).status_code == 409
+    with override_settings(UNIMIND_LEARNING_RUNTIME='ulr'):
+        assert client.get(status_url).data['can_resume']
+        assert client.post(resume_url).status_code == 202 and submissions == [str(build.pk)]
+    build.refresh_from_db()
+    assert build.requires_ulr and build.status == 'PENDING' and build.requirements['learning_goal'] == '沿用原要求'
 
 
 @override_settings(ROOT_URLCONF='knowledge_builder.urls')
@@ -705,7 +750,7 @@ def test_ensure_project_activates_whole_tree_and_immediately_generates_quiz(
     monkeypatch.setattr('users.feature_access.has_learning_feature', lambda *args: True)
     monkeypatch.setattr('ai_assistant.services.learning_tasks.has_learning_feature', lambda *args: True)
     monkeypatch.setattr('knowledge_builder.tasks.prepare_block_assessment.delay', prepare_block_assessment)
-    def generate(row, block, q_type, seen, source_context=''):
+    def generate(row, block, q_type, seen, source_context='', *, before_retry=None):
         return dict(stem=f'{row.atom.name}如何影响现值？', q_type=q_type,
                     options={'A': '改变现值', 'B': '始终不变'}, correct_answer='A',
                     grading_points='分析时间价值', subjective_type='short', question_id=None)

@@ -85,12 +85,12 @@ export function DesktopLogin() {
   const status = error || auth.error || (!supported ? t('请安装最新客户端，以使用浏览器登录。')
     : waiting ? t('浏览器已打开。登录完成后，会自动回到这里。') : '');
 
-  return <AuthLayout title={t('登录 UniMind.ai')}>
+  return <AuthLayout className="um-auth-login" title={t('欢迎回来')}>
     <Button className="um-auth-submit" disabled={!supported || busy} onClick={() => void start()}>
       {busy ? <><Spinner size={18} className="animate-spin" aria-hidden="true" />{t('正在打开浏览器')}</>
         : <>{waiting ? t('重新打开浏览器') : t('通过浏览器登录')}<ArrowUpRight size={18} aria-hidden="true" /></>}
     </Button>
-    {status && <p className="mt-4 text-sm text-center text-muted-foreground" role={error || auth.error ? 'alert' : 'status'}>{status}</p>}
-    {(waiting || auth.status === 'error') && <Button variant="ghost" className="w-full mt-3" disabled={actionPending} onClick={() => void cancel()}>{waiting ? t('取消登录') : t('返回登录')}</Button>}
+    {status && <p className="um-auth-status mt-4" role={error || auth.error ? 'alert' : 'status'}>{status}</p>}
+    {(waiting || auth.status === 'error') && <Button variant="ghost" className="um-auth-secondary mt-3" disabled={actionPending} onClick={() => void cancel()}>{waiting ? t('取消登录') : t('返回登录')}</Button>}
   </AuthLayout>;
 }

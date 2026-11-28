@@ -44,7 +44,9 @@ def serve_spa(request, path):
     meta_html = _build_meta_html(_DEFAULT_META)
     html = re.sub(r'^\s*<title>.*?</title>\s*$', meta_html, html, flags=re.MULTILINE)
 
-    return HttpResponse(html, content_type='text/html')
+    response = HttpResponse(html, content_type='text/html')
+    response.allow_blob_frames = True  # Inline preview of PDFs fetched through the authenticated client.
+    return response
 
 def health_check(request):
     """K8s / load balancer readiness probe."""
@@ -94,6 +96,18 @@ if _APP_ON('articles'):
     urlpatterns.append(path("api/articles/", include("articles.urls")))
 if _APP_ON('ai_assistant'):
     urlpatterns.append(path("api/ai/", include("ai_assistant.urls")))
+    from ai_assistant import views_learning_memory_oauth
+    urlpatterns.extend([
+        path(".well-known/oauth-protected-resource/api/ai/learning-memory/mcp/",
+             views_learning_memory_oauth.resource_metadata, name="learning-memory-oauth-resource"),
+        path(".well-known/oauth-authorization-server",
+             views_learning_memory_oauth.server_metadata, name="learning-memory-oauth-metadata"),
+        path("api/ai/learning-memory/oauth/authorize/",
+             views_learning_memory_oauth.authorize, name="learning-memory-oauth-authorize"),
+        path("api/ai/learning-memory/oauth/token/", views_learning_memory_oauth.token, name="learning-memory-oauth-token"),
+        path("api/ai/learning-memory/oauth/register/",
+             views_learning_memory_oauth.register_client, name="learning-memory-oauth-register"),
+    ])
 if _APP_ON('notes'):
     urlpatterns.append(path("api/notes/", include("notes.urls")))
 if _APP_ON('notifications'):

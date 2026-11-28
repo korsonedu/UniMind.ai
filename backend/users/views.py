@@ -1005,7 +1005,10 @@ class AccountDeleteView(APIView):
 
                 # 3. 匿名化关联数据
                 # AI 对话历史
-                from ai_assistant.models import AIChatMessage, AgentMemory, ActionCardInteraction
+                from ai_assistant.models import AIChatMessage, AgentMemory, ActionCardInteraction, PrismMemory, TaskMemoryState, TaskMemoryObject
+                TaskMemoryState.objects.filter(owner=user).delete()
+                TaskMemoryObject.objects.filter(owner=user).delete()
+                PrismMemory.objects.filter(owner=user).delete()
                 AIChatMessage.objects.filter(user=user).delete()
                 AgentMemory.objects.filter(user=user).delete()
                 ActionCardInteraction.objects.filter(user=user).delete()

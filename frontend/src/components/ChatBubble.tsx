@@ -1,7 +1,7 @@
 import { ProtectedImage } from '@/components/ProtectedImage';
 import { t, useLocale } from '@/i18n';
 import { NoteAttachments } from '@/pages/notes/NoteMentions';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useContext, useMemo } from 'react';
 import { Sparkle, ThumbsUp, ThumbsDown } from '@phosphor-icons/react';
 import type { Components } from 'react-markdown';
 import { MarkdownContent } from '@/components/MarkdownContent';
@@ -9,6 +9,11 @@ import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { NoteSources } from '@/pages/notes/NoteSources';
 import { useSystemStore } from '@/store/useSystemStore';
+import type { WorkbenchCitation } from '@/types/workbench';
+import { CitationPill } from './workbench/CitationPill';
+import { WorkbenchCitationContext, stripStreamingCitations, workbenchCitationMarkdown } from './workbench/workbenchCitations';
+
+const noCitations: WorkbenchCitation[] = [];
 
 function StreamingText({ content }: { content: string }) {
   const reduceMotion = useSystemStore(state => state.reduceMotion);
@@ -84,6 +89,13 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
     }
   }, [msg.id, feedback]);
 
+  const workbenchContext = useContext(WorkbenchCitationContext);
+  const workbench = isUser || isThinking ? null : workbenchContext;
+  const citations = Array.isArray(msg.metadata?.workbench_citations) ? msg.metadata.workbench_citations as WorkbenchCitation[] : noCitations;
+  const citedMarkdown = useMemo(() => workbench && !streaming
+    ? workbenchCitationMarkdown(citations, workbench, markdownComponents)
+    : undefined, [workbench, citations, streaming, markdownComponents]);
+
   const showFeedback = !isUser && !isThinking && msg.content && msg.id;
 
   return (
@@ -134,14 +146,18 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
               "prose-[.katex-display]:my-2 prose-[.katex-display]:overflow-x-auto",
             )}>
               {streaming ? (
-                <StreamingText content={msg.content} />
-              ) : <MarkdownContent content={msg.content} components={markdownComponents} />}
+                <StreamingText content={workbench ? stripStreamingCitations(msg.content) : msg.content} />
+              ) : <MarkdownContent content={msg.content} components={markdownComponents} {...citedMarkdown} />}
             </div>
           )}
         </div>
 
         {isUser && <NoteAttachments attachments={msg.metadata?.note_attachments} />}
       {!isUser && !isThinking && <NoteSources sources={msg.metadata?.note_sources} content={msg.content} />}
+        {workbench && citations.length > 0 && <details className="um-wb-citations">
+          <summary>{t('引用来源 ({0})', { 0: citations.length })}</summary>
+          <div>{citations.map(citation => <CitationPill key={citation.cite_key} citation={citation} {...workbench} />)}</div>
+        </details>}
 
         {/* Feedback row — 始终占位，hover 时显示，避免 layout shift */}
         <div className={cn(

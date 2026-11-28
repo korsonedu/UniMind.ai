@@ -12,4 +12,5 @@ READ_ONLY_TOOLS = frozenset({
     'check_pipeline_status', 'get_workbench_stats', 'get_student_detail',
     'list_courses', 'list_questions', 'list_articles',
     'search_similar_questions',
+    'search_workbench_sources', 'read_workbench_source_chunks',
 })

@@ -157,13 +157,14 @@ export const MainLayout: React.FC = () => {
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [pendingTourDismiss, setPendingTourDismiss] = useState(false);
+  const isPersonalVideo = activeWorkspace() === 'personal' && /^\/course\/\d+/.test(location.pathname);
   const isMobileImmersivePage = isMobile && ((location.pathname.startsWith('/tests/session') && hasFeature('quiz.exam')) || (location.pathname.startsWith('/xiaoyu/practice') && hasFeature('ai.assistant')));
   const hasWorkspaceToolbar = ['/xiaoyu', '/courses', '/notes'].includes(location.pathname) || location.pathname.startsWith('/notes/') || /^\/course\/\d+/.test(location.pathname) || isMobileImmersivePage;
-  const isIntegratedWorkspace = location.pathname.startsWith('/settings') || location.pathname === '/notes' || location.pathname.startsWith('/notes/')
+  const isIntegratedWorkspace = isPersonalVideo || location.pathname.startsWith('/settings') || location.pathname === '/notes' || location.pathname.startsWith('/notes/')
     || (location.pathname === '/xiaoyu' && hasFeature('ai.assistant'))
     || ((location.pathname === '/xiaoyu/knowledge-builder' || location.pathname.startsWith('/xiaoyu/knowledge-builder/')) && hasFeature('ai.assistant'))
     || ((location.pathname === '/courses' || /^\/course\/\d+/.test(location.pathname)) && hasFeature('course.video'));
-  const isMobileVideoPage = isMobile && location.pathname.startsWith('/course/') && hasFeature('course.video');
+  const isMobileVideoPage = isMobile && (isPersonalVideo || (location.pathname.startsWith('/course/') && hasFeature('course.video')));
   const isMobilePracticeCanvas = isMobile && (
     location.pathname === '/tests'
     || (location.pathname.startsWith('/tests/') && !location.pathname.startsWith('/tests/session'))

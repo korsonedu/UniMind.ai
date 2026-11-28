@@ -1,8 +1,60 @@
-"""Read models shared by exam result, status, history and the XiaoYu tool."""
+"""Practice card bindings and read models for exam results and history."""
+
+import hashlib
+import json
 
 from django.db.models import Count, Q, Sum
+from rest_framework.exceptions import APIException, ValidationError
 
-from quizzes.models import ExamQuestionResult, QuizExam
+from quizzes.models import ExamQuestionResult, PracticeSubmission, QuizExam
+from quizzes.services.exam_grading_state import can_resume_grading
+
+
+_GRADING_FIELDS = ('text', 'options', 'q_type', 'subjective_type', 'correct_answer', 'grading_points', 'kp_id')
+
+
+def _practice_fingerprint(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+
+def _practice_display_fingerprint(rows):
+    return _practice_fingerprint([[row['id'], row['text'] or '', row['q_type'], row['subjective_type'] or '',
+                                   row['options'] or []] for row in rows])
+
+
+def prepare_practice_card(reservation, question_points, current_questions, payload):
+    questions = payload['questions']
+    question_ids = [row['id'] for row in questions]
+    display = _practice_display_fingerprint(questions)
+    if _practice_display_fingerprint(current_questions[pk] for pk in question_ids) != display:
+        error = APIException('练习题已更新，请重新准备。', code='practice_changed')
+        error.status_code = 409
+        raise error
+    PracticeSubmission.objects.create(user_id=reservation.user_id, session_id=payload['practice_id'], answers_hash='',
+        response={'ulr_practice': {'source': reservation.pk, 'question_ids': question_ids,
+            'question_points': [question_points[pk] for pk in question_ids], 'display': display}})
+
+
+def validate_practice_card(user, binding, answers, request):
+    from ai_assistant.services.ulr_capabilities import require_visible_practice_sources
+    from quizzes.ai_workflow import validate_exam_answers
+    from users.models import AIUsageReservation
+
+    source = AIUsageReservation.objects.select_for_update().filter(pk=binding['source'], user=user, status='succeeded').first()
+    if not source or source.response.get('engine') != 'ulr' or source.response.get('deleted'):
+        raise ValidationError('原练习卡已失效，请重新准备。')
+    question_ids = binding['question_ids']
+    if [int(row['question_id']) for row in answers] != question_ids or any(not (row.get('answer') or '').strip() for row in answers):
+        raise ValidationError('请按原练习卡提交全部题目的答案。')
+    questions = validate_exam_answers(user, answers, request=request, lock=True)
+    points = binding.get('question_points')
+    if points is None:
+        points = [binding['point_id']] * len(question_ids)
+    require_visible_practice_sources(user, dict(zip(question_ids, points, strict=True)))
+    rows = [{'id': question_id, **question_snapshot(questions[question_id])} for question_id in question_ids]
+    if _practice_display_fingerprint(rows) != binding['display']:
+        raise ValidationError('练习题已更新，请重新准备。')
+    return questions
 
 
 def question_snapshot(question) -> dict:
@@ -21,6 +73,77 @@ def question_snapshot(question) -> dict:
         'kp_name': knowledge_point.name if knowledge_point else '',
         'kp_code': knowledge_point.code if knowledge_point else '',
     }
+
+
+def versioned_question_snapshot(question, *, practice_card=False):
+    snapshot = question_snapshot(question)
+    grading = [snapshot[key] for key in _GRADING_FIELDS]
+    key = 'ulr_practice_version' if practice_card else 'ulr_grading_version'
+    snapshot[key] = _practice_fingerprint([grading, question.rubric])
+    return snapshot
+
+
+def validate_grading_question(question, snapshot, scope):
+    practice_card = 'ulr_practice_version' in snapshot
+    key = 'ulr_practice_version' if practice_card else 'ulr_grading_version'
+    if question.knowledge_point_id and question.knowledge_point.institution_id != scope:
+        raise ValidationError('原题或知识点已变更，请重新准备。')
+    current = versioned_question_snapshot(question, practice_card=practice_card)
+    if key in snapshot:
+        if current[key] != snapshot[key]:
+            raise ValidationError('原题或知识点已变更，请重新准备。')
+    elif (not all(field in snapshot and current[field] == snapshot[field] for field in _GRADING_FIELDS)
+            or question.q_type == 'subjective' and (question.rubric or None) != (snapshot.get('rubric') or None)):
+        raise ValidationError('旧试卷的原题评分依据已变更或无法核验。')
+    return current
+
+
+def _saved_result_analysis(snapshot, analysis):
+    if snapshot.get('q_type') == 'objective' and 'ulr_practice_version' in snapshot:
+        return snapshot.get('ai_answer') or ''
+    return analysis or snapshot.get('ai_answer') or ''
+
+
+_REVIEW_FIELDS = ('pk', 'question_id', 'exam_id', 'position', 'status', 'graded_at', 'score', 'max_score',
+                  'user_answer', 'question_snapshot', 'feedback', 'analysis')
+
+
+def _saved_grade(row):
+    snapshot = row['question_snapshot'] or {}
+    return (row['status'] == 'graded' and row['graded_at'] and 0 < row['max_score'] and 0 <= row['score'] <= row['max_score']
+            and snapshot.get('q_type') in ('objective', 'subjective') and bool(snapshot.get('text')))
+
+
+def saved_practice_review_rows(results):
+    for row in results.filter(status='graded', graded_at__isnull=False).values(*_REVIEW_FIELDS).iterator():
+        if _saved_grade(row):
+            row['analysis'] = _saved_result_analysis(row['question_snapshot'], row['analysis'])
+            yield row
+
+
+def practice_question_reviews(user, question_ids):
+    """Resolve the latest bound attempt and any outstanding card for this learner."""
+    from users.models import AIUsageReservation
+
+    if not question_ids:
+        return {}
+    cards = [card for card in PracticeSubmission.objects.filter(user=user, response__has_key='ulr_practice')
+             .values_list('response__ulr_practice', flat=True) if question_ids.intersection(card['question_ids'])]
+    sources = AIUsageReservation.objects.filter(user=user, status='succeeded', response__engine='ulr',
+        pk__in={card['source'] for card in cards}).values_list('pk', 'response__deleted')
+    active = {pk for pk, deleted in sources if not deleted}
+    reviews = {question_id: {'practice_status': 'unsubmitted'} for card in cards if card['source'] in active
+               for question_id in question_ids.intersection(card['question_ids'])}
+    results = ExamQuestionResult.objects.filter(exam__user=user, question_id__in=question_ids - reviews.keys(),
+        question_snapshot__has_key='ulr_practice_version').order_by('question_id', '-exam_id', '-pk')
+    for row in results.values(*_REVIEW_FIELDS).iterator():
+        if row['question_id'] in reviews:
+            continue
+        graded = _saved_grade(row)
+        if graded:
+            row['analysis'] = _saved_result_analysis(row['question_snapshot'], row['analysis'])
+        reviews[row['question_id']] = ({'practice_status': 'graded', **row} if graded else {'practice_status': 'awaiting_review'})
+    return reviews
 
 
 def _options_list(options):
@@ -51,7 +174,7 @@ def _knowledge_point(snapshot: dict, question):
     return None, '', ''
 
 
-def _result_payload(result: ExamQuestionResult) -> dict:
+def question_result_payload(result: ExamQuestionResult) -> dict:
     snapshot = result.question_snapshot or {}
     question = result.question
     kp_id, kp_name, kp_code = _knowledge_point(snapshot, question)
@@ -65,7 +188,7 @@ def _result_payload(result: ExamQuestionResult) -> dict:
         'options': _options_list(_snapshot_value(snapshot, question, 'options')),
         'user_answer': result.user_answer or '',
         'correct_answer': _snapshot_value(snapshot, question, 'correct_answer') if result.status == 'graded' else '',
-        'analysis': (result.analysis or snapshot.get('ai_answer') or '') if result.status == 'graded' else '',
+        'analysis': _saved_result_analysis(snapshot, result.analysis) if result.status == 'graded' else '',
         'response_type': snapshot.get('response_type', ''),
         'label_source': snapshot.get('label_source') or ('objective_answer_key' if snapshot.get('q_type') == 'objective' else 'model_rubric_grade'),
         'feedback': result.feedback or '',
@@ -126,22 +249,30 @@ def _kp_breakdown(results: list[dict]) -> list[dict]:
 
 def exam_result_payload(exam: QuizExam, include_results: bool = True) -> dict:
     results = list(exam.results.select_related('question__knowledge_point').order_by('position', 'id'))
-    payload_results = [_result_payload(result) for result in results]
+    return _exam_result_payload(exam, results, include_results)
+
+
+def _exam_result_payload(exam, results, include_results=True):
+    payload_results = [question_result_payload(result) for result in results]
     graded = [item for item in payload_results if item['status'] == 'graded']
     total_score = sum(item['score'] for item in graded)
     max_score = sum(item['max_score'] for item in graded)
     correct_count = sum(1 for item in graded if item['is_correct'])
     total_questions = exam.total_questions or len(results)
+    failed = sum(1 for item in payload_results if item['status'] == 'failed')
+    if exam.requires_ulr and exam.status in ('failed', 'partial'):
+        failed = max(failed, exam.failed_count)
     payload = {
         'kind': 'exam',
         'id': exam.id,
         'status': exam.status,
+        **({'can_resume': True} if can_resume_grading(exam) else {}),
         'created_at': exam.created_at,
         'completed_at': exam.grading_completed_at,
         'total_questions': total_questions,
         'graded_count': len(graded),
-        'failed_count': sum(1 for item in payload_results if item['status'] == 'failed'),
-        'pending_count': max(0, total_questions - len(graded) - sum(1 for item in payload_results if item['status'] == 'failed')),
+        'failed_count': failed,
+        'pending_count': max(0, total_questions - len(graded) - failed),
         'total_score': round(total_score, 1),
         'max_score': round(max_score, 1),
         'correct_rate': round(total_score / max_score * 100, 1) if max_score else 0,
@@ -165,6 +296,8 @@ def exam_status_payload(exam: QuizExam) -> dict:
     )
     graded = aggregate['graded'] or 0
     failed = aggregate['failed'] or 0
+    if exam.requires_ulr and exam.status in ('failed', 'partial'):
+        failed = max(failed, exam.failed_count)
     total_score = aggregate['score'] or 0
     max_score = aggregate['max_score'] or 0
     total_questions = exam.total_questions or exam.results.count()
@@ -183,6 +316,7 @@ def exam_status_payload(exam: QuizExam) -> dict:
         'kind': 'exam',
         'id': exam.id,
         'status': exam.status,
+        **({'can_resume': True} if can_resume_grading(exam) else {}),
         'total_questions': total_questions,
         'graded_count': graded,
         'failed_count': failed,

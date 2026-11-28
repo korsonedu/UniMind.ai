@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.db import models, router, transaction
 from django.conf import settings
+from django.utils import timezone
 import uuid
 
 from quizzes.models import KnowledgePoint
@@ -43,6 +46,7 @@ class CourseModule(models.Model):
 class Course(models.Model):
     title = models.CharField(max_length=200)
     is_published = models.BooleanField(default=False, db_index=True, verbose_name='已发布')
+    is_workbench_companion = models.BooleanField(default=False, editable=False)
     module = models.ForeignKey(CourseModule, on_delete=models.PROTECT, null=True, blank=True, related_name='courses', verbose_name='所属模块')
     album_obj = models.ForeignKey(Album, on_delete=models.SET_NULL, null=True, blank=True, related_name='courses', verbose_name="所属专辑")
     description = models.TextField(blank=True, null=True)
@@ -59,11 +63,23 @@ class Course(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(is_workbench_companion=False) | models.Q(is_published=False),
+                name='course_workbench_companion_unpublished',
+            ),
+        ]
+
     def __str__(self):
         return self.title
 
     @staticmethod
     def _delete_unused_file(storage, name, using):
+        from ai_assistant.models import WORKBENCH_SOURCE_PREFIX
+
+        if name.startswith(WORKBENCH_SOURCE_PREFIX):
+            return  # 工作台视频由 ProjectSource 管理文件生命周期。
         # 同一对象仍被任一课程字段引用时保留，避免重用同名对象后误删。
         references = models.Q()
         for field in ('video_file', 'cover_image', 'courseware', 'reference_materials'):
@@ -121,12 +137,14 @@ class Course(models.Model):
 
 
 class CourseOutline(models.Model):
+    GENERATION_LEASE = timedelta(minutes=10)
     STATUS_CHOICES = [
         ('pending', '待处理'), ('generating', '生成中'),
         ('completed', '已完成'), ('failed', '失败'),
     ]
     course = models.OneToOneField(Course, on_delete=models.CASCADE, related_name='outline')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="大纲状态")
+    generating_with_ulr = models.BooleanField(default=False, db_default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -182,6 +200,22 @@ class CourseVideoQuestion(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class PendingCourseQuestions(models.Model):
+    transcript = models.ForeignKey(VideoTranscript, on_delete=models.CASCADE)
+    revision = models.PositiveIntegerField()
+    dispatch_after = models.DateTimeField(default=timezone.now)
+    running_until = models.DateTimeField(null=True)
+    completed_at = models.DateTimeField(null=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['dispatch_after'], condition=models.Q(completed_at__isnull=True),
+                                name='course_questions_due_idx')]
+        constraints = [models.UniqueConstraint(
+            fields=['transcript', 'revision'], name='unique_course_questions_transcript_revision',
+        )]
+
 
 class StartupMaterial(models.Model):
     name = models.CharField(max_length=200, verbose_name="资料名称")

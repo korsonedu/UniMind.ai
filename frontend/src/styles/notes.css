@@ -140,7 +140,8 @@
 
 .um-right-panel-header [role=tablist] { overflow-x:auto; scrollbar-width:none; }
 .um-sidebar-tab { position:relative; display:flex; align-items:center; flex:none; }
-.um-right-panel-header .um-sidebar-tab [role=tab] { padding-right:30px; }
+.um-right-panel-header .um-sidebar-tab:has(> .um-sidebar-tab-close) > [role=tab] { padding-inline-end:30px; }
+.um-right-panel-header .um-sidebar-tab:not(:has(> .um-sidebar-tab-close)) > [role=tab] { min-height:32px; padding-block:4px; line-height:1.3; }
 .um-sidebar-tab-close { position:absolute; right:4px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:22px; height:28px; border-radius:5px; color:var(--um-color-text-muted); cursor:pointer; }
 .um-sidebar-tab-close:hover { background:var(--um-color-hover); color:var(--um-color-text); }
 @media(max-width:767px) {

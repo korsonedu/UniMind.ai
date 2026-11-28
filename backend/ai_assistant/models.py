@@ -1,8 +1,16 @@
-from django.db import models
+import uuid
+from pathlib import PurePosixPath
+
+from django.db import models, transaction
 from django.conf import settings
+from django.db.models.fields.json import KeyTextTransform
+from django.db.models.functions import Cast
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
-import uuid
+from django.utils import timezone
+from django.utils.text import get_valid_filename
+
+from core.fields import EncryptedTextField
 
 class AIChatMessage(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -25,10 +33,179 @@ class ConversationProject(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     name = models.CharField(max_length=60)
     instructions = models.TextField(max_length=4000, blank=True, default='')
+    workbench_overview = models.JSONField(default=dict, blank=True)
+    workbench_notebook = models.OneToOneField(
+        'notes.Notebook', null=True, blank=True, on_delete=models.SET_NULL, related_name='workbench_project',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['created_at', 'id']
+
+
+WORKBENCH_SOURCE_PREFIX = 'workbench_sources/'
+
+
+def workbench_source_upload_path(instance, filename):
+    filename = get_valid_filename(PurePosixPath(filename.replace('\\', '/')).name)
+    prefix = f'{WORKBENCH_SOURCE_PREFIX}{instance.user_id}/{instance.pk}_'
+    # Course.video_file can reference the same key. Leave room for the storage collision suffix.
+    budget = 100 - len(prefix) - 8
+    suffix = PurePosixPath(filename).suffix
+    if suffix and len(suffix) < budget:
+        filename = filename[:-len(suffix)][:budget - len(suffix)] + suffix
+    else:
+        filename = filename[:budget]
+    return prefix + filename
+
+
+class ProjectSource(models.Model):
+    class Type(models.TextChoices):
+        PDF = 'pdf', 'PDF'
+        PPTX = 'pptx', 'PPT'
+        DOCX = 'docx', 'Word'
+        TEXT = 'text', '文本/Markdown'
+        WEB_URL = 'web_url', '网页'
+        UPLOADED_MEDIA = 'uploaded_media', '本地音视频'
+        COURSE = 'course', '站内课程'
+        EXTERNAL_VIDEO = 'external_video', '外部视频'
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', '等待处理'
+        PROCESSING = 'processing', '解析中'
+        READY = 'ready', '就绪'
+        FAILED = 'failed', '失败'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE, related_name='workbench_sources')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='workbench_sources')
+    source_type = models.CharField(max_length=24, choices=Type.choices)
+    title = models.CharField(max_length=240)
+    file = models.FileField(upload_to=workbench_source_upload_path, max_length=255, blank=True, null=True)
+    mime_type = models.CharField(max_length=120, blank=True, default='')
+    file_size = models.PositiveBigIntegerField(default=0)
+    source_url = models.URLField(max_length=3000, blank=True, default='')
+    course = models.ForeignKey('courses.Course', null=True, blank=True, on_delete=models.SET_NULL,
+                               related_name='workbench_sources')
+    companion_course = models.ForeignKey('courses.Course', null=True, blank=True, on_delete=models.SET_NULL,
+                                         related_name='companion_workbench_sources')
+    external_key = models.CharField(max_length=200, blank=True, default='', db_index=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True)
+    error_message = models.TextField(blank=True, default='')
+    is_selected = models.BooleanField(default=True)
+    summary = models.TextField(blank=True, default='')
+    unit_count = models.PositiveIntegerField(default=0)
+    word_count = models.PositiveIntegerField(default=0)
+    duration_seconds = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['project', 'created_at']),
+            models.Index(fields=['project', 'is_selected', 'status']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['project', 'external_key'], condition=~models.Q(external_key=''),
+                name='uniq_workbench_project_ext_key',
+            ),
+        ]
+
+
+@receiver(pre_delete, sender=ProjectSource)
+def delete_project_source_file(sender, instance, using, **kwargs):
+    record = sender.objects.using(using).select_for_update().filter(pk=instance.pk).values_list(
+        'file', 'companion_course_id', 'user_id',
+    ).first()
+    if record is None:
+        return
+    name, companion_id, user_id = record
+    if not name and not companion_id:
+        return
+
+    def cleanup():
+        from courses.models import Course
+
+        if companion_id:
+            Course.objects.using(using).filter(
+                pk=companion_id, is_workbench_companion=True, is_published=False, author_id=user_id,
+                companion_workbench_sources__isnull=True, workbench_sources__isnull=True,
+            ).delete()
+        if (name and name.startswith(f'{WORKBENCH_SOURCE_PREFIX}{user_id}/')
+                and not sender.objects.using(using).filter(file=name).exists()
+                and not Course.objects.using(using).filter(pk=companion_id, video_file=name).exists()):
+            sender._meta.get_field('file').storage.delete(name)
+
+    transaction.on_commit(cleanup, using=using, robust=True)
+
+
+class ProjectSourceChunk(models.Model):
+    class Anchor(models.TextChoices):
+        PAGE = 'page', '页码'
+        SLIDE = 'slide', '幻灯片'
+        SECTION = 'section', '章节段落'
+        TIMESTAMP = 'timestamp', '时间戳'
+
+    source = models.ForeignKey(ProjectSource, on_delete=models.CASCADE, related_name='chunks')
+    chunk_index = models.PositiveIntegerField()
+    anchor_type = models.CharField(max_length=16, choices=Anchor.choices)
+    locator_label = models.CharField(max_length=80)
+    heading = models.CharField(max_length=240, blank=True, default='')
+    content = models.TextField()
+    page_number = models.PositiveIntegerField(null=True, blank=True)
+    slide_number = models.PositiveIntegerField(null=True, blank=True)
+    start_seconds = models.FloatField(null=True, blank=True)
+    end_seconds = models.FloatField(null=True, blank=True)
+    token_estimate = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['chunk_index']
+        constraints = [
+            models.UniqueConstraint(fields=['source', 'chunk_index'], name='uniq_project_source_chunk_index'),
+        ]
+        indexes = [models.Index(fields=['source', 'anchor_type'])]
+
+
+class ProjectStudioArtifact(models.Model):
+    class Kind(models.TextChoices):
+        STUDY_GUIDE = 'study_guide', '资料导读'
+        BRIEFING = 'briefing', '精华简报'
+        FLASHCARDS = 'flashcards', '记忆闪卡'
+        FAQ = 'faq', '核心问答'
+        QUIZ = 'quiz', '靶向自测'
+
+    class Status(models.TextChoices):
+        GENERATING = 'generating', '生成中'
+        READY = 'ready', '已完成'
+        FAILED = 'failed', '失败'
+
+    class Mastery(models.TextChoices):
+        UNSEEN = 'unseen', '未复习'
+        LEARNING = 'learning', '复习中'
+        MASTERED = 'mastered', '已掌握'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE, related_name='studio_artifacts')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='studio_artifacts')
+    kind = models.CharField(max_length=24, choices=Kind.choices)
+    title = models.CharField(max_length=240)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.GENERATING)
+    error_message = models.TextField(blank=True, default='')
+    source_ids = models.JSONField(default=list, blank=True)
+    content_markdown = models.TextField(blank=True, default='')
+    structured_payload = models.JSONField(default=dict, blank=True)
+    citations = models.JSONField(default=list, blank=True)
+    linked_note = models.ForeignKey(
+        'notes.Note', null=True, blank=True, on_delete=models.SET_NULL, related_name='studio_artifacts',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
 
 class Conversation(models.Model):
@@ -47,11 +224,67 @@ class Conversation(models.Model):
         unique_together = [('user', 'conversation_id')]
 
 
+def mark_runtime_requests_deleted(messages, user_id):
+    from users.models import AIUsageReservation
+
+    reservations = AIUsageReservation.objects.using(messages.db).filter(user_id=user_id)
+    answers = messages.filter(role='assistant')
+    linked = reservations.alias(message_key=Cast(KeyTextTransform('message_id', 'response'), models.CharField()))
+    answer_keys = answers.values(message_key=Cast('pk', models.CharField()))
+    linked.filter(response__engine='ulr', message_key__in=answer_keys).update(
+        response={'engine': 'ulr', 'deleted': True})
+    linked.filter(response__engine='dsh', response__metadata__dsh_handoff=True,
+                  message_key__in=answer_keys).update(response={'deleted': True})
+    prompt_keys = messages.filter(role='user').values(message_key=Cast('pk', models.CharField()))
+    legacy = linked.filter(status='succeeded', response__engine__isnull=True).alias(
+        prompt_key=Cast(KeyTextTransform.from_lookup('response__metadata__learning_turn__message_id'), models.CharField()))
+    legacy.filter(models.Q(response__done=True, message_key__in=answer_keys) |
+                  models.Q(response__type='done', prompt_key__in=prompt_keys)).update(response={'deleted': True})
+    sessions = answers.filter(metadata__engine__in=('dsh', 'dsh_import')).values_list(
+        'metadata__dsh_session_id', 'metadata__dsh_imported_session_id').distinct()
+    for legacy_id, imported_id in sessions:
+        session_id = legacy_id or imported_id
+        if session_id:
+            reservations.filter(response__engine='dsh', response__session_id=session_id).update(
+                response={'engine': 'dsh', 'session_id': session_id, 'deleted': True})
+
+
+def chat_receipt_deleted(reservation):
+    response = reservation.response
+    if response.get('deleted'):
+        return True
+    if reservation.status != 'succeeded':
+        return False
+    answers = AIChatMessage.objects.filter(user_id=reservation.user_id, role='assistant')
+    if response.get('done') is True:
+        message_id = response.get('message_id')
+        return type(message_id) is not int or not answers.filter(pk=message_id).exists()
+    if response.get('type') == 'done' and not response.get('engine'):
+        metadata = response.get('metadata')
+        turn = metadata.get('learning_turn') if isinstance(metadata, dict) else None
+        prompt_id = turn.get('message_id') if isinstance(turn, dict) else None
+        return type(prompt_id) is not int or not answers.filter(metadata__learning_turn__message_id=prompt_id).exists()
+    return False
+
+
+def cancel_conversation_requests(user_id, conversation_id, using):
+    from users.models import AIUsageReservation
+
+    AIUsageReservation.objects.using(using).filter(user_id=user_id,
+        conversation_id=conversation_id, status__in=('pending', 'released')).update(
+        status='released', response={'deleted': True}, updated_at=timezone.now())
+
+
 @receiver(pre_delete, sender=Conversation)
 def delete_conversation_messages(sender, instance, using, **kwargs):
-    AIChatMessage.objects.using(using).filter(
+    # Share the row lock with the runtime's final commit.
+    Conversation.objects.using(using).select_for_update().filter(pk=instance.pk).exists()
+    cancel_conversation_requests(instance.user_id, instance.conversation_id, using)
+    messages = AIChatMessage.objects.using(using).filter(
         user_id=instance.user_id, conversation_id=instance.conversation_id,
-    ).delete()
+    )
+    mark_runtime_requests_deleted(messages, instance.user_id)
+    messages.delete()
 
 
 class Bot(models.Model):
@@ -152,11 +385,134 @@ class AgentMemory(models.Model):
         return f"[{self.memory_type}] {self.key}: {self.value[:30]}"
 
 
+class MemoryWriteState(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    revision = models.PositiveBigIntegerField(default=0)
+
+
+@receiver(pre_delete, sender=AgentMemory)
+def invalidate_pending_fact_writes(sender, instance, origin, **kwargs):
+    if isinstance(origin, AgentMemory) or getattr(origin, 'model', None) is AgentMemory:
+        from .services.memory_core import invalidate_fact_writes
+        invalidate_fact_writes(instance.user_id)
+
+
+class TaskMemoryProgram(models.Model):
+    request_key = models.CharField(max_length=160, unique=True)
+    definition = models.JSONField()
+    digest = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class TaskMemoryState(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    project = models.OneToOneField('ConversationProject', on_delete=models.CASCADE)
+    revision = models.PositiveIntegerField(default=0)
+
+
+class TaskMemoryObject(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    project = models.ForeignKey('ConversationProject', null=True, on_delete=models.CASCADE)
+    digest = models.CharField(max_length=64)
+    kind = models.CharField(max_length=20)
+    value = models.JSONField()
+    fact = models.ForeignKey('AgentMemory', null=True, on_delete=models.CASCADE)
+    question = models.ForeignKey('AIChatMessage', null=True, on_delete=models.CASCADE, related_name='+')
+    answer = models.ForeignKey('AIChatMessage', null=True, on_delete=models.CASCADE, related_name='+')
+    task = models.ForeignKey('ProjectLearningTask', null=True, on_delete=models.CASCADE)
+    assessment = models.ForeignKey('quizzes.ExamQuestionResult', null=True, on_delete=models.CASCADE)
+    event = models.ForeignKey('ProjectLearningEvent', null=True, on_delete=models.CASCADE)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['owner', 'digest'], name='task_memory_object_identity')]
+
+
+class TaskMemoryFrame(models.Model):
+    memory = models.ForeignKey(TaskMemoryState, on_delete=models.CASCADE)
+    revision = models.PositiveIntegerField()
+    program = models.ForeignKey(TaskMemoryProgram, on_delete=models.PROTECT)
+    source = models.JSONField()
+    occurred_at = models.DateTimeField()
+    packet_digest = models.CharField(max_length=64)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['memory', 'revision'], name='task_memory_frame_revision')]
+
+
+class PrismMemory(models.Model):
+    """One scoped representation/operator state; private evidence is never promoted."""
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                              on_delete=models.CASCADE, related_name='prism_memories')
+    scope = models.CharField(max_length=12, choices=[('student', 'Student'), ('system', 'System')])
+    key = models.CharField(max_length=160, unique=True)
+    fields = models.JSONField(default=list)
+    definitions = models.JSONField(default=dict)
+    cases = models.JSONField(default=list)
+    operators = models.JSONField(default=list)
+    provenance = models.JSONField(default=dict)
+    revision = models.PositiveIntegerField(default=1)
+    active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=(
+            models.Q(scope='system', owner__isnull=True) | models.Q(scope='student', owner__isnull=False)
+        ), name='prism_memory_scope_owner')]
+
+
+class PrismEpisode(models.Model):
+    """Grounded model observations; source deletion removes the observation."""
+    question = models.OneToOneField(AIChatMessage, on_delete=models.CASCADE, related_name='prism_episode')
+    answer = models.ForeignKey(AIChatMessage, on_delete=models.CASCADE, related_name='+')
+    observation = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class PrismApplication(models.Model):
+    question = models.OneToOneField(AIChatMessage, on_delete=models.CASCADE, related_name='prism_application')
+    packet = models.JSONField(default=dict)
+    result = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class PrismRevision(models.Model):
+    memory = models.ForeignKey(PrismMemory, on_delete=models.CASCADE, related_name='revisions')
+    before = models.JSONField()
+    report = models.JSONField()
+    accepted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class PrismProposal(models.Model):
+    """Unverified relation or shared abstraction, separate from active memory."""
+    memory = models.ForeignKey(PrismMemory, on_delete=models.CASCADE, related_name='proposals')
+    question = models.ForeignKey(AIChatMessage, null=True, blank=True, on_delete=models.CASCADE, related_name='+')
+    source_episode = models.ForeignKey(PrismEpisode, null=True, blank=True, on_delete=models.CASCADE, related_name='+')
+    kind = models.CharField(max_length=12, choices=[('relation', 'Relation'), ('shared', 'Shared'), ('migration', 'Migration'), ('mapping', 'Mapping')])
+    key = models.CharField(max_length=160)
+    payload = models.JSONField(default=dict)
+    status = models.CharField(max_length=12, default='pending', choices=[
+        ('pending', 'Pending'), ('accepted', 'Accepted'), ('rejected', 'Rejected')])
+    review = models.JSONField(default=dict)
+    reviewer = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                 on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['memory', 'question', 'kind', 'key'], name='prism_proposal_question'),
+            models.UniqueConstraint(fields=['memory', 'kind', 'key'], condition=models.Q(question__isnull=True),
+                                    name='prism_proposal_shared'),
+        ]
+
+
 class MemoryExtractionLog(models.Model):
     """同一轮用户发言只提取一次，防止重试或旧来源重建已删除的记忆。"""
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='memory_extraction_logs')
     conversation_id = models.CharField(max_length=64, db_index=True)
     message_hash = models.CharField(max_length=64)
+    source_message_id = models.PositiveBigIntegerField(null=True, blank=True)
+    answer_message_id = models.PositiveBigIntegerField(null=True, blank=True)
     candidate_count = models.IntegerField(default=0)
     saved_count = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -169,6 +525,22 @@ class MemoryExtractionLog(models.Model):
             ),
         ]
         indexes = [models.Index(fields=['user', 'created_at'])]
+
+
+class PendingMemoryExtraction(models.Model):
+    source_message = models.ForeignKey(AIChatMessage, on_delete=models.CASCADE, related_name='+')
+    answer_message = models.OneToOneField(AIChatMessage, on_delete=models.CASCADE, related_name='+')
+    dispatch_after = models.DateTimeField(default=timezone.now, db_index=True)
+    running_until = models.DateTimeField(null=True)
+    provider_retry_used = models.BooleanField(default=False, db_default=False)
+
+
+class PendingConversationTitle(models.Model):
+    conversation = models.OneToOneField(Conversation, on_delete=models.CASCADE, related_name='+')
+    answer_message = models.OneToOneField(AIChatMessage, on_delete=models.CASCADE, related_name='+')
+    expected_title = models.CharField(max_length=120)
+    dispatch_after = models.DateTimeField(default=timezone.now, db_index=True)
+    running_until = models.DateTimeField(null=True)
 
 
 class DshSubmission(models.Model):
@@ -599,6 +971,37 @@ class TeachingMechanismVersion(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class TeachingDecisionLog(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='teaching_decisions')
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE, related_name='teaching_decisions')
+    message = models.ForeignKey(AIChatMessage, on_delete=models.CASCADE, related_name='teaching_decisions')
+    answer = models.ForeignKey(AIChatMessage, null=True, blank=True, on_delete=models.SET_NULL,
+                               related_name='committed_teaching_decisions')
+    task = models.ForeignKey(ProjectLearningTask, null=True, blank=True, on_delete=models.SET_NULL,
+                             related_name='teaching_decisions')
+    decision_point = models.CharField(max_length=40, choices=[
+        ('recheck_timing', '复测时机'), ('method_ranking', '方法候选排序')])
+    mechanism = models.ForeignKey(TeachingMechanismVersion, null=True, blank=True, on_delete=models.SET_NULL,
+                                  related_name='decisions')
+    policy_version = models.CharField(max_length=80)
+    selection_mode = models.CharField(max_length=32, choices=[
+        ('deterministic', '确定性'), ('stratified_random', '受控随机'),
+        ('bounded_exploration', '受限探索'), ('shadow_only', '影子评估')])
+    selected_action = models.CharField(max_length=120)
+    propensity = models.FloatField(null=True, blank=True)
+    candidates = models.JSONField(default=list)
+    sdtm_frame_id = models.BigIntegerField(null=True, blank=True)
+    sdtm_program_digest = models.CharField(max_length=64, blank=True, default='')
+    trace_id = models.CharField(max_length=64, blank=True, default='', db_index=True)
+    context_snapshot = models.JSONField(default=dict)
+    exposure = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['message', 'decision_point'], name='teaching_decision_message_point')]
+        indexes = [models.Index(fields=['project', 'decision_point', 'created_at'])]
+
+
 class LearningStrategyVersion(models.Model):
     strategy = models.ForeignKey(LearningStrategy, on_delete=models.CASCADE, related_name='versions')
     generator = models.ForeignKey(TeachingMechanismVersion, null=True, blank=True, on_delete=models.SET_NULL)
@@ -625,10 +1028,166 @@ class LearningStrategyOutcome(models.Model):
 class TeachingResearchRun(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE)
-    kind = models.CharField(max_length=1, choices=[('G', '生成'), ('E', '评价')])
+    kind = models.CharField(max_length=1, choices=[('G', '生成'), ('E', '评价'), ('S', '选择')])
     baseline = models.ForeignKey(TeachingMechanismVersion, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
     candidate = models.ForeignKey(TeachingMechanismVersion, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
     packet_hash = models.CharField(max_length=64)
     protocol = models.JSONField()
     report = models.JSONField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class TeachingMechanismActivation(models.Model):
+    kind = models.CharField(max_length=1, choices=[('G', '生成'), ('S', '选择'), ('E', '评价')])
+    scope = models.CharField(max_length=24, choices=[('project_canary', '项目灰度'), ('global', '全局')])
+    project = models.ForeignKey(ConversationProject, null=True, blank=True, on_delete=models.CASCADE,
+                                related_name='mechanism_activations')
+    decision_point = models.CharField(max_length=40, blank=True, default='')
+    research_run = models.ForeignKey(TeachingResearchRun, on_delete=models.PROTECT, related_name='activations')
+    mechanism = models.ForeignKey(TeachingMechanismVersion, on_delete=models.PROTECT, related_name='activations')
+    previous = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='successors')
+    published_program = models.ForeignKey(TaskMemoryProgram, null=True, blank=True, on_delete=models.SET_NULL,
+                                          related_name='rsi_activations')
+    status = models.CharField(max_length=24, choices=[('gate_passed', '通过门禁'), ('canary_active', '灰度生效'),
+                                                     ('active', '正式生效'), ('rolled_back', '已回滚'), ('rejected', '已拒绝')])
+    gate_report = models.JSONField(default=dict)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name='approved_mechanism_activations')
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rolled_back_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                       related_name='rolled_back_mechanism_activations')
+    rolled_back_at = models.DateTimeField(null=True, blank=True)
+    rollback_reason = models.CharField(max_length=500, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['kind', 'scope', 'project', 'decision_point', 'status', 'created_at'])]
+        constraints = [
+            models.UniqueConstraint(fields=['kind', 'scope', 'project', 'decision_point'],
+                condition=models.Q(project__isnull=False, status__in=('canary_active', 'active')),
+                name='rsi_active_project_slot'),
+            models.UniqueConstraint(fields=['kind', 'scope', 'decision_point'],
+                condition=models.Q(project__isnull=True, status__in=('canary_active', 'active')),
+                name='rsi_active_global_slot'),
+        ]
+
+
+class LearningMemoryGrant(models.Model):
+    """A revocable workspace credential or a legacy project credential."""
+
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE, related_name='memory_grants', null=True)
+    learner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True)
+    name = models.CharField(max_length=80)
+    digest = models.CharField(max_length=64, unique=True)
+    can_write = models.BooleanField(default=False)
+    share_notes = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    oauth_resource = models.URLField(blank=True, default='')
+    oauth_client_id = models.CharField(max_length=100, blank=True, default='')
+    oauth_account_session_version = models.PositiveIntegerField(null=True)
+    oauth_authorized_until = models.DateTimeField(null=True)
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(project__isnull=True, learner__isnull=False) |
+                                               models.Q(project__isnull=False, learner__isnull=True), name='memory_grant_one_scope')]
+
+    @property
+    def owner(self):
+        return self.learner if self.learner_id else self.project.user
+
+
+class LearningMemoryCheckpoint(models.Model):
+    learner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    request_key = models.CharField(max_length=64, unique=True)
+    content = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class LearningMemoryRefreshToken(models.Model):
+    grant = models.ForeignKey(LearningMemoryGrant, on_delete=models.CASCADE)
+    digest = models.CharField(max_length=64, unique=True)
+    scope = models.CharField(max_length=150)
+    used = models.BooleanField(default=False)
+
+
+class LearningMemorySource(models.Model):
+    """An explicit link to a live learning source within a single project."""
+
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE, related_name='memory_sources')
+    note = models.ForeignKey('notes.Note', on_delete=models.CASCADE, null=True)
+    course = models.ForeignKey('courses.Course', on_delete=models.CASCADE, null=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(note__isnull=True, course__isnull=False) |
+                                   models.Q(note__isnull=False, course__isnull=True), name='memory_source_one_target'),
+            models.UniqueConstraint(fields=['project', 'note'], condition=models.Q(note__isnull=False),
+                                    name='memory_source_unique_note'),
+            models.UniqueConstraint(fields=['project', 'course'], condition=models.Q(course__isnull=False),
+                                    name='memory_source_unique_course'),
+        ]
+
+class LearningMemoryAuthorizationCode(models.Model):
+    digest = models.CharField(max_length=64, unique=True)
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE, null=True)
+    learner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, related_name='+')
+    account = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    account_session_version = models.PositiveIntegerField()
+    client_id = models.CharField(max_length=100)
+    redirect_uri = models.URLField(max_length=2000)
+    resource = models.URLField()
+    challenge = models.CharField(max_length=43)
+    scope = models.CharField(max_length=150)
+    expires_at = models.DateTimeField(db_index=True)
+
+
+class LearningMemoryDynamicClient(models.Model):
+    """RFC 7591 dynamically registered public OAuth 2.1 client for Learning Memory MCP."""
+
+    client_id = models.CharField(max_length=100, unique=True)
+    client_name = models.CharField(max_length=120)
+    client_uri = models.URLField(max_length=500, blank=True, default='')
+    redirect_uris = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-id']
+
+
+class ExternalMcpServer(models.Model):
+    """User-configured external Streamable HTTP MCP server for XiaoYu (MCP Client)."""
+
+    AUTH_NONE = 'none'
+    AUTH_BEARER = 'bearer'
+    AUTH_HEADER = 'header'
+    AUTH_CHOICES = [
+        (AUTH_NONE, '无认证'),
+        (AUTH_BEARER, 'Bearer Token'),
+        (AUTH_HEADER, '自定义请求头'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='external_mcp_servers',
+    )
+    name = models.CharField(max_length=80)
+    slug = models.CharField(max_length=40)
+    url = models.URLField(max_length=500)
+    auth_type = models.CharField(max_length=16, choices=AUTH_CHOICES, default=AUTH_NONE)
+    auth_header_name = models.CharField(max_length=80, blank=True, default='Authorization')
+    auth_secret = EncryptedTextField(blank=True, default='')
+    enabled = models.BooleanField(default=True)
+    allow_write_tools = models.BooleanField(default=False)
+    cached_tools = models.JSONField(default=list, blank=True)
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=300, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-id']
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'slug'], name='external_mcp_server_user_slug'),
+        ]

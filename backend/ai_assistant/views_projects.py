@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, serializers
 from rest_framework.exceptions import NotFound, PermissionDenied
@@ -8,6 +9,7 @@ from .models import AIChatMessage, Conversation, ConversationProject
 
 class ProjectSerializer(serializers.ModelSerializer):
     learning_summary = serializers.SerializerMethodField()
+    source_count = serializers.SerializerMethodField()
 
     def get_learning_summary(self, project):
         from .models import ProjectLearning
@@ -18,9 +20,14 @@ class ProjectSerializer(serializers.ModelSerializer):
         return {'status': state.status, 'next_action': state.next_action,
                 'conversation_id': str(state.last_conversation.conversation_id) if state.last_conversation else None}
 
+    def get_source_count(self, project):
+        if hasattr(project, 'source_count'):
+            return project.source_count
+        return project.workbench_sources.count()
+
     class Meta:
         model = ConversationProject
-        fields = ('id', 'name', 'instructions', 'created_at', 'learning_summary')
+        fields = ('id', 'name', 'instructions', 'created_at', 'learning_summary', 'source_count')
         read_only_fields = ('id', 'created_at')
 
 
@@ -53,7 +60,9 @@ class ProjectListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsMember]
 
     def get_queryset(self):
-        return ConversationProject.objects.filter(user=self.request.user).select_related('learning__last_conversation')
+        return ConversationProject.objects.filter(user=self.request.user).select_related(
+            'learning__last_conversation',
+        ).annotate(source_count=Count('workbench_sources'))
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -64,7 +73,14 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsMember]
 
     def get_queryset(self):
-        return ConversationProject.objects.filter(user=self.request.user).select_related('learning__last_conversation')
+        return ConversationProject.objects.filter(user=self.request.user).select_related(
+            'learning__last_conversation',
+        ).annotate(source_count=Count('workbench_sources'))
+
+    def perform_destroy(self, instance):
+        from .services.dsh_runtime import quota_write_lock
+        with quota_write_lock():
+            super().perform_destroy(instance)
 
 
 class ConversationUpdateSerializer(serializers.ModelSerializer):
@@ -122,6 +138,7 @@ def save_new_conversation_project(request, bot, conversation_id):
                 state.followup_at = None
             state.save(update_fields=['last_conversation', 'followup_at', 'updated_at'])
             ProjectLearningEvent.objects.create(project=conversation.project, kind='turn', content={})
+    return conversation
 
 
 def add_project_context(user, conversation_id, history):
@@ -130,8 +147,8 @@ def add_project_context(user, conversation_id, history):
     ).select_related('project').first()
     if not conversation:
         return history
-    from .services.project_learning import project_context
-    return [{'role': 'user', 'content': project_context(user, conversation_id)}] + history
+    from .services.project_learning import project_context, model_project_context
+    return [{'role': 'user', 'content': model_project_context(project_context(user, conversation_id))}] + history
 
 
 def learning_activity_metadata(request, conversation_id):

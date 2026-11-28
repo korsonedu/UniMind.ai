@@ -1,9 +1,10 @@
 import { activeWorkspace } from '@/lib/activeWorkspace';
+import { companionProjectId, companionReturnHref } from '@/lib/companionVideo';
 import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { OfflineTrialPage } from '@/components/OfflineTrialPage';
 import { getLocale, t, useLocale } from '@/i18n';
 import { saveLanguagePreference } from '@/lib/languagePreference';
-import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { createBrowserRouter, redirectDocument, RouterProvider, Navigate, Outlet, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { registerSW } from 'virtual:pwa-register';
 import axios from 'axios';
@@ -11,7 +12,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 import { queryKeys } from '@/lib/queryKeys';
-import { HOME_PATH, getLoginPath } from '@/lib/routing';
+import { HOME_PATH, LEARNING_MEMORY_AUTHORIZE_PATH, getLoginPath } from '@/lib/routing';
 import { FEATURES } from './store/useInstitutionStore';
 const MainLayout = lazy(() => import('./layouts/MainLayout').then(m => ({ default: m.MainLayout })));
 import { useAuthStore } from './store/useAuthStore';
@@ -33,6 +34,7 @@ let serviceWorkerRegistered = false;
 // Lazy-loaded pages — named exports need .then() wrapper
 const Landing = lazy(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
 const CourseCenter = lazy(() => import('./pages/CourseCenter').then(module => ({ default: module.CourseCenter })));
+const VideoLesson = lazy(() => import('./pages/VideoLesson').then(module => ({ default: module.VideoLesson })));
 const TestLadder = lazy(() => import('./pages/TestLadder').then(module => ({ default: module.TestLadder })));
 const InstitutionManagement = lazy(() => import('./pages/InstitutionManagement'));
 const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })));
@@ -229,22 +231,36 @@ const WorkspaceEntry = () => {
 const workspacePage = (Component: React.ComponentType) => <ErrorBoundary><Component /></ErrorBoundary>;
 const PersonalCourseRedirect = () => {
   const { data, isPending } = useWorkspace();
-  const { pathname, key } = useLocation();
+  const { pathname, key, search } = useLocation();
+  const params = new URLSearchParams(search);
+  const projectId = pathname.startsWith('/course/') ? companionProjectId(params) : null;
+  const back = projectId ? companionReturnHref(projectId, params.get('conversation') || undefined) : '/xiaoyu';
   const hasCourseSpace = data?.workspaces?.some(space => space.service_active);
   useEffect(() => {
     if (isPending) return;
-    const message = hasCourseSpace
+    const message = projectId ? '这段伴学视频暂时无法打开，已返回项目工作台。' : hasCourseSpace
       ? pathname === '/courses'
         ? '请从左上角切换到课程空间，打开课程中心。'
         : '课程视频位于课程空间，请从左上角切换到对应课程空间查看。'
       : '请先加入可用的课程空间。';
     toast.info(t(message), { id: `course-space-${key}` });
-  }, [hasCourseSpace, isPending, key, pathname]);
-  return isPending ? <PageLoader /> : <Navigate to="/xiaoyu" replace />;
+  }, [hasCourseSpace, isPending, key, pathname, projectId]);
+  return isPending ? <PageLoader /> : <Navigate to={back} replace />;
 };
-const InstitutionCourses = () => activeWorkspace() === 'personal'
-  ? <PersonalCourseRedirect />
-  : <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{workspacePage(CourseCenter)}</FeatureGuard>;
+function InstitutionCourses() {
+  const { id } = useParams();
+  const [params] = useSearchParams();
+  const project = companionProjectId(params);
+  if (activeWorkspace() !== 'personal') {
+    return <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{workspacePage(CourseCenter)}</FeatureGuard>;
+  }
+  if (id) {
+    return <ErrorBoundary><div className="um-course-detail-player um-personal-course-detail">
+      <VideoLesson key={`${id}:${project ?? ''}`} workbenchVideo={project !== null} missingCourse={<PersonalCourseRedirect />} />
+    </div></ErrorBoundary>;
+  }
+  return <PersonalCourseRedirect />;
+}
 
 const lazyPage = (Component: React.ComponentType) => (
   <ErrorBoundary>
@@ -297,6 +313,7 @@ const router = createBrowserRouter([
   { path: "/promo/plus", element: <Navigate to="/pricing" replace /> },
   { path: "/memorix", element: lazyPage(MemorixPage) },
   { path: "/desktop-auth", element: lazyPage(DesktopAuthorize) },
+  { path: LEARNING_MEMORY_AUTHORIZE_PATH, loader: ({ request }) => redirectDocument(request.url) },
   { path: "/login", element: lazyPage(Login) },
   { path: "/account-callback", element: lazyPage(AccountCallback) },
   { path: "/register", element: lazyPage(Register) },

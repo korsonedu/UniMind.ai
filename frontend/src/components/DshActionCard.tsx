@@ -17,6 +17,8 @@ type Result = {
   results?: { question_text: string; is_correct: boolean; correct_answer: string }[];
 };
 
+const LEARNING_ACTIONS = '/ai/learning-actions';
+
 export function DshActionCard({ payload }: { payload: ActionPayload }) {
   const userId = useAuthStore(state => state.user?.id);
   return userId ? <ActionForm key={`${userId}:${payload.request_id}`} payload={payload} /> : null;
@@ -39,7 +41,7 @@ function ActionForm({ payload }: { payload: ActionPayload }) {
 
   useEffect(() => {
     let active = true;
-    api.get<Result>(`/ai/dsh/actions/${payload.request_id}/`)
+    api.get<Result>(`${LEARNING_ACTIONS}/${payload.request_id}/`)
       .then(({ data }) => { if (active) { setResult(data); setStatusKnown(true); } })
       .catch(err => {
         if (!active) return;
@@ -65,7 +67,7 @@ function ActionForm({ payload }: { payload: ActionPayload }) {
   const recover = async () => {
     if (checking || inFlight.current) return;
     setChecking(true); setStatusKnown(false); setError('');
-    try { setResult((await api.get<Result>(`/ai/dsh/actions/${payload.request_id}/`)).data); setStatusKnown(true); }
+    try { setResult((await api.get<Result>(`${LEARNING_ACTIONS}/${payload.request_id}/`)).data); setStatusKnown(true); }
     catch (err) {
       if (isAxiosError(err) && err.response?.status === 404) { setResult(null); setStatusKnown(true); }
       else setError(formatApiErrorToast(err, t('暂时无法读取提交状态，请稍后重试。')));
@@ -79,7 +81,7 @@ function ActionForm({ payload }: { payload: ActionPayload }) {
     try {
       const body = { token: payload.token, confirmed: true,
         answers: (payload.questions || []).map(question => ({ question: { id: question.id }, answer: answers[question.id] || '' })) };
-      setResult((await api.post<Result>('/ai/dsh/actions/confirm/', body)).data);
+      setResult((await api.post<Result>(`${LEARNING_ACTIONS}/confirm/`, body)).data);
     } catch (err) { setStatusKnown(false); setError(formatApiErrorToast(err, t('提交未确认，请刷新状态查看原结果。'))); }
     finally { inFlight.current = false; setBusy(false); }
   };

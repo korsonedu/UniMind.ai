@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import jsonschema
+from ai_assistant.services.ulr_structured import InvalidStructuredOutput
 from ai_engine.ai_service import AIService
 from .exceptions import AIResponseError
 from .schemas import SCHEMAS
@@ -18,6 +19,7 @@ SYSTEM_PREFIX_KEYS = {
     'intrablock_steps': ('subject', 'requirements', 'profile', 'block_summaries'),
     'intrablock_repair': ('subject', 'requirements', 'profile', 'block_summaries'),
     'interface_bind': ('subject', 'requirements', 'profile', 'block_summaries'),
+    'source_tree_align': ('subject', 'source_title', 'source_kind', 'source_nodes'),
 }
 
 
@@ -47,16 +49,21 @@ def ask(name, context, operation='knowledge_tree_decompose'):
     payload = context
     for attempt in range(2):
         system_prompt, user_prompt = render_messages(name, payload)
-        result = AIService.structured_output(
-            system_prompt=system_prompt, user_prompt=user_prompt,
-            schema=SCHEMAS[name], tool_name=name, operation=operation, raise_on_error=True,
-        )
         try:
-            json.dumps(result, allow_nan=False)
-            jsonschema.validate(result, SCHEMAS[name])
-            return result
-        except (ValueError, TypeError, jsonschema.ValidationError) as exc:
-            if attempt == 1:
-                raise AIResponseError(f'{name}: invalid structured response: {exc}') from exc
-            detail = f"{list(exc.path)}: {exc.message}" if isinstance(exc, jsonschema.ValidationError) else str(exc)
-            payload = {**context, 'schema_error': f'上一次返回未通过Schema校验，请严格修正：{detail}'}
+            result = AIService.structured_output(
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                schema=SCHEMAS[name], tool_name=name, operation=operation, raise_on_error=True,
+            )
+        except InvalidStructuredOutput as exc:
+            error = exc
+        else:
+            try:
+                json.dumps(result, allow_nan=False)
+                jsonschema.validate(result, SCHEMAS[name])
+                return result
+            except (ValueError, TypeError, jsonschema.ValidationError) as exc:
+                error = exc
+        if attempt == 1:
+            raise AIResponseError(f'{name}: invalid structured response: {error}') from error
+        detail = f"{list(error.path)}: {error.message}" if isinstance(error, jsonschema.ValidationError) else str(error)
+        payload = {**context, 'schema_error': f'上一次返回未通过Schema校验，请严格修正：{detail}'}

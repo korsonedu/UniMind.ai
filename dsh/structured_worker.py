@@ -31,7 +31,7 @@ def turn_error(result):
     return None
 
 
-def execute(payload):
+def execute(payload, observations=None):
     context, model = payload['context'], payload['model']
     tool = context['tools'][0]['function']
     with ExitStack() as stack:
@@ -43,6 +43,8 @@ def execute(payload):
             directory.mkdir(mode=0o700, exist_ok=True)
             audit = directory / 'gateway-usage.jsonl'
         with task_gateway(context, model['url'], model['key'], model['mode'], audit) as gateway:
+            if observations is not None:
+                observations.append(gateway['requests'])
             with DeepSeekHarness(dsh_home=payload['home'], cwd=payload['home'],
                 patches=(str(ROOT / 'profile.patch.yml'), str(ROOT / 'structured.patch.yml')),
                 provider='deepseek-official', model=context['model_policy']['model'],
@@ -55,6 +57,10 @@ def execute(payload):
         if result.finish_reason != 'completed' or not gateway['requests'] or any(request['status'] != 'completed' for request in gateway['requests']):
             if result.finish_reason == 'error' and turn_error(result) == 'MALFORMED_RESPONSE':
                 raise RetryableTask('MALFORMED_RESPONSE')
+            if (context['model_policy']['operation'] in {'assistant.prism_observe', 'assistant.prism_complete'}
+                    and not context.get('research_tools') and gateway['requests']
+                    and all(request['status'] == 'completed' for request in gateway['requests'])):
+                raise RetryableTask('INCOMPLETE_TASK')
             raise RuntimeError('Incomplete structured task')
         calls, outputs = set(), []
         for event in result.events:
@@ -71,10 +77,17 @@ def execute(payload):
 
 
 if __name__ == '__main__':
+    observations = []
     try:
-        response = {'status': 200, 'result': execute(json.load(sys.stdin))}
+        payload = json.load(sys.stdin)
+        response = {'status': 200, 'result': execute(payload, observations if payload.get('observe') else None)}
     except RetryableTask as exc:
         response = {'status': 503, 'error': 'DSH 结构化任务未完成。', 'code': exc.code, 'retryable': True}
-    except Exception:
-        response = {'status': 503, 'error': 'DSH 结构化任务未完成。'}
+    except Exception as exc:
+        code = {'Collector failed': 'COLLECTOR_FAILED', 'Incomplete structured task': 'INCOMPLETE_TASK',
+            'Expected one successful collector': 'INVALID_COLLECTOR_COUNT', 'Runtime capacity exhausted': 'CAPACITY_EXHAUSTED'}.get(
+                str(exc), 'TASK_FAILED')
+        response = {'status': 503, 'error': 'DSH 结构化任务未完成。', 'code': code}
+    if observations:
+        response['observations'] = observations[0]
     print(json.dumps(response, ensure_ascii=False, allow_nan=False))

@@ -3,6 +3,7 @@ import json
 import re
 from pathlib import Path
 import subprocess
+from time import monotonic
 from uuid import uuid4
 
 from django.conf import settings
@@ -10,11 +11,15 @@ from jsonschema import Draft202012Validator, FormatChecker
 from rest_framework.exceptions import APIException, NotFound, PermissionDenied, ValidationError
 
 from ai_assistant.models import AIChatMessage
+from ai_engine.observability import log_ai_operation
 
 
-VISUAL_DEMO_REQUEST = re.compile(r'可视化|演示|互动|交互实验|图解|示意图|画(?:一个|一张|一|个)?图|用图片|动态(?:展示|图)')
+VISUAL_DEMO_REQUEST = re.compile(r'可视化|演示|互动|交互实验|图解|示意图|画(?:一个|一张|一|个)?图|用图片|动态(?:展示|图)'
+                                 r'|交互卡片.{0,24}(?:排序|重排)|(?:排序|重排).{0,24}交互卡片')
 EXERCISE_REQUEST = re.compile(r'出题|出(?:一|几|两|\d+)道|来(?:一|几|两|\d+)道|做(?:一|几|两|\d+)道|刷题|练一练|练练|'
-                              r'(?:生成|抽取).{0,8}(?:题目|练习题)')
+                              r'给(?:我)?(?:一|几|两|\d+)道(?:练习)?题|(?:生成|抽取).{0,8}(?:题目|练习题)')
+INTERACTION_CONTINUATIONS = ('继续', '再详细一点', '再讲细一点')
+OPTION_REPLY = re.compile(r'^\s*(?:(?:我)?选\s*)?[A-Za-zＡ-Ｚａ-ｚ1-9１-９][.。！!、]?\s*$')
 
 
 class ExperimentConflict(APIException):
@@ -39,28 +44,20 @@ def available_to(user):
     return enabled() and bool(filter_tools('planner', None, EXPERIMENT_TOOLS, user=user))
 
 
-def allows_interaction(current):
+def interaction_request(current):
     text = current.content.strip()
-    if text in {'继续', '再详细一点', '再讲细一点'}:
+    if text in INTERACTION_CONTINUATIONS or OPTION_REPLY.fullmatch(text):
         previous = AIChatMessage.objects.filter(user=current.user, bot_id=current.bot_id, conversation_id=current.conversation_id,
-            role='user', id__lt=current.pk).exclude(content__in=['继续', '再详细一点', '再讲细一点']).order_by('-id').first()
-        text = previous.content if previous else ''
+            role='user', id__lt=current.pk).exclude(content__in=INTERACTION_CONTINUATIONS).exclude(
+                content__regex=OPTION_REPLY.pattern).order_by('-id').values_list('content', flat=True).first()
+        text = previous or text
     if re.search(r'不要交互|不用交互|不需要交互|只用文字', text):
-        return False
-    # A request for exercises, records or planning must not acquire an explanation widget.
-    if EXERCISE_REQUEST.search(text) or re.search(r'批改|判分|评分|学习计划|复习计划|备考计划|学习规划|安排|日程|'
-                 r'(?:制定|生成|调整|做个|做一份).{0,8}计划|学习统计|学习报告|成绩单|正确率|掌握率|'
-                 r'统计(?!学|量|题|分布|推断|方法)|听课时长|做题时长|学习记录|专注|番茄钟|推荐课程|查找课程', text):
-        return False
-    if (re.search(r'卡片|图|柱|滑块|控件|按钮|标签|文字|字', text)
-            and re.search(r'重叠|挤|混到|混在|遮挡|显示错误|不动|没反应|修正|修改|改一下', text)
-            and AIChatMessage.objects.filter(user=current.user, bot_id=current.bot_id,
-                conversation_id=current.conversation_id, role='user',
-                metadata__learning_experiments__isnull=False).exists()):
-        return True
-    return bool(VISUAL_DEMO_REQUEST.search(text) or re.search(
-        r'讲解|讲题|解答|求解|解释|推导|证明|为什么|如何|什么是|是什么意思|怎么做|怎么解|怎么算|怎么理解|不懂|没理解|不理解|不明白|看不懂|'
-        r'讲(?:一|这|那|讲|一下)|修正.{0,8}(?:实验|讲解|图形)|\b(?:explain|solve|derive|why)\b', text, re.I))
+        return ''
+    return text
+
+
+def allows_interaction(current):
+    return bool(interaction_request(current))
 
 
 def attach_to_chat(user, current, messages, tools, executor):
@@ -78,18 +75,18 @@ def attach_to_chat(user, current, messages, tools, executor):
     fixed = [*[tool for tool in EXPERIMENT_TOOLS
         if tool['function']['name'] != 'build_learning_experiment' or interactive], *SESSION_TOOLS]
     if not interactive:
-        messages[0]['content'] += '\n本轮不属于解答讲解，不生成交互卡片。出题、统计、计划等使用原有工具和文字。'
+        messages[0]['content'] += '\n本轮按用户要求用文字回答，不生成交互卡片。'
     set_permitted_tools(executor, [*executor._permitted_tool_definitions.values(), *fixed])
     return refresh(executor, [*tools, *fixed])
 
 
-def anchor_for(user, conversation_id):
+def anchor_for(user, conversation_id, *, artifacts=None):
     check_access(user)
     anchor = AIChatMessage.objects.filter(user=user, conversation_id=conversation_id,
         role='user', bot__bot_type='planner').order_by('id').first()
     if not anchor:
         raise NotFound('实验所在对话不存在。')
-    return anchor
+    return artifacts.overlay(anchor) if artifacts is not None else anchor
 
 
 def load_experiment(anchor, experiment_id):
@@ -99,8 +96,11 @@ def load_experiment(anchor, experiment_id):
     return experiment
 
 
-def save_experiment(anchor, experiment_id, experiment):
+def save_experiment(anchor, experiment_id, experiment, *, artifacts=None):
     experiments = {**anchor.metadata.get('learning_experiments', {}), experiment_id: experiment}
+    if artifacts is not None:
+        artifacts.stage(anchor, 'learning_experiments', experiments)
+        return
     metadata = {**anchor.metadata, 'learning_experiments': experiments}
     # Preserve concurrent note/context/state changes without adding a new table.
     if not AIChatMessage.objects.filter(pk=anchor.pk, metadata=anchor.metadata).update(metadata=metadata):
@@ -151,14 +151,29 @@ window.addEventListener('DOMContentLoaded', () => {
 def preview(html, state, checks, *, current=None):
     from .learning_worker import run
     visual = getattr(settings, 'UNIMIND_LEARNING_VISUAL_REVIEW_ENABLED', False)
+    started = monotonic()
     try:
         report = run('learning_experiment_preview.py', {
             'document': experiment_document(html, state), 'checks': checks,
             'capture_screenshots': visual}, max_output_bytes=4 * 1024 * 1024 if visual else 65536)
-    except (subprocess.TimeoutExpired, OSError, ValueError):
+    except (subprocess.TimeoutExpired, OSError, ValueError) as error:
+        log_ai_operation('assistant.experiment.browser_preview', False,
+            (monotonic() - started) * 1000, type(error).__name__)
         return {'ok': False, 'errors': ['浏览器预览不可用或超时，请缩短代码并检查运行环境。'], 'checks': []}
     frames = report.pop('screenshots', [])
-    if visual and report['ok']:
+    if not report['ok']:
+        failed_checks = [
+            {'index': index, 'action': check['action'], 'selector': check['selector'],
+                'expect_selector': check['expect_selector'], 'error': result.get('error', '').partition('\n')[0][:240]}
+            for index, (check, result) in enumerate(zip(checks, report.get('checks', [])), start=1)
+            if not result['ok']
+        ]
+        log_ai_operation('assistant.experiment.browser_preview', False, (monotonic() - started) * 1000,
+            'check_failed' if failed_checks else 'preview_failed', metadata={
+                'failed_checks': failed_checks,
+                'errors': [error.partition('\n')[0][:240] for error in report.get('errors', [])],
+            })
+    elif visual:
         from .learning_experiment_review import reserve_review, review_screenshots
         if not reserve_review(current):
             report.update(ok=False, visual_review={'status': 'budget_exhausted'})
@@ -175,7 +190,7 @@ def preview(html, state, checks, *, current=None):
     return report
 
 
-def execute(user, name, arguments, chat_context):
+def execute(user, name, arguments, chat_context, *, artifacts=None):
     check_access(user)
     definition = next(tool['function'] for tool in EXPERIMENT_TOOLS if tool['function']['name'] == name)
     error = next(Draft202012Validator(definition['parameters'], format_checker=FormatChecker()).iter_errors(arguments), None)
@@ -187,8 +202,8 @@ def execute(user, name, arguments, chat_context):
     if not current:
         raise PermissionDenied('学习实验需要当前对话授权。')
     if name == 'build_learning_experiment' and not allows_interaction(current):
-        raise PermissionDenied('交互卡片仅用于解答和讲解问题，本轮不能生成交互。')
-    anchor = anchor_for(user, current.conversation_id)
+        raise PermissionDenied('本轮要求用文字回答，不能生成交互卡片。')
+    anchor = anchor_for(user, current.conversation_id, artifacts=artifacts)
     experiment_id = arguments.get('experiment_id')
     if name == 'read_learning_experiment':
         return load_experiment(anchor, experiment_id)
@@ -216,6 +231,8 @@ def execute(user, name, arguments, chat_context):
     experiment_id = experiment_id or str(uuid4())
     # Read the latest state after the preview; never persist state produced by automated checks.
     anchor.refresh_from_db()
+    if artifacts is not None:
+        artifacts.overlay(anchor)
     latest = load_experiment(anchor, experiment_id) if previous else None
     if latest and latest['revision'] != previous['revision']:
         raise ExperimentConflict()
@@ -226,7 +243,7 @@ def execute(user, name, arguments, chat_context):
         'revision': previous['revision'] + 1 if previous else 1,
         'state': latest['state'] if latest else {}, 'state_version': latest['state_version'] if latest else 0,
         'checks': arguments['checks'], 'preview': report}
-    save_experiment(anchor, experiment_id, experiment)
+    save_experiment(anchor, experiment_id, experiment, artifacts=artifacts)
     return {'experiment_id': experiment_id, 'revision': experiment['revision'], 'preview': report,
         'visual': {'type': 'learning_experiment', 'payload': {
             'title': experiment['title'], 'experiment_id': experiment_id,
@@ -247,7 +264,7 @@ def conversation_experiments(user, conversation_id):
 EXPERIMENT_TOOLS = [
     {'type': 'function', 'function': {
         'name': 'build_learning_experiment',
-        'description': '仅在解答具体问题或讲解概念时编写交互卡片，出题、统计、报告、计划等不得使用。通过检查后挂载当前对话。自包含HTML/CSS/JavaScript，无外部资源；以图形、参数控件和数值为主，沿用平台CSS变量及控件样式；布局紧凑清晰、宽度自适应（高度随内容自动展开，控件建议2到4个），长解释放聊天正文。不做答题或判分。失败返回诊断；更新前先read并沿用ID和版本。用unimind.getState()/setState(object)保存演示参数，report(简短观察)准备讲解线索；不修改学习记录。checks至少检查一个真实控件与结果。',
+        'description': '为当前学习目标制作可操作的演示、模拟或探索卡片。根据用户想做的操作和上下文判断；仅需文字讲解、正式作答或计分、统计、报告、计划时使用对应能力。通过检查后挂载当前对话。自包含HTML/CSS/JavaScript，无外部资源；沿用平台CSS变量及控件样式；布局紧凑清晰、宽度自适应（高度随内容自动展开，参数控件建议2到4个），长解释放聊天正文。失败返回诊断；更新前先read并沿用ID和版本。用unimind.getState()/setState(object)保存演示状态，report(简短观察)准备讲解线索；不修改学习记录。checks至少检查一个真实控件与结果。',
         'parameters': {'type': 'object', 'additionalProperties': False, 'properties': {
             'title': {'type': 'string', 'minLength': 1, 'maxLength': 100},
             'html': {'type': 'string', 'minLength': 1, 'maxLength': 24000},

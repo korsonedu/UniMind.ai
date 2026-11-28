@@ -73,6 +73,8 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                'assistant.chat.planner.prototype': ('fast', 6, 8192),
                'assistant.title': ('fast', 1, 64),
                'assistant.memory_extract': ('fast', 1, 800),
+               'assistant.prism_observe': ('fast', 1, 2400),
+               'assistant.prism_complete': ('fast', 1, 3200),
                'quizzes.preview_parse': ('fast', 1, 3200),
                'quizzes.grade_question': ('pro', 1, 2500),
                'quizzes.objective_analysis': ('fast', 1, 2000),
@@ -161,7 +163,7 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                         return self.reject(403, 'model_policy_denied')
                     tools = body.get('tools', [])
                     dynamic = {}
-                    if 'session_registry' in context:
+                    if 'session_registry' in context or context.get('reauthorize_history'):
                         if refresh_context is None:
                             return self.reject(403, 'session_registry_unavailable')
                         try:
@@ -171,6 +173,8 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                             dynamic = {t['function']['name']: t['function']['parameters']
                                        for t in current.get('session_registry', {}).get('tools', [])}
                         except Exception:
+                            if context.get('reauthorize_history'):
+                                return self.reject(403, 'history_authorization_unavailable')
                             return self.reject(503, 'session_registry_unavailable')
                     permitted = {name for name in allowed_tools if not name.startswith('session_')} | set(dynamic)
                     if not isinstance(tools, list) or len(tools) > 8 or any(not isinstance(t, dict) or 'type' in t
@@ -203,6 +207,8 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                     body['temperature'] = 0.4 if policy['operation'] == 'quizzes.objective_analysis' else 0.2
                 record = {'request': len(requests) + 1, 'model': policy['model'],
                           'operation': policy.get('task_operation', policy['operation']), 'tier': policy['tier'],
+                          'offered_tools': [tool['name'] for tool in tools], 'submitted_tools': [],
+                          'max_output_tokens': body['max_tokens'],
                           'tool_count': len(tools), 'tool_schema_bytes': len(json.dumps(tools, ensure_ascii=False).encode()),
                           'status': 'started', 'usage': {}, 'usage_complete': False,
                           'tool_results': sum(b.get('type') == 'tool_result'
@@ -242,6 +248,7 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                         self.end_headers()
                         streaming = True
                         size = 0
+                        source_complete = output_reported = False
                         while True:
                             line = response.readline(65537)
                             if not line:
@@ -254,15 +261,28 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                                 public = text_delta(event)
                                 if on_event and public:
                                     on_event(public)
+                                if event.get('type') == 'message_start':
+                                    model = event.get('message', {}).get('model')
+                                    if isinstance(model, str) and len(model) <= 160:
+                                        record['reported_model'] = model
+                                if event.get('type') == 'content_block_start':
+                                    block = event.get('content_block')
+                                    if isinstance(block, dict) and block.get('type') == 'tool_use':
+                                        name = block.get('name')
+                                        record['submitted_tools'].append(name if name in record['offered_tools'] else '<unoffered>')
                                 usage = event.get('usage', event.get('message', {}).get('usage', {}))
-                                record['usage'].update({k: v for k, v in usage.items()
+                                counts = {k: v for k, v in usage.items()
                                     if k in ('input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens')
-                                    and type(v) is int and v >= 0})
+                                    and type(v) is int and v >= 0} if isinstance(usage, dict) else {}
+                                record['usage'].update(counts)
+                                if event.get('type') == 'message_delta':
+                                    output_reported = 'output_tokens' in counts
                                 if event.get('type') == 'message_stop':
-                                    record['usage_complete'] = all(k in record['usage'] for k in ('input_tokens', 'output_tokens'))
+                                    source_complete = all(k in record['usage'] for k in ('input_tokens', 'output_tokens'))
+                                    record['usage_complete'] = source_complete and output_reported
                             self.wfile.write(line)
                             self.wfile.flush()
-                        record['status'] = 'completed' if record['usage_complete'] else ('interrupted' if stopping.is_set() else 'incomplete')
+                        record['status'] = 'completed' if source_complete else ('interrupted' if stopping.is_set() else 'incomplete')
                 except Exception:
                     record['status'] = 'interrupted'
                     if not streaming and not stopping.is_set():
@@ -272,6 +292,8 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                     with io_lock:
                         active_sockets.discard(upstream_socket)
                     record['elapsed_ms'] = round((monotonic() - started) * 1000)
+                    if on_event:
+                        on_event({'type': 'model_observation', 'record': record})
             finally:
                 lock.release()
 

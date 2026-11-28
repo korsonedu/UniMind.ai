@@ -4,6 +4,7 @@ from .views import (
     AgentMemoryListCreateView, AgentMemoryDetailView,
     BotListView,
     ConversationListView,
+    ExternalAudioSnippetView,
     SemanticMemoryListView, SemanticMemoryDeleteView,
     ActionCardInteractionView,
 )
@@ -18,16 +19,38 @@ from .views_api import (
 )
 from .views_learning_experiments import LearningExperimentView
 
-from .views_learning import ProjectLearningView, ProjectLearningLibraryView, ProjectLearningKnowledgeView
+from .views_learning import LearningExposurePresentView, ProjectLearningView, ProjectLearningLibraryView, ProjectLearningKnowledgeView
 from .views_learning_tasks import ProjectLearningTaskListView, ProjectLearningTaskDetailView
+from .views_workbench import (
+    ProjectNoteListView, ProjectSourceBatchSelectView, ProjectSourceDetailView, ProjectSourceFileView,
+    ProjectSourceImportView, ProjectSourceListView, ProjectSourceUploadView, ProjectStudioDetailView,
+    ProjectStudioListView, ProjectStudioSaveNoteView, ProjectStudioSubmitQuizView, ProjectWorkbenchOverviewView,
+)
+
+from .views_learning_memory import LearningMemoryGrantsView, LearningMemoryGrantView, LearningMemoryMcpView
+from .views_learning_memory_sources import LearningMemorySourcesView, LearningMemorySourceView
+from .views_mcp_client import ExternalMcpServerDetailView, ExternalMcpServerListCreateView, ExternalMcpServerSyncView
 
 urlpatterns = [
+    path('learning/exposure/present/', LearningExposurePresentView.as_view(), name='learning-exposure-present'),
+    path('learning-memory/mcp/', LearningMemoryMcpView.as_view(), name='learning-memory-mcp'),
+    path('learning-memory/grants/', LearningMemoryGrantsView.as_view(), name='workspace-learning-memory-grants'),
+    path('learning-memory/grants/<int:grant_id>/', LearningMemoryGrantView.as_view(), name='workspace-learning-memory-grant'),
+    path('mcp-servers/', ExternalMcpServerListCreateView.as_view(), name='external-mcp-server-list'),
+    path('mcp-servers/<int:server_id>/', ExternalMcpServerDetailView.as_view(), name='external-mcp-server-detail'),
+    path('mcp-servers/<int:server_id>/sync/', ExternalMcpServerSyncView.as_view(), name='external-mcp-server-sync'),
+    path('projects/<int:project_id>/learning-memory/sources/', LearningMemorySourcesView.as_view(), name='learning-memory-sources'),
+    path('projects/<int:project_id>/learning-memory/sources/<int:source_link_id>/', LearningMemorySourceView.as_view(), name='learning-memory-source'),
+    path('projects/<int:project_id>/learning-memory/grants/', LearningMemoryGrantsView.as_view(), name='learning-memory-grants'),
+    path('projects/<int:project_id>/learning-memory/grants/<int:grant_id>/', LearningMemoryGrantView.as_view(), name='learning-memory-grant'),
     path('projects/<int:pk>/learning/tasks/', ProjectLearningTaskListView.as_view(), name='project-learning-tasks'),
     path('projects/<int:pk>/learning/tasks/<uuid:task_id>/', ProjectLearningTaskDetailView.as_view(), name='project-learning-task'),
     path('projects/<int:pk>/learning/knowledge/', ProjectLearningKnowledgeView.as_view(), name='project-learning-knowledge'),
     path('projects/<int:pk>/learning/library/', ProjectLearningLibraryView.as_view(), name='project-learning-library'),
     path('projects/<int:pk>/learning/', ProjectLearningView.as_view(), name='project-learning'),
     path('learning-experiments/<uuid:conversation_id>/<uuid:experiment_id>/', LearningExperimentView.as_view(), name='learning-experiment'),
+    path('learning-actions/confirm/', DshConfirmView.as_view(), name='learning-action-confirm'),
+    path('learning-actions/<uuid:request_id>/', DshSubmissionView.as_view(), name='learning-action-submission'),
     path('dsh/actions/confirm/', DshConfirmView.as_view(), name='dsh-confirm'),
     path('dsh/actions/<uuid:request_id>/', DshSubmissionView.as_view(), name='dsh-submission'),
     path('dsh/context/', DshContextView.as_view(), name='dsh-context'),
@@ -40,12 +63,25 @@ urlpatterns = [
     path('dashboard/', XiaoYuDashboardView.as_view(), name='xiaoyu-dashboard'),
     path('chat/', AIChatView.as_view(), name='ai-chat'),
     path('chat/stream/', AIChatStreamView.as_view(), name='ai-chat-stream'),
+    path('external-audio-snippet/', ExternalAudioSnippetView.as_view(), name='external-audio-snippet'),
     path('chat-requests/<uuid:request_id>/', ChatRequestStatusView.as_view(), name='ai-chat-request-status'),
     path('history/', AIChatListView.as_view(), name='ai-chat-history'),
     path('conversations/', ConversationListView.as_view(), name='conversation-list'),
     path('conversations/<uuid:conversation_id>/', ConversationDetailView.as_view(), name='conversation-detail'),
     path('projects/', ProjectListCreateView.as_view(), name='conversation-project-list'),
     path('projects/<int:pk>/', ProjectDetailView.as_view(), name='conversation-project-detail'),
+    path('projects/<int:pk>/workbench-overview/', ProjectWorkbenchOverviewView.as_view(), name='project-workbench-overview'),
+    path('projects/<int:pk>/studio/', ProjectStudioListView.as_view(), name='project-studio-list'),
+    path('projects/<int:pk>/studio/<uuid:artifact_id>/', ProjectStudioDetailView.as_view(), name='project-studio-detail'),
+    path('projects/<int:pk>/studio/<uuid:artifact_id>/save-note/', ProjectStudioSaveNoteView.as_view(), name='project-studio-save-note'),
+    path('projects/<int:pk>/studio/<uuid:artifact_id>/submit-quiz/', ProjectStudioSubmitQuizView.as_view(), name='project-studio-submit-quiz'),
+    path('projects/<int:pk>/notes/', ProjectNoteListView.as_view(), name='project-note-list'),
+    path('projects/<int:pk>/sources/', ProjectSourceListView.as_view(), name='project-source-list'),
+    path('projects/<int:pk>/sources/upload/', ProjectSourceUploadView.as_view(), name='project-source-upload'),
+    path('projects/<int:pk>/sources/import/', ProjectSourceImportView.as_view(), name='project-source-import'),
+    path('projects/<int:pk>/sources/batch-select/', ProjectSourceBatchSelectView.as_view(), name='project-source-batch-select'),
+    path('projects/<int:pk>/sources/<uuid:source_id>/', ProjectSourceDetailView.as_view(), name='project-source-detail'),
+    path('projects/<int:pk>/sources/<uuid:source_id>/file/', ProjectSourceFileView.as_view(), name='project-source-file'),
     path('reset/', AIChatResetView.as_view(), name='ai-chat-reset'),
     path('delete-conversation/', AIChatDeleteConversationView.as_view(), name='ai-chat-delete-conversation'),
     path('memories/', AgentMemoryListCreateView.as_view(), name='agent-memory-list'),

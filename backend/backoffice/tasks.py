@@ -4,30 +4,38 @@ from datetime import timedelta
 from types import SimpleNamespace
 
 from celery import shared_task
-from django.conf import settings
 from django.db import transaction
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from ai_assistant.models import AIChatMessage, Bot, Conversation
+from ai_assistant.services.ulr_config import ulr_enabled
+from ai_engine.observability import observe_background
 from quizzes.models import ContentPipelineTask, KnowledgePoint
 from .common import content_institution
 
 logger = logging.getLogger(__name__)
+TEACHING_JOB_KINDS = ('quick', 'arc', 'bulk', 'parse', 'chat', 'report')
+# Hard limit is 960s; allow a minute for the worker to finish recording failure.
+TEACHING_JOB_TIMEOUT = timedelta(seconds=1020)
+
+
+def running_teaching_tasks(queryset):
+    return queryset.filter(
+        status='running', payload__kind__in=TEACHING_JOB_KINDS,
+    ).alias(effective_started_at=Coalesce('started_at', 'updated_at'))
 
 
 def expire_stale_teaching_tasks(queryset):
-    # Hard limit is 960s; allow a minute for the worker to finish recording failure.
-    return queryset.filter(
-        status='running', started_at__lt=timezone.now() - timedelta(seconds=1020),
-        payload__kind__in=['quick', 'arc', 'bulk', 'parse', 'chat', 'report'],
-    ).update(status='failed', error_message='任务处理超时或工作进程已退出，请重试。',
-             finished_at=timezone.now(), updated_at=timezone.now())
+    now = timezone.now()
+    return running_teaching_tasks(queryset).filter(effective_started_at__lt=now - TEACHING_JOB_TIMEOUT).update(
+        status='failed', error_message='任务处理超时或工作进程已退出，请重试。', finished_at=now, updated_at=now)
 
 
 @shared_task(name='backoffice.run_teaching_task', soft_time_limit=900, time_limit=960)
 def run_teaching_task(task_id):
     from ai_assistant.services.dsh_scope import teaching_job
-    with teaching_job(task_id):
+    with teaching_job(task_id), observe_background('ulr' if ulr_enabled() else 'legacy', f'teaching:{task_id}'):
         return _run_teaching_task(task_id)
 
 
@@ -38,12 +46,24 @@ def _run_teaching_task(task_id):
         task = ContentPipelineTask.objects.select_for_update().select_related('created_by').get(pk=task_id)
         if task.status != 'pending':
             return
+        native_worker = ulr_enabled()
+        if task.payload.get('requires_ulr') and not native_worker:
+            task.status = 'failed'
+            task.error_message = '任务需要 ULR，当前工作进程配置不一致。请在配置恢复后重试。'
+            task.finished_at = timezone.now()
+            task.save(update_fields=['status', 'error_message', 'finished_at', 'updated_at'])
+            return
         task.status = 'running'
         task.started_at = timezone.now()
-        task.save(update_fields=['status', 'started_at', 'updated_at'])
+        task.error_message = ''
+        fields = ['status', 'started_at', 'error_message', 'updated_at']
+        if native_worker and not task.payload.get('requires_ulr'):
+            task.payload['requires_ulr'] = True
+            fields.append('payload')
+        task.save(update_fields=fields)
     kind = None
     try:
-        from .teaching import student_detail, validate_kps
+        from .teaching import parse_enabled, student_detail, validate_kps
         scope = content_institution(required=True)
         if task.institution_id != (scope.pk if scope else None):
             raise ValueError('任务内容归属已变更，请重新提交。')
@@ -55,9 +75,15 @@ def _run_teaching_task(task_id):
         if kind in ['quick', 'arc']:
             ids = validate_kps(args.get('kp_ids'))
             kps = list(KnowledgePoint.objects.filter(institution=scope, pk__in=ids))
-            count_per_kp = max(1, -(-args.get('count', 5)//len(kps)))
+            count_per_kp = max(1, -(-args.get('count', 5)//len(ids)))
             if kind == 'arc':
                 from quizzes.services.adversarial_pipeline import _execute_pipeline
+                if args.get('arc_confirmation'):
+                    points = {point.pk: point for point in kps if point.level == 'kp'}
+                    if points.keys() != set(ids):
+                        raise ValueError('已确认的考点范围发生变化。')
+                    kps = [points[pk] for pk in ids]
+                    count_per_kp = args['questions_per_kp']
                 _execute_pipeline(task, kps, count_per_kp, difficulty=args.get('difficulty', 'normal'),
                     types=args.get('types'), institution=scope, strict_scope=True, review_only=True)
                 return
@@ -70,8 +96,8 @@ def _run_teaching_task(task_id):
             task.result = {'questions': questions}
             task.status = 'review'
         elif kind == 'parse':
-            if not getattr(settings, 'UNIMIND_DSH_TEACHING_ENABLED', False):
-                raise ValueError('DSH 教研解析已关闭。')
+            if not parse_enabled():
+                raise ValueError('教研解析已关闭。')
             ids = validate_kps(args.get('kp_ids'))
             if len(ids) != 1:
                 raise ValueError('解析任务缺少唯一考点。')
@@ -79,6 +105,8 @@ def _run_teaching_task(task_id):
             parsed = AIService.parse_questions_from_text(args['raw_text'])
             if not parsed:
                 raise ValueError('未解析出有效候选题，请人工录入或分批重试。')
+            if ulr_enabled():
+                validate_kps(ids)
             kp_name = KnowledgePoint.objects.filter(institution=scope, pk=ids[0]).values_list('name', flat=True).first() or f'考点 #{ids[0]}'
             task.result = {'questions': [{**item, 'kp_id': ids[0], 'kp_name': kp_name, 'question': item['text'],
                 'answer': item['correct_answer'], 'explanation': item.get('analysis', '')} for item in parsed]}
@@ -95,6 +123,7 @@ def _run_teaching_task(task_id):
             task.status = 'completed'
         elif kind == 'chat':
             run_chat(task)
+            return
         else:
             raise ValueError('此任务没有可执行的处理器。')
         from ai_assistant.services.dsh_scope import check_teaching_task
@@ -111,13 +140,13 @@ def _run_teaching_task(task_id):
             if isinstance(exc, DshUnavailable):
                 message = '解析服务暂时不可用或未返回有效结果，材料可继续人工录入。'
             elif isinstance(exc, ValueError) and str(exc) in {
-                'DSH 教研解析已关闭。', '解析任务缺少唯一考点。',
+                '教研解析已关闭。', '解析任务缺少唯一考点。',
                 '未解析出有效候选题，请人工录入或分批重试。',
             }:
                 message = str(exc)
             else:
                 message = '解析任务执行失败，请稍后重试或人工录入。'
-        ContentPipelineTask.objects.filter(pk=task.pk).update(status='failed',
+        ContentPipelineTask.objects.filter(pk=task.pk, status='running').update(status='failed',
             error_message=message, finished_at=timezone.now())
 
 
@@ -125,6 +154,7 @@ def run_chat(task):
     from ai_engine.service import AIEngine
     from ai_assistant.bot_registry import get_bot_profile
     from ai_assistant.services.chat_service import AssistantChatService
+    from ai_assistant.services.dsh_scope import check_teaching_task
     from ai_assistant.services.tool_executor import set_permitted_tools
     from .teaching_executor import TeachingExecutor
     args = task.payload
@@ -136,6 +166,17 @@ def run_chat(task):
     tools = get_bot_profile('exam_generator').tools_factory()
     # Models cannot invoke a legacy handler even if they invent its name.
     tools = [item for item in tools if item['function']['name'] not in ('save_questions_to_bank', 'render_visual')]
+    ulr = ulr_enabled()
+    if ulr:
+        descriptions = {'send_notification': '准备通知预览，教师确认后才发送。',
+                        'launch_arc_pipeline': '准备精修任务参数，教师确认后才启动。',
+                        'quick_generate': '生成待教师审核的题目草稿，无权入库。'}
+        for item in tools:
+            function = item['function']
+            if function['name'] in descriptions:
+                function['description'] = descriptions[function['name']]
+            if function['name'] in ('send_notification', 'launch_arc_pipeline'):
+                function['parameters'] = {**function['parameters'], 'additionalProperties': False}
     set_permitted_tools(executor, tools)
     executor._allowed_tool_names = {item['function']['name'] for item in tools}
     prompt = AssistantChatService._build_agent_system_prompt(bot, '', '', executor.institution)
@@ -146,12 +187,16 @@ def run_chat(task):
     def progress(step):
         payload = dict(task.payload)
         payload['status_text'] = str(step.get('label') or step.get('name') or '正在处理')[:250]
-        ContentPipelineTask.objects.filter(pk=task.pk).update(payload=payload)
+        ContentPipelineTask.objects.filter(pk=task.pk, status='running').update(payload=payload)
         task.payload = payload
 
-    executor.on_step = progress
-    response = AIEngine.call_ai_with_tools(messages=messages, tools=tools, tool_executor=executor,
-        tool_choice='auto', temperature=0.6, max_tokens=2500, operation='assistant.chat.exam_generator', max_tool_rounds=8)
+    if ulr:
+        from .ulr_chat import run_workbench
+        response = run_workbench(messages, tools, executor, progress)
+    else:
+        executor.on_step = progress
+        response = AIEngine.call_ai_with_tools(messages=messages, tools=tools, tool_executor=executor,
+            tool_choice='auto', temperature=0.6, max_tokens=2500, operation='assistant.chat.exam_generator', max_tool_rounds=8)
     executor.check_dsh_scope()
     content = response['choices'][0]['message']['content'] or ''
     visuals = executor.pop_pending_visuals()
@@ -162,8 +207,22 @@ def run_chat(task):
     metadata = {'questions': executor.generated_batches, 'confirmations': executor.confirmations,
         'visuals': visuals, 'task_id': task.pk}
     with transaction.atomic():
+        ContentPipelineTask.objects.select_for_update().get(pk=task.pk)
+        check_teaching_task(task.pk)
+        Conversation.objects.select_for_update().get(pk=conversation.pk, user=user, bot=bot)
+        if ulr:
+            from .teaching import save_arc_draft, seal_notification_preview, student
+            for confirmation in executor.confirmations:
+                if confirmation['type'] == 'notification':
+                    student(confirmation['payload'])
+                    confirmation['payload'] = seal_notification_preview(user, confirmation['payload'])
+                elif confirmation['type'] == 'arc':
+                    save_arc_draft(task, confirmation['payload'])
         AIChatMessage.objects.create(user=user, bot=bot, conversation_id=conversation.conversation_id, role='user', content=args['message'])
         AIChatMessage.objects.create(user=user, bot=bot, conversation_id=conversation.conversation_id, role='assistant', content=content, metadata=metadata)
         Conversation.objects.filter(pk=conversation.pk).update(updated_at=timezone.now())
-    task.result = {'content': content, **metadata}
-    task.status = 'review' if executor.generated_batches else 'completed'
+        task.result = {'content': content, **metadata}
+        task.status = 'review' if executor.generated_batches else 'completed'
+        task.progress = 100
+        task.finished_at = timezone.now()
+        task.save(update_fields=['result', 'status', 'progress', 'finished_at', 'updated_at'])

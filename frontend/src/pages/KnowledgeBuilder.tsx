@@ -10,6 +10,7 @@ import {
   getKnowledgeBuildDetail,
   getKnowledgeBuildStatus,
   listKnowledgeBuilds,
+  resumeKnowledgeBuild,
 } from '@/lib/knowledgeBuilderApi';
 import type { BuildArchetype, BuildStatus, BuildSummary } from '@/types/knowledgeBuilder';
 import { KnowledgeIntakeWizard } from '@/components/KnowledgeIntakeWizard';
@@ -151,9 +152,20 @@ export default function KnowledgeBuilder() {
     [activeBuildId, builds]
   );
 
+  const resumeMutation = useMutation({
+    mutationFn: resumeKnowledgeBuild,
+    onSuccess: async resumed => {
+      const statusKey = queryKeys.knowledgeBuilder.status(resumed.id);
+      await queryClient.cancelQueries({ queryKey: statusKey });
+      queryClient.setQueryData(statusKey, resumed);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBuilder.list(userId) });
+    },
+  });
+
   const shouldPollStatus = Boolean(
     activeBuildId &&
-      (!selectedFromList ||
+      (resumeMutation.variables === activeBuildId ||
+        !selectedFromList ||
         selectedFromList.status === 'PENDING' ||
         selectedFromList.status === 'RUNNING')
   );
@@ -200,6 +212,18 @@ export default function KnowledgeBuilder() {
     },
   });
 
+  const resumeError = resumeMutation.variables === effectiveSummary?.id && resumeMutation.isError
+    ? <p role="alert">{extractApiError(resumeMutation.error)}</p> : null;
+  const resumeButton = effectiveSummary?.can_resume ? (
+    <Button
+      type="button"
+      disabled={resumeMutation.isPending}
+      onClick={() => resumeMutation.mutate(effectiveSummary.id)}
+    >
+      {t('继续构建')}
+    </Button>
+  ) : null;
+
   const buildPicker = (
     <div className="kb-subject-picker">
       <AppleSelect
@@ -234,7 +258,7 @@ export default function KnowledgeBuilder() {
           ...(detailQuery.data
             ? [
                 {
-                  label: t('公开资产池 & 整树挂载…'),
+                  label: t('📚 主线资料与切片对齐…'),
                   onSelect: () => setPublicAssetsBuildId(detailQuery.data!.id),
                 },
               ]
@@ -510,21 +534,26 @@ export default function KnowledgeBuilder() {
               <ArrowClockwise size={15} className="mr-1.5" />
               {t('立即刷新状态')}
             </Button>
+            {resumeError}
+            {resumeButton}
           </div>
         ) : effectiveSummary.status === 'FAILED' ? (
           <div className="kb-state-card">
             <h2>{t('《{0}》构建失败', { 0: effectiveSummary.subject })}</h2>
             <p>{effectiveSummary.error_message || t('后台构建流水线未能正常完成，请重新发起构建。')}</p>
-            <Button
-              type="button"
-              onClick={() => {
-                setNewSubject(effectiveSummary.subject);
-                setFormError(null);
-                setCreateOpen(true);
-              }}
-            >
-              {t('重新构建该科目')}
-            </Button>
+            {resumeError}
+            {resumeButton ?? (
+              <Button
+                type="button"
+                onClick={() => {
+                  setNewSubject(effectiveSummary.subject);
+                  setFormError(null);
+                  setCreateOpen(true);
+                }}
+              >
+                {t('重新构建该科目')}
+              </Button>
+            )}
           </div>
         ) : detailQuery.isError ? (
           <div className="kb-state-card">

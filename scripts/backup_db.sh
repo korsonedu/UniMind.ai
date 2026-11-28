@@ -15,12 +15,21 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BACKUP_DIR="${PROJECT_DIR}/backups"
 RETENTION_DAYS=30
 
-# 从 .env 读取数据库配置
+# .env 提供默认值，调用方指定的数据库与 DSH 状态目录优先。
 if [ -f "${PROJECT_DIR}/backend/.env" ]; then
+    backup_overrides=()
+    for key in DB_NAME DB_HOST DB_PORT DB_USER DB_PASSWORD UNIMIND_DSH_STATE_DIR; do
+        if [[ ${!key+x} ]]; then
+            backup_overrides+=("${key}=${!key}")
+        fi
+    done
     set -a
     # shellcheck disable=SC1091
     source "${PROJECT_DIR}/backend/.env"
     set +a
+    if [ "${#backup_overrides[@]}" -gt 0 ]; then
+        export "${backup_overrides[@]}"
+    fi
 fi
 
 DB_NAME="${DB_NAME:-unimind}"
@@ -28,14 +37,28 @@ DB_USER="${DB_USER:-unimind}"
 DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
 
-TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-BACKUP_FILE="${BACKUP_DIR}/${DB_NAME}_${TIMESTAMP}.sql.gz"
-
 mkdir -p "${BACKUP_DIR}"
 chmod 700 "${BACKUP_DIR}"
-BACKUP_PARTIAL="${BACKUP_FILE}.partial"
-trap 'rm -f "${BACKUP_PARTIAL}"; echo "[$(date -u +%FT%TZ)] database backup FAILED" >&2' ERR
-trap 'rm -f "${BACKUP_PARTIAL}"; exit 1' INT TERM
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+SNAPSHOT_DIR="$(mktemp -d "${BACKUP_DIR}/.snapshot.XXXXXX")"
+SNAPSHOT_ID="${TIMESTAMP}_${SNAPSHOT_DIR##*.}"
+DUMP_NAME="${DB_NAME}_${SNAPSHOT_ID}.sql.gz"
+ARCHIVE_NAME="files_${SNAPSHOT_ID}.tar.gz"
+BACKUP_FILE="${BACKUP_DIR}/${DUMP_NAME}"
+
+cleanup() {
+    if [ ! -e "${BACKUP_FILE}" ]; then
+        rm -f "${BACKUP_FILE}.sha256" "${BACKUP_DIR}/${ARCHIVE_NAME}" "${BACKUP_DIR}/${ARCHIVE_NAME}.sha256"
+    fi
+    rm -rf "${SNAPSHOT_DIR}"
+}
+trap cleanup EXIT
+trap 'echo "[$(date -u +%FT%TZ)] backup FAILED" >&2' ERR
+trap 'exit 1' INT TERM
+
+for path in "${PROJECT_DIR}/backend/.env" "${PROJECT_DIR}/backend/media" "${PROJECT_DIR}/backend/logs"; do
+    test -e "$path"
+done
 
 echo "[$(date)] 开始备份 ${DB_NAME}..."
 
@@ -46,21 +69,9 @@ PGPASSWORD="${DB_PASSWORD:-}" pg_dump \
     -d "${DB_NAME}" \
     --no-owner \
     --no-privileges \
-    | gzip > "${BACKUP_PARTIAL}"
-gzip -t "${BACKUP_PARTIAL}"
-mv "${BACKUP_PARTIAL}" "${BACKUP_FILE}"
-# Standard sha256sum format supports checksum verification before restoring.
-(cd "${BACKUP_DIR}" && shasum -a 256 "$(basename "${BACKUP_FILE}")" > "$(basename "${BACKUP_FILE}").sha256")
-
+    | gzip > "${SNAPSHOT_DIR}/${DUMP_NAME}"
 
 # Snapshot active logs first so tar never archives a file being appended by workers.
-FILE_BACKUP="${BACKUP_DIR}/files_${TIMESTAMP}.tar.gz"
-SNAPSHOT_DIR="$(mktemp -d "${BACKUP_DIR}/.snapshot.XXXXXX")"
-trap 'rm -f "${BACKUP_PARTIAL}" "${FILE_BACKUP}.partial"; rm -rf "${SNAPSHOT_DIR}"; echo "[$(date -u +%FT%TZ)] backup FAILED" >&2' ERR
-trap 'rm -f "${BACKUP_PARTIAL}" "${FILE_BACKUP}.partial"; rm -rf "${SNAPSHOT_DIR}"; exit 1' INT TERM
-for path in "${PROJECT_DIR}/backend/.env" "${PROJECT_DIR}/backend/media" "${PROJECT_DIR}/backend/logs"; do
-    test -e "$path"
-done
 cp -R "${PROJECT_DIR}/backend/logs" "${SNAPSHOT_DIR}/logs"
 paths=("${PROJECT_DIR}/backend/.env" "${PROJECT_DIR}/backend/media" "${SNAPSHOT_DIR}/logs")
 for path in "${ACCOUNT_RSA_KEY_PATH:-}" "${UNIMIND_DSH_STATE_DIR:-}"; do
@@ -68,12 +79,20 @@ for path in "${ACCOUNT_RSA_KEY_PATH:-}" "${UNIMIND_DSH_STATE_DIR:-}"; do
     test -e "$path"
     paths+=("$path")
 done
-tar -czf "${FILE_BACKUP}.partial" "${paths[@]}"
-gzip -t "${FILE_BACKUP}.partial"
-mv "${FILE_BACKUP}.partial" "${FILE_BACKUP}"
-(cd "${BACKUP_DIR}" && shasum -a 256 "$(basename "${FILE_BACKUP}")" > "$(basename "${FILE_BACKUP}").sha256")
-rm -rf "${SNAPSHOT_DIR}"
-# Seven full local file archives bound disk use; database dumps retain thirty days.
+tar -czf "${SNAPSHOT_DIR}/${ARCHIVE_NAME}" "${paths[@]}"
+(
+    cd "${SNAPSHOT_DIR}"
+    for file in "${DUMP_NAME}" "${ARCHIVE_NAME}"; do
+        gzip -t -- "$file"
+        shasum -a 256 "$file" > "${file}.sha256"
+    done
+)
+# Restore discovers the database file. Publish it only after its paired files are ready.
+mv "${SNAPSHOT_DIR}/${ARCHIVE_NAME}" "${SNAPSHOT_DIR}/${ARCHIVE_NAME}.sha256" \
+    "${SNAPSHOT_DIR}/${DUMP_NAME}.sha256" "${BACKUP_DIR}/"
+mv "${SNAPSHOT_DIR}/${DUMP_NAME}" "${BACKUP_FILE}"
+
+# File archives retain seven days; database dumps retain thirty days.
 find "${BACKUP_DIR}" -name 'files_*.tar.gz*' -mtime +7 -delete
 
 FILE_SIZE="$(du -h "${BACKUP_FILE}" | cut -f1)"

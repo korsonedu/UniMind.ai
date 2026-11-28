@@ -3,8 +3,16 @@ import { createServer } from 'vite';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+globalThis.sessionStorage = { getItem: () => null };
+globalThis.document = {
+  compatMode: 'CSS1Compat', querySelectorAll: () => [], querySelector: () => null, documentElement: {},
+  head: { appendChild() {} }, createElement: () => ({ appendChild() {} }), createTextNode() {},
+};
+globalThis.location = new URL('http://localhost/');
+globalThis.window = { location, addEventListener() {} };
+
 const server = await createServer({
-  server: { middlewareMode: true },
+  server: { middlewareMode: true, hmr: false },
   // This test only loads SSR modules; no client dependency discovery is needed.
   optimizeDeps: { noDiscovery: true },
 });

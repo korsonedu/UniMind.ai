@@ -1,0 +1,84 @@
+{
+  "case_id": "course-discount-transcript",
+  "delivery_cases": {
+    "direct": {
+      "case_id": "literal-current-course-card",
+      "scenario": "当前课程时间戳定位",
+      "prompt": "请定位当前课程的「折现率」讲稿。只要时间点。",
+      "reference": "当前课程《折现率迁移课》的对应讲稿在 01:00。另一门同名课的 02:00 片段不属于当前课。",
+      "criteria": {
+        "source": "只提供当前课程的讲稿来源。",
+        "timestamp": "来源定位到 01:00，只交付定位结果。"
+      },
+      "tool_paths": {
+        "dsh": ["search_asr"],
+        "ulr_model_instruction": [["locate_current_course_transcript", "find_learning_tools"]],
+        "ulr": ["locate_current_course_transcript"]
+      },
+      "tool_steps": {"ulr_model_instruction": [["search_asr"]], "ulr": [["search_asr"]]}
+    },
+    "named": {
+      "case_id": "literal-named-course-card",
+      "scenario": "按完整课程名称定位讲稿",
+      "prompt": "请定位课程「折现率迁移课」的「折现率」讲稿。只要时间点。",
+      "reference": "《折现率迁移课》对应片段在 01:00。名称相近的《折现率迁移导读》在 02:00 的片段不属于目标课程。",
+      "criteria": {
+        "source": "时间点卡片指向《折现率迁移课》的 01:00。",
+        "delivery": "只交付讲稿定位，未附加其他卡片或讲解。"
+      },
+      "tool_paths": {
+        "dsh": ["search_courses", "search_asr"],
+        "ulr_model_instruction": [["run_course_tools", "find_learning_tools"]],
+        "ulr": ["run_course_tools"]
+      },
+      "tool_steps": {
+        "ulr_model_instruction": [["search_courses", "search_asr"]],
+        "ulr": [["search_courses", "search_asr"]]
+      }
+    },
+    "timestamp": {
+      "case_id": "course-discount-timestamp",
+      "scenario": "课程伴学时间戳直达",
+      "prompt": "请查折现率课程，再在匹配的第一门课里查折现率讲稿。只要时间点。",
+      "expected_delivery": "card",
+      "criteria": {
+        "source": "提供通向《折现率迁移课》01:00 的讲稿来源卡。",
+        "scope": "仅确认定位结果或提供时间点及来源，未附加讲解。"
+      }
+    },
+    "explanation": {
+      "case_id": "course-discount-timestamp-explanation",
+      "scenario": "课程伴学时间戳与讲解",
+      "prompt": "请查折现率课程，并在第一门课中查找讲稿。给出时间点，也请用讲稿里的例子解释折现率。",
+      "expected_delivery": "answer",
+      "criteria": {
+        "source": "提供通向《折现率迁移课》01:00 的讲稿来源卡。",
+        "explanation": "给出完整讲解，说明一年后的 110 元按 10% 折现得到现在的 100 元。",
+        "scope": "未经讲稿核实的内容未被归为讲稿原文。"
+      }
+    }
+  },
+  "case": {
+    "scenario": "课程伴学",
+    "prompt": "请把折现率的公式推导和第一门相关课程的讲稿放在一起说。",
+    "reference": "合成课程《折现率迁移课》在 01:00 说明，一年后的 110 元以 10% 折现，现值为 100 元。公式为 PV = FV / (1 + r)^t，r 与 t 使用同一计息周期。",
+    "criteria": {
+      "formula": "公式的分母、指数和计息周期正确。",
+      "example": "使用讲稿中 110 元、10% 与 100 元的例子，解释折现方向。",
+      "source": "给出可回到《折现率迁移课》01:00 的原讲稿来源。",
+      "scope": "答复中未经讲稿核实的内容不会被归为讲稿原文。"
+    },
+    "tool_paths": {
+      "dsh": ["find_learning_tools", "search_courses", "search_asr"],
+      "ulr_individual": ["find_learning_tools", "search_courses", "search_asr"],
+      "ulr": [["find_learning_tools", "run_course_tools"]]
+    },
+    "tool_steps": {"ulr": [["search_courses", "search_asr"]]},
+    "fixture": {
+      "course_title": "折现率迁移课",
+      "transcript": "折现率讲稿证据。一年后的 110 元以 10% 折现，现值为 100 元。公式为 PV = FV / (1 + r)^t，r 与 t 使用同一计息周期。",
+      "start_time": 60,
+      "end_time": 75
+    }
+  }
+}

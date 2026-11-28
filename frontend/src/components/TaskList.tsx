@@ -1,15 +1,22 @@
 import { t, useLocale } from '@/i18n';
 import { useState, useEffect, useId, useRef } from 'react';
-import { Check, Circle, Spinner, X, CaretRight } from '@phosphor-icons/react';
+import { CaretRight, Check, CheckCircle, Circle, ListChecks, Spinner, X, XCircle } from '@phosphor-icons/react';
 import { Collapse } from './ui/collapse';
-import { cn } from '@/lib/utils';
-import { shouldExpandToolRun, type TaskListData } from '@/types/toolRun';
+import { shouldExpandToolRun, type TaskListData, type ToolTaskStatus } from '@/types/toolRun';
 import { useSystemStore } from '@/store/useSystemStore';
+import './task-list.css';
 
 interface TaskListProps {
   data: TaskListData;
   onComplete?: () => void;
 }
+
+const taskStatus = {
+  queued: { Icon: Circle, label: '等待中' },
+  running: { Icon: Spinner, label: '进行中' },
+  succeeded: { Icon: Check, label: '已完成' },
+  failed: { Icon: X, label: '失败' },
+} satisfies Record<ToolTaskStatus, { Icon: typeof Circle; label: string }>;
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -27,16 +34,15 @@ export function TaskList({ data, onComplete }: TaskListProps) {
   }
   const previousRunId = useRef(data.run_id);
   const contentId = useId();
-  const [completion, setCompletion] = useState(() => {
-    const doneIds = new Set(data.items.filter(item => item.status === 'succeeded').map(item => item.id));
-    return { items: data.items, doneIds, justCompleted: doneIds };
-  });
-
-  const activeCount = data.items.filter(item => item.status === 'queued' || item.status === 'running').length;
-  const succeededCount = data.items.filter(item => item.status === 'succeeded').length;
-  const failedCount = data.items.filter(item => item.status === 'failed').length;
+  const activeItems = data.items.filter(item => item.status === 'queued' || item.status === 'running');
+  const succeededItems = data.items.filter(item => item.status === 'succeeded');
+  const failedItems = data.items.filter(item => item.status === 'failed');
+  const succeededCount = succeededItems.length;
+  const failedCount = failedItems.length;
   const terminalCount = succeededCount + failedCount;
-  const allSucceeded = data.completed && !data.failed && activeCount === 0 && succeededCount > 0 && failedCount === 0;
+  const allSucceeded = data.completed && !data.failed && activeItems.length === 0 && succeededCount > 0 && failedCount === 0;
+  const runFailed = data.completed && (data.failed || failedCount > 0);
+  const SummaryIcon = allSucceeded ? CheckCircle : runFailed ? XCircle : ListChecks;
 
   useEffect(() => {
     if (shouldExpandToolRun(previousRunId.current, data)) {
@@ -56,105 +62,51 @@ export function TaskList({ data, onComplete }: TaskListProps) {
     }
   }, [allSucceeded, onComplete, toolDetails]);
 
-  // Track newly completed items for animation
-  const doneIds = new Set(data.items.filter(item => item.status === 'succeeded').map(item => item.id));
-  if (completion.items !== data.items) {
-    setCompletion({ items: data.items, doneIds, justCompleted: new Set([...doneIds].filter(id => !completion.doneIds.has(id))) });
-  }
-  const justCompleted = completion.justCompleted;
-
-  const succeededItems = data.items.filter(item => item.status === 'succeeded');
-  const failedItems = data.items.filter(item => item.status === 'failed');
-  const activeItems = data.items.filter(item => item.status === 'queued' || item.status === 'running');
-
   return (
-    <div className="my-3 rounded-xl border border-border/60 bg-card/50 overflow-hidden transition-all duration-[180ms]">
-      {/* Header */}
-      <button
-        aria-expanded={!collapsed}
-        aria-controls={contentId}
-        onClick={() => setCollapsed(!collapsed)}
-        className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted/30 transition-colors"
-      >
-        <CaretRight className="um-disclosure-chevron w-3.5 h-3.5" />
-        <span>
-          {allSucceeded
-            ? t('全部完成 · {0} 项', { 0: succeededCount })
-            : data.completed && (data.failed || failedCount > 0)
-              ? t('本轮未完成 · {0} 成功 · {1} 失败', { 0: succeededCount, 1: failedCount })
-              : t('进行中 · {0}/{1} 项', { 0: terminalCount, 1: data.items.length })}
-        </span>
-      </button>
+    <div className="um-chat-tasks">
+      <div className="min-h-0 overflow-hidden">
+        <div className="um-chat-tasks-panel">
+          <button
+            type="button"
+            aria-expanded={!collapsed}
+            aria-controls={contentId}
+            onClick={() => setCollapsed(value => !value)}
+            className="um-chat-tasks-summary"
+          >
+            <SummaryIcon size={16} aria-hidden="true" />
+            <span className="flex-1">
+              {allSucceeded
+                ? t('全部完成 · {0} 项', { 0: succeededCount })
+                : runFailed
+                  ? t('本轮未完成 · {0} 成功 · {1} 失败', { 0: succeededCount, 1: failedCount })
+                  : t('进行中 · {0}/{1} 项', { 0: terminalCount, 1: data.items.length })}
+            </span>
+            <CaretRight size={14} className="um-disclosure-chevron" aria-hidden="true" />
+          </button>
 
-      {/* Items */}
-      <Collapse open={!collapsed} id={contentId}>
-        <div className="border-t border-border/30">
-          {/* Active items first */}
-          {activeItems.map(item => (
-            <div
-              key={item.id}
-              className="flex items-center gap-3 px-4 py-2.5 text-sm border-b border-border/20 last:border-0"
-            >
-              {item.status === 'running'
-                ? <Spinner className="w-4 h-4 text-primary animate-spin shrink-0" />
-                : <Circle className="w-4 h-4 text-muted-foreground/50 shrink-0" />}
-              <span className="flex-1 text-foreground">{t(item.label)}</span>
-              {item.duration_ms != null && (
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {formatDuration(item.duration_ms)}
-                </span>
-              )}
-            </div>
-          ))}
-
-          {/* Succeeded items */}
-          {succeededItems.map(item => {
-            const isNew = justCompleted.has(item.id);
-            return (
-              <div
-                key={item.id}
-                className={cn(
-                  'flex items-center gap-3 px-4 py-2 text-sm border-b border-border/20 last:border-0 transition-all duration-[180ms]',
-                  isNew && 'bg-emerald-50/50 dark:bg-emerald-950/20',
-                )}
-              >
-                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span className="flex-1 text-muted-foreground line-through decoration-muted-foreground/30">
-                  {t(item.label)}
-                </span>
-                {item.duration_ms != null && (
-                  <span className="text-xs text-muted-foreground/70 tabular-nums">
-                    {formatDuration(item.duration_ms)}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Failed items */}
-          {failedItems.map(item => (
-            <div
-              key={item.id}
-              className="flex items-start gap-3 px-4 py-2.5 text-sm border-b border-border/20 last:border-0 bg-destructive/[0.04]"
-            >
-              <X className="w-4 h-4 mt-0.5 text-destructive shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="text-foreground">{t(item.label)}</div>
-                {item.error?.message && (
-                  <div className="text-xs text-destructive/80 mt-0.5 break-words">
-                    {item.error.message}
-                  </div>
-                )}
-              </div>
-              {item.duration_ms != null && (
-                <span className="text-xs text-muted-foreground/70 tabular-nums">
-                  {formatDuration(item.duration_ms)}
-                </span>
-              )}
-            </div>
-          ))}
+          <Collapse open={!collapsed} id={contentId}>
+            <ul className="um-chat-tasks-items" role="list">
+              {[...activeItems, ...succeededItems, ...failedItems].map(item => {
+                const { Icon, label } = taskStatus[item.status];
+                return (
+                  <li key={item.id} data-status={item.status} className="um-chat-task">
+                    <Icon size={14} role="img" aria-label={t(label)} className="um-chat-task-status" />
+                    <div className="min-w-0 flex-1 break-words">
+                      {t(item.label)}
+                      {item.status === 'failed' && item.error?.message && (
+                        <p className="um-chat-task-error">{item.error.message}</p>
+                      )}
+                    </div>
+                    {item.duration_ms != null && (
+                      <span className="um-chat-task-duration">{formatDuration(item.duration_ms)}</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </Collapse>
         </div>
-      </Collapse>
+      </div>
     </div>
   );
 }

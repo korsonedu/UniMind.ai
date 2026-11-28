@@ -65,6 +65,9 @@ class AssistantChatService:
             from django.conf import settings
             from pathlib import Path
             base += (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu/project_learning.txt').read_text()
+            from .prism_memory import mode, ANSWER_POLICY
+            if mode() == 'active':
+                base += ANSWER_POLICY
 
         adaptive_section = f"\n\n{adaptive_directives}" if adaptive_directives else ''
         variant_section = f"\n\n{variant_suffix}" if variant_suffix else ''
@@ -102,6 +105,8 @@ class AssistantChatService:
             if role in {'user', 'assistant'} and content:
                 messages.append({'role': role, 'content': content})
 
+        from .runtime.workbench_grounding import include_workbench_tools, inject_workbench_context
+        inject_workbench_context(messages, tool_executor, user_message)
         messages.append({'role': 'user', 'content': user_message})
 
         # 从 registry 获取 tools（Redis 缓存 300s，按 bot_type 分 key）
@@ -125,6 +130,7 @@ class AssistantChatService:
 
         from .project_learning_tools import include_project_tools
         tools = include_project_tools(tools, tool_executor)
+        tools = include_workbench_tools(tools, tool_executor, bot_type)
 
         # 设置工具白名单，防止 LLM 被注入后调用非预期工具
         tool_executor._allowed_tool_names = {t['function']['name'] for t in tools}

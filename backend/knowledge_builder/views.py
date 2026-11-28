@@ -1,27 +1,57 @@
+import logging
+
 from django.db import transaction
 from django.db.models import F, Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import serializers, status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.authentication import CookieTokenAuthentication
-from .models import (KnowledgeTreeBuild, LearningBlock, BlockStepAtom,
-                     BlockResourceFeedback, ConceptAssetIndex, PublicAssetCatalog)
+from .build_state import can_resume_build, lock_build_for_resume, reset_for_queue
+from .models import (
+    BlockResourceFeedback,
+    BlockStepAtom,
+    ConceptAssetIndex,
+    KnowledgeTreeBuild,
+    LearningBlock,
+    PublicAssetCatalog,
+    SourceAlignment,
+    TreeAtomPoint,
+    TreeSourceDocument,
+)
 from .pipeline import create_build
-from .serializers import BuildSummarySerializer, CreateBuildSerializer, FullKnowledgeTreeSerializer, RequirementIntakeSerializer
-from . import intake
+from .serializers import (
+    AtomMicroLessonRequestSerializer,
+    AtomMicroLessonSerializer,
+    AttachBlockResourceSerializer,
+    BlockQuizRequestSerializer,
+    BlockResourceSerializer,
+    BlockResourceUpdateSerializer,
+    BuildSummarySerializer,
+    CreateBuildSerializer,
+    CreateTreeSourceSerializer,
+    FullKnowledgeTreeSerializer,
+    PublicAssetCatalogSerializer,
+    RequirementIntakeSerializer,
+    SourceAlignmentSerializer,
+    SourceAlignmentUpdateSerializer,
+    TreePublicAssetImportSerializer,
+    TreeSourceDocumentSerializer,
+)
+from . import block_study, intake, micro_lesson_service, public_asset_service, source_alignment, source_parsers
 from .tasks import build_knowledge_tree
-from . import block_study, public_asset_service
-from .serializers import (AttachBlockResourceSerializer, BlockQuizRequestSerializer, BlockResourceSerializer,
-                          BlockResourceUpdateSerializer, PublicAssetCatalogSerializer, TreePublicAssetImportSerializer)
+
+logger = logging.getLogger(__name__)
 
 
 def _visible_builds(user):
     """Builds created by the user or shared system/CLI builds with no owner."""
-    return KnowledgeTreeBuild.objects.filter(Q(created_by=user) | Q(created_by__isnull=True))
+    return KnowledgeTreeBuild.objects.filter(Q(created_by=user) | Q(created_by__isnull=True)).defer('checkpoint')
 
 
 def _listable_builds(user):
@@ -29,7 +59,7 @@ def _listable_builds(user):
     return KnowledgeTreeBuild.objects.filter(
         Q(created_by=user)
         | Q(created_by__isnull=True, status=KnowledgeTreeBuild.Status.COMPLETED)
-    ).order_by(F('completed_at').desc(nulls_last=True), '-created_at')
+    ).defer('checkpoint').order_by(F('completed_at').desc(nulls_last=True), '-created_at')
 
 
 class BuildCreateView(APIView):
@@ -38,7 +68,7 @@ class BuildCreateView(APIView):
 
     def get(self, request):
         builds = _listable_builds(request.user)
-        return Response(BuildSummarySerializer(builds, many=True).data)
+        return Response(BuildSummarySerializer(builds, many=True, context={'request': request}).data)
 
     def post(self, request):
         serializer = CreateBuildSerializer(data=request.data)
@@ -50,7 +80,7 @@ class BuildCreateView(APIView):
             requirements=serializer.validated_data.get('requirements') or {},
         )
         enqueue_build(build)
-        return Response(BuildSummarySerializer(build).data, status=status.HTTP_202_ACCEPTED)
+        return Response(BuildSummarySerializer(build, context={'request': request}).data, status=status.HTTP_202_ACCEPTED)
 
 
 class BuildIntakeView(APIView):
@@ -68,9 +98,12 @@ def enqueue_build(build):
     try:
         return build_knowledge_tree.delay(str(build.pk))
     except Exception as exc:
-        build.status = KnowledgeTreeBuild.Status.FAILED
-        build.error_message = f'Task submission failed: {exc}'
-        build.save(update_fields=('status', 'error_message', 'updated_at'))
+        KnowledgeTreeBuild.objects.filter(
+            pk=build.pk, status=KnowledgeTreeBuild.Status.PENDING, updated_at=build.updated_at,
+        ).update(
+            status=KnowledgeTreeBuild.Status.FAILED, error_message=f'Task submission failed: {exc}',
+            updated_at=timezone.now(),
+        )
         raise
 
 
@@ -81,7 +114,21 @@ class BuildStatusView(APIView):
 
     def get(self, request, build_id):
         build = get_object_or_404(_visible_builds(request.user), pk=build_id)
-        return Response(self.serializer_class(build).data)
+        return Response(self.serializer_class(build, context={'request': request, 'check_build_lock': True}).data)
+
+
+class BuildResumeView(BuildStatusView):
+    http_method_names = ['post', 'options']
+
+    def post(self, request, build_id):
+        builds = KnowledgeTreeBuild.objects.filter(created_by=request.user).defer('checkpoint')
+        with transaction.atomic():
+            build = get_object_or_404(builds, pk=build_id)
+            if not (can_resume_build(build) and lock_build_for_resume(build) and reset_for_queue(build)):
+                return Response({'detail': '该构建当前无法继续。'}, status=status.HTTP_409_CONFLICT)
+        enqueue_build(build)
+        build.refresh_from_db()
+        return Response(self.serializer_class(build, context={'request': request}).data, status=status.HTTP_202_ACCEPTED)
 
 
 class BuildDetailView(BuildStatusView):
@@ -104,19 +151,56 @@ class BlockResourceView(BuildStatusView):
     def get(self, request, build_id, block_id):
         block = self.get_block(request, build_id, block_id)
         region = public_asset_service.get_region_preference(request.user, request)
+        include_candidates = request.query_params.get('include_candidates', '1') not in ('0', 'false', 'False')
         resources = block_study.visible_block_resources(request.user, block, request=request, explicit_region=region)
-        data = {'resources': BlockResourceSerializer(resources, many=True, context={'request': request}).data,
-                'internal_candidates': block_study.internal_resource_candidates(request.user, block, region), 'web_candidates': [],
-                'region_pref': region,
-                'wiki_candidates': public_asset_service.wiki_candidates_for_block(block, region),
-                'catalog_candidates': PublicAssetCatalogSerializer(
-                    public_asset_service.catalog_candidates_for_build(block.build, region, block=block), many=True).data}
+        alignments = (
+            SourceAlignment.objects.filter(block=block, source_document__build=block.build)
+            .select_related('source_document', 'block', 'atom')
+            .order_by('-is_verified', '-source_document__is_primary', '-confidence', 'id')
+        )
+        internal_candidates = []
+        wiki_candidates = []
+        catalog_candidates = []
+        if include_candidates:
+            try:
+                internal_candidates = block_study.internal_resource_candidates(request.user, block, region)
+            except Exception:
+                logger.warning('internal_resource_candidates failed for block %s', block.pk, exc_info=True)
+            try:
+                wiki_candidates = public_asset_service.wiki_candidates_for_block(block, region)
+            except Exception:
+                logger.warning('wiki_candidates_for_block failed for block %s', block.pk, exc_info=True)
+            try:
+                catalog_candidates = PublicAssetCatalogSerializer(
+                    public_asset_service.catalog_candidates_for_build(block.build, region, block=block), many=True).data
+            except Exception:
+                logger.warning('catalog_candidates_for_build failed for block %s', block.pk, exc_info=True)
+        data = {
+            'resources': BlockResourceSerializer(resources, many=True, context={'request': request}).data,
+            'source_alignments': SourceAlignmentSerializer(alignments, many=True).data,
+            'internal_candidates': internal_candidates,
+            'web_candidates': [],
+            'region_pref': region,
+            'wiki_candidates': wiki_candidates,
+            'catalog_candidates': catalog_candidates,
+        }
         if 'query' in request.query_params:
             data['web_candidates'] = block_study.search_block_web_resources(block, request.query_params['query'], region)
         return Response(data)
 
     def post(self, request, build_id, block_id):
         block = self.get_block(request, build_id, block_id)
+        if request.data.get('action') == 'auto_discover':
+            atom_id = request.data.get('atom_id')
+            if atom_id not in (None, ''):
+                atom_id = serializers.IntegerField(min_value=1).run_validation(atom_id)
+            else:
+                atom_id = None
+            mounted = block_study.auto_discover_block_resources(request.user, block, request=request, atom_id=atom_id)
+            return Response({
+                'mounted_count': len(mounted),
+                'resources': BlockResourceSerializer(mounted, many=True, context={'request': request}).data,
+            }, status=status.HTTP_200_OK)
         if request.data.get('action') == 'ensure_project':
             project_id = request.data.get('project_id')
             atom_id = request.data.get('atom_id')
@@ -310,3 +394,220 @@ class BlockQuizView(BlockResourceView):
         payload = serializer.validated_data
         from .block_assessments import block_assessment
         return Response(block_assessment(request.user, block, **payload))
+
+
+class TreeSourceListView(BuildStatusView):
+    parser_classes = (JSONParser, MultiPartParser, FormParser)
+
+    def get(self, request, build_id):
+        build = get_object_or_404(_visible_builds(request.user), pk=build_id)
+        sources = (
+            TreeSourceDocument.objects.filter(build=build)
+            .prefetch_related('alignments__source_document', 'alignments__block', 'alignments__atom')
+        )
+        albums = []
+        try:
+            albums = [
+                {'id': row.pk, 'name': row.name, 'description': row.description}
+                for row in public_asset_service.album_candidates(build, request.user)
+            ]
+        except Exception:
+            logger.warning('album_candidates failed for build %s', build.pk, exc_info=True)
+        return Response({
+            'sources': TreeSourceDocumentSerializer(sources, many=True).data,
+            'coverage': source_alignment.build_source_coverage_summary(build),
+            'albums': albums,
+        })
+
+    def post(self, request, build_id):
+        build = get_object_or_404(_visible_builds(request.user), pk=build_id)
+        uploaded = request.FILES.get('file')
+        raw_data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        if uploaded is not None:
+            filename = getattr(uploaded, 'name', '') or 'document'
+            lower_name = filename.lower()
+            if not raw_data.get('source_kind'):
+                if lower_name.endswith('.pdf'):
+                    raw_data['source_kind'] = TreeSourceDocument.SourceKind.PDF
+                elif lower_name.endswith(('.md', '.markdown')):
+                    raw_data['source_kind'] = TreeSourceDocument.SourceKind.MARKDOWN
+                else:
+                    raw_data['source_kind'] = TreeSourceDocument.SourceKind.TEXT
+            if not raw_data.get('title'):
+                raw_data['title'] = filename.rsplit('.', 1)[0][:240]
+
+        serializer = CreateTreeSourceSerializer(data=raw_data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        source_kind = payload['source_kind']
+        title = (payload.get('title') or '').strip()
+        url = (payload.get('url') or '').strip()
+        file_key = ''
+
+        if source_kind == TreeSourceDocument.SourceKind.PDF:
+            if uploaded is None:
+                raise ValidationError('上传 PDF 主线资料时请附带 PDF 文件。')
+            file_bytes = uploaded.read()
+            if len(file_bytes) > 25 * 1024 * 1024:
+                raise ValidationError('单个 PDF 文件不能超过 25MB。')
+            file_key = getattr(uploaded, 'name', '')[:500]
+            toc_tree, raw_sections = source_parsers.parse_pdf_bytes(file_bytes, filename=file_key)
+            title = title or file_key.rsplit('.', 1)[0] or 'PDF 主线教材'
+        elif source_kind in (TreeSourceDocument.SourceKind.MARKDOWN, TreeSourceDocument.SourceKind.TEXT):
+            content = payload.get('content') or ''
+            if uploaded is not None and not content:
+                raw_bytes = uploaded.read()
+                if len(raw_bytes) > 10 * 1024 * 1024:
+                    raise ValidationError('单个文档文件不能超过 10MB。')
+                file_key = getattr(uploaded, 'name', '')[:500]
+                try:
+                    content = raw_bytes.decode('utf-8')
+                except UnicodeDecodeError:
+                    content = raw_bytes.decode('gb18030', errors='ignore')
+            toc_tree, raw_sections = source_parsers.parse_markdown_or_text(content, title=title, kind=source_kind)
+            title = title or (toc_tree[0]['title'] if toc_tree else '主线文档')
+        elif source_kind == TreeSourceDocument.SourceKind.BILIBILI_SERIES:
+            title, url, toc_tree, raw_sections = source_parsers.parse_bilibili_series(
+                url, title=title, outline_text=payload.get('outline_text') or '',
+            )
+        elif source_kind == TreeSourceDocument.SourceKind.COURSE_ALBUM:
+            album_id = payload.get('album_id')
+            if not album_id:
+                raise ValidationError('请选择一个站内课程专辑。')
+            title, url, toc_tree, raw_sections = source_parsers.parse_course_album(album_id, request.user)
+        elif source_kind == TreeSourceDocument.SourceKind.WEB_REPO:
+            title, url, toc_tree, raw_sections = source_parsers.parse_web_repo(
+                url, title=title, outline_text=payload.get('outline_text') or '',
+            )
+        else:
+            raise ValidationError('不支持的主线信源类型。')
+
+        with transaction.atomic():
+            if payload.get('is_primary', True):
+                TreeSourceDocument.objects.filter(build=build, is_primary=True).update(is_primary=False)
+            source_doc = TreeSourceDocument.objects.create(
+                build=build,
+                source_kind=source_kind,
+                title=title[:240],
+                url=url[:1000],
+                file_key=file_key,
+                is_primary=bool(payload.get('is_primary', True)),
+                parse_status=TreeSourceDocument.ParseStatus.READY,
+                parse_error='',
+                toc_tree=toc_tree,
+                raw_sections=raw_sections,
+                created_by=request.user,
+            )
+
+        alignment_result = None
+        if payload.get('auto_align'):
+            alignment_result = source_alignment.align_source_document(source_doc)
+
+        source_doc.refresh_from_db()
+        return Response({
+            'source': TreeSourceDocumentSerializer(source_doc).data,
+            'coverage': source_alignment.build_source_coverage_summary(build),
+            'alignment_result': (
+                {
+                    'used_ai': alignment_result['used_ai'],
+                    'created_count': alignment_result['created_count'],
+                    'coverage': alignment_result['coverage'],
+                }
+                if alignment_result is not None else None
+            ),
+        }, status=status.HTTP_201_CREATED)
+
+
+class TreeSourceDetailView(BuildStatusView):
+    def delete(self, request, build_id, source_id):
+        build = get_object_or_404(_visible_builds(request.user), pk=build_id)
+        qs = TreeSourceDocument.objects.filter(build=build)
+        if build.created_by_id != request.user.pk:
+            qs = qs.filter(created_by=request.user)
+        get_object_or_404(qs, pk=source_id).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class TreeSourceAlignView(BuildStatusView):
+    def post(self, request, build_id, source_id):
+        build = get_object_or_404(_visible_builds(request.user), pk=build_id)
+        source_doc = get_object_or_404(TreeSourceDocument, build=build, pk=source_id)
+        if source_doc.parse_status != TreeSourceDocument.ParseStatus.READY:
+            raise ValidationError('该主线资料尚未解析就绪，暂时无法执行语义对齐。')
+        result = source_alignment.align_source_document(source_doc)
+        source_doc.refresh_from_db()
+        return Response({
+            'source': TreeSourceDocumentSerializer(source_doc).data,
+            'used_ai': result['used_ai'],
+            'created_count': result['created_count'],
+            'coverage': result['coverage'],
+            'build_coverage': source_alignment.build_source_coverage_summary(build),
+            'alignments': SourceAlignmentSerializer(result['alignments'], many=True).data,
+        }, status=status.HTTP_200_OK)
+
+
+class SourceAlignmentDetailView(BuildStatusView):
+    def patch(self, request, build_id, source_id, alignment_id):
+        build = get_object_or_404(_visible_builds(request.user), pk=build_id)
+        alignment = get_object_or_404(
+            SourceAlignment.objects.select_related('source_document', 'block', 'atom'),
+            source_document__build=build,
+            source_document_id=source_id,
+            pk=alignment_id,
+        )
+        serializer = SourceAlignmentUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        alignment.is_verified = serializer.validated_data['is_verified']
+        alignment.save(update_fields=('is_verified', 'updated_at'))
+        return Response(SourceAlignmentSerializer(alignment).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, build_id, source_id, alignment_id):
+        build = get_object_or_404(_visible_builds(request.user), pk=build_id)
+        alignment = get_object_or_404(
+            SourceAlignment,
+            source_document__build=build,
+            source_document_id=source_id,
+            pk=alignment_id,
+        )
+        alignment.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AtomMicroLessonView(BuildStatusView):
+    def get(self, request, build_id, atom_id):
+        build = get_object_or_404(_visible_builds(request.user), pk=build_id)
+        atom = get_object_or_404(TreeAtomPoint, build=build, pk=atom_id)
+        lesson, citations = micro_lesson_service.get_or_generate_micro_lesson(build, atom, generate=False)
+        if lesson is None:
+            tier, label = public_asset_service.compute_atom_difficulty(atom)
+            return Response({
+                'exists': False,
+                'atom': atom.pk,
+                'build': str(build.pk),
+                'difficulty_tier': tier,
+                'difficulty_label': label,
+                'is_source_grounded': bool(citations),
+                'citations': citations,
+            }, status=status.HTTP_200_OK)
+        data = AtomMicroLessonSerializer(lesson).data
+        if citations and not data.get('citations'):
+            data['citations'] = citations
+        return Response(data, status=status.HTTP_200_OK)
+
+    def post(self, request, build_id, atom_id):
+        build = get_object_or_404(_visible_builds(request.user), pk=build_id)
+        atom = get_object_or_404(TreeAtomPoint, build=build, pk=atom_id)
+        serializer = AtomMicroLessonRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        lesson, citations = micro_lesson_service.get_or_generate_micro_lesson(
+            build,
+            atom,
+            generate=True,
+            regenerate=payload['regenerate'],
+            style=payload['style'],
+        )
+        data = AtomMicroLessonSerializer(lesson).data
+        if citations and not data.get('citations'):
+            data['citations'] = citations
+        return Response(data, status=status.HTTP_200_OK)

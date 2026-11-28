@@ -420,6 +420,9 @@ def test_call_ai_logs_cached_tokens_from_usage(monkeypatch):
     service.AIEngine.call_ai([{"role": "user", "content": "hi"}], operation="knowledge_tree_edges")
     assert events[0]["metadata"]["cached_tokens"] == 1024
     assert events[0]["metadata"]["cache_miss_tokens"] == 176
+    fake_resp.json.return_value.pop("usage")
+    service.AIEngine.call_ai([{"role": "user", "content": "hi"}], operation="knowledge_tree_edges")
+    assert not {"prompt_tokens", "completion_tokens"} & events[1]["metadata"].keys()
 
 
 def test_strong_topo_order_respects_internal_strong_edges():

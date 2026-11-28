@@ -423,6 +423,10 @@ GET_RECENT_PRACTICE_RESULT_SCHEMA = {
 GET_PRACTICE_QUESTIONS_SCHEMA = {
     "type": "object",
     "properties": {
+        "knowledge_point_id": {
+            "type": "integer", "minimum": 1,
+            "description": "限定一个确切的知识点（来自 search_knowledge_tree 的 id）",
+        },
         "kp_name": {
             "type": "string",
             "description": "知识点名称（模糊匹配）",
@@ -626,8 +630,8 @@ GET_MY_ACHIEVEMENTS_SCHEMA = {
 
 def get_planner_tools():
     """学习规划师 Agent 工具集（含助教工具 + 规划专用工具）。"""
-    from ai_assistant.services.project_learning_tools import PROJECT_LEARNING_TOOLS
-    assistant = [*get_assistant_tools(), *PROJECT_LEARNING_TOOLS]
+    from ai_assistant.services.project_learning_tools import project_learning_tools
+    assistant = [*get_assistant_tools(), *project_learning_tools()]
     planner_only = [
         _make_tool("get_learning_stats", "获取用户学习统计概览（已练题数、最近正确率、连续学习天数、诊断掌握度）。调用后自动在对话中展示学习概览卡片，文字只需解读。", GET_LEARNING_STATS_SCHEMA,
             impl_summary="聚合 UserQuestionStatus（reps>0）：已练题数、最近正确率、累计近似正确率、连续学习天数、诊断掌握度。需要 user_id。"),

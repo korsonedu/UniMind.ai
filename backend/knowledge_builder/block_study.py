@@ -25,6 +25,7 @@ from quizzes.services.single_generate_pipeline import _check_latex_integrity, _c
 from .intake import _bank_question
 from .models import BlockResource, BlockStepAtom
 from .serializers import BlockResourceSerializer
+from .source_parsers import clean_resource_excerpt
 
 logger = logging.getLogger(__name__)
 _DEFAULT_PUBLIC_TEXT = learning_resources.public_text
@@ -281,9 +282,75 @@ def attach_block_resource(user, block, payload, request=None):
     if assignment:
         atom_id, step_id = assignment.atom_id, assignment.step_id
     fields.update({key: payload[key] for key in ('asset_track', 'pedagogical_role', 'locator') if key in payload})
+    fields['excerpt'] = clean_resource_excerpt(fields.get('excerpt', ''), max_len=600)
     with transaction.atomic():
         return BlockResource.objects.create(build=block.build, block=block, created_by=user,
                                             atom_id=atom_id, step_id=step_id, **fields)
+
+
+def auto_discover_block_resources(user, block, request=None, atom_id=None, max_mount=2):
+    """Single-block budgeted fallback discovery so BlockResourceDrawer never triggers a full-tree scan."""
+    from .public_asset_discovery import evaluate_candidate_quality, search_public_web
+    from .public_asset_resolvers import detect_source_kind, extract_locator_from_url, infer_region_scope
+    from .public_asset_service import get_region_preference, public_asset_allowed
+
+    region = get_region_preference(user, request)
+    assignments = _assignments(block)
+    target_row = next((r for r in assignments if r.atom_id == atom_id), None) if atom_id else None
+    focus_term = target_row.atom.name if target_row else block.short_title
+    queries = [
+        f'{block.build.subject} {focus_term} 精讲 site:bilibili.com/video',
+        f'{block.build.subject} {focus_term} 讲义 定义',
+    ]
+    existing_urls = set(block.resources.filter(is_dismissed=False).values_list('url', flat=True))
+    mounted = []
+    labels = [focus_term, block.short_title, *(row.atom.name for row in assignments[:4])]
+
+    for query in queries:
+        if len(mounted) >= max_mount:
+            break
+        try:
+            candidates = search_public_web(query, region_pref=region, limit=5)
+        except Exception as exc:
+            logger.warning('Single-block web discovery failed for query %r: %s', query, exc)
+            continue
+        for item in candidates:
+            if len(mounted) >= max_mount:
+                break
+            url = (item.get('url') or '').strip()
+            if not url.startswith('https://') or url in existing_urls:
+                continue
+            if not public_asset_allowed(item, region):
+                continue
+            score = evaluate_candidate_quality(item, block.build.subject, labels)
+            if not score:
+                continue
+            kind = detect_source_kind(url)
+            track = 'wiki' if kind == 'wikipedia' else 'spotlight'
+            row_match = target_row
+            if row_match is None:
+                row_match, _ = _match(block, assignments, f"{item.get('title', '')} {item.get('summary', '')}")
+            created = BlockResource.objects.create(
+                build=block.build,
+                block=block,
+                step_id=row_match.step_id if row_match else None,
+                atom_id=row_match.atom_id if row_match else None,
+                source_kind=kind,
+                asset_track=track,
+                pedagogical_role='wiki_reference' if track == 'wiki' else 'concept_intuition',
+                locator=extract_locator_from_url(url, kind),
+                region_scope=infer_region_scope(url, kind),
+                title=clean_resource_excerpt(item.get('title') or url, max_len=200),
+                url=url[:1000],
+                excerpt=clean_resource_excerpt(item.get('summary') or '', max_len=600),
+                origin='auto',
+                match_method='block_fallback_search',
+                match_score=float(score),
+                created_by=user,
+            )
+            existing_urls.add(url)
+            mounted.append(created)
+    return mounted
 
 
 def _hash(stem):
@@ -329,7 +396,7 @@ def _clean_question(raw, q_type):
     return item
 
 
-def _generate_question(row, block, q_type, seen, source_context=''):
+def _generate_question(row, block, q_type, seen, source_context='', *, before_retry=None):
     atom = row.atom
     if config._get_api_key():
         description = (f'所属学习块：{block.short_title}；掌握目标：{atom.goal_statement}；认知层级：{atom.cognitive_level}；'
@@ -342,7 +409,8 @@ def _generate_question(row, block, q_type, seen, source_context=''):
         try:
             generated = QuestionGenerator(AIService)._request_bulk_generate_once(
                 [{'id': atom.pk, 'code': atom.code, 'name': atom.name, 'description': description}],
-                1, ['objective'] if q_type == 'objective' else ['subjective:short', 'subjective:calculate'], 'normal' if q_type == 'objective' else 'hard', '')
+                1, ['objective'] if q_type == 'objective' else ['subjective:short', 'subjective:calculate'],
+                'normal' if q_type == 'objective' else 'hard', '', before_retry=before_retry)
             for raw in generated:
                 item = _clean_question(raw, q_type)
                 if item and _hash(item['stem']) not in seen:

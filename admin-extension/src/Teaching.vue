@@ -7,7 +7,7 @@ import { localDate, useTask } from './api';
 import { difficulties } from './catalog';
 import type { Gateway, Meta, Page, Payload } from './types';
 
-type Job = { id: number; title: string; status: string; progress: number; task_type: string; payload: any; result?: any; error_message?: string; created_at: string };
+type Job = { id: number; title: string; status: string; progress: number; task_type: string; payload: any; result?: any; error_message?: string; created_at: string; can_resume?: boolean };
 type Message = { id: number; role: string; content: string; metadata: any };
 type Candidate = { question?: string; text?: string; q_type?: string; subjective_type?: string; kp_id?: number; kp_name?: string; answer?: string; grading_points?: any; options?: any; difficulty_level?: string };
 const props = defineProps<{ api: Gateway; meta: Meta; view: 'workbench' | 'tasks' }>();
@@ -157,6 +157,11 @@ async function generate(payload?: Payload) {
   panel.value = ''; success.value = `任务 #${job.id} 已提交，完成后请审核题目。`;
   await watchJob(job); await loadJobs();
 }
+const arcTypeLabels: Record<string, string> = { objective: '客观题', 'subjective:noun': '名词解释',
+  'subjective:short': '简答题', 'subjective:essay': '论述题', 'subjective:calculate': '计算题' };
+async function confirmArc(preview: Payload) {
+  await generate({ ...preview, confirmed: true, source_task_id: latestAssistant.value?.metadata?.task_id });
+}
 async function findKnowledge() { knowledge.value = (await props.api('teaching.knowledge', { query: kpQuery.value, page_size: 100 })).items; }
 async function findPeople() { people.value = (await props.api('teaching.students', { search: studentQuery.value, page_size: 100 })).items; }
 async function restoreDraft(item: Message) {
@@ -183,6 +188,9 @@ async function makeReport() {
 }
 async function previewNotification() {
   noticePreview.value = await props.api('teaching.notification.preview', { student_id: studentId.value, title: noticeTitle.value, content: noticeContent.value });
+}
+function openNotificationConfirmation(preview: Payload) {
+  noticePreview.value = { ...preview, source_task_id: latestAssistant.value?.metadata?.task_id };
 }
 async function sendNotification(preview: any) {
   await write('teaching.notification.send', { ...preview, confirmed: true });
@@ -251,12 +259,16 @@ watch(() => props.view, () => run(async () => { current.value = undefined; await
       <div class="toolbar"><button :disabled="!canWrite" @click="run(() => openPanel('generate'))">出题与批量初始化</button><button :disabled="!canWrite" @click="run(() => openPanel('student'))">学情与报告</button><button :disabled="!canWrite" @click="run(() => openPanel('notification'))">通知学员</button><button :disabled="!canWrite" @click="run(() => openPanel('notification-config'))">到期提醒配置</button><button :disabled="busy || !meta.content_configured" @click="run(() => openPanel('assets'))">浏览教学资产</button></div>
       <div class="teaching-chat-layout"><aside class="teaching-conversations"><button :disabled="busy" @click="newConversation"><Plus :size="15" />新建对话</button><button v-for="item in conversations" :key="item.id" :class="{ active: conversationId === item.id }" :disabled="busy" @click="run(() => selectConversation(item.id))">{{ item.title || '未命名对话' }}</button><p v-if="!conversations.length" class="empty">暂无对话记录</p></aside>
         <div class="teaching-chat"><button v-if="messages.length < historyTotal" :disabled="busy" @click="run(olderHistory)">加载更早消息</button><div class="teaching-messages"><p v-if="!messages.length" class="empty">可以查找考点、生成题目、查看学情或准备通知。题目入库和发送通知会请你确认。</p><article v-for="item in messages" :key="item.id" :class="['teaching-message', item.role]"><small>{{ item.role === 'user' ? meta.operator.name : '教学助手' }}</small><p>{{ item.content }}</p><details v-if="item.metadata?.visuals?.length || item.metadata?.all_visuals?.length || item.metadata?.visual"><summary>查看学情与结构化结果</summary><TeachingData :value="item.metadata.visuals || item.metadata.all_visuals || item.metadata.visual" /></details><button v-if="item.role === 'assistant' && (item.metadata?.generated_questions?.length || item.metadata?.questions?.length)" :disabled="!canWrite" @click="run(() => restoreDraft(item))">恢复这批题目进行审核</button><button v-if="item.metadata?.pipeline_task_id" :disabled="busy" @click="run(() => openJob({ id: item.metadata.pipeline_task_id } as Job))">查看关联管线 #{{ item.metadata.pipeline_task_id }}</button></article></div>
-          <div v-for="(item, index) in confirmations" :key="index" class="teaching-confirmation"><template v-if="item.type === 'notification'"><p>待确认通知：{{ item.payload.recipient }}</p><strong>{{ item.payload.title }}</strong><p>{{ item.payload.content }}</p><button :disabled="!canWrite" @click="noticePreview = item.payload">核对并发送</button></template><template v-else-if="item.type === 'arc'"><p>助手建议启动 ARC 精修，{{ item.payload.kp_ids?.length }} 个考点，目标 {{ item.payload.count }} 题。</p><button :disabled="!canWrite" @click="run(() => generate(item.payload))">确认启动精修</button></template></div>
+          <div v-for="(item, index) in confirmations" :key="index" class="teaching-confirmation"><template v-if="item.type === 'notification'"><p>待确认通知：{{ item.payload.recipient }}</p><strong>{{ item.payload.title }}</strong><p>{{ item.payload.content }}</p><button :disabled="!canWrite" @click="openNotificationConfirmation(item.payload)">核对并发送</button></template><template v-else-if="item.type === 'arc'"><p>ARC 精修 · 目标 {{ item.payload.count }} 题<span v-if="item.payload.questions_per_kp"> · 每个考点 {{ item.payload.questions_per_kp }} 题</span></p>
+            <p>考点编号 {{ item.payload.kp_ids?.join('、') }} · {{ difficulties.find(option => option.value === item.payload.difficulty)?.label || item.payload.difficulty }} · {{ item.payload.types?.length ? item.payload.types.map((type: string) => arcTypeLabels[type] || type).join('、') : '全部题型' }}</p>
+            <button :disabled="!canWrite || busy" @click="run(() => confirmArc(item.payload))">确认启动精修</button></template></div>
           <form class="teaching-composer" @submit.prevent="run(send)"><textarea v-model="message" rows="3" aria-label="教学任务" placeholder="描述教学任务…" :disabled="busy || !meta.content_configured" /><button class="primary" :disabled="!canWrite || working || !message.trim()"><Send :size="16" />发送</button></form>
         </div>
       </div>
     </template>
-    <div v-if="activeJob" class="teaching-progress" role="status"><div><strong>#{{ activeJob.id }} {{ activeJob.title }}</strong><span>{{ statusNames[activeJob.status] }} · {{ activeJob.progress }}%</span></div><progress max="100" :value="activeJob.progress" /><small>{{ activeJob.payload?.status_text || activeJob.error_message }}</small></div>
+    <div v-if="activeJob" class="teaching-progress" role="status"><div><strong>#{{ activeJob.id }} {{ activeJob.title }}</strong><span>{{ statusNames[activeJob.status] }} · {{ activeJob.progress }}%</span></div><progress max="100" :value="activeJob.progress" /><small>{{ activeJob.payload?.status_text || activeJob.error_message }}</small>
+      <button v-if="activeJob.can_resume" :disabled="!canWrite" @click="run(() => retryTask(activeJob!))">继续任务</button>
+    </div>
     <template v-if="view === 'tasks'">
       <form class="toolbar" @submit.prevent="run(() => loadJobs())"><input v-model="search" aria-label="搜索任务" placeholder="搜索任务标题" /><select v-model="status" aria-label="任务状态" :disabled="busy" @change="run(() => loadJobs())"><option value="">全部状态</option><option v-for="(label, value) in statusNames" :key="value" :value="value">{{ label }}</option></select><button :disabled="busy">查询</button><button type="button" :disabled="busy" @click="run(async () => { metrics = await api('pipeline.metrics'); })">查看近14天指标</button></form>
       <details v-if="metrics" open class="teaching-results"><summary>管线指标</summary><TeachingData :value="metrics" /></details>

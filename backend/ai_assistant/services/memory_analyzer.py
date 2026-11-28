@@ -25,7 +25,7 @@ class UserProfile:
     raw_analysis: str  # LLM 原始分析
 
 
-ANALYSIS_PROMPT = """你是一个学习行为分析专家。分析以下用户记忆，识别学习风格和当前状态。
+PROFILE_PROMPT = """你是一个学习行为分析专家。分析以下用户记忆，识别学习风格和当前状态。
 
 用户记忆：
 {memories}
@@ -60,7 +60,9 @@ ANALYSIS_PROMPT = """你是一个学习行为分析专家。分析以下用户�
    - intermediate: 中级（能处理标准问题）
    - advanced: 高级（关注综合应用）
 
-6. **置信度**：0-1，表示分析的确定程度
+6. **置信度**：0-1，表示分析的确定程度"""
+
+ANALYSIS_PROMPT = PROFILE_PROMPT + """
 
 返回 JSON 格式：
 {{

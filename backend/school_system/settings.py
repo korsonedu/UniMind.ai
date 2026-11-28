@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import math
 import os
 from pathlib import Path
 
@@ -224,6 +225,13 @@ CORS_ALLOWED_ORIGINS = _get_list("CORS_ALLOWED_ORIGINS")
 if CORS_ALLOW_CAPACITOR_ORIGINS:
     CORS_ALLOWED_ORIGINS = list(dict.fromkeys([*CORS_ALLOWED_ORIGINS, *CAPACITOR_ALLOWED_ORIGINS]))
 CORS_ALLOWED_ORIGIN_REGEXES = _get_list("CORS_ALLOWED_ORIGIN_REGEXES")
+CORS_ALLOW_EXTENSION_ORIGINS = _get_bool("CORS_ALLOW_EXTENSION_ORIGINS", default=True)
+if CORS_ALLOW_EXTENSION_ORIGINS:
+    CORS_ALLOWED_ORIGIN_REGEXES = list(dict.fromkeys([
+        *CORS_ALLOWED_ORIGIN_REGEXES,
+        r"^chrome-extension://[a-z]{32}$",
+        r"^moz-extension://[0-9a-fA-F-]+$",
+    ]))
 from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = (*default_headers, 'x-unimind-workspace')
 CORS_ALLOW_CREDENTIALS = _get_bool("CORS_ALLOW_CREDENTIALS", default=True)
@@ -239,19 +247,73 @@ if CORS_ALLOW_CAPACITOR_ORIGINS:
 
 # The account rollout is opt-in. No credentials are stored in the frontend.
 ACCOUNT_ENABLED = _get_bool("ACCOUNT_ENABLED")
-UNIMIND_DSH_ENABLED = _get_bool("UNIMIND_DSH_ENABLED")
+UNIMIND_LEARNING_RUNTIME = os.getenv("UNIMIND_LEARNING_RUNTIME", "ulr" if IS_PROD else "legacy").strip().lower()
+if UNIMIND_LEARNING_RUNTIME not in {"legacy", "ulr"}:
+    raise ImproperlyConfigured("UNIMIND_LEARNING_RUNTIME must be legacy or ulr.")
+
+
+def _dsh_flag(name):
+    return UNIMIND_LEARNING_RUNTIME == "legacy" and _get_bool(name)
+
+
+UNIMIND_DSH_ENABLED = _dsh_flag("UNIMIND_DSH_ENABLED")
 UNIMIND_PUBLIC_ASSET_EDITION = os.getenv("UNIMIND_PUBLIC_ASSET_EDITION", "cn")
 UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE = _get_bool("UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE")
 UNIMIND_LEARNING_EXPERIMENTS_ENABLED = _get_bool("UNIMIND_LEARNING_EXPERIMENTS_ENABLED")
 UNIMIND_LEARNING_VISUAL_REVIEW_ENABLED = _get_bool("UNIMIND_LEARNING_VISUAL_REVIEW_ENABLED")
 UNIMIND_LEARNING_WORKER_ROOT = os.getenv("UNIMIND_LEARNING_WORKER_ROOT", "")
-UNIMIND_DSH_GENERATION_ENABLED = _get_bool("UNIMIND_DSH_GENERATION_ENABLED")
-UNIMIND_DSH_TEACHING_ENABLED = _get_bool("UNIMIND_DSH_TEACHING_ENABLED")
-UNIMIND_DSH_TITLE_ENABLED = _get_bool("UNIMIND_DSH_TITLE_ENABLED")
-UNIMIND_DSH_MEMORY_ENABLED = _get_bool("UNIMIND_DSH_MEMORY_ENABLED")
-UNIMIND_DSH_GRADING_ENABLED = _get_bool("UNIMIND_DSH_GRADING_ENABLED")
-UNIMIND_DSH_XIAOYU_ENABLED = _get_bool("UNIMIND_DSH_XIAOYU_ENABLED")
-UNIMIND_DSH_SITE_ENABLED = _get_bool("UNIMIND_DSH_SITE_ENABLED")
+UNIMIND_DSH_GENERATION_ENABLED = _dsh_flag("UNIMIND_DSH_GENERATION_ENABLED")
+UNIMIND_DSH_TEACHING_ENABLED = _dsh_flag("UNIMIND_DSH_TEACHING_ENABLED")
+UNIMIND_DSH_TITLE_ENABLED = _dsh_flag("UNIMIND_DSH_TITLE_ENABLED")
+UNIMIND_DSH_MEMORY_ENABLED = _dsh_flag("UNIMIND_DSH_MEMORY_ENABLED")
+UNIMIND_DSH_GRADING_ENABLED = _dsh_flag("UNIMIND_DSH_GRADING_ENABLED")
+UNIMIND_DSH_XIAOYU_ENABLED = _dsh_flag("UNIMIND_DSH_XIAOYU_ENABLED")
+UNIMIND_ULR_PROTOTYPE = DEBUG and _get_bool("UNIMIND_ULR_PROTOTYPE")
+UNIMIND_ULR_RECHECK_STRATEGY = os.getenv("UNIMIND_ULR_RECHECK_STRATEGY", "immediate")
+UNIMIND_DSH_SITE_ENABLED = _dsh_flag("UNIMIND_DSH_SITE_ENABLED")
+
+UNIMIND_PRISM_MODE = os.getenv('UNIMIND_PRISM_MODE', 'off')
+if UNIMIND_PRISM_MODE not in ('off', 'shadow', 'active'):
+    raise ImproperlyConfigured('UNIMIND_PRISM_MODE must be off, shadow or active.')
+UNIMIND_SDTM_TASK_MEMORY_MODE = os.getenv('UNIMIND_SDTM_TASK_MEMORY_MODE', 'off')
+if UNIMIND_SDTM_TASK_MEMORY_MODE not in ('off', 'shadow', 'active'):
+    raise ImproperlyConfigured('UNIMIND_SDTM_TASK_MEMORY_MODE must be off, shadow or active.')
+UNIMIND_SDTM_STRUCTURED_DIAGNOSTICS = _get_bool('UNIMIND_SDTM_STRUCTURED_DIAGNOSTICS')
+try:
+    UNIMIND_SDTM_DIAGNOSTIC_PROJECTS = frozenset(int(value) for value in
+        os.getenv('UNIMIND_SDTM_DIAGNOSTIC_PROJECTS', '').split(',') if value.strip())
+except ValueError as error:
+    raise ImproperlyConfigured('UNIMIND_SDTM_DIAGNOSTIC_PROJECTS must contain comma-separated project IDs.') from error
+UNIMIND_RSI_ONLINE_POLICY_MODE = os.getenv('UNIMIND_RSI_ONLINE_POLICY_MODE', 'off')
+if UNIMIND_RSI_ONLINE_POLICY_MODE not in ('off', 'shadow', 'active'):
+    raise ImproperlyConfigured('UNIMIND_RSI_ONLINE_POLICY_MODE must be off, shadow or active.')
+try:
+    UNIMIND_RSI_POLICY_PROJECTS = frozenset(int(value) for value in
+        os.getenv('UNIMIND_RSI_POLICY_PROJECTS', '').split(',') if value.strip())
+except ValueError as error:
+    raise ImproperlyConfigured('UNIMIND_RSI_POLICY_PROJECTS must contain comma-separated project IDs.') from error
+try:
+    UNIMIND_RSI_EXPLORATION_RATE = float(os.getenv('UNIMIND_RSI_EXPLORATION_RATE', '0.0'))
+except ValueError as error:
+    raise ImproperlyConfigured('UNIMIND_RSI_EXPLORATION_RATE must be a finite number between 0.0 and 0.5.') from error
+if not math.isfinite(UNIMIND_RSI_EXPLORATION_RATE) or not 0.0 <= UNIMIND_RSI_EXPLORATION_RATE <= 0.5:
+    raise ImproperlyConfigured('UNIMIND_RSI_EXPLORATION_RATE must be a finite number between 0.0 and 0.5.')
+
+UNIMIND_LEARNING_MEMORY_CONNECTORS = _get_bool('UNIMIND_LEARNING_MEMORY_CONNECTORS')
+UNIMIND_LEARNING_MEMORY_OAUTH_ORIGIN = os.getenv('UNIMIND_LEARNING_MEMORY_OAUTH_ORIGIN', '').rstrip('/')
+UNIMIND_LEARNING_MEMORY_OAUTH_CLIENT_IDS = frozenset(_get_list('UNIMIND_LEARNING_MEMORY_OAUTH_CLIENT_IDS'))
+UNIMIND_LEARNING_MEMORY_OAUTH_DCR = _get_bool('UNIMIND_LEARNING_MEMORY_OAUTH_DCR')
+UNIMIND_MCP_CLIENT_ENABLED = _get_bool('UNIMIND_MCP_CLIENT_ENABLED')
+UNIMIND_MCP_CLIENT_ALLOW_PRIVATE_URLS = _get_bool('UNIMIND_MCP_CLIENT_ALLOW_PRIVATE_URLS')
+if UNIMIND_LEARNING_MEMORY_OAUTH_ORIGIN:
+    from urllib.parse import urlsplit
+    _memory_oauth_origin = urlsplit(UNIMIND_LEARNING_MEMORY_OAUTH_ORIGIN)
+    if (not _memory_oauth_origin.hostname or _memory_oauth_origin.username or _memory_oauth_origin.password
+            or _memory_oauth_origin.path or _memory_oauth_origin.query or _memory_oauth_origin.fragment
+            or (_memory_oauth_origin.scheme != 'https' and
+                (IS_PROD or _memory_oauth_origin.scheme != 'http' or _memory_oauth_origin.hostname not in ('127.0.0.1', 'localhost', '::1')))):
+        raise ImproperlyConfigured('UNIMIND_LEARNING_MEMORY_OAUTH_ORIGIN must be an HTTPS origin.')
+
 UNIMIND_DSH_PYTHON = os.getenv("UNIMIND_DSH_PYTHON", "")
 UNIMIND_DSH_API_URL = os.getenv("UNIMIND_DSH_API_URL", "")
 UNIMIND_DSH_STATE_DIR = os.getenv("UNIMIND_DSH_STATE_DIR", "")
@@ -430,6 +492,7 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_ENABLE_UTC = USE_TZ
 CELERY_TASK_DEFAULT_QUEUE = os.getenv("CELERY_TASK_DEFAULT_QUEUE", "default")
+CELERY_TASK_ALWAYS_EAGER = _get_bool("CELERY_TASK_ALWAYS_EAGER", default=False)
 CELERY_TASK_TRACK_STARTED = _get_bool("CELERY_TASK_TRACK_STARTED", default=True)
 CELERY_TASK_ACKS_LATE = _get_bool("CELERY_TASK_ACKS_LATE", default=True)
 CELERY_TASK_REJECT_ON_WORKER_LOST = _get_bool("CELERY_TASK_REJECT_ON_WORKER_LOST", default=True)
@@ -549,6 +612,7 @@ CELERY_TASK_ROUTES = {
     # ── high_priority ──
     "ai_assistant.tasks.record_trajectory_async": {"queue": "high_priority"},
     "ai_assistant.tasks.generate_conversation_title": {"queue": "high_priority"},
+    "ai_assistant.tasks.extract_memory_turn": {"queue": "high_priority"},
     "ai_assistant.tasks.precompute_user_profile": {"queue": "high_priority"},
     # ── low_priority ──
     "ai_assistant.tasks.analyze_trajectory_task": {"queue": "low_priority"},
@@ -685,5 +749,17 @@ if SENTRY_DSN:
 
 CELERY_BEAT_SCHEDULE['project-learning-followups'] = {
     'task': 'ai_assistant.tasks_learning.send_project_learning_followups',
+    'schedule': 60.0,
+}
+CELERY_BEAT_SCHEDULE['pending-memory-extractions'] = {
+    'task': 'ai_assistant.tasks.dispatch_pending_memory_extractions',
+    'schedule': 60.0,
+}
+CELERY_BEAT_SCHEDULE['pending-conversation-titles'] = {
+    'task': 'ai_assistant.tasks.dispatch_pending_conversation_titles',
+    'schedule': 60.0,
+}
+CELERY_BEAT_SCHEDULE['pending-course-questions'] = {
+    'task': 'courses.tasks.dispatch_pending_course_questions',
     'schedule': 60.0,
 }

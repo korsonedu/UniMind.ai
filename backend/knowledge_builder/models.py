@@ -18,6 +18,8 @@ class KnowledgeTreeBuild(models.Model):
     requirements = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     current_stage = models.CharField(max_length=64, blank=True)
+    requires_ulr = models.BooleanField(default=False)
+    checkpoint = models.JSONField(default=dict, editable=False)
     archetype = models.CharField(max_length=40, default='auto')
     dispatch_profile = models.JSONField(default=dict)
     stats = models.JSONField(default=dict)
@@ -249,3 +251,112 @@ class ConceptAssetIndex(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['subject_domain', 'concept_name', 'public_asset', 'segment_locator'], name='kb_concept_asset_unique')]
+
+
+class TreeSourceDocument(models.Model):
+    """Source-First primary material (Markdown/TXT/PDF/Bilibili series/Course Album/Web Repo) bound to a build."""
+
+    class SourceKind(models.TextChoices):
+        PDF = 'pdf', 'pdf'
+        MARKDOWN = 'markdown', 'markdown'
+        TEXT = 'text', 'text'
+        BILIBILI_SERIES = 'bilibili_series', 'bilibili_series'
+        COURSE_ALBUM = 'course_album', 'course_album'
+        WEB_REPO = 'web_repo', 'web_repo'
+
+    class ParseStatus(models.TextChoices):
+        PENDING = 'pending', 'pending'
+        READY = 'ready', 'ready'
+        FAILED = 'failed', 'failed'
+
+    build = models.ForeignKey(KnowledgeTreeBuild, on_delete=models.CASCADE, related_name='source_documents')
+    source_kind = models.CharField(max_length=24, choices=SourceKind.choices, default=SourceKind.MARKDOWN)
+    title = models.CharField(max_length=240)
+    url = models.CharField(max_length=1000, blank=True, default='')
+    file_key = models.CharField(max_length=500, blank=True, default='')
+    is_primary = models.BooleanField(default=False)
+    parse_status = models.CharField(max_length=16, choices=ParseStatus.choices, default=ParseStatus.PENDING)
+    parse_error = models.TextField(blank=True, default='')
+    toc_tree = models.JSONField(default=list)
+    raw_sections = models.JSONField(default=dict)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='kb_source_documents')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ('-is_primary', '-created_at', '-id')
+
+
+class SourceAlignment(models.Model):
+    """Tree-to-Tree alignment mapping between a TreeSourceDocument node and a block/atom."""
+
+    class AlignmentRole(models.TextChoices):
+        PRIMARY_TEXTBOOK = 'primary_textbook', 'primary_textbook'
+        OFFICIAL_SYLLABUS = 'official_syllabus', 'official_syllabus'
+        VIDEO_LECTURE = 'video_lecture', 'video_lecture'
+        WORKED_EXAMPLE = 'worked_example', 'worked_example'
+
+    source_document = models.ForeignKey(TreeSourceDocument, on_delete=models.CASCADE, related_name='alignments')
+    block = models.ForeignKey(LearningBlock, on_delete=models.CASCADE, related_name='source_alignments')
+    atom = models.ForeignKey(TreeAtomPoint, null=True, blank=True, on_delete=models.CASCADE, related_name='source_alignments')
+    source_node_id = models.CharField(max_length=80)
+    section_title = models.CharField(max_length=240)
+    locator = models.CharField(max_length=160, blank=True, default='')
+    source_url = models.CharField(max_length=1000, blank=True, default='')
+    excerpt_quote = models.TextField(blank=True, default='')
+    alignment_role = models.CharField(max_length=32, choices=AlignmentRole.choices, default=AlignmentRole.PRIMARY_TEXTBOOK)
+    match_reason = models.CharField(max_length=120, blank=True, default='')
+    confidence = models.FloatField(default=0.0)
+    is_verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ('-is_verified', '-confidence', 'id')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['source_document', 'block', 'atom', 'source_node_id'],
+                condition=models.Q(atom__isnull=False),
+                name='kb_source_alignment_atom_unique',
+            ),
+            models.UniqueConstraint(
+                fields=['source_document', 'block', 'source_node_id'],
+                condition=models.Q(atom__isnull=True),
+                name='kb_source_alignment_block_unique',
+            ),
+        ]
+
+
+class AtomMicroLesson(models.Model):
+    """Lazily generated, source-grounded multimodal micro-lesson cached per TreeAtomPoint."""
+
+    class DifficultyTier(models.TextChoices):
+        L1 = 'L1', 'L1'
+        L2 = 'L2', 'L2'
+        L3 = 'L3', 'L3'
+
+    class Status(models.TextChoices):
+        READY = 'ready', 'ready'
+        GENERATING = 'generating', 'generating'
+        FAILED = 'failed', 'failed'
+
+    build = models.ForeignKey(KnowledgeTreeBuild, on_delete=models.CASCADE, related_name='micro_lessons')
+    atom = models.OneToOneField(TreeAtomPoint, on_delete=models.CASCADE, related_name='micro_lesson')
+    version = models.PositiveIntegerField(default=1)
+    difficulty_tier = models.CharField(max_length=8, choices=DifficultyTier.choices, default=DifficultyTier.L1)
+    style = models.CharField(max_length=24, default='balanced')
+    is_source_grounded = models.BooleanField(default=False)
+    grounded_source_ids = models.JSONField(default=list)
+    hook_summary = models.TextField(blank=True, default='')
+    pitfalls = models.JSONField(default=list)
+    narration_script = models.TextField(blank=True, default='')
+    visuals = models.JSONField(default=list)
+    quick_check = models.JSONField(default=dict)
+    citations = models.JSONField(default=list)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.READY)
+    error_message = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ('-updated_at', '-id')

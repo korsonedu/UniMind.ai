@@ -13,6 +13,25 @@
 
 MUTAR 的用户反馈指 Agent 回复赞踩。右下角产品反馈和 NPS 满意度问卷已在本地退出，两者与 Agent 赞踩分别管理。
 
+## 四层总体架构（事实—状态—决策—视图 + ULR 脊柱）
+
+`backend/ai_assistant/services/` 正按四层总体架构渐进收口为五个子包（旧平铺路径保留 `sys.modules` 同对象别名以兼容存量 import 与测试）：
+
+| 子包 | 层级定位 | 职责边界 |
+| --- | --- | --- |
+| `services/facts/` | **L1 事实层** | 原始来源绑定、证据溯源、披露捕获与受审修订（唯一事实源，改资格不改原成绩） |
+| `services/state/` | **L2 状态层** | 从事实提取出的结构化状态：`bep/`（掌握估计）、`sdtm/`（条件与任务帧）、`prism/`（迁移与分化）、知识结构与离线评测 |
+| `services/decision/` | **L3 决策层** | 项目规划、ULE 教学决策、方法选用、冲突澄清闸门与 RSI 策略治理 |
+| `services/views/` | **L4 视图层** | 流式输出、卡片、交互实验、未提交产物隔离与 MCP 协议投影（无权威状态） |
+| `services/runtime/` | **ULR 纵贯脊柱** | 指令编译与 1→4 直编短路、领域能力算子、权限复核、事务提交、Outbox 恢复与全链路 `trace_id` 观测 |
+
+**PR 架构红线**：
+1. **归属必声明**：新增服务必须放入上述对应子包，禁止继续向 `dsh_xiaoyu.py` 等混杂入口或 Legacy 模块堆叠新状态/新策略。
+2. **状态必溯源**：新增 L2 状态必须绑定 L1 来源 ID/版本，并定义撤权、删除或换版时的失效规则。
+3. **视图零权威**：前端、SSE、MCP 摘要与历史对话转述不得作为正式成绩、掌握度或权限的唯一来源。
+4. **策略必留痕**：新增教学策略与方法路由必须将决策依据、策略版本与 `trace_id` 写入观测/L1 记录，便于后续独立检验。
+5. **旧债不扩增**：禁止向 `dsh_runtime.py` 回退链路或旧记忆/经验栈（`experience_*`、`mutar_variants`）追加新功能。
+
 ## 硬边界
 
 - **禁止在服务器上直接改代码**。所有修改本地 → git commit → push → 服务器 `git pull`。`.env` 是唯一例外。
@@ -227,6 +246,7 @@ sudo journalctl -u unimind.service -f
 
 | 文档 | 内容 |
 |------|------|
+| `docs/architecture/FOUR_LAYER_ARCHITECTURE.md` | 四层总体架构（事实—状态—决策—视图 + ULR 脊柱）与代码子包规范 |
 | `docs/tech/AI_SYSTEM_REFERENCE.md` | AI 系统完整参考（Schema 目录、Prompt 模板、模型路由表） |
 | `docs/tech/architecture/SINGLE_PLATFORM_TRANSITION.md` | 当前单平台权限、内容边界与历史依赖 |
 | `docs/tech/architecture/PERMISSION_ARCHITECTURE.md` | 历史四层权限设计，不作为现行授权规范 |
