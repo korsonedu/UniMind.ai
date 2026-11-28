@@ -3,7 +3,7 @@ import type { Root, RootContent, Text } from 'mdast';
 import type { Components } from 'react-markdown';
 import type { Plugin } from 'unified';
 import type { SourceAnchor, WorkbenchCitation } from '@/types/workbench';
-import { CitationPill } from './CitationPill';
+import { AssetCitationLink, CitationPill, type AssetCitation } from './CitationPill';
 
 interface CitationContext {
   conversationId: string;
@@ -12,8 +12,9 @@ interface CitationContext {
 
 export const WorkbenchCitationContext = createContext<CitationContext | null>(null);
 
-const marker = /\[(S\d+#C\d+(?:\s*[,，]\s*S\d+#C\d+)*)\]/g;
-const trailingMarker = /\[S(?:\d+#C\d+\s*[,，]\s*S)*\d*(?:#C?\d*)?\s*(?:[,，]\s*)?$/;
+const keyPattern = String.raw`(?:S\d+#C\d+(?:[LT]\d+)?|[NAW]\d+#L\d+|V\d+#T\d+)`;
+const marker = new RegExp(String.raw`\[(${keyPattern}(?:\s*[,，]\s*${keyPattern})*)\]`, 'g');
+const trailingMarker = /\[(?:[SNAVW]\d+#(?:[CLT]\d+[LT]?\d*)?\s*[,，]\s*)*[SNAVW]\d*(?:#[CLT]?\d*[LT]?\d*)?$/;
 
 export function stripStreamingCitations(content: string) {
   return content.replace(marker, '').replace(trailingMarker, '');
@@ -40,7 +41,7 @@ const remarkWorkbenchCitations: Plugin<[], Root> = () => tree => {
         transform(child);
         return [child];
       }
-      if (!child.value.includes('[S')) return [child];
+      if (!child.value.includes('[')) return [child];
       return splitCitationMarkers(child.value).flatMap((part): RootContent[] => {
         if (typeof part === 'string') return [{ type: 'text', value: part } satisfies Text];
         return part.keys.map(key => ({
@@ -54,8 +55,9 @@ const remarkWorkbenchCitations: Plugin<[], Root> = () => tree => {
   transform(tree);
 };
 
-export function workbenchCitationMarkdown(citations: WorkbenchCitation[], context: CitationContext, components?: Components) {
+export function workbenchCitationMarkdown(citations: WorkbenchCitation[], context: CitationContext | null, components?: Components, assets: AssetCitation[] = []) {
   const byKey = new Map(citations.map(citation => [citation.cite_key, citation]));
+  const assetsByKey = new Map(assets.map(citation => [citation.key, citation]));
   return {
     extraRemarkPlugins: [remarkWorkbenchCitations],
     components: {
@@ -63,8 +65,10 @@ export function workbenchCitationMarkdown(citations: WorkbenchCitation[], contex
       span: props => {
         const key = props.node?.properties['data-workbench-cite'];
         if (typeof key === 'string') {
+          const asset = assetsByKey.get(key);
+          if (asset) return <AssetCitationLink citation={asset} />;
           const citation = byKey.get(key);
-          return citation ? <CitationPill citation={citation} {...context} /> : null;
+          return citation && context ? <CitationPill citation={citation} {...context} /> : null;
         }
         const Span = components?.span as ComponentType<typeof props> | undefined;
         if (Span) return <Span {...props} />;

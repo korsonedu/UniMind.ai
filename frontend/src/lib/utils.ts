@@ -58,3 +58,8 @@ export function processMathContent(content: string) {
     .replace(/\\\(/g, '$')
     .replace(/\\\)/g, '$');
 }
+
+export function citationLine(value: string | null) {
+  const line = Number(value);
+  return Number.isSafeInteger(line) && line > 0 ? line : null;
+}

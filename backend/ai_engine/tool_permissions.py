@@ -8,7 +8,7 @@ TOOL_FEATURES = {
     'search_knowledge_tree': 'quiz.exam', 'get_user_weak_points': 'full.report',
     'get_user_wrong_questions': 'wrong.review', 'lookup_question': 'quiz.exam',
     'search_courses': 'course.video', 'search_asr': 'course.video',
-    'search_articles': 'course.video', 'get_learning_stats': 'basic.stats',
+    'read_web_article': 'ai.assistant', 'search_articles': 'course.video', 'get_learning_stats': 'basic.stats',
     'get_knowledge_mastery_map': 'full.report', 'get_due_reviews': 'memorix.review',
     'get_knowledge_difficulty_analysis': 'memorix.review',
     'get_practice_questions': 'quiz.exam', 'get_exam_history': 'full.report',

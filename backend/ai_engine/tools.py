@@ -610,9 +610,9 @@ def get_assistant_tools():
             impl_summary="主键查询 question 表，返回完整题目记录（题干、选项、答案、解析、知识点关联）。需要 question_id。"),
         _make_tool("search_courses", "搜索课程库，按关键词或学科查找推荐课程。用于在建议学习资源时提供具体课程链接。", SEARCH_COURSES_SCHEMA,
             impl_summary="全文搜索 course 表的 title 和 description，支持 subject 过滤，返回按 relevance 排序的课程列表（含 slug 用于前端链接）。"),
-        _make_tool("search_asr", "搜索课程视频的 ASR 转录文本，找到某个知识点在视频中的具体时间位置。用于告诉学生'XX概念在课程YY的ZZ分ZZ秒处讲解'。", SEARCH_ASR_SCHEMA,
+        _make_tool("search_asr", "搜索课程视频的 ASR 转录文本，找到某个知识点在视频中的具体时间位置。引用讲解时复制该条字幕的 citation 标记。", SEARCH_ASR_SCHEMA,
             impl_summary="查询 asr_segment 表的 transcript 字段做全文匹配，返回包含关键词的片段及对应时间戳（start_time），关联 course 和 video 信息。"),
-        _make_tool("search_articles", "搜索深度文章库，按关键词查找相关文章。用于推荐学习资料和扩展阅读。", SEARCH_ARTICLES_SCHEMA,
+        _make_tool("search_articles", "按关键词查找站内文章和匹配的原文行。引用时复制该行的 citation 标记。", SEARCH_ARTICLES_SCHEMA,
             impl_summary="全文搜索 article 表的 title 和 body，返回按 relevance 排序的文章列表（含 slug 用于前端链接）。"),
     ]
 
@@ -633,6 +633,10 @@ def get_planner_tools():
     from ai_assistant.services.project_learning_tools import project_learning_tools
     assistant = [*get_assistant_tools(), *project_learning_tools()]
     planner_only = [
+        _make_tool("read_web_article", "读取用户给出的公开 HTTPS 文章链接，可按关键词挑选原文行。引用时复制该行的 citation。",
+            {"type": "object", "properties": {"url": {"type": "string", "maxLength": 3000},
+             "query": {"type": "string", "maxLength": 200}}, "required": ["url"], "additionalProperties": False},
+            impl_summary="通过现有网页资料读取器提取公开文章正文，返回带行号和引用标记的原文。"),
         _make_tool("get_learning_stats", "获取用户学习统计概览（已练题数、最近正确率、连续学习天数、诊断掌握度）。调用后自动在对话中展示学习概览卡片，文字只需解读。", GET_LEARNING_STATS_SCHEMA,
             impl_summary="聚合 UserQuestionStatus（reps>0）：已练题数、最近正确率、累计近似正确率、连续学习天数、诊断掌握度。需要 user_id。"),
         _make_tool("get_learning_sessions", "查询当前学生实际听课和做题的起止时间、每次时长、前台专注参考时长及每日首次开始时间。用于了解学习时段和习惯，不包含线下学习或自习室计时。", GET_LEARNING_SESSIONS_SCHEMA,

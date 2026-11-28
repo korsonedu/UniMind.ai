@@ -11,6 +11,7 @@ from django.utils import timezone
 from ai_assistant.models import (
     AIChatMessage, Bot, Conversation, ConversationProject, ProjectLearning, ProjectSource, ProjectSourceChunk,
 )
+from ai_assistant.services.facts.workbench_parsers import parse_text_content
 from ai_assistant.services.project_learning_tools import PROJECT_LEARNING_NAMES
 from ai_assistant.services.runtime.workbench_grounding import (
     RETRIEVAL_LIMIT, WORKBENCH_TOOL_NAMES, WorkbenchGrounding, active_sources, extract_workbench_citations,
@@ -458,3 +459,34 @@ def test_overview_rejects_synthesis_if_selection_changes_during_generation(auth_
     project.refresh_from_db()
     assert project.workbench_overview == {}
     assert auth_client.get(url).data['overview'] == ''
+
+
+def test_chat_cites_exact_article_line_and_second_subtitle(auth_client, bot, project, materials, monkeypatch):
+    article = add_source(project, '原文.md')
+    text_chunk, = parse_text_content('# 摘要\n\n\n\n第一行\n引用目标')
+    article_chunk = ProjectSourceChunk.objects.create(source=article, chunk_index=0, **text_chunk)
+    _, _, video_chunk = materials
+    video_chunk.metadata = {'segments': [
+        {'start_time': 124.0, 'end_time': 129.0, 'text': '例子的开头'},
+        {'start_time': 138.25, 'end_time': 142.0, 'text': '被引用的句子'},
+    ]}
+    video_chunk.save(update_fields=['metadata'])
+
+    payload = chat_payload(bot, project)
+    payload['workbench_source_ids'] = [str(article.pk), str(video_chunk.source_id)]
+    # Source aliases follow import order.
+    payload['message'] = '结合视频和文章解释。'
+
+    def answer(messages, tools, tool_executor, **kwargs):
+        keys = tool_executor.workbench_grounding.aliases
+        article_key = f'{keys[article.pk]}#C0L4'
+        video_key = f'{keys[video_chunk.source_id]}#C1T2'
+        source_text = '\n'.join(row['content'] for row in messages)
+        assert f'[{article_key}] 引用目标' in source_text
+        assert f'[{video_key}] 被引用的句子' in source_text
+        return f'文章的依据[{article_key}]，视频的依据[{video_key}]。[S2#C1T9]'
+
+    done = finish_chat(auth_client, payload, monkeypatch, answer, stream=True)
+    article_ref, video_ref = done['metadata']['workbench_citations']
+    assert (article_ref['chunk_id'], article_ref['line'], article_ref['chunk_line']) == (article_chunk.pk, 6, 4)
+    assert video_ref['start_seconds'] == 138.25

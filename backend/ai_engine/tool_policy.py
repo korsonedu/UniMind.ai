@@ -7,7 +7,7 @@ READ_ONLY_TOOLS = frozenset({
     'get_learning_stats', 'get_knowledge_mastery_map', 'get_due_reviews',
     'get_practice_questions', 'get_exam_history', 'get_recent_practice_result',
     'get_learning_sessions',
-    'search_courses', 'search_asr', 'search_articles',
+    'search_courses', 'search_asr', 'search_articles', 'read_web_article',
     'get_knowledge_difficulty_analysis', 'search_knowledge',
     'check_pipeline_status', 'get_workbench_stats', 'get_student_detail',
     'list_courses', 'list_questions', 'list_articles',

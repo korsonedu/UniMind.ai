@@ -663,6 +663,7 @@ class PlannerToolExecutor(BaseToolExecutor):
                     "end_time": format_time(s.end_time),
                     "start_seconds": s.start_time,
                     "text": s.text[:200],
+                    "citation": f"[V{s.transcript.course_id}#T{s.pk}]",
                     "url": f"/course/{s.transcript.course_id}?t={str(s.start_time).removesuffix('.0')}",
                 }
                 for s in segments
@@ -676,8 +677,14 @@ class PlannerToolExecutor(BaseToolExecutor):
 
     def _handle_search_articles(self, args: Dict) -> Dict:
         """搜索文章库，推荐扩展阅读。"""
-        from articles.models import Article
+        from django.apps import apps
+        from ai_assistant.services.facts.asset_citations import matching_article_lines
+        from core.utils import apply_institution_filter
+        from courses.access import has_full_course_access
 
+        if not apps.is_installed('articles') or not has_full_course_access(self.user):
+            return {"articles": [], "message": "当前空间没有可读的文章库"}
+        Article = apps.get_model('articles', 'Article')
         query = (args.get('query') or '').strip()
         limit = min(int(args.get('limit', 5)), 10)
 
@@ -687,13 +694,11 @@ class PlannerToolExecutor(BaseToolExecutor):
         qs = Article.objects.filter(
             models.Q(title__icontains=query) |
             models.Q(content__icontains=query) |
-            models.Q(tags__contains=[query])
+            models.Q(tags__icontains=query)
         ).select_related('knowledge_point', 'author')
 
-        # Institution isolation
-        qs = qs.filter(institution=self.institution)
-
-        articles = qs[:limit]
+        qs = apply_institution_filter(qs, self.user)
+        articles = qs.order_by('-updated_at', 'pk')[:limit]
 
         return {
             "articles": [
@@ -705,11 +710,17 @@ class PlannerToolExecutor(BaseToolExecutor):
                     "views": a.views,
                     "author": a.author_display_name or (a.author.nickname or a.author.username if a.author else ''),
                     "url": f"/article/{a.id}",
+                    "version": a.updated_at.isoformat(),
+                    "lines": matching_article_lines(a.content, query, f'A{a.pk}'),
                 }
                 for a in articles
             ],
             "total_found": qs.count(),
         }
+
+    def _handle_read_web_article(self, args):
+        from ai_assistant.services.facts.asset_citations import read_web_article
+        return read_web_article(args['url'], args.get('query', ''))
 
     def _handle_get_knowledge_difficulty_analysis(self, args: Dict) -> Dict:
         """获取知识点的 Memorix 难度分析。"""

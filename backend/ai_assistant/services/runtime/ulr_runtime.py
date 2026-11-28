@@ -12,6 +12,7 @@ from ai_engine.service import AICallError, AIEngine
 from ai_engine.tool_run import ToolReferenceError, ToolRunCoordinator
 from users.feature_access import has_learning_feature
 from ai_assistant.services.facts import teaching_sidecar
+from ai_assistant.services.facts.asset_citations import INLINE_MARKER, asset_citations, tool_citation_rows
 from ai_assistant.services.dsh_cards import data_card, item
 from ai_assistant.services.dsh_service import build_context, context_memory, execute_tool, permitted_tools, prototype_executor
 from ai_assistant.services.course_context import require_course_transcript, require_current_transcript_sources, transcript_source
@@ -35,7 +36,7 @@ from ai_assistant.services.runtime.ulr_capabilities import (
     require_visible_practice_sources, task_review,
 )
 from ai_assistant.services.decision.ulr_teaching import selected_task, supports_objective_evidence
-from .workbench_grounding import CHAT_CITATION_MARKER, WORKBENCH_TOOL_NAMES, include_workbench_tools, workbench_prompt
+from .workbench_grounding import WORKBENCH_TOOL_NAMES, include_workbench_tools, workbench_prompt
 
 
 PROGRESS_TOOL = 'record_learning_progress'
@@ -123,6 +124,10 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
         return messages[review['status']][0 if english else 1], [], str(task.pk), None, None, {}
     source_context = task_context_data(user, chat_context, message, history_limit=0)
     history = scoped_history(user, current, set(source_context['note_versions']))
+    for row, *_ in history:
+        if row['role'] == 'assistant':
+            row['content'] = INLINE_MARKER.sub('', row['content'])
+    citation_rows = list(source_context.get('note_citations', ()))
     experiment_prompt = ''
     project_id = conversation_project_id(user, current.conversation_id)
     workbench_executor = None
@@ -178,9 +183,7 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
             prompt += '\n\n' + workbench_prompt('grounded_qa.txt')
             policy['max_request_bytes'] = max(policy['max_request_bytes'], 262144)
             selected_sources = workbench.context(message)
-            for row, *_ in history:
-                if row['role'] == 'assistant':
-                    row['content'] = CHAT_CITATION_MARKER.sub('', row['content'])
+    prompt += workbench_prompt('asset_citations.txt')
     memory_items = memory['items'] if has_learning_feature(user, 'full.report') else []
     if memory_items:
         prompt += '\n当前学生已授权的记忆（资料）：' + json.dumps(memory_items, ensure_ascii=False, default=str)
@@ -310,6 +313,8 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
                 'message': '请单独选择本轮提供的一个分组或组合指令。'}, 'steps_executed': []}, ensure_ascii=False)
         if name in PROGRAM_TOOLS:
             return execute_program(name, arguments)
+        if name == 'read_web_article' and arguments['url'] not in message:
+            return json.dumps({'error': '请使用本轮用户提供的文章链接。'}, ensure_ascii=False)
         if name in WORKBENCH_TOOL_NAMES and workbench_executor is not None:
             return workbench_executor(name, arguments)
         if name == 'search_asr' and current_course_id is not None and not arguments.get('course_id'):
@@ -402,6 +407,8 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
                 raise ULRTurnUnavailable('检查题评阅未完成，请恢复同一请求。')
             return outcome.result
         result = json.loads(outcome.result)
+        if name in ('search_articles', 'search_asr', 'read_web_article', PROGRAM_NAME, CURRENT_COURSE_NAME):
+            citation_rows.extend(tool_citation_rows(result))
         transcript_sources.update(map(tuple, result.pop('_ulr_transcripts', ())))
         if name in ('recall_learning', 'read_learning_source'):
             buffer_reply = True
@@ -693,6 +700,8 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
             context_sources = {'courses': sorted(course_ids), 'notes': source_context['note_versions'],
                                'selection': bool(current.metadata.get('note_selection')),
                                'question_answers': sorted(question_answers), 'transcripts': sorted(transcript_sources)}
+            if citations := asset_citations(content, citation_rows):
+                context_sources['asset_citations'] = citations
             if practice_reviews:
                 context_sources['practice_reviews'] = sorted(practice_reviews)
             if practice_sources or practice_point:

@@ -27,7 +27,7 @@ M0_TOOLS = frozenset({
     'read_learning_project', 'plan_learning_project', 'record_learning_progress', 'set_learning_followup', 'find_learning_resources',
     'get_learning_stats', 'get_recent_practice_result', 'get_user_weak_points',
     'run_diagnostic',
-    'search_courses', 'search_asr',
+    'search_courses', 'search_asr', 'search_articles', 'read_web_article',
     'search_knowledge_tree', 'get_user_wrong_questions', 'lookup_question',
     'get_learning_sessions', 'get_knowledge_mastery_map', 'get_due_reviews',
     'get_knowledge_difficulty_analysis', 'get_practice_questions', 'get_exam_history',

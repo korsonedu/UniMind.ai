@@ -32,6 +32,7 @@ from .utils import get_student_academic_context
 from .views_projects import ProjectAssignmentSerializer, add_project_context, save_new_conversation_project, learning_activity_metadata
 from notes.context import prepare_note_context, conversation_uses_notes
 from notes.awareness import note_message_metadata
+from .services.facts.asset_citations import legacy_asset_citations
 from django.db import transaction
 from .prompt_sync import sync_bot_prompt
 from users.views import IsMember
@@ -111,7 +112,7 @@ def _save_chat_project(request, bot, conversation_id, source_ids):
 def _chat_workbench_grounding(conversation, source_ids):
     project = conversation.project
     if project is not None and project.user_id == conversation.user_id:
-        return WorkbenchGrounding(project, active_sources(project, source_ids))
+        return WorkbenchGrounding(project, active_sources(project, source_ids), precise=True)
     if source_ids:
         raise serializers.ValidationError({'workbench_source_ids': '请在当前资料所属的项目会话中选择资料。'})
     return None
@@ -261,6 +262,8 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                 # 统一 metadata 构建
                 msg_metadata = {'note_sources': note_sources} if note_sources else {}
                 msg_metadata.update(workbench_citation_metadata(ai_content, tool_executor))
+                if citations := legacy_asset_citations(ai_content, note_sources, note_context, tool_executor):
+                    msg_metadata['asset_citations'] = citations
                 if external_video_context:
                     msg_metadata['external_video_context'] = external_video_context
                 if getattr(tool_executor, '_prism_clarification', False):
