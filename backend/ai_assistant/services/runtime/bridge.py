@@ -27,7 +27,7 @@ M0_TOOLS = frozenset({
     'read_learning_project', 'plan_learning_project', 'record_learning_progress', 'set_learning_followup', 'find_learning_resources',
     'get_learning_stats', 'get_recent_practice_result', 'get_user_weak_points',
     'run_diagnostic',
-    'search_courses', 'search_asr', 'search_articles', 'read_web_article',
+    'search_courses', 'search_asr',
     'search_knowledge_tree', 'get_user_wrong_questions', 'lookup_question',
     'get_learning_sessions', 'get_knowledge_mastery_map', 'get_due_reviews',
     'get_knowledge_difficulty_analysis', 'get_practice_questions', 'get_exam_history',
@@ -91,8 +91,13 @@ def presentation_tool(user, chat_context):
         'parameters': {'type': 'object', 'oneOf': [function['parameters'], selection]}}}
 
 
+def _runtime_tool_names(ulr):
+    return M0_TOOLS | {'search_articles', 'read_web_article'} if ulr else M0_TOOLS
+
+
 def permitted_tools(user, chat_context=None, *, ulr=False):
-    allowed = [t for t in student_catalog(user, ulr=ulr) if t['function']['name'] in M0_TOOLS]
+    names = _runtime_tool_names(ulr)
+    allowed = [t for t in student_catalog(user, ulr=ulr) if t['function']['name'] in names]
     return [*allowed, presentation_tool(user, chat_context)] if allowed else []
 
 
@@ -135,7 +140,8 @@ def build_context(user, message, recent_messages=None, chat_context=None, *, ulr
     catalog = student_catalog(user, ulr=ulr)
     candidates = route_tools(message, catalog, recent_messages=recent_messages,
                              bot_type='planner', intent_classifier=classify_intent_keywords, use_semantic=False)
-    allowed = [t for t in catalog if t['function']['name'] in M0_TOOLS]
+    names = _runtime_tool_names(ulr)
+    allowed = [t for t in catalog if t['function']['name'] in names]
     if allowed:
         allowed.append(presentation_tool(user, chat_context))
     executor = prototype_executor(user, chat_context)

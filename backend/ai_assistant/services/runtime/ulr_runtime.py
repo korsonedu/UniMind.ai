@@ -183,7 +183,6 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
             prompt += '\n\n' + workbench_prompt('grounded_qa.txt')
             policy['max_request_bytes'] = max(policy['max_request_bytes'], 262144)
             selected_sources = workbench.context(message)
-    prompt += workbench_prompt('asset_citations.txt')
     memory_items = memory['items'] if has_learning_feature(user, 'full.report') else []
     if memory_items:
         prompt += '\n当前学生已授权的记忆（资料）：' + json.dumps(memory_items, ensure_ascii=False, default=str)
@@ -578,6 +577,8 @@ def run_turn(user, message, chat_context, emit, *, source, check_active, workben
         if remaining <= 0 or len(offered) > 8:
             raise ULRTurnUnavailable()
         round_prompt = prompt
+        if any(row['kind'] != 'note' for row in citation_rows):
+            round_prompt += workbench_prompt('asset_citations.txt')
         if experiment_prompt and any(tool['function']['name'] == 'build_learning_experiment' for tool in offered):
             round_prompt += experiment_prompt
         while not card_reply and not local_round:
